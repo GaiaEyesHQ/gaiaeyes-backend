@@ -307,13 +307,76 @@ def _severity_from_pressure(delta: float | None) -> str:
 
 def _severity_from_temp(delta: float | None) -> str:
     abs_value = abs(delta or 0.0)
-    if abs_value >= 12:
+    if abs_value >= 10:
         return "high"
-    if abs_value >= 8:
+    if abs_value >= 7:
         return "watch"
-    if abs_value >= 6:
+    if abs_value >= 5:
         return "mild"
     return "low"
+
+
+def _effective_temp_delta_from_prior_day(
+    row: Mapping[str, Any],
+    previous_row: Mapping[str, Any] | None,
+) -> float | None:
+    candidates: list[float] = []
+    stored = _safe_float(row.get("temp_delta_from_prior_day_c"))
+    if stored is not None:
+        candidates.append(stored)
+    if previous_row:
+        current_high = _safe_float(row.get("temp_high_c"))
+        previous_high = _safe_float(previous_row.get("temp_high_c"))
+        if current_high is not None and previous_high is not None:
+            candidates.append(current_high - previous_high)
+        current_low = _safe_float(row.get("temp_low_c"))
+        previous_low = _safe_float(previous_row.get("temp_low_c"))
+        if current_low is not None and previous_low is not None:
+            candidates.append(current_low - previous_low)
+    if not candidates:
+        return None
+    return round(max(candidates, key=lambda item: abs(item)), 1)
+
+
+def _enrich_forecast_input_rows(merged_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    ordered_rows = sorted(
+        (
+            row
+            for row in merged_rows
+            if isinstance(row.get("day"), date)
+        ),
+        key=lambda row: row["day"],
+    )
+    enriched: list[dict[str, Any]] = []
+    previous_row: dict[str, Any] | None = None
+    for row in ordered_rows:
+        prepared = dict(row)
+        effective_temp_delta = _effective_temp_delta_from_prior_day(prepared, previous_row)
+        if effective_temp_delta is not None:
+            prepared["temp_delta_from_prior_day_c"] = effective_temp_delta
+        enriched.append(prepared)
+        previous_row = prepared
+    return enriched
+
+
+def _pressure_proxy_from_conditions(row: Mapping[str, Any]) -> tuple[str, str] | None:
+    summary = str(row.get("condition_summary") or "").strip().lower()
+    precip_probability = _safe_float(row.get("precip_probability"))
+    if not summary and precip_probability is None:
+        return None
+
+    thunder_words = ("thunder", "t-storm", "tstorm", "storm")
+    rain_words = ("showers", "shower", "rain", "drizzle")
+
+    if any(word in summary for word in thunder_words):
+        return "watch", "Stormier weather may bring a pressure swing around this day."
+    if any(word in summary for word in rain_words):
+        if (precip_probability or 0.0) >= 50:
+            return "watch", "Rain chances may bring a pressure swing around this day."
+        return "mild", "Rain chances may bring a smaller pressure swing around this day."
+    if precip_probability is not None and precip_probability >= 70:
+        return "mild", "Rain chances may bring a smaller pressure swing around this day."
+    return None
 
 
 def _severity_from_aqi(aqi: float | None) -> str:
@@ -877,7 +940,7 @@ def summarize_local_forecast_days(
         pressure_by_day[day_key] = round(weighted_mean, 1)
 
     rows: list[dict[str, Any]] = []
-    prev_temp_mean: float | None = None
+    prev_row_payload: dict[str, Any] | None = None
     prev_pressure: float | None = None
     updated_at = datetime.now(UTC)
     for day_key in day_order:
@@ -896,54 +959,59 @@ def summarize_local_forecast_days(
         summary = Counter(summaries).most_common(1)[0][0] if summaries else None
         pollen_row = pollen_by_day.get(day_key) or {}
 
-        rows.append(
-            {
-                "location_key": location_key,
-                "day": day_key,
-                "source": "nws:forecast-hourly",
-                "issued_at": issued_at,
-                "location_zip": zip_code,
-                "lat": lat,
-                "lon": lon,
-                "temp_high_c": _safe_round(temp_high, 1),
-                "temp_low_c": _safe_round(temp_low, 1),
-                "temp_delta_from_prior_day_c": _safe_round(temp_mean - prev_temp_mean, 1) if temp_mean is not None and prev_temp_mean is not None else None,
-                "pressure_hpa": pressure_hpa,
-                "pressure_delta_from_prior_day_hpa": _safe_round(pressure_hpa - prev_pressure, 1) if pressure_hpa is not None and prev_pressure is not None else None,
-                "humidity_avg": _safe_round(fmean(humidity), 1) if humidity else None,
-                "precip_probability": _safe_round(max(precip), 1) if precip else None,
-                "wind_speed": _safe_round(fmean(wind), 1) if wind else None,
-                "wind_gust": _safe_round(max(gust), 1) if gust else None,
-                "condition_code": _slugify_condition(summary),
-                "condition_summary": summary,
-                "aqi_forecast": None,
-                "pollen_tree_level": pollen_row.get("pollen_tree_level"),
-                "pollen_grass_level": pollen_row.get("pollen_grass_level"),
-                "pollen_weed_level": pollen_row.get("pollen_weed_level"),
-                "pollen_mold_level": pollen_row.get("pollen_mold_level"),
-                "pollen_overall_level": pollen_row.get("pollen_overall_level"),
-                "pollen_primary_type": pollen_row.get("pollen_primary_type"),
-                "pollen_source": pollen_row.get("pollen_source"),
-                "pollen_updated_at": _parse_iso_datetime(pollen_row.get("pollen_updated_at")) or updated_at,
-                "pollen_tree_index": _safe_float(pollen_row.get("pollen_tree_index")),
-                "pollen_grass_index": _safe_float(pollen_row.get("pollen_grass_index")),
-                "pollen_weed_index": _safe_float(pollen_row.get("pollen_weed_index")),
-                "pollen_mold_index": _safe_float(pollen_row.get("pollen_mold_index")),
-                "pollen_overall_index": _safe_float(pollen_row.get("pollen_overall_index")),
-                "raw": json.dumps(
-                    {
-                        "period_count": bucket.get("raw_periods") or 0,
-                        "pressure_points": len(weighted_values.get(day_key) or []),
-                        "pollen_available": bool(pollen_row),
-                        "pollen_primary_type": pollen_row.get("pollen_primary_type"),
-                    }
-                ),
-                "updated_at": updated_at,
-            }
-        )
-        prev_temp_mean = temp_mean if temp_mean is not None else prev_temp_mean
+        row_payload = {
+            "location_key": location_key,
+            "day": day_key,
+            "source": "nws:forecast-hourly",
+            "issued_at": issued_at,
+            "location_zip": zip_code,
+            "lat": lat,
+            "lon": lon,
+            "temp_high_c": _safe_round(temp_high, 1),
+            "temp_low_c": _safe_round(temp_low, 1),
+            "temp_delta_from_prior_day_c": _safe_round(temp_mean - _safe_float(prev_row_payload.get("temp_mean_c")), 1)
+            if temp_mean is not None and prev_row_payload and _safe_float(prev_row_payload.get("temp_mean_c")) is not None
+            else None,
+            "pressure_hpa": pressure_hpa,
+            "pressure_delta_from_prior_day_hpa": _safe_round(pressure_hpa - prev_pressure, 1) if pressure_hpa is not None and prev_pressure is not None else None,
+            "humidity_avg": _safe_round(fmean(humidity), 1) if humidity else None,
+            "precip_probability": _safe_round(max(precip), 1) if precip else None,
+            "wind_speed": _safe_round(fmean(wind), 1) if wind else None,
+            "wind_gust": _safe_round(max(gust), 1) if gust else None,
+            "condition_code": _slugify_condition(summary),
+            "condition_summary": summary,
+            "aqi_forecast": None,
+            "pollen_tree_level": pollen_row.get("pollen_tree_level"),
+            "pollen_grass_level": pollen_row.get("pollen_grass_level"),
+            "pollen_weed_level": pollen_row.get("pollen_weed_level"),
+            "pollen_mold_level": pollen_row.get("pollen_mold_level"),
+            "pollen_overall_level": pollen_row.get("pollen_overall_level"),
+            "pollen_primary_type": pollen_row.get("pollen_primary_type"),
+            "pollen_source": pollen_row.get("pollen_source"),
+            "pollen_updated_at": _parse_iso_datetime(pollen_row.get("pollen_updated_at")) or updated_at,
+            "pollen_tree_index": _safe_float(pollen_row.get("pollen_tree_index")),
+            "pollen_grass_index": _safe_float(pollen_row.get("pollen_grass_index")),
+            "pollen_weed_index": _safe_float(pollen_row.get("pollen_weed_index")),
+            "pollen_mold_index": _safe_float(pollen_row.get("pollen_mold_index")),
+            "pollen_overall_index": _safe_float(pollen_row.get("pollen_overall_index")),
+            "raw": json.dumps(
+                {
+                    "period_count": bucket.get("raw_periods") or 0,
+                    "pressure_points": len(weighted_values.get(day_key) or []),
+                    "pollen_available": bool(pollen_row),
+                    "pollen_primary_type": pollen_row.get("pollen_primary_type"),
+                }
+            ),
+            "updated_at": updated_at,
+            "temp_mean_c": _safe_round(temp_mean, 1),
+        }
+        row_payload["temp_delta_from_prior_day_c"] = _effective_temp_delta_from_prior_day(row_payload, prev_row_payload)
+        rows.append(row_payload)
+        prev_row_payload = row_payload
         prev_pressure = pressure_hpa if pressure_hpa is not None else prev_pressure
 
+    for row in rows:
+        row.pop("temp_mean_c", None)
     return rows
 
 
@@ -1740,6 +1808,39 @@ def derive_forecast_drivers(
             detail=f"Pressure may swing about {abs(delta or 0.0):.1f} hPa day to day.",
             signal_key=PRIMARY_DRIVER_SIGNAL["pressure"],
         )
+    else:
+        pressure_proxy_candidates = [
+            (row.get("day"),) + proxy
+            for row in rows
+            if (proxy := _pressure_proxy_from_conditions(row)) is not None
+        ]
+        if pressure_proxy_candidates:
+            day_key, severity, detail = max(
+                pressure_proxy_candidates,
+                key=lambda item: (
+                    SEVERITY_RANK.get(item[1], 0),
+                    _safe_float(
+                        next(
+                            (
+                                row.get("precip_probability")
+                                for row in rows
+                                if row.get("day") == item[0]
+                            ),
+                            None,
+                        )
+                    )
+                    or 0.0,
+                ),
+            )
+            add_driver(
+                "pressure",
+                severity=severity,
+                value=None,
+                unit=None,
+                day_key=day_key if isinstance(day_key, date) else None,
+                detail=detail,
+                signal_key=PRIMARY_DRIVER_SIGNAL["pressure"],
+            )
 
     temp_candidates = [
         (row.get("day"), _safe_float(row.get("temp_delta_from_prior_day_c")))
@@ -2197,10 +2298,11 @@ def build_daily_outlook(
     days: int = 7,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    prepared_rows = _enrich_forecast_input_rows(merged_rows)
     today = _app_today()
     future_rows = [
         row
-        for row in merged_rows
+        for row in prepared_rows
         if isinstance(row.get("day"), date) and row.get("day") > today
     ]
     source_rows = future_rows
@@ -2264,7 +2366,7 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
         )
 
     space_rows = await ensure_space_forecast_daily(conn, days=USER_OUTLOOK_INPUT_DAYS)
-    merged_rows = merge_daily_forecast_inputs(local_rows, space_rows)
+    merged_rows = _enrich_forecast_input_rows(merge_daily_forecast_inputs(local_rows, space_rows))
     pattern_rows = await fetch_best_pattern_rows(conn, user_id)
     gauges = await fetch_latest_gauges(conn, user_id)
     daily_outlook = build_daily_outlook(

@@ -282,7 +282,7 @@ Outlook For March 23-29
         self.assertAlmostEqual(rows[0]["temp_low_c"], 17.8, places=1)
         self.assertEqual(rows[0]["condition_code"], "mostly-cloudy")
         self.assertEqual(rows[1]["condition_summary"], "Chance Showers")
-        self.assertAlmostEqual(rows[1]["temp_delta_from_prior_day_c"], 2.8, places=1)
+        self.assertAlmostEqual(rows[1]["temp_delta_from_prior_day_c"], 3.4, places=1)
         self.assertAlmostEqual(rows[2]["pressure_delta_from_prior_day_hpa"], 8.0, places=1)
         self.assertGreater(rows[1]["wind_gust"], rows[1]["wind_speed"])
         self.assertEqual(rows[0]["pollen_overall_level"], "high")
@@ -538,6 +538,54 @@ Outlook For March 23-29
         outcome_labels = {item.get("top_outcome_label") for item in payload[0]["likely_elevated_domains"]}
         self.assertIn("Head / sinus pressure", outcome_labels)
         self.assertIn("Fatigue", outcome_labels)
+
+    def test_build_daily_outlook_marks_watch_temp_swings_from_day_to_day_highs(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 18),
+                "temp_high_c": 22.8,
+                "temp_low_c": 12.2,
+            },
+            {
+                "day": date(2026, 3, 19),
+                "temp_high_c": 30.0,
+                "temp_low_c": 16.1,
+            },
+        ]
+
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 3, 18)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[],
+                gauges={},
+                days=7,
+            )
+
+        self.assertEqual(len(payload), 1)
+        temp_driver = next(item for item in payload[0]["top_drivers"] if item["key"] == "temp")
+        self.assertEqual(temp_driver["severity"], "watch")
+
+    def test_build_daily_outlook_marks_pressure_watch_for_storm_days_without_hpa_delta(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "condition_summary": "Chance Thunderstorms",
+                "precip_probability": 65.0,
+            },
+        ]
+
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 3, 18)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[],
+                gauges={},
+                days=7,
+            )
+
+        self.assertEqual(len(payload), 1)
+        pressure_driver = next(item for item in payload[0]["top_drivers"] if item["key"] == "pressure")
+        self.assertEqual(pressure_driver["severity"], "watch")
+        self.assertIn("pressure swing", pressure_driver["detail"].lower())
 
     def test_build_daily_outlook_uses_app_day_when_filtering_future_rows(self) -> None:
         merged_rows = [
