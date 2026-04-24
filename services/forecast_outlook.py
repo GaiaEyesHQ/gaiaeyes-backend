@@ -29,6 +29,21 @@ LOCAL_FORECAST_DAYS = 7
 SPACE_FORECAST_DAYS = 7
 USER_OUTLOOK_INPUT_DAYS = 8
 POLLEN_FORECAST_DAYS = 5
+POLLEN_ROW_FIELDS = (
+    "pollen_tree_level",
+    "pollen_grass_level",
+    "pollen_weed_level",
+    "pollen_mold_level",
+    "pollen_overall_level",
+    "pollen_primary_type",
+    "pollen_source",
+    "pollen_updated_at",
+    "pollen_tree_index",
+    "pollen_grass_index",
+    "pollen_weed_index",
+    "pollen_mold_index",
+    "pollen_overall_index",
+)
 APP_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
 
 try:
@@ -1100,6 +1115,51 @@ async def _upsert_local_forecast_rows(conn, rows: Sequence[Mapping[str, Any]]) -
             )
 
 
+def _is_blank_pollen_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
+def _preserve_existing_pollen_rows(
+    existing_rows: Sequence[Mapping[str, Any]],
+    refreshed_rows: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    if not existing_rows or not refreshed_rows:
+        return [dict(row) for row in refreshed_rows]
+
+    existing_by_day = {
+        row.get("day"): row
+        for row in existing_rows
+        if row.get("day") is not None and _row_has_pollen_data(row)
+    }
+    merged_rows: list[dict[str, Any]] = []
+    for row in refreshed_rows:
+        merged = dict(row)
+        existing = existing_by_day.get(merged.get("day"))
+        if existing:
+            for field in POLLEN_ROW_FIELDS:
+                if _is_blank_pollen_value(merged.get(field)):
+                    fallback_value = existing.get(field)
+                    if not _is_blank_pollen_value(fallback_value):
+                        merged[field] = fallback_value
+            raw_payload: dict[str, Any] = {}
+            raw_value = merged.get("raw")
+            if isinstance(raw_value, str) and raw_value.strip():
+                try:
+                    raw_payload = json.loads(raw_value)
+                except Exception:
+                    raw_payload = {}
+            if isinstance(raw_payload, dict):
+                raw_payload["pollen_available"] = _row_has_pollen_data(merged)
+                raw_payload["pollen_primary_type"] = merged.get("pollen_primary_type")
+                merged["raw"] = json.dumps(raw_payload)
+        merged_rows.append(merged)
+    return merged_rows
+
+
 async def ensure_local_forecast_daily(
     conn,
     *,
@@ -1167,6 +1227,7 @@ async def ensure_local_forecast_daily(
         return existing
 
     if rows:
+        rows = _preserve_existing_pollen_rows(existing, rows)
         await _upsert_local_forecast_rows(conn, rows)
         try:
             await conn.commit()

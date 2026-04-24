@@ -764,21 +764,31 @@ struct GuideHubView: View {
     }
 
     private func guideInfluenceBulletGrid(_ items: [String]) -> some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(minimum: 124), spacing: 6, alignment: .top),
-                GridItem(.flexible(minimum: 124), spacing: 6, alignment: .top),
-            ],
-            alignment: .leading,
-            spacing: 6
-        ) {
-            ForEach(items, id: \.self) { item in
-                guideInfluenceBulletTile(item)
+        Group {
+            if items.count == 1, let item = items.first {
+                HStack(spacing: 0) {
+                    guideInfluenceBulletTile(item, expandToFullWidth: false)
+                        .frame(maxWidth: 250, alignment: .leading)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(minimum: 124), spacing: 6, alignment: .top),
+                        GridItem(.flexible(minimum: 124), spacing: 6, alignment: .top),
+                    ],
+                    alignment: .leading,
+                    spacing: 6
+                ) {
+                    ForEach(items, id: \.self) { item in
+                        guideInfluenceBulletTile(item)
+                    }
+                }
             }
         }
     }
 
-    private func guideInfluenceBulletTile(_ text: String) -> some View {
+    private func guideInfluenceBulletTile(_ text: String, expandToFullWidth: Bool = true) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Circle()
                 .fill(style.accent.opacity(0.92))
@@ -792,7 +802,7 @@ struct GuideHubView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, minHeight: 28, alignment: .topLeading)
+        .frame(maxWidth: expandToFullWidth ? .infinity : nil, minHeight: 28, alignment: .topLeading)
         .background(style.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 

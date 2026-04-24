@@ -786,6 +786,74 @@ class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
         fetch_pollen.assert_not_awaited()
         self.assertEqual(payload, existing)
 
+    async def test_ensure_local_forecast_daily_preserves_existing_pollen_when_refresh_is_blank(self) -> None:
+        now = datetime.now(UTC)
+        stale = now - timedelta(hours=7)
+        start_day = date(2026, 4, 21)
+        existing = [
+            {
+                "day": start_day + timedelta(days=index),
+                "updated_at": stale,
+                "pollen_overall_level": "moderate" if index < POLLEN_FORECAST_DAYS else None,
+                "pollen_primary_type": "grass" if index < POLLEN_FORECAST_DAYS else None,
+                "pollen_grass_level": "moderate" if index < POLLEN_FORECAST_DAYS else None,
+                "pollen_source": "google-pollen:forecast" if index < POLLEN_FORECAST_DAYS else None,
+                "raw": "{\"pollen_available\": true}",
+            }
+            for index in range(LOCAL_FORECAST_DAYS)
+        ]
+        refreshed_blank = [
+            {
+                "day": start_day + timedelta(days=index),
+                "updated_at": now,
+                "pollen_overall_level": None,
+                "pollen_primary_type": None,
+                "pollen_grass_level": None,
+                "pollen_source": None,
+                "raw": "{\"pollen_available\": false}",
+            }
+            for index in range(LOCAL_FORECAST_DAYS)
+        ]
+        preserved = [
+            {
+                **row,
+                "pollen_overall_level": existing[index]["pollen_overall_level"],
+                "pollen_primary_type": existing[index]["pollen_primary_type"],
+                "pollen_grass_level": existing[index]["pollen_grass_level"],
+                "pollen_source": existing[index]["pollen_source"],
+                "raw": "{\"pollen_available\": true, \"pollen_primary_type\": \"grass\"}"
+                if index < POLLEN_FORECAST_DAYS
+                else "{\"pollen_available\": false, \"pollen_primary_type\": null}",
+            }
+            for index, row in enumerate(refreshed_blank)
+        ]
+
+        class _Conn:
+            async def commit(self) -> None:
+                return None
+
+        with (
+            patch("services.forecast_outlook._fetch_local_forecast_rows", AsyncMock(side_effect=[existing, preserved])),
+            patch("services.forecast_outlook.summarize_local_forecast_days", return_value=refreshed_blank),
+            patch("services.forecast_outlook._upsert_local_forecast_rows", AsyncMock()) as upsert_rows,
+            patch.object(nws, "forecast_hourly_by_latlon", AsyncMock(return_value={})),
+            patch.object(nws, "gridpoints_by_latlon", AsyncMock(return_value={})),
+            patch("services.forecast_outlook._fetch_local_pollen_forecast", AsyncMock(return_value={})),
+        ):
+            payload = await ensure_local_forecast_daily(
+                _Conn(),
+                zip_code="78209",
+                lat=29.49,
+                lon=-98.47,
+                days=LOCAL_FORECAST_DAYS,
+            )
+
+        upserted_rows = upsert_rows.await_args.args[1]
+        self.assertEqual(upserted_rows[0]["pollen_overall_level"], "moderate")
+        self.assertEqual(upserted_rows[0]["pollen_primary_type"], "grass")
+        self.assertEqual(upserted_rows[0]["pollen_source"], "google-pollen:forecast")
+        self.assertEqual(payload[0]["pollen_overall_level"], "moderate")
+
 
 if __name__ == "__main__":
     unittest.main()
