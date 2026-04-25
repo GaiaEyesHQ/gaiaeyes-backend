@@ -3209,6 +3209,8 @@ struct ContentView: View {
     @State private var onboardingAccountBusy: Bool = false
     @State private var onboardingResetInFlight: Bool = false
     @State private var onboardingResetMessage: String?
+    @State private var showReauthenticationSheet: Bool = false
+    @State private var reauthenticationMessage: String?
 #if canImport(CoreLocation)
     @State private var locationProvider = OneShotLocationProvider()
 #endif
@@ -6553,6 +6555,9 @@ struct ContentView: View {
         let hasStoredAuthContinuity = await MainActor.run { auth.hasStoredAuthContinuity }
         if hasStoredAuthContinuity && !allowsAnonymousIdentity {
             appLog("[AUTH] backend identity deferred; stored auth continuity without usable token reason=\(reason)")
+            await MainActor.run {
+                presentReauthenticationPrompt(reason: reason)
+            }
             return false
         }
 
@@ -6567,6 +6572,30 @@ struct ContentView: View {
             appLog("[AUTH] anonymous backend identity failed reason=\(reason): \(String(describing: error))")
             return false
         }
+    }
+
+    @MainActor
+    private func presentReauthenticationPrompt(reason: String, detail: String? = nil) {
+        auth.loadFromKeychain()
+        let accessToken = auth.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let refreshToken = auth.supabaseRefreshToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard accessToken.isEmpty, refreshToken.isEmpty, auth.hasStoredAuthContinuity else { return }
+        let email = (auth.supabaseEmail?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? UserDefaults.standard.string(forKey: AuthManager.continuityEmailDefaultsKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? "")
+        let emailText = email.isEmpty ? "" : " as \(email)"
+        reauthenticationMessage = "Your secure session expired\(emailText). Sign back in to keep syncing health, symptoms, patterns, and Plus features."
+        if !showReauthenticationSheet {
+            appLog("[AUTH] presenting sign-in prompt reason=\(reason)")
+        }
+        showReauthenticationSheet = true
+    }
+
+    @MainActor
+    private func completeReauthenticationPrompt() {
+        reauthenticationMessage = nil
+        showReauthenticationSheet = false
+        handleAuthScopeChangeIfNeeded()
     }
 
     private func continueOnboardingWithoutAccount() async -> Bool {
@@ -18137,6 +18166,13 @@ struct ContentView: View {
                     AppAnalytics.flush()
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .gaiaAuthNeedsReauthentication).receive(on: RunLoop.main)) { note in
+                let info = note.userInfo as? [String: String]
+                presentReauthenticationPrompt(
+                    reason: info?["reason"] ?? "auth_needs_reauthentication",
+                    detail: info?["detail"] ?? info?["endpoint"]
+                )
+            }
             .onChange(of: selectedTab, initial: true) { oldValue, newValue in
                 let trigger = oldValue == newValue ? "initial" : "switch"
                 AppAnalytics.track(
@@ -20528,6 +20564,37 @@ struct ContentView: View {
             symptomSheetPrefill = nil
         }) {
             symptomLogSheet(isPresented: $showSymptomSheet)
+        }
+        .sheet(isPresented: $showReauthenticationSheet) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Sign back in")
+                            .font(.title2.weight(.bold))
+                        Text(reauthenticationMessage ?? "Your secure session expired. Sign back in to keep Gaia Eyes synced.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    LoginView(
+                        initialEmail: auth.supabaseEmail ?? UserDefaults.standard.string(forKey: AuthManager.continuityEmailDefaultsKey),
+                        onAuthenticated: {
+                            completeReauthenticationPrompt()
+                        }
+                    )
+                    Spacer(minLength: 0)
+                }
+                .padding(24)
+                .navigationTitle("Account")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Not Now") {
+                            showReauthenticationSheet = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
         }
         )
 

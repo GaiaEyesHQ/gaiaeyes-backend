@@ -428,10 +428,19 @@ final class AuthManager: ObservableObject {
         let detail = "access=\(hasAccess) refresh=\(hasRefresh) user=\(hasUser) email=\(hasEmail) continuity=\(hasContinuityEmail)"
         if !hasAccess && !hasRefresh && (hasUser || hasEmail || hasContinuityEmail) {
             recordDiagnosticsEvent("stored_session_missing_tokens", detail: detail, userId: userId)
+            notifyReauthenticationNeeded(reason: "stored_session_missing_tokens", detail: detail)
             appLog("[AUTH] keychain continuity without usable tokens \(detail)")
         } else {
             appLog("[AUTH] keychain session loaded \(detail)")
         }
+    }
+
+    private func notifyReauthenticationNeeded(reason: String, detail: String? = nil) {
+        var userInfo: [String: String] = ["reason": reason]
+        if let detail, !detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            userInfo["detail"] = detail
+        }
+        NotificationCenter.default.post(name: .gaiaAuthNeedsReauthentication, object: nil, userInfo: userInfo)
     }
 
     private func hasNonEmptyStoredValue(_ inMemoryValue: String?, key: String) -> Bool {
@@ -690,6 +699,9 @@ final class AuthManager: ObservableObject {
         clearMirroredBackendDefaultsForMissingSession(reason: "session invalidated")
         lastError = reason
         recordDiagnosticsEvent("session_invalidated", detail: diagnosticDetail ?? reason, userId: currentUserId)
+        if preserveEmail {
+            notifyReauthenticationNeeded(reason: "session_invalidated", detail: diagnosticDetail ?? reason)
+        }
         appLog("[AUTH] cleared invalid Supabase session: \(reason)")
     }
 

@@ -1066,6 +1066,11 @@ final class APIClient {
         }
         guard request.value(forHTTPHeaderField: "Authorization") != nil else {
             logger?("[AUTH] skipped protected request \(endpoint): missing Authorization header")
+            NotificationCenter.default.post(
+                name: .gaiaAuthNeedsReauthentication,
+                object: nil,
+                userInfo: ["reason": "protected_request_missing_auth", "endpoint": endpoint]
+            )
             throw APIError.server(code: 401, body: "missing local auth token before request")
         }
     }

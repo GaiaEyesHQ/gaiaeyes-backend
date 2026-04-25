@@ -4,6 +4,7 @@ import Foundation
 extension Notification.Name {
     static let gaiaBackendDBRecovered = Notification.Name("gaia.backend.db.recovered")
     static let dashboardShouldRefresh = Notification.Name("DashboardShouldRefresh")
+    static let gaiaAuthNeedsReauthentication = Notification.Name("gaia.auth.needs_reauthentication")
 }
 
 enum DeveloperAuthDefaults {

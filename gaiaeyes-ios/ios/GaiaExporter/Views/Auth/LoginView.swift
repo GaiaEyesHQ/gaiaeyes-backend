@@ -2,7 +2,8 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var auth: AuthManager
-    let onAuthenticated: (() -> Void)? = nil
+    let initialEmail: String?
+    let onAuthenticated: (() -> Void)?
 
     @State private var email: String = ""
     @State private var password: String = ""
@@ -10,6 +11,11 @@ struct LoginView: View {
     @State private var isBusy: Bool = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+
+    init(initialEmail: String? = nil, onAuthenticated: (() -> Void)? = nil) {
+        self.initialEmail = initialEmail
+        self.onAuthenticated = onAuthenticated
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -52,6 +58,10 @@ struct LoginView: View {
                     .font(.footnote)
                     .foregroundColor(.orange)
             }
+        }
+        .onAppear {
+            guard email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            email = initialEmail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         }
     }
 
