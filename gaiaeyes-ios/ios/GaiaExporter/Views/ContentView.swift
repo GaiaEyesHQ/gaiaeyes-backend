@@ -2754,6 +2754,7 @@ private struct LaunchDebugToolkitPanel: View {
     let onRefreshEntitlements: () -> Void
     let onRestorePurchases: () -> Void
     let onResetOnboarding: () -> Void
+    let onSimulateLostSecureSession: () -> Void
     let onClearCache: () -> Void
     let onCopyBundle: () -> Void
     let onShareBundle: () -> Void
@@ -2951,6 +2952,12 @@ private struct LaunchDebugToolkitPanel: View {
                         .buttonStyle(.bordered)
                         .disabled(isOnboardingResetInFlight)
                     }
+                    Button("Simulate Lost Secure Session", action: onSimulateLostSecureSession)
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    Text("Deletes local auth tokens but preserves last-known account continuity, so QA can verify the sign-back-in recovery flow.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                     VStack(alignment: .leading, spacing: 8) {
                         Picker("Cache target", selection: $selectedCacheTarget) {
                             ForEach(DebugCacheTarget.allCases) { target in
@@ -5959,6 +5966,13 @@ struct ContentView: View {
         }
         debugToolkitMessage = "Cleared \(debugSelectedCacheTarget.rawValue.lowercased())."
         appLog("[UI] cleared debug cache target: \(debugSelectedCacheTarget.rawValue)")
+    }
+
+    @MainActor
+    private func simulateLostSecureSessionForDebug() {
+        auth.simulateLostSecureSessionForDebug()
+        handleAuthScopeChangeIfNeeded()
+        debugToolkitMessage = "Simulated lost secure session. Sign-in prompt should be visible."
     }
     
     private func formatISO(_ iso: String) -> Date? {
@@ -20071,6 +20085,7 @@ struct ContentView: View {
                                         onRefreshEntitlements: { Task { await refreshBillingDiagnostics(showSuccessMessage: true) } },
                                         onRestorePurchases: { Task { await restorePurchasesForDebug() } },
                                         onResetOnboarding: { Task { await resetOnboardingForDebug() } },
+                                        onSimulateLostSecureSession: { simulateLostSecureSessionForDebug() },
                                         onClearCache: { clearSelectedDebugCache() },
                                         onCopyBundle: { copyDiagnosticsBundle() },
                                         onShareBundle: { shareDiagnosticsBundle() }

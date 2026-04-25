@@ -107,7 +107,6 @@ STATEMENT_TIMEOUT_MS = 60000
 MART_REFRESH_DEBOUNCE_SECONDS = 300.0
 FORCED_MART_REFRESH_DEBOUNCE_SECONDS = 120.0
 DB_POOL_ACQUIRE_TIMEOUT_SECONDS = 1.0
-DB_POOL_PRESSURE_MIN_OPEN = 4
 _REFRESH_DELAY_RANGE = (1.5, 2.0)
 
 _CACHE_STALE_THRESHOLD_SECONDS = 15 * 60
@@ -208,12 +207,7 @@ def _pool_metrics_show_pressure(metrics: Optional[Dict[str, Any]]) -> bool:
     if not metrics:
         return False
     waiting = _pool_metric_int(metrics, "waiting")
-    open_count = _pool_metric_int(metrics, "open")
-    free = _pool_metric_int(metrics, "free")
-    used = _pool_metric_int(metrics, "used")
-    if waiting > 0:
-        return True
-    return open_count >= DB_POOL_PRESSURE_MIN_OPEN and free <= 0 and used >= open_count
+    return waiting > 0
 
 
 def _db_pressure_reason(monitor=None) -> Optional[str]:

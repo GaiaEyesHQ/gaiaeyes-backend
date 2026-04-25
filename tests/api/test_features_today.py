@@ -84,6 +84,11 @@ class _FakePool:
         return _FakeConnContext()
 
 
+def test_pool_metrics_show_pressure_requires_waiting_requests():
+    assert summary._pool_metrics_show_pressure({"open": 8, "free": 0, "used": 8, "waiting": 0}) is False
+    assert summary._pool_metrics_show_pressure({"open": 8, "free": 0, "used": 8, "waiting": 1}) is True
+
+
 class _RecordingCursor:
     def __init__(self):
         self.calls: List[tuple[str, tuple]] = []

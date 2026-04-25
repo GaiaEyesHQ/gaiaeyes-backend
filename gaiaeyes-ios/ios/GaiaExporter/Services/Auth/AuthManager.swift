@@ -357,6 +357,31 @@ final class AuthManager: ObservableObject {
         recordDiagnosticsEvent("manual_sign_out", userId: currentUserId)
     }
 
+    func simulateLostSecureSessionForDebug() {
+        let accessToken = supabaseAccessToken
+        let currentUserId = supabaseUserId ?? keychain.read("user_id")
+        let email = supabaseEmail ?? keychain.read("email") ?? continuityEmailHint()
+        supabaseAccessToken = nil
+        supabaseRefreshToken = nil
+        supabaseUserId = nil
+        supabaseExpiresAt = nil
+        if let email {
+            supabaseEmail = email
+            keychain.write(email, key: "email")
+            persistContinuityEmail(email)
+        }
+        keychain.delete("access_token")
+        keychain.delete("refresh_token")
+        keychain.delete("user_id")
+        keychain.delete("expires_at")
+        clearMirroredBackendDefaults(accessToken: accessToken, userId: currentUserId)
+        clearMirroredBackendDefaultsForMissingSession(reason: "debug simulated lost secure session")
+        let detail = "debug simulated lost secure session"
+        recordDiagnosticsEvent("stored_session_missing_tokens", detail: detail, userId: currentUserId)
+        notifyReauthenticationNeeded(reason: "debug_simulated_lost_secure_session", detail: detail)
+        appLog("[AUTH] debug simulated lost secure session")
+    }
+
     private func persistSession(accessToken: String, refreshToken: String, expiresAt: Date?, userId: String?) {
         supabaseAccessToken = accessToken
         supabaseRefreshToken = refreshToken
