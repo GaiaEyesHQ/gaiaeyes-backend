@@ -1081,7 +1081,7 @@ final class HealthKitBackgroundSync {
         let started = await phase2BackfillState.beginIfNeeded()
         guard started else { return }
 
-        let keys = ["heart_rate", "step_count"]
+        let keys = ["heart_rate", "step_count", "sleep_stage"]
         if await healthAuthorizationShouldRequest(read: Set([hrType, stepsType])) {
             appLog("[Backfill] phase2 recent backfill skipped: Health authorization not requested on this device")
             await phase2BackfillState.end()
@@ -1110,8 +1110,18 @@ final class HealthKitBackgroundSync {
             sort: sort,
             windowDays: 7
         )
+        let sleepSelected = (defaults.string(forKey: "gaia.healthkit.selected_permission_keys") ?? HealthPermissionOption.defaultStorageValue)
+            .split(separator: ",")
+            .contains { $0.trimmingCharacters(in: .whitespacesAndNewlines) == HealthPermissionOption.sleep.rawValue }
+        let sleepResult: HealthBackfillMetricResult?
+        if sleepSelected {
+            let pred = HKQuery.predicateForSamples(withStart: recentRepairStart, end: now, options: [])
+            sleepResult = await backfillSleep(pred: pred, sort: sort, chunkSize: 200, maxRetries: 3)
+        } else {
+            sleepResult = nil
+        }
 
-        let failures = [heartResult.failureDescription, stepResult.failureDescription].compactMap { $0 }
+        let failures = [heartResult.failureDescription, stepResult.failureDescription, sleepResult?.failureDescription].compactMap { $0 }
         if failures.isEmpty {
             defaults.set(Self.phase2BackfillVersion, forKey: markerKey)
             defaults.removeObject(forKey: Self.phase2BackfillMarkerKey)
@@ -1939,6 +1949,7 @@ final class HealthKitBackgroundSync {
                     "Imported \(rows.count) \(anchorKey.replacingOccurrences(of: "_", with: " ")) rows from window \(windowLabel).",
                     onProgress: onProgress
                 )
+                await requestFeaturesRefreshAfterUpload(rows: rows.count, source: "hk:backfill_\(anchorKey)")
             } catch {
                 appLog("[Backfill] statistics query error \(anchorKey) window \(windowLabel): \(error.localizedDescription)")
                 return HealthBackfillMetricResult(
@@ -1950,9 +1961,6 @@ final class HealthKitBackgroundSync {
         }
 
         anchorStore.setSeedStart(end, forKey: anchorKey)
-        if totalUploaded > 0 {
-            await requestFeaturesRefreshAfterUpload(rows: totalUploaded, source: "hk:backfill_\(anchorKey)")
-        }
 
         return HealthBackfillMetricResult(
             collectedCount: totalCollected,

@@ -85,7 +85,7 @@ final class HealthKitSleepExporter {
         let predicate = HKQuery.predicateForSamples(
             withStart: start,
             end: end,
-            options: [.strictStartDate, .strictEndDate]
+            options: []
         )
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
@@ -105,7 +105,9 @@ final class HealthKitSleepExporter {
                     return
                 }
                 let mapped: [(Stage, Date, Date)] = samples.compactMap { s in
-                    guard s.endDate > s.startDate else { return nil }
+                    let clampedStart = max(s.startDate, start)
+                    let clampedEnd = min(s.endDate, end)
+                    guard clampedEnd > clampedStart else { return nil }
                     let stage: Stage
                     switch s.value {
                     case HKCategoryValueSleepAnalysis.inBed.rawValue: stage = .inBed
@@ -115,8 +117,9 @@ final class HealthKitSleepExporter {
                     case HKCategoryValueSleepAnalysis.asleepDeep.rawValue: stage = .deep
                     default: stage = .asleep
                     }
-                    return (stage, s.startDate, s.endDate)
+                    return (stage, clampedStart, clampedEnd)
                 }
+                appLog("[SLEEP] fetched \(samples.count) raw HealthKit samples; mapped \(mapped.count) overlapping segments")
                 cont.resume(returning: mapped)
             }
             self.healthStore.execute(query)

@@ -212,6 +212,24 @@ async def _execute_mart_refresh(
                     )
                 try:
                     await cur.execute(
+                        "select to_regprocedure('gaia.refresh_daily_summary_sleep_user(uuid,date,text)')"
+                    )
+                    exists_row = await cur.fetchone()
+                    if exists_row and exists_row[0]:
+                        await cur.execute(
+                            "select gaia.refresh_daily_summary_sleep_user(%s::uuid, %s::date, %s::text)",
+                            (user_id, day_local, tz_name),
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "[MART] sleep summary repair failed user=%s day=%s tz=%s error=%s",
+                        user_id,
+                        day_local,
+                        tz_name,
+                        exc,
+                    )
+                try:
+                    await cur.execute(
                         "select marts.refresh_daily_features_user(%s::uuid, %s::date)",
                         (user_id, day_local),
                     )

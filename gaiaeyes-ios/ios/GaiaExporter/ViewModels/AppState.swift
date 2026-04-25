@@ -795,13 +795,17 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             try await exporter.requestAuthorization()
             let api = apiWithAuth()
             let uploadUserId = AuthManager.shared.currentSupabaseUserId() ?? userId
-            let uploaded = try await exporter.syncSleep(lastDays: 7, api: api, userId: uploadUserId)
-            append("[SLEEP] uploaded \(uploaded) segments (7d)")
+            var uploaded = try await exporter.syncSleep(lastDays: 7, api: api, userId: uploadUserId)
+            if uploaded == 0 {
+                append("[SLEEP] 7-day sync returned 0 segments; retrying 30-day overlap scan…")
+                uploaded = try await exporter.syncSleep(lastDays: 30, api: api, userId: uploadUserId)
+            }
+            append("[SLEEP] uploaded \(uploaded) segments")
             if uploaded > 0 {
                 healthkitSleepSyncMessage = "Imported \(uploaded) sleep segments from HealthKit."
                 UserDefaults.standard.set(checkedAt, forKey: "gaia.upload.sleep")
             } else {
-                healthkitSleepSyncMessage = "Sleep sync ran, but HealthKit returned no sleep samples in the last 7 days."
+                healthkitSleepSyncMessage = "Sleep sync ran, but HealthKit returned no sleep samples in the last 30 days."
                 UserDefaults.standard.removeObject(forKey: "gaia.upload.sleep")
             }
             refreshStatus()
