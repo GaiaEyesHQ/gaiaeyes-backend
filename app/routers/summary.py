@@ -2104,6 +2104,8 @@ async def features_today(
 
     tz_param = request.query_params.get("tz", DEFAULT_TIMEZONE)
     tz_name, tzinfo = _normalize_timezone(tz_param)
+    force_param = (request.query_params.get("force") or "").strip().lower()
+    force_requested = force_param in {"1", "true", "yes", "on", "force"}
 
     user_id = getattr(request.state, "user_id", None)
     if diag:
@@ -2141,6 +2143,9 @@ async def features_today(
     diag_info: Dict[str, Any]
     error_text: Optional[str] = None
     primary_failed = False
+    forced_refresh_day: Optional[date] = None
+    forced_refresh_completed = False
+    forced_refresh_error: Optional[str] = None
 
     reason_code = getattr(request.state, "db_error", None)
     if conn is None:
@@ -2168,6 +2173,19 @@ async def features_today(
         error_text = error_code
     else:
         try:
+            if force_requested and user_id:
+                try:
+                    forced_refresh_day = await _current_day_local(conn, tz_name)
+                    await _execute_mart_refresh(user_id, forced_refresh_day, tz_name)
+                    forced_refresh_completed = True
+                except Exception as exc:
+                    forced_refresh_error = str(exc) or exc.__class__.__name__
+                    logger.warning(
+                        "[features_today] forced mart refresh failed user=%s tz=%s: %s",
+                        user_id,
+                        tz_name,
+                        forced_refresh_error,
+                    )
             response_payload, diag_info, error_text = await _collect_features(
                 conn, user_id, tz_name, tzinfo, cached_payload=cached_payload
             )
@@ -2210,6 +2228,16 @@ async def features_today(
 
     if not diag_info.get("cache_snapshot_initial"):
         diag_info["cache_snapshot_initial"] = initial_cache_summary
+    if force_requested:
+        diag_info["refresh_forced"] = True
+        day_text = forced_refresh_day.isoformat() if forced_refresh_day else "-"
+        if forced_refresh_completed:
+            _diag_trace(diag_info, f"forced mart refresh completed before collect day={day_text}")
+        elif forced_refresh_error:
+            diag_info.setdefault("enrichment_errors", []).append(f"forced mart refresh failed: {forced_refresh_error}")
+            _diag_trace(diag_info, f"forced mart refresh failed before collect day={day_text}")
+        else:
+            _diag_trace(diag_info, "forced mart refresh requested but not run")
     if (
         initial_cache_trace
         and initial_cache_trace not in (diag_info.get("trace") or [])
@@ -2260,12 +2288,12 @@ async def features_today(
     if cache_age_seconds is not None and diag_info.get("cache_age_seconds") is None:
         diag_info["cache_age_seconds"] = cache_age_seconds
 
-    refresh_reason = "interval"
-    refresh_forced = False
-    if diag_info.get("error"):
+    refresh_reason = "forced" if force_requested else "interval"
+    refresh_forced = bool(force_requested)
+    if not force_requested and diag_info.get("error"):
         refresh_reason = "error"
         refresh_forced = True
-    elif cached_payload:
+    elif not force_requested and cached_payload:
         stale_cache = cache_age_seconds is None or cache_age_seconds >= _CACHE_STALE_THRESHOLD_SECONDS
         if stale_cache:
             refresh_reason = "stale_cache"
@@ -2282,22 +2310,23 @@ async def features_today(
     refresh_scheduled = False
     if user_id:
         refresh_attempted = True
-        try:
-            refresh_scheduled = await _maybe_schedule_background_refresh(
-                user_id, refresh_day, force=refresh_forced
-            )
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.warning(
-                "[features_today] background refresh scheduling failed user=%s: %s",
-                user_id,
-                exc,
-            )
-            refresh_scheduled = False
+        if not forced_refresh_completed:
+            try:
+                refresh_scheduled = await _maybe_schedule_background_refresh(
+                    user_id, refresh_day, force=refresh_forced
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "[features_today] background refresh scheduling failed user=%s: %s",
+                    user_id,
+                    exc,
+                )
+                refresh_scheduled = False
 
     diag_info["refresh_attempted"] = refresh_attempted
     diag_info["refresh_scheduled"] = refresh_scheduled
     diag_info["refresh_reason"] = refresh_reason if refresh_attempted else None
-    diag_info["refresh_forced"] = refresh_forced and refresh_attempted
+    diag_info["refresh_forced"] = (refresh_forced or forced_refresh_completed) and refresh_attempted
 
     if refresh_attempted:
         refresh_day_text = None

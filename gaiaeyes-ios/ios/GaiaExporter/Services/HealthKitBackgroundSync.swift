@@ -220,6 +220,8 @@ final class HealthKitBackgroundSync {
     private static let phase2BackfillVersion = 4
     private static let phase2BackfillMarkerKey = "gaia.hk.phase2BackfillVersion"
     private static let recentRepairLookbackDays = 30
+    private static let initialDeltaLookbackDays = 2
+    private static let initialSleepDeltaLookbackDays = 30
 
     private static func isoString(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
@@ -559,7 +561,13 @@ final class HealthKitBackgroundSync {
         if let seedStart {
             appLog("[HK] resuming \(anchorKey) deltas from seed \(iso.string(from: seedStart))")
         }
-        let pred = HKQuery.predicateForSamples(withStart: seedStart ?? Date.distantPast, end: Date(), options: [])
+        let initialStart = Calendar.current.date(byAdding: .day, value: -Self.initialDeltaLookbackDays, to: Date())
+            ?? Date(timeIntervalSinceNow: -Double(Self.initialDeltaLookbackDays) * 24 * 60 * 60)
+        let queryStart = seedStart ?? (anchor == nil ? initialStart : Date.distantPast)
+        if seedStart == nil, anchor == nil {
+            appLog("[HK] \(anchorKey) initial delta sweep limited to recent \(Self.initialDeltaLookbackDays)d before repair")
+        }
+        let pred = HKQuery.predicateForSamples(withStart: queryStart, end: Date(), options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         var collected: [HKSample] = []
@@ -660,7 +668,14 @@ final class HealthKitBackgroundSync {
             return
         }
         var anchor = anchorStore.anchor(forKey: anchorKey)
-        let pred  = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: [])
+        let seedStart = anchor == nil ? anchorStore.seedStart(forKey: anchorKey) : nil
+        let initialStart = Calendar.current.date(byAdding: .day, value: -Self.initialSleepDeltaLookbackDays, to: Date())
+            ?? Date(timeIntervalSinceNow: -Double(Self.initialSleepDeltaLookbackDays) * 24 * 60 * 60)
+        let queryStart = seedStart ?? (anchor == nil ? initialStart : Date.distantPast)
+        if seedStart == nil, anchor == nil {
+            appLog("[HK] \(anchorKey) initial delta sweep limited to recent \(Self.initialSleepDeltaLookbackDays)d before repair")
+        }
+        let pred  = HKQuery.predicateForSamples(withStart: queryStart, end: Date(), options: [])
         let sort  = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         var collected: [HKSample] = []
@@ -698,6 +713,7 @@ final class HealthKitBackgroundSync {
                 value: nil, unit: nil, value_text: stage
             ))
         }
+        out.sort { $0.start_time > $1.start_time }
 
         guard !out.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
@@ -855,7 +871,16 @@ final class HealthKitBackgroundSync {
     }
 
     private func prioritizeRecentUploads(anchorKey: String, samples: inout [Sample]) {
-        guard anchorKey == "respiratory_rate" else { return }
+        let recentFirstKeys: Set<String> = [
+            "heart_rate",
+            "step_count",
+            "spo2",
+            "hrv_sdnn",
+            "respiratory_rate",
+            "resting_heart_rate",
+            "temperature_deviation"
+        ]
+        guard recentFirstKeys.contains(anchorKey) else { return }
         samples.sort { $0.start_time > $1.start_time }
     }
 
@@ -1038,7 +1063,7 @@ final class HealthKitBackgroundSync {
     private func fetchFeaturesSnapshot(reason: String) async {
         let api = buildAPI()
         do {
-            let envelope: Envelope<FeaturesToday> = try await api.getJSON("v1/features/today", as: Envelope<FeaturesToday>.self)
+            let envelope: Envelope<FeaturesToday> = try await api.getJSON("v1/features/today?force=1", as: Envelope<FeaturesToday>.self)
             if let data = envelope.payload,
                let encoded = try? JSONEncoder().encode(data),
                let json = String(data: encoded, encoding: .utf8) {
@@ -1472,7 +1497,6 @@ final class HealthKitBackgroundSync {
             appLog("[BG] kickOnce skipped until account onboarding is complete")
             return
         }
-        await ensurePhase2RecentBackfillIfNeeded()
         let now = Date()
         let suppressed: Bool = await MainActor.run { () -> Bool in
             let last = lastKickAt ?? .distantPast
@@ -1487,9 +1511,7 @@ final class HealthKitBackgroundSync {
         appLog("[BG] kickOnce: \(reason)")
         let phase2BackfillInProgress = await phase2BackfillState.isInProgress()
         if phase2BackfillInProgress {
-            appLog("[BG] kickOnce: phase2 backfill in progress; skipping delta sweep")
-            StatusStore.shared.setBackgroundRun()
-            return
+            appLog("[BG] kickOnce: phase2 backfill in progress; running critical delta sweep anyway")
         }
         await self.processingGate.runOnce(key: "heart_rate") {
             do { try await self.processDeltas(for: self.hrType, anchorKey: "heart_rate") } catch { appLog("[BG] kickOnce hr error: \(error.localizedDescription)") }
@@ -1528,6 +1550,9 @@ final class HealthKitBackgroundSync {
             }
         }
         StatusStore.shared.setBackgroundRun()
+        if !phase2BackfillInProgress {
+            Task { await self.ensurePhase2RecentBackfillIfNeeded() }
+        }
     }
 
     private func backfillOne(

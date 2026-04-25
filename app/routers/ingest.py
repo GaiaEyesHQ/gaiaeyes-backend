@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Annotated, Awaitable, Dict, List, Optional, Union, Callable, Tuple, Any
 
 import math
@@ -37,9 +37,9 @@ _backlog = deque()
 _backlog_lock = asyncio.Lock()
 _backlog_drain_lock = asyncio.Lock()
 _backlog_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
-_recent_refresh_requests: Dict[str, float] = {}
+_recent_refresh_requests: Dict[Tuple[str, date], float] = {}
 _recent_refresh_lock = asyncio.Lock()
-_DELAYED_REFRESH_DELAY_SECONDS = 2.0
+_DELAYED_REFRESH_DELAY_SECONDS = 0.5
 _DELAYED_REFRESH_DEBOUNCE_SECONDS = 20.0
 
 # Legacy compatibility for tests expecting direct access to the refresh registry
@@ -80,6 +80,20 @@ def _resolve_timezone(value: Optional[str]) -> tuple[str, ZoneInfo]:
 
 def _today_local(tzinfo: ZoneInfo) -> date:
     return datetime.now(tzinfo).date()
+
+
+def _sample_refresh_days(samples: List["SampleIn"], tzinfo: ZoneInfo) -> List[date]:
+    days: set[date] = set()
+    for sample in samples:
+        for sample_time in (sample.start_time, sample.end_time):
+            try:
+                dt = sample_time
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                days.add(dt.astimezone(tzinfo).date())
+            except Exception:
+                continue
+    return sorted(days)
 
 
 async def _enqueue_backlog(entry: Dict[str, Any]) -> None:
@@ -128,10 +142,15 @@ async def _drain_backlog(pool) -> None:
                 break
 
             scheduled_refresh = False
-            if inserted > 0 and refresh_user and not REFRESH_DISABLED:
+            if refresh_user and not REFRESH_DISABLED:
                 tz_resolved, tzinfo = _resolve_timezone(tz_name)
-                day_local = _today_local(tzinfo)
-                scheduled_refresh = await _maybe_schedule_refresh(refresh_user, day_local, inserted, tz_resolved)
+                refresh_days = _sample_refresh_days(models, tzinfo) or [_today_local(tzinfo)]
+                refresh_count = inserted if inserted > 0 else len(models)
+                for day_local in refresh_days:
+                    scheduled_refresh = (
+                        await _maybe_schedule_refresh(refresh_user, day_local, refresh_count, tz_resolved)
+                        or scheduled_refresh
+                    )
                 logger.info(
                     "[BATCH] drained backlog for user=%s tz=%s inserted=%d skipped=%d",
                     refresh_user,
@@ -545,9 +564,11 @@ async def samples_batch(
     )
 
     if db_healthy:
-        if valid_rows and inserted > 0 and refresh_user and not REFRESH_DISABLED:
-            day_local = _today_local(tzinfo)
-            await _maybe_schedule_refresh(refresh_user, day_local, inserted, tz_name)
+        if valid_rows and refresh_user and not REFRESH_DISABLED:
+            refresh_days = _sample_refresh_days([sample for sample, _ in valid_rows], tzinfo) or [_today_local(tzinfo)]
+            refresh_count = inserted if inserted > 0 else len(valid_rows)
+            for day_local in refresh_days:
+                await _maybe_schedule_refresh(refresh_user, day_local, refresh_count, tz_name)
         if valid_rows or _backlog:
             _start_backlog_drain(pool)
 
@@ -576,16 +597,18 @@ async def _maybe_schedule_refresh(
 
     loop = asyncio.get_running_loop()
     now = loop.time()
+    refresh_key = (user_id, day_local)
     async with _recent_refresh_lock:
-        last = _recent_refresh_requests.get(user_id)
+        last = _recent_refresh_requests.get(refresh_key)
         if last and now - last < _DELAYED_REFRESH_DEBOUNCE_SECONDS:
             logger.debug(
-                "[MART] delayed refresh skipped user=%s (debounce %.0fs)",
+                "[MART] delayed refresh skipped user=%s day=%s (debounce %.0fs)",
                 user_id,
+                day_local,
                 _DELAYED_REFRESH_DEBOUNCE_SECONDS,
             )
             return False
-        _recent_refresh_requests[user_id] = now
+        _recent_refresh_requests[refresh_key] = now
 
     delay = _DELAYED_REFRESH_DELAY_SECONDS
     if getenv("PYTEST_CURRENT_TEST"):
@@ -598,11 +621,12 @@ async def _maybe_schedule_refresh(
             await _execute_refresh(user_id, day_local, tz_name)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning(
-                "[MART] delayed refresh failed user=%s error=%s",
+                "[MART] delayed refresh failed user=%s day=%s error=%s",
                 user_id,
+                day_local,
                 exc,
             )
 
     _refresh_task_factory(_runner())
-    logger.info("[MART] scheduled refresh (delayed) user=%s inserted=%d", user_id, inserted)
+    logger.info("[MART] scheduled refresh (delayed) user=%s day=%s inserted=%d", user_id, day_local, inserted)
     return True

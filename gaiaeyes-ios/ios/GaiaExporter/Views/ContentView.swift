@@ -3148,6 +3148,7 @@ struct ContentView: View {
     @State private var featuresRetryWorkItem: DispatchWorkItem? = nil
     @State private var featuresCancellations: [String] = []
     @State private var lastAutoSleepSyncAttemptAt: Date? = nil
+    @State private var autoSleepSyncInFlight: Bool = false
     @State private var forecast: ForecastSummary? = nil
     @State private var series: SpaceSeries? = nil
     @State private var lastKnownSeries: SpaceSeries? = nil
@@ -5080,6 +5081,31 @@ struct ContentView: View {
     private func shouldAttemptAutoSleepSync(now: Date = Date()) -> Bool {
         guard let lastAutoSleepSyncAttemptAt else { return true }
         return now.timeIntervalSince(lastAutoSleepSyncAttemptAt) >= 15 * 60
+    }
+
+    private func runAutoSleepSync(reason: String, emptyLogMessage: String) {
+        guard !autoSleepSyncInFlight else {
+            appLog("[UI] sleep sync already in progress; skipping \(reason)")
+            return
+        }
+        autoSleepSyncInFlight = true
+        Task { @MainActor in
+            defer { autoSleepSyncInFlight = false }
+            appLog("[UI] \(reason) — running sleep sync (7d)…")
+            let uploadedSleepSegments = await state.syncSleep7d()
+            guard uploadedSleepSegments > 0 else {
+                appLog(emptyLogMessage)
+                return
+            }
+            let delaySeconds = Double.random(in: 3.0...3.5)
+            let delayText = String(format: "%.1f", delaySeconds)
+            appLog("[UI] sleep sync imported \(uploadedSleepSegments) segments, refetching features after ~\(delayText)s backoff…")
+            let nanos = UInt64(delaySeconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanos)
+            if !Task.isCancelled {
+                await fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
+            }
+        }
     }
 
     private func healthPermissionStatus(for option: HealthPermissionOption, metric: String) -> String {
@@ -9068,7 +9094,6 @@ struct ContentView: View {
                         }
                     }
 
-                    let guardAlreadyExpired = Date() >= featuresRefreshGuardUntil
                     let guardSeconds = featuresGuardDuration(for: env, fallback: false)
                     featuresConsecutiveFailures = 0
                     featuresRefreshGuardUntil = Date().addingTimeInterval(guardSeconds)
@@ -9091,27 +9116,10 @@ struct ContentView: View {
                                 return
                             }
                             lastAutoSleepSyncAttemptAt = sleepSyncNow
-                            appLog("[UI] today has 0 sleep — running sleep sync (7d)…")
-                            let uploadedSleepSegments = await state.syncSleep7d()
-                            guard uploadedSleepSegments > 0 else {
-                                appLog("[UI] sleep sync completed with 0 imported segments; will retry if sleep stays empty")
-                                return
-                            }
-                            let delaySeconds = Double.random(in: 1.0...1.2)
-                            let delayText = String(format: "%.1f", delaySeconds)
-                            appLog("[UI] sleep sync imported \(uploadedSleepSegments) segments, refetching features after ~\(delayText)s backoff…")
-                            let nanos = UInt64(delaySeconds * 1_000_000_000)
-                            try? await Task.sleep(nanoseconds: nanos)
-                            // schedule a single follow-up after short delay only if outside guard
-                            if guardAlreadyExpired {
-                                Task {
-                                    let nanos2 = UInt64(0.8 * 1_000_000_000)
-                                    try? await Task.sleep(nanoseconds: nanos2)
-                                    if !Task.isCancelled && !featuresRefreshBusy {
-                                        await fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
-                                    }
-                                }
-                            }
+                            runAutoSleepSync(
+                                reason: "today has 0 sleep",
+                                emptyLogMessage: "[UI] sleep sync completed with 0 imported segments; will retry if sleep stays empty"
+                            )
                             return
                         }
                     } else if data.day == chicagoTodayString() {
@@ -9122,26 +9130,10 @@ struct ContentView: View {
                                 return
                             }
                             lastAutoSleepSyncAttemptAt = sleepSyncNow
-                            appLog("[UI] today sleep total missing — running sleep sync (7d)…")
-                            let uploadedSleepSegments = await state.syncSleep7d()
-                            guard uploadedSleepSegments > 0 else {
-                                appLog("[UI] sleep sync completed with 0 imported segments; will retry if sleep stays missing")
-                                return
-                            }
-                            let delaySeconds = Double.random(in: 1.0...1.2)
-                            let delayText = String(format: "%.1f", delaySeconds)
-                            appLog("[UI] sleep sync imported \(uploadedSleepSegments) segments, refetching features after ~\(delayText)s backoff…")
-                            let nanos = UInt64(delaySeconds * 1_000_000_000)
-                            try? await Task.sleep(nanoseconds: nanos)
-                            if guardAlreadyExpired {
-                                Task {
-                                    let nanos2 = UInt64(0.8 * 1_000_000_000)
-                                    try? await Task.sleep(nanoseconds: nanos2)
-                                    if !Task.isCancelled && !featuresRefreshBusy {
-                                        await fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
-                                    }
-                                }
-                            }
+                            runAutoSleepSync(
+                                reason: "today sleep total missing",
+                                emptyLogMessage: "[UI] sleep sync completed with 0 imported segments; will retry if sleep stays missing"
+                            )
                             return
                         }
                     }

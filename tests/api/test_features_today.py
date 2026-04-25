@@ -220,7 +220,7 @@ async def test_refresh_scheduled_on_ingest(monkeypatch, client: AsyncClient):
     assert scheduled, "refresh task should be scheduled"
     scheduled_user, scheduled_day = scheduled[0]
     assert scheduled_user == user_id
-    assert scheduled_day == ingest._today_local(ZoneInfo("UTC"))
+    assert scheduled_day == date(2024, 4, 3)
 
 
 @pytest.mark.anyio
@@ -459,6 +459,46 @@ async def test_features_today_includes_geomagnetic_context(monkeypatch, client: 
     assert data["geomagnetic_context"]["label"] == "Elevated"
     assert data["geomagnetic_context"]["confidence_label"] == "Moderate"
     assert data["geomagnetic_context"]["ts_utc"] == "2026-03-22T12:00:00Z"
+
+
+@pytest.mark.anyio
+async def test_features_today_force_refreshes_before_collect(monkeypatch, client: AsyncClient):
+    def _fake_acquire():
+        return _FakeConnContext()
+
+    today = date(2026, 4, 24)
+    calls: List[str] = []
+
+    async def _fake_current_day(conn, tz_name):  # noqa: ARG001
+        calls.append("current_day")
+        return today
+
+    async def _fake_execute_mart_refresh(user_id, day_local, tz_name="UTC"):  # noqa: ARG001
+        calls.append("refresh")
+
+    async def _fake_collect(conn, user_id, tz_name, tzinfo, cached_payload=None):  # noqa: ARG001
+        calls.append("collect")
+        return (
+            {"user_id": user_id, "day": today, "updated_at": datetime.now(timezone.utc)},
+            {"source": "today", "day": today, "day_used": today, "updated_at": datetime.now(timezone.utc)},
+            None,
+        )
+
+    monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
+    monkeypatch.setattr(summary, "_current_day_local", _fake_current_day)
+    monkeypatch.setattr(summary, "_execute_mart_refresh", _fake_execute_mart_refresh)
+    monkeypatch.setattr(summary, "_collect_features", _fake_collect)
+
+    user_id = str(uuid4())
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC", "force": "1"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    assert calls[:3] == ["current_day", "refresh", "collect"]
 
 
 @pytest.mark.anyio
