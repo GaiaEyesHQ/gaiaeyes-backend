@@ -68,6 +68,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
     }
     private var warnedAboutAnonymousDevRequest = false
+    private var warnedAboutStaleStoredBearer = false
 
     // MARK: - UI status + log
     @Published var statusLines: [String] = []
@@ -351,9 +352,16 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     func apiWithAuth() -> APIClient {
         let trimmedBase = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         let storedBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
-        let supabaseBearer = AuthManager.shared.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let trimmedBearer = supabaseBearer.isEmpty ? storedBearer : supabaseBearer
-        let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let auth = AuthManager.shared
+        if auth.supabaseAccessToken == nil && auth.supabaseRefreshToken == nil && auth.hasStoredAuthContinuity {
+            auth.loadFromKeychain()
+        }
+        let supabaseBearer = auth.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let supabaseRefresh = auth.supabaseRefreshToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hasContinuityWithoutToken = supabaseBearer.isEmpty && supabaseRefresh.isEmpty && auth.hasStoredAuthContinuity
+        let trimmedBearer = hasContinuityWithoutToken ? "" : (supabaseBearer.isEmpty ? storedBearer : supabaseBearer)
+        let storedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUserId = hasContinuityWithoutToken ? "" : storedUserId
         let storedBearerIsDeveloper = supabaseBearer.isEmpty && Self.isDeveloperBearerString(storedBearer)
         let normalizedBase = trimmedBase.isEmpty ? "http://127.0.0.1:8000" : trimmedBase
         let clientSignature = "\(normalizedBase)|\(trimmedBearer)"
@@ -370,7 +378,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             append("[NET] client ready base=\(cfg.baseURLString) bearer=\(!trimmedBearer.isEmpty) uid=\(trimmedUserId.isEmpty ? "nil" : trimmedUserId)")
         }
         // Scope only developer-token calls. Supabase JWTs are already account-scoped.
-        if supabaseBearer.isEmpty,
+        if !hasContinuityWithoutToken,
+           supabaseBearer.isEmpty,
            let eff = effectiveDeveloperUserId(isDeveloperBearer: storedBearerIsDeveloper, trimmedUserId: trimmedUserId) {
             client.devUserId = eff
         } else {
@@ -383,7 +392,14 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             await AuthManager.shared.forceRefreshAccessToken()
         }
         client.logger = { [weak self] msg in Task { @MainActor in self?.append("[NET] \(msg)") } }
-        if supabaseBearer.isEmpty,
+        if hasContinuityWithoutToken, !storedBearer.isEmpty, !warnedAboutStaleStoredBearer {
+            append("[AUTH] ignoring stored backend bearer; auth continuity has no usable token")
+            warnedAboutStaleStoredBearer = true
+        } else if !hasContinuityWithoutToken {
+            warnedAboutStaleStoredBearer = false
+        }
+        if !hasContinuityWithoutToken,
+           supabaseBearer.isEmpty,
            storedBearerIsDeveloper,
            Self.developerUserIdLooksMissing(trimmedUserId),
            !warnedAboutAnonymousDevRequest {

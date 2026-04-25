@@ -40,7 +40,7 @@ extension APIClient {
         var lastError: Error?
         while true {
             do {
-                await refreshAuthorizationHeader(on: &req)
+                try await ensureAuthorizationHeaderIfNeeded(on: &req, pathHint: url.path)
                 logger?("GET \(url.absoluteString)")
                 let (data, resp) = try await session.data(for: req)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
@@ -388,7 +388,7 @@ final class APIClient {
         var lastError: Error?
         while true {
             do {
-                await refreshAuthorizationHeader(on: &req)
+                try await ensureAuthorizationHeaderIfNeeded(on: &req, pathHint: clean)
                 logger?("GET \(finalURL.absoluteString)")
                 let (data, resp) = try await session.data(for: req)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
@@ -492,7 +492,7 @@ final class APIClient {
         var didForceAuthRefresh = false
         let data: Data
         while true {
-            await refreshAuthorizationHeader(on: &req)
+            try await ensureAuthorizationHeaderIfNeeded(on: &req, pathHint: path)
             logger?("POST \(req.url?.absoluteString ?? path)")
             let (responseData, resp) = try await session.data(for: req)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
@@ -529,7 +529,7 @@ final class APIClient {
         var didForceAuthRefresh = false
         let data: Data
         while true {
-            await refreshAuthorizationHeader(on: &req)
+            try await ensureAuthorizationHeaderIfNeeded(on: &req, pathHint: path)
             logger?("DELETE \(req.url?.absoluteString ?? path)")
             let (responseData, resp) = try await session.data(for: req)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
@@ -1046,12 +1046,61 @@ final class APIClient {
         let source = force ? forceBearerRefreshProvider : bearerProvider
         let dynamicBearer = (await source?())?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let usesDynamicBearer = bearerProvider != nil || forceBearerRefreshProvider != nil
-        let activeBearer = usesDynamicBearer ? dynamicBearer : bearer
+        let staticBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let developerUserId = devUserId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let canUseStaticDeveloperBearer = usesDynamicBearer && dynamicBearer.isEmpty && !staticBearer.isEmpty && !developerUserId.isEmpty
+        let activeBearer = usesDynamicBearer ? (canUseStaticDeveloperBearer ? staticBearer : dynamicBearer) : staticBearer
         if activeBearer.isEmpty {
             request.setValue(nil, forHTTPHeaderField: "Authorization")
         } else {
             request.setValue("Bearer \(activeBearer)", forHTTPHeaderField: "Authorization")
         }
+    }
+
+    private func ensureAuthorizationHeaderIfNeeded(on request: inout URLRequest, pathHint: String) async throws {
+        await refreshAuthorizationHeader(on: &request)
+        let endpoint = Self.normalizedEndpointPath(from: request.url, fallback: pathHint)
+        guard Self.endpointRequiresAuthorization(endpoint) else { return }
+        if request.value(forHTTPHeaderField: "Authorization") == nil {
+            await refreshAuthorizationHeader(on: &request, force: true)
+        }
+        guard request.value(forHTTPHeaderField: "Authorization") != nil else {
+            logger?("[AUTH] skipped protected request \(endpoint): missing Authorization header")
+            throw APIError.server(code: 401, body: "missing local auth token before request")
+        }
+    }
+
+    private static func normalizedEndpointPath(from url: URL?, fallback: String) -> String {
+        var raw = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty, let url {
+            raw = url.path
+        } else if let parsed = URL(string: raw), parsed.scheme != nil {
+            raw = parsed.path
+        }
+        while raw.hasPrefix("/") {
+            raw.removeFirst()
+        }
+        if let queryIndex = raw.firstIndex(of: "?") {
+            raw = String(raw[..<queryIndex])
+        }
+        return raw.lowercased()
+    }
+
+    private static func endpointRequiresAuthorization(_ endpoint: String) -> Bool {
+        let protectedPrefixes = [
+            "v1/analytics",
+            "v1/dashboard",
+            "v1/diag",
+            "v1/features",
+            "v1/feedback",
+            "v1/insights",
+            "v1/patterns",
+            "v1/profile",
+            "v1/samples",
+            "v1/symptoms",
+            "v1/users/me",
+        ]
+        return protectedPrefixes.contains { endpoint == $0 || endpoint.hasPrefix($0 + "/") }
     }
 
     private func parseAcceptedBatch(from data: Data) -> Bool? {
@@ -1132,7 +1181,7 @@ extension APIClient {
         var didForceAuthRefresh = false
         let data: Data
         while true {
-            await refreshAuthorizationHeader(on: &request)
+            try await ensureAuthorizationHeaderIfNeeded(on: &request, pathHint: "v1/features/today")
             let (responseData, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
                 throw URLError(.badServerResponse)

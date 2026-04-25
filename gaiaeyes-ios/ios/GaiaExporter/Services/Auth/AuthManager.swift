@@ -22,6 +22,7 @@ final class AuthManager: ObservableObject {
     private var tokenRefreshInFlight = false
     private var tokenRefreshWaiters: [CheckedContinuation<Bool, Never>] = []
     private var forcedRefreshBlockedUntil: Date?
+    private var lastKeychainLoadDiagnosticSignature: String?
 
     var isConfigured: Bool {
         config != nil
@@ -50,19 +51,45 @@ final class AuthManager: ObservableObject {
     }
 
     func loadFromKeychain() {
-        supabaseAccessToken = keychain.read("access_token")
-        supabaseRefreshToken = keychain.read("refresh_token")
-        supabaseUserId = keychain.read("user_id")
-        supabaseEmail = keychain.read("email")
-        if let exp = keychain.read("expires_at"), let ts = TimeInterval(exp) {
+        let storedAccessToken = keychain.read("access_token")
+        let storedRefreshToken = keychain.read("refresh_token")
+        let storedUserId = keychain.read("user_id")
+        let storedEmail = keychain.read("email")
+        let storedExpiresAt = keychain.read("expires_at")
+        let continuityEmail = continuityEmailHint()
+
+        supabaseAccessToken = storedAccessToken
+        supabaseRefreshToken = storedRefreshToken
+        supabaseUserId = storedUserId
+        supabaseEmail = storedEmail
+        if let exp = storedExpiresAt, let ts = TimeInterval(exp) {
             supabaseExpiresAt = Date(timeIntervalSince1970: ts)
-        } else if let token = supabaseAccessToken {
+        } else if let token = storedAccessToken {
             supabaseExpiresAt = Self.jwtExpiration(from: token)
+        } else {
+            supabaseExpiresAt = nil
         }
         if let email = supabaseEmail?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty {
             persistContinuityEmail(email)
         }
-        mirrorSessionToBackendDefaults(accessToken: supabaseAccessToken, userId: supabaseUserId)
+
+        let hasTokenPair = !(storedAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            || !(storedRefreshToken?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasContinuity = !(storedUserId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            || !(storedEmail?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            || continuityEmail != nil
+        if hasTokenPair {
+            mirrorSessionToBackendDefaults(accessToken: supabaseAccessToken, userId: supabaseUserId)
+        } else if hasContinuity {
+            clearMirroredBackendDefaultsForMissingSession(reason: "keychain load without tokens")
+        }
+        recordKeychainLoadDiagnostic(
+            accessToken: storedAccessToken,
+            refreshToken: storedRefreshToken,
+            userId: storedUserId,
+            email: storedEmail,
+            continuityEmail: continuityEmail
+        )
 
         if supabaseRefreshToken != nil {
             Task { await refreshSessionIfNeeded() }
@@ -326,6 +353,7 @@ final class AuthManager: ObservableObject {
         keychain.delete("expires_at")
         clearContinuityEmail()
         clearMirroredBackendDefaults(accessToken: accessToken, userId: currentUserId)
+        clearMirroredBackendDefaultsForMissingSession(reason: "manual sign out")
         recordDiagnosticsEvent("manual_sign_out", userId: currentUserId)
     }
 
@@ -368,6 +396,41 @@ final class AuthManager: ObservableObject {
         defaults.removeObject(forKey: "bearer")
         if defaults.string(forKey: "userId") == userId {
             defaults.removeObject(forKey: "userId")
+        }
+    }
+
+    private func clearMirroredBackendDefaultsForMissingSession(reason: String) {
+        let defaults = UserDefaults.standard
+        let storedBearer = defaults.string(forKey: "bearer")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let storedUserId = defaults.string(forKey: "userId")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !storedBearer.isEmpty || !storedUserId.isEmpty else { return }
+        defaults.removeObject(forKey: "bearer")
+        defaults.removeObject(forKey: "userId")
+        appLog("[AUTH] cleared mirrored backend auth defaults reason=\(reason) bearer=\(!storedBearer.isEmpty) user=\(!storedUserId.isEmpty)")
+    }
+
+    private func recordKeychainLoadDiagnostic(
+        accessToken: String?,
+        refreshToken: String?,
+        userId: String?,
+        email: String?,
+        continuityEmail: String?
+    ) {
+        let hasAccess = !(accessToken?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasRefresh = !(refreshToken?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasUser = !(userId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasEmail = !(email?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasContinuityEmail = continuityEmail != nil
+        let signature = "\(hasAccess)|\(hasRefresh)|\(hasUser)|\(hasEmail)|\(hasContinuityEmail)"
+        guard signature != lastKeychainLoadDiagnosticSignature else { return }
+        lastKeychainLoadDiagnosticSignature = signature
+
+        let detail = "access=\(hasAccess) refresh=\(hasRefresh) user=\(hasUser) email=\(hasEmail) continuity=\(hasContinuityEmail)"
+        if !hasAccess && !hasRefresh && (hasUser || hasEmail || hasContinuityEmail) {
+            recordDiagnosticsEvent("stored_session_missing_tokens", detail: detail, userId: userId)
+            appLog("[AUTH] keychain continuity without usable tokens \(detail)")
+        } else {
+            appLog("[AUTH] keychain session loaded \(detail)")
         }
     }
 
@@ -624,6 +687,7 @@ final class AuthManager: ObservableObject {
             clearContinuityEmail()
         }
         clearMirroredBackendDefaults(accessToken: accessToken, userId: currentUserId)
+        clearMirroredBackendDefaultsForMissingSession(reason: "session invalidated")
         lastError = reason
         recordDiagnosticsEvent("session_invalidated", detail: diagnosticDetail ?? reason, userId: currentUserId)
         appLog("[AUTH] cleared invalid Supabase session: \(reason)")
