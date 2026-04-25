@@ -199,15 +199,27 @@ private actor ProcessingGate {
 
 private actor Phase2BackfillState {
     private var inProgress = false
+    private var scheduled = false
 
     func beginIfNeeded() -> Bool {
         guard !inProgress else { return false }
         inProgress = true
+        scheduled = false
         return true
     }
 
     func end() {
         inProgress = false
+    }
+
+    func scheduleIfNeeded() -> Bool {
+        guard !scheduled, !inProgress else { return false }
+        scheduled = true
+        return true
+    }
+
+    func clearSchedule() {
+        scheduled = false
     }
 
     func isInProgress() -> Bool {
@@ -222,6 +234,7 @@ final class HealthKitBackgroundSync {
     private static let recentRepairLookbackDays = 30
     private static let initialDeltaLookbackDays = 2
     private static let initialSleepDeltaLookbackDays = 30
+    private static let deferredPhase2BackfillDelayNanoseconds: UInt64 = 30 * 60 * 1_000_000_000
 
     private static func isoString(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
@@ -1039,14 +1052,11 @@ final class HealthKitBackgroundSync {
         }
         let backendAvailable = refreshState.0
         let suspendRefresh = refreshState.1
-        guard backendAvailable else {
-            appLog("[BG] skip refresh; backend DB=false")
-            await logRefreshBlocked()
-            return
+        if !backendAvailable {
+            appLog("[BG] upload-triggered features refresh continuing despite backend DB=false")
         }
-        guard !suspendRefresh else {
-            appLog("[BG] skip refresh; nonessential network refresh suspended")
-            return
+        if suspendRefresh {
+            appLog("[BG] upload-triggered features refresh allowed while nonessential refresh is suspended")
         }
         await featuresRefresher.schedule { [weak self] in
             guard let self else { return }
@@ -1060,7 +1070,14 @@ final class HealthKitBackgroundSync {
         }
     }
 
-    private func fetchFeaturesSnapshot(reason: String) async {
+    private func retryFeaturesSnapshotIfNeeded(reason: String, attempt: Int) async {
+        guard attempt < 2 else { return }
+        appLog("[BG] features snapshot retry scheduled after upload (\(reason))")
+        try? await Task.sleep(nanoseconds: 20_000_000_000)
+        await fetchFeaturesSnapshot(reason: reason, attempt: attempt + 1)
+    }
+
+    private func fetchFeaturesSnapshot(reason: String, attempt: Int = 1) async {
         let api = buildAPI()
         do {
             let envelope: Envelope<FeaturesToday> = try await api.getJSON("v1/features/today?force=1", as: Envelope<FeaturesToday>.self)
@@ -1076,6 +1093,7 @@ final class HealthKitBackgroundSync {
             } else {
                 let okText = envelope.ok.map { $0 ? "true" : "false" } ?? "nil"
                 appLog("[BG] features snapshot missing data after upload (\(reason)) ok=\(okText)")
+                await retryFeaturesSnapshotIfNeeded(reason: reason, attempt: attempt)
             }
         } catch is CancellationError {
             return
@@ -1083,6 +1101,7 @@ final class HealthKitBackgroundSync {
             return
         } catch {
             appLog("[BG] features snapshot error after upload (\(reason)): \(error.localizedDescription)")
+            await retryFeaturesSnapshotIfNeeded(reason: reason, attempt: attempt)
         }
     }
 
@@ -1154,6 +1173,18 @@ final class HealthKitBackgroundSync {
             appLog("[Backfill] phase2 recent backfill incomplete: \(failures.joined(separator: " | "))")
         }
         await phase2BackfillState.end()
+    }
+
+    private func scheduleDeferredPhase2RecentBackfill(reason: String) async {
+        let scheduled = await phase2BackfillState.scheduleIfNeeded()
+        guard scheduled else { return }
+        appLog("[Backfill] phase2 recent backfill deferred 30m after \(reason)")
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.deferredPhase2BackfillDelayNanoseconds)
+            guard let self else { return }
+            await self.phase2BackfillState.clearSchedule()
+            await self.ensurePhase2RecentBackfillIfNeeded()
+        }
     }
 
     private func reportBackfillProgress(
@@ -1516,7 +1547,9 @@ final class HealthKitBackgroundSync {
         await self.processingGate.runOnce(key: "heart_rate") {
             do { try await self.processDeltas(for: self.hrType, anchorKey: "heart_rate") } catch { appLog("[BG] kickOnce hr error: \(error.localizedDescription)") }
         }
-        await repairMissingHeartRateIfNeeded(reason: reason)
+        if shouldAttemptHeartRateStatisticsRepair() {
+            appLog("[Backfill] heart_rate repair deferred to phase2 after \(reason)")
+        }
         await self.processingGate.runOnce(key: "spo2") {
             do { try await self.processDeltas(for: self.spo2Type, anchorKey: "spo2") } catch { appLog("[BG] kickOnce spo2 error: \(error.localizedDescription)") }
         }
@@ -1551,7 +1584,7 @@ final class HealthKitBackgroundSync {
         }
         StatusStore.shared.setBackgroundRun()
         if !phase2BackfillInProgress {
-            Task { await self.ensurePhase2RecentBackfillIfNeeded() }
+            await scheduleDeferredPhase2RecentBackfill(reason: reason)
         }
     }
 

@@ -105,6 +105,9 @@ def _record_enrichment_errors(diag_info: Dict[str, Any], errors: List[str]) -> N
 STATEMENT_TIMEOUT_MS = 60000
 
 MART_REFRESH_DEBOUNCE_SECONDS = 300.0
+FORCED_MART_REFRESH_DEBOUNCE_SECONDS = 120.0
+DB_POOL_ACQUIRE_TIMEOUT_SECONDS = 1.0
+DB_POOL_PRESSURE_MIN_OPEN = 4
 _REFRESH_DELAY_RANGE = (1.5, 2.0)
 
 _CACHE_STALE_THRESHOLD_SECONDS = 15 * 60
@@ -129,7 +132,10 @@ def _diag_trace(diag_info: Dict[str, Any], message: str) -> None:
 async def _features_db_dependency(request: Request):
     monitor = get_health_monitor()
     request.state.db_error = None
-    if monitor and not monitor.get_db_ok():
+    request.state.db_pressure_reason = None
+    pressure_reason = _db_pressure_reason(monitor)
+    if pressure_reason:
+        request.state.db_pressure_reason = pressure_reason
         request.state.db_error = "db_unavailable"
         yield None
         return
@@ -186,6 +192,73 @@ _refresh_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.creat
 
 _background_refresh_registry: Dict[str, float] = {}
 _background_refresh_lock = asyncio.Lock()
+_forced_refresh_registry: Dict[Tuple[str, date], float] = {}
+_forced_refresh_inflight: set[Tuple[str, date]] = set()
+_forced_refresh_lock = asyncio.Lock()
+
+
+def _pool_metric_int(metrics: Dict[str, Any], key: str) -> int:
+    try:
+        return int(metrics.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _pool_metrics_show_pressure(metrics: Optional[Dict[str, Any]]) -> bool:
+    if not metrics:
+        return False
+    waiting = _pool_metric_int(metrics, "waiting")
+    open_count = _pool_metric_int(metrics, "open")
+    free = _pool_metric_int(metrics, "free")
+    used = _pool_metric_int(metrics, "used")
+    if waiting > 0:
+        return True
+    return open_count >= DB_POOL_PRESSURE_MIN_OPEN and free <= 0 and used >= open_count
+
+
+def _db_pressure_reason(monitor=None) -> Optional[str]:
+    monitor = monitor or get_health_monitor()
+    if not monitor:
+        return None
+    try:
+        snapshot = monitor.snapshot()
+    except Exception:
+        logger.debug("[features] unable to read db monitor snapshot", exc_info=True)
+        return None
+    if not snapshot.get("db_ok", True):
+        return "db_unavailable"
+    if _pool_metrics_show_pressure(snapshot.get("pool")):
+        return "db_pressure"
+    return None
+
+
+def _pool_connection(pool, timeout: float = DB_POOL_ACQUIRE_TIMEOUT_SECONDS):
+    try:
+        return pool.connection(timeout=timeout)
+    except TypeError:  # Test fakes and some pool shims do not accept timeout.
+        return pool.connection()
+
+
+async def _claim_forced_mart_refresh(user_id: str, day_local: date) -> tuple[bool, Optional[str]]:
+    loop = asyncio.get_running_loop()
+    now = loop.time()
+    key = (user_id, day_local)
+    async with _forced_refresh_lock:
+        if key in _forced_refresh_inflight:
+            return False, "inflight"
+        last = _forced_refresh_registry.get(key)
+        if last and now - last < FORCED_MART_REFRESH_DEBOUNCE_SECONDS:
+            return False, "recent"
+        _forced_refresh_inflight.add(key)
+    return True, None
+
+
+async def _release_forced_mart_refresh(user_id: str, day_local: date) -> None:
+    loop = asyncio.get_running_loop()
+    key = (user_id, day_local)
+    async with _forced_refresh_lock:
+        _forced_refresh_registry[key] = loop.time()
+        _forced_refresh_inflight.discard(key)
 
 
 async def _execute_mart_refresh(
@@ -195,7 +268,7 @@ async def _execute_mart_refresh(
 ) -> None:
     try:
         pool = await get_pool()
-        async with pool.connection() as conn:
+        async with _pool_connection(pool) as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
@@ -286,6 +359,15 @@ async def mart_refresh(user_id: str, day_local: date, tz_name: str = DEFAULT_TIM
     async def _runner() -> None:
         try:
             await asyncio.sleep(delay_seconds)
+            pressure_reason = _db_pressure_reason()
+            if pressure_reason:
+                logger.warning(
+                    "[MART] refresh skipped user=%s day=%s reason=%s",
+                    user_id,
+                    day_local,
+                    pressure_reason,
+                )
+                return
             await execute_fn(user_id, day_local, tz_name)
         finally:
             async with _refresh_lock:
@@ -2146,8 +2228,10 @@ async def features_today(
     forced_refresh_day: Optional[date] = None
     forced_refresh_completed = False
     forced_refresh_error: Optional[str] = None
+    forced_refresh_skipped: Optional[str] = None
 
     reason_code = getattr(request.state, "db_error", None)
+    pressure_reason = getattr(request.state, "db_pressure_reason", None)
     if conn is None:
         primary_failed = True
         error_code = reason_code or "db_unavailable"
@@ -2160,9 +2244,10 @@ async def features_today(
             )
         else:
             logger.warning(
-                "[features_today] db unavailable tz=%s user=%s (pre-check)",
+                "[features_today] db unavailable tz=%s user=%s reason=%s (pre-check)",
                 tz_name,
                 user_id,
+                pressure_reason or error_code,
             )
         response_payload, diag_info, _ = await _fallback_from_cache(
             diag_seed,
@@ -2176,8 +2261,21 @@ async def features_today(
             if force_requested and user_id:
                 try:
                     forced_refresh_day = await _current_day_local(conn, tz_name)
-                    await _execute_mart_refresh(user_id, forced_refresh_day, tz_name)
-                    forced_refresh_completed = True
+                    pressure_reason = _db_pressure_reason()
+                    if pressure_reason:
+                        forced_refresh_skipped = pressure_reason
+                    else:
+                        claimed, skip_reason = await _claim_forced_mart_refresh(
+                            user_id, forced_refresh_day
+                        )
+                        if claimed:
+                            try:
+                                await _execute_mart_refresh(user_id, forced_refresh_day, tz_name)
+                                forced_refresh_completed = True
+                            finally:
+                                await _release_forced_mart_refresh(user_id, forced_refresh_day)
+                        else:
+                            forced_refresh_skipped = skip_reason
                 except Exception as exc:
                     forced_refresh_error = str(exc) or exc.__class__.__name__
                     logger.warning(
@@ -2233,6 +2331,11 @@ async def features_today(
         day_text = forced_refresh_day.isoformat() if forced_refresh_day else "-"
         if forced_refresh_completed:
             _diag_trace(diag_info, f"forced mart refresh completed before collect day={day_text}")
+        elif forced_refresh_skipped:
+            _diag_trace(
+                diag_info,
+                f"forced mart refresh skipped before collect day={day_text} reason={forced_refresh_skipped}",
+            )
         elif forced_refresh_error:
             diag_info.setdefault("enrichment_errors", []).append(f"forced mart refresh failed: {forced_refresh_error}")
             _diag_trace(diag_info, f"forced mart refresh failed before collect day={day_text}")
@@ -2310,7 +2413,8 @@ async def features_today(
     refresh_scheduled = False
     if user_id:
         refresh_attempted = True
-        if not forced_refresh_completed:
+        schedule_pressure_reason = pressure_reason or _db_pressure_reason()
+        if not forced_refresh_completed and not schedule_pressure_reason:
             try:
                 refresh_scheduled = await _maybe_schedule_background_refresh(
                     user_id, refresh_day, force=refresh_forced
@@ -2322,6 +2426,11 @@ async def features_today(
                     exc,
                 )
                 refresh_scheduled = False
+        elif schedule_pressure_reason:
+            _diag_trace(
+                diag_info,
+                f"background refresh skipped reason={schedule_pressure_reason} day={refresh_day}",
+            )
 
     diag_info["refresh_attempted"] = refresh_attempted
     diag_info["refresh_scheduled"] = refresh_scheduled

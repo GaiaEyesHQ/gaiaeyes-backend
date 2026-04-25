@@ -14210,7 +14210,12 @@ struct ContentView: View {
         private func driverSignalTint(_ driver: UserOutlookDriver) -> Color {
             let key = driver.key.lowercased()
             if key.contains("kp") || key.contains("geomag") { return Color(red: 0.95, green: 0.32, blue: 0.18) }
-            if key.contains("solar") || key == "sw" || key.contains("cme") || key.contains("flare") { return GaugePalette.elevated }
+            if key.contains("bz") { return Color(red: 0.72, green: 0.46, blue: 0.95) }
+            if key.contains("solar_wind") || key == "sw" { return Color(red: 0.35, green: 0.58, blue: 1.0) }
+            if key.contains("radiation") || key == "sep" { return Color(red: 1.0, green: 0.43, blue: 0.72) }
+            if key.contains("cme") { return Color(red: 0.95, green: 0.68, blue: 0.28) }
+            if key.contains("flare") { return Color(red: 1.0, green: 0.4, blue: 0.2) }
+            if key.contains("radio") || key.contains("drap") { return Color(red: 0.42, green: 0.86, blue: 0.76) }
             if key.contains("humidity") { return GaugePalette.sky }
             if key.contains("pollen") || key.contains("allergen") { return GaugePalette.low }
             if key.contains("aqi") { return GaugePalette.mild }

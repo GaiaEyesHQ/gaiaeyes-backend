@@ -130,6 +130,9 @@ struct AllDriversView: View {
     }
 
     private func translatedLabel(for driver: DriverDetailItem) -> String {
+        if driver.key == "bz", mode == .scientific {
+            return driver.label.isEmpty ? "Bz Coupling" : driver.label
+        }
         let label = vocabulary.driverLabel(for: driver.key, fallback: driver.label)
         return label.caseInsensitiveCompare("Last night below usual") == .orderedSame ? "Less Sleep" : label
     }

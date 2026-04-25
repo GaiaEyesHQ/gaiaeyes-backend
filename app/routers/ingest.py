@@ -40,7 +40,8 @@ _backlog_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.creat
 _recent_refresh_requests: Dict[Tuple[str, date], float] = {}
 _recent_refresh_lock = asyncio.Lock()
 _DELAYED_REFRESH_DELAY_SECONDS = 0.5
-_DELAYED_REFRESH_DEBOUNCE_SECONDS = 20.0
+_DELAYED_REFRESH_DEBOUNCE_SECONDS = 120.0
+_POOL_ACQUIRE_TIMEOUT_SECONDS = 1.0
 
 # Legacy compatibility for tests expecting direct access to the refresh registry
 _refresh_registry = _summary_module._refresh_registry
@@ -53,6 +54,13 @@ async def _execute_refresh(
     tz_name: str = DEFAULT_TIMEZONE,
 ) -> None:
     await _summary_module._execute_mart_refresh(user_id, day_local, tz_name)
+
+
+def _pool_connection(pool, timeout: float = _POOL_ACQUIRE_TIMEOUT_SECONDS):
+    try:
+        return pool.connection(timeout=timeout)
+    except TypeError:  # Test fakes and some pool shims do not accept timeout.
+        return pool.connection()
 
 
 class BatchInsertError(Exception):
@@ -142,13 +150,12 @@ async def _drain_backlog(pool) -> None:
                 break
 
             scheduled_refresh = False
-            if refresh_user and not REFRESH_DISABLED:
+            if refresh_user and inserted > 0 and not REFRESH_DISABLED:
                 tz_resolved, tzinfo = _resolve_timezone(tz_name)
                 refresh_days = _sample_refresh_days(models, tzinfo) or [_today_local(tzinfo)]
-                refresh_count = inserted if inserted > 0 else len(models)
                 for day_local in refresh_days:
                     scheduled_refresh = (
-                        await _maybe_schedule_refresh(refresh_user, day_local, refresh_count, tz_resolved)
+                        await _maybe_schedule_refresh(refresh_user, day_local, inserted, tz_resolved)
                         or scheduled_refresh
                     )
                 logger.info(
@@ -217,7 +224,7 @@ async def _insert_batch_once(
     skipped = 0
     errors: List[Dict[str, Any]] = []
 
-    async with pool.connection() as conn:
+    async with _pool_connection(pool) as conn:
         async with conn.cursor() as cur:
             user_ids = {dev_uid} if dev_uid else {sample.user_id for sample, _ in rows if sample.user_id}
             for user_id in sorted(user_ids):
@@ -449,22 +456,25 @@ async def samples_batch(
     }
 
     monitor = get_health_monitor()
-    if monitor and not monitor.get_db_ok():
+    pressure_reason = _summary_module._db_pressure_reason(monitor)
+    if pressure_reason:
         if valid_rows:
             await _enqueue_backlog(buffer_entry)
-        monitor_snapshot = monitor.snapshot()
+        monitor_snapshot = monitor.snapshot() if monitor else {}
+        pool_snapshot = monitor_snapshot.get("pool") or {}
         logger.warning(
-            "[BATCH] db unavailable; buffering batch size=%d valid=%d backlog=%d sticky_age_ms=%s consec_fail=%s waiting=%s",
+            "[BATCH] db pressure; buffering batch size=%d valid=%d backlog=%d reason=%s sticky_age_ms=%s consec_fail=%s waiting=%s",
             received,
             len(valid_rows),
             len(_backlog),
+            pressure_reason,
             monitor_snapshot.get("sticky_age_ms"),
             monitor_snapshot.get("consec_fail"),
-            ((monitor_snapshot.get("pool") or {}).get("waiting")),
+            pool_snapshot.get("waiting"),
         )
         errors = list(validation_errors)
         if not errors:
-            errors = [{"reason": "db_unavailable"}]
+            errors = [{"reason": pressure_reason}]
         _log_batch_summary(
             effective_user or "<unknown>",
             received,
@@ -564,11 +574,10 @@ async def samples_batch(
     )
 
     if db_healthy:
-        if valid_rows and refresh_user and not REFRESH_DISABLED:
+        if valid_rows and refresh_user and inserted > 0 and not REFRESH_DISABLED:
             refresh_days = _sample_refresh_days([sample for sample, _ in valid_rows], tzinfo) or [_today_local(tzinfo)]
-            refresh_count = inserted if inserted > 0 else len(valid_rows)
             for day_local in refresh_days:
-                await _maybe_schedule_refresh(refresh_user, day_local, refresh_count, tz_name)
+                await _maybe_schedule_refresh(refresh_user, day_local, inserted, tz_name)
         if valid_rows or _backlog:
             _start_backlog_drain(pool)
 
@@ -592,7 +601,7 @@ async def _maybe_schedule_refresh(
     inserted: int,
     tz_name: str = DEFAULT_TIMEZONE,
 ) -> bool:
-    if REFRESH_DISABLED or not user_id:
+    if REFRESH_DISABLED or not user_id or inserted <= 0:
         return False
 
     loop = asyncio.get_running_loop()
@@ -618,6 +627,15 @@ async def _maybe_schedule_refresh(
         try:
             if delay > 0:
                 await asyncio.sleep(delay)
+            pressure_reason = _summary_module._db_pressure_reason()
+            if pressure_reason:
+                logger.warning(
+                    "[MART] delayed refresh skipped user=%s day=%s reason=%s",
+                    user_id,
+                    day_local,
+                    pressure_reason,
+                )
+                return
             await _execute_refresh(user_id, day_local, tz_name)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning(

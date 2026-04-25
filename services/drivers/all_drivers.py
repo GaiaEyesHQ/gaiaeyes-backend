@@ -720,6 +720,45 @@ def _seed_space_context_drivers(space_context: Mapping[str, Any]) -> list[Dict[s
     updated_at = _iso(daily.get("updated_at"))
     rows: list[Dict[str, Any]] = []
 
+    bz_now = _safe_float(daily.get("bz_now"))
+    bz_min = _safe_float(daily.get("bz_min"))
+    bz_value = bz_now if bz_now is not None else bz_min
+    if bz_now is not None and bz_min is not None and bz_now > -3.0:
+        bz_value = bz_min
+    if bz_value is not None and bz_value <= -3.0:
+        if bz_value <= -10.0:
+            severity = "high"
+            state = "Strong"
+            signal_strength = 0.96
+        elif bz_value <= -5.0:
+            severity = "watch"
+            state = "Watch"
+            signal_strength = 0.74
+        else:
+            severity = "mild"
+            state = "Active"
+            signal_strength = 0.54
+        reading = _reading_from_value("bz", bz_value, "nT")
+        rows.append(
+            _build_base_driver(
+                key="bz",
+                label="Bz Coupling",
+                severity=severity,
+                state=state,
+                value=bz_value,
+                unit="nT",
+                reading=reading,
+                signal_strength=signal_strength,
+                force_visible=severity == "high",
+                show_driver=True,
+                short_reason="Southward Bz is helping space-weather coupling.",
+                active_now_text=f"Bz is running near {reading or 'a more southward orientation'} right now.",
+                source_hint="Current space-weather context",
+                updated_at=updated_at,
+                aliases=_aliases_for_key("bz"),
+            )
+        )
+
     flare_class = str(daily.get("xray_max_class") or "").strip().upper()
     flare_rank = flare_class_rank(flare_class)
     if flare_rank[0] >= 3 and flare_rank[1] >= 1.0:

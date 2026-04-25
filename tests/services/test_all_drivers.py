@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
 
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
 
-from services.drivers.all_drivers import compose_all_drivers_payload
+from services.drivers.all_drivers import _seed_space_context_drivers, compose_all_drivers_payload
 from services.drivers.driver_normalize import normalize_environmental_drivers
 
 
@@ -131,3 +131,23 @@ def test_normalize_environmental_drivers_skips_quiet_local_baselines() -> None:
     )
 
     assert drivers == []
+
+
+def test_seed_space_context_drivers_adds_southward_bz() -> None:
+    rows = _seed_space_context_drivers(
+        {
+            "daily": {
+                "bz_now": -7.8,
+                "bz_min": -9.1,
+                "updated_at": "2026-04-25T03:24:00+00:00",
+            }
+        }
+    )
+
+    bz = next(row for row in rows if row["key"] == "bz")
+    assert bz["label"] == "Bz Coupling"
+    assert bz["severity"] == "watch"
+    assert bz["state"] == "Watch"
+    assert bz["value"] == -7.8
+    assert bz["reading"] == "-7.8 nT"
+    assert "Southward Bz" in bz["short_reason"]
