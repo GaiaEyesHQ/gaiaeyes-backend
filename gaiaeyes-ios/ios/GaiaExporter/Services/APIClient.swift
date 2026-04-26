@@ -1048,8 +1048,12 @@ final class APIClient {
         let usesDynamicBearer = bearerProvider != nil || forceBearerRefreshProvider != nil
         let staticBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
         let developerUserId = devUserId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let canUseStaticDeveloperBearer = usesDynamicBearer && dynamicBearer.isEmpty && !staticBearer.isEmpty && !developerUserId.isEmpty
-        let activeBearer = usesDynamicBearer ? (canUseStaticDeveloperBearer ? staticBearer : dynamicBearer) : staticBearer
+        let staticBearerLooksJWT = staticBearer.split(separator: ".").count == 3
+        let canUseStaticFallbackBearer = usesDynamicBearer
+            && dynamicBearer.isEmpty
+            && !staticBearer.isEmpty
+            && (staticBearerLooksJWT || !developerUserId.isEmpty)
+        let activeBearer = usesDynamicBearer ? (canUseStaticFallbackBearer ? staticBearer : dynamicBearer) : staticBearer
         if activeBearer.isEmpty {
             request.setValue(nil, forHTTPHeaderField: "Authorization")
         } else {

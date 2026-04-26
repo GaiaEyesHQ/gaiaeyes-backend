@@ -51,11 +51,27 @@ final class AuthManager: ObservableObject {
     }
 
     func loadFromKeychain() {
-        let storedAccessToken = keychain.read("access_token")
-        let storedRefreshToken = keychain.read("refresh_token")
-        let storedUserId = keychain.read("user_id")
-        let storedEmail = keychain.read("email")
-        let storedExpiresAt = keychain.read("expires_at")
+        let accessTokenRead = keychain.readResult("access_token")
+        let refreshTokenRead = keychain.readResult("refresh_token")
+        let userIdRead = keychain.readResult("user_id")
+        let emailRead = keychain.readResult("email")
+        let expiresAtRead = keychain.readResult("expires_at")
+        let statusDetail = "access=\(accessTokenRead.status) refresh=\(refreshTokenRead.status) user=\(userIdRead.status) email=\(emailRead.status) expires=\(expiresAtRead.status)"
+        if [accessTokenRead, refreshTokenRead, userIdRead, emailRead, expiresAtRead].contains(where: \.isTemporaryUnavailable) {
+            recordDiagnosticsEvent(
+                "keychain_temporarily_unavailable",
+                detail: statusDetail,
+                userId: supabaseUserId
+            )
+            appLog("[AUTH] keychain temporarily unavailable; preserving auth state \(statusDetail)")
+            return
+        }
+
+        let storedAccessToken = accessTokenRead.value
+        let storedRefreshToken = refreshTokenRead.value
+        let storedUserId = userIdRead.value
+        let storedEmail = emailRead.value
+        let storedExpiresAt = expiresAtRead.value
         let continuityEmail = continuityEmailHint()
 
         supabaseAccessToken = storedAccessToken
@@ -79,6 +95,13 @@ final class AuthManager: ObservableObject {
             || !(storedEmail?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
             || continuityEmail != nil
         if hasTokenPair {
+            migrateKeychainAccessibility(
+                accessToken: storedAccessToken,
+                refreshToken: storedRefreshToken,
+                userId: storedUserId,
+                email: storedEmail,
+                expiresAt: storedExpiresAt
+            )
             mirrorSessionToBackendDefaults(accessToken: supabaseAccessToken, userId: supabaseUserId)
         } else if hasContinuity {
             clearMirroredBackendDefaultsForMissingSession(reason: "keychain load without tokens")
@@ -93,6 +116,30 @@ final class AuthManager: ObservableObject {
 
         if supabaseRefreshToken != nil {
             Task { await refreshSessionIfNeeded() }
+        }
+    }
+
+    private func migrateKeychainAccessibility(
+        accessToken: String?,
+        refreshToken: String?,
+        userId: String?,
+        email: String?,
+        expiresAt: String?
+    ) {
+        if let accessToken, !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            keychain.write(accessToken, key: "access_token")
+        }
+        if let refreshToken, !refreshToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            keychain.write(refreshToken, key: "refresh_token")
+        }
+        if let userId, !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            keychain.write(userId, key: "user_id")
+        }
+        if let email, !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            keychain.write(email, key: "email")
+        }
+        if let expiresAt, !expiresAt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            keychain.write(expiresAt, key: "expires_at")
         }
     }
 
@@ -883,10 +930,23 @@ private struct SupabaseConfig {
     }
 }
 
+private struct KeychainReadResult {
+    let value: String?
+    let status: OSStatus
+
+    var isTemporaryUnavailable: Bool {
+        status == errSecInteractionNotAllowed || status == errSecNotAvailable
+    }
+}
+
 private struct KeychainStore {
     let service: String
 
     func read(_ key: String) -> String? {
+        readResult(key).value
+    }
+
+    func readResult(_ key: String) -> KeychainReadResult {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -898,9 +958,9 @@ private struct KeychainStore {
         var item: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data else {
-            return nil
+            return KeychainReadResult(value: nil, status: status)
         }
-        return String(data: data, encoding: .utf8)
+        return KeychainReadResult(value: String(data: data, encoding: .utf8), status: status)
     }
 
     func write(_ value: String, key: String) {
@@ -910,6 +970,7 @@ private struct KeychainStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: data,
         ]
         SecItemAdd(query as CFDictionary, nil)
