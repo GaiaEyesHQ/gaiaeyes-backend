@@ -41,6 +41,15 @@ def override_db_dependency():
         app.dependency_overrides.pop(get_db, None)
 
 
+@pytest.fixture(autouse=True)
+def clear_drivers_route_cache():
+    drivers_router._drivers_cache.clear()
+    try:
+        yield
+    finally:
+        drivers_router._drivers_cache.clear()
+
+
 @pytest.fixture
 async def client():
     try:
@@ -172,3 +181,50 @@ async def test_user_drivers_endpoint_uses_app_day_when_day_is_omitted(monkeypatc
     response = await client.get("/v1/users/me/drivers", headers=headers)
     assert response.status_code == 200
     assert response.json()["day"] == "2026-03-27"
+
+
+@pytest.mark.anyio
+async def test_user_drivers_endpoint_reuses_short_cache(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": user_id,
+    }
+    calls = 0
+
+    async def _payload(conn, *, user_id: str, day: date):  # noqa: ARG001
+        nonlocal calls
+        calls += 1
+        return {
+            "generated_at": f"2026-03-26T12:00:0{calls}Z",
+            "asof": "2026-03-26T11:55:00Z",
+            "day": day.isoformat(),
+            "summary": {
+                "active_driver_count": 1,
+                "total_count": 1,
+                "strongest_category": "Space",
+                "primary_state": "Watch",
+                "note": "Bz Coupling is in play.",
+                "has_personal_patterns": False,
+            },
+            "has_personal_patterns": False,
+            "filters": [{"key": "all", "label": "All"}],
+            "drivers": [{"id": "bz", "key": f"bz-{calls}", "label": "Bz Coupling"}],
+            "setup_hints": [],
+        }
+
+    monkeypatch.setattr(drivers_router, "build_all_drivers_payload", _payload)
+
+    first = await client.get("/v1/users/me/drivers?day=2026-03-26", headers=headers)
+    second = await client.get("/v1/users/me/drivers?day=2026-03-26", headers=headers)
+    forced = await client.get("/v1/users/me/drivers?day=2026-03-26&force=true", headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert forced.status_code == 200
+    assert first.json()["cache_hit"] is False
+    assert second.json()["cache_hit"] is True
+    assert second.json()["drivers"][0]["key"] == "bz-1"
+    assert forced.json()["cache_hit"] is False
+    assert forced.json()["drivers"][0]["key"] == "bz-2"
+    assert calls == 2

@@ -9945,6 +9945,16 @@ struct ContentView: View {
         }
         return (f, false)
     }
+
+    private func selectDisplayHealthFeatures(for f: FeaturesToday) -> (FeaturesToday, Bool) {
+        let todayStr = chicagoTodayString()
+        if f.day == todayStr,
+           !hasUsableSleepData(f),
+           let previous = previousDayFallbackFeatures(for: todayStr) {
+            return (previous, true)
+        }
+        return selectDisplayFeatures(for: f)
+    }
     
     #endif
 
@@ -17204,6 +17214,9 @@ struct ContentView: View {
             guard let bannerText, !bannerText.isEmpty else {
                 return nil
             }
+            if usingYesterdayFallback {
+                return bannerText
+            }
             let totalSleep = current?.sleepTotalMinutes?.value ?? 0
             return totalSleep > 0 ? nil : bannerText
         }
@@ -18477,6 +18490,15 @@ struct ContentView: View {
         return (current, usingYesterdayFallback, updatedText)
     }
 
+    private var selectedHealthFeaturesTuple: (current: FeaturesToday?, usingYesterdayFallback: Bool, updatedText: String?) {
+        let baseFeatures = features ?? lastKnownFeatures
+        let selected = baseFeatures.map { selectDisplayHealthFeatures(for: $0) }
+        let current = selected?.0
+        let usingYesterdayFallback = selected?.1 ?? false
+        let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
+        return (current, usingYesterdayFallback, updatedText)
+    }
+
     private var resolvedSpaceOutlookPayload: SpaceForecastOutlook? {
         mergedSpaceOutlook(spaceOutlook, fallback: lastKnownSpaceOutlook)
     }
@@ -18662,7 +18684,7 @@ struct ContentView: View {
     }
 
     private var bodyNavigationStack: some View {
-        let selection = selectedFeaturesTuple
+        let selection = selectedHealthFeaturesTuple
 
         return NavigationStack(path: $bodyPath) {
             InsightsHealthSymptomsView(
@@ -18842,6 +18864,7 @@ struct ContentView: View {
     @ViewBuilder
     private func shellDestinationView(for route: InsightsRoute) -> some View {
         let selection = selectedFeaturesTuple
+        let healthSelection = selectedHealthFeaturesTuple
 
         switch route {
         case .dailyCheckIn:
@@ -18935,14 +18958,14 @@ struct ContentView: View {
             )
         case .healthSymptoms:
             InsightsHealthSymptomsView(
-                current: selection.current,
+                current: healthSelection.current,
                 todayString: chicagoTodayString(),
-                updatedText: selection.updatedText,
+                updatedText: healthSelection.updatedText,
                 tempUnit: experienceProfile.tempUnit,
                 trackedStatKeys: experienceProfile.trackedStatKeys,
                 smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
                 bannerText: healthSleepSyncBannerText,
-                usingYesterdayFallback: selection.usingYesterdayFallback,
+                usingYesterdayFallback: healthSelection.usingYesterdayFallback,
                 todayCount: symptomsToday.count,
                 queuedCount: state.symptomQueueCount,
                 sparklinePoints: resolvedSymptomPoints,
@@ -20237,9 +20260,13 @@ struct ContentView: View {
         .sheet(isPresented: $showMissionInsightsSheet) {
             let baseFeatures = features ?? lastKnownFeatures
             let selected: (FeaturesToday, Bool)? = baseFeatures.map { selectDisplayFeatures(for: $0) }
+            let selectedHealth: (FeaturesToday, Bool)? = baseFeatures.map { selectDisplayHealthFeatures(for: $0) }
             let current = selected?.0
             let usingYesterdayFallback = selected?.1 ?? false
+            let healthCurrent = selectedHealth?.0
+            let healthUsingYesterdayFallback = selectedHealth?.1 ?? false
             let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
+            let healthUpdatedText = healthCurrent?.updatedAt.flatMap { formatUpdated($0) }
             let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
             let resolvedUserOutlook = userOutlook ?? lastKnownUserOutlook
             let symptomPoints = symptomSparkPoints()
@@ -20380,14 +20407,14 @@ struct ContentView: View {
                         )
                     case .healthSymptoms:
                         InsightsHealthSymptomsView(
-                            current: current,
+                            current: healthCurrent,
                             todayString: chicagoTodayString(),
-                            updatedText: updatedText,
+                            updatedText: healthUpdatedText,
                             tempUnit: experienceProfile.tempUnit,
                             trackedStatKeys: experienceProfile.trackedStatKeys,
                             smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
                             bannerText: healthSleepSyncBannerText,
-                            usingYesterdayFallback: usingYesterdayFallback,
+                            usingYesterdayFallback: healthUsingYesterdayFallback,
                             todayCount: symptomsToday.count,
                             queuedCount: state.symptomQueueCount,
                             sparklinePoints: symptomPoints,

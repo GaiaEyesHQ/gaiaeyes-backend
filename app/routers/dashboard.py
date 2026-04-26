@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
+import os
 import re
 import time
 from datetime import date, datetime, timezone
@@ -50,6 +52,10 @@ router = APIRouter(prefix="/v1", tags=["dashboard"])
 logger = logging.getLogger(__name__)
 
 _SIGNAL_CONTEXT_TIMEOUT_SECONDS = 6.0
+_DASHBOARD_CACHE_TTL_SECONDS = max(0, int(os.getenv("GAIA_DASHBOARD_CACHE_TTL_SECONDS", "60")))
+_DASHBOARD_CACHE_MAX_ITEMS = max(1, int(os.getenv("GAIA_DASHBOARD_CACHE_MAX_ITEMS", "512")))
+_dashboard_cache: dict[tuple[str, str], tuple[float, Dict[str, Any]]] = {}
+_dashboard_cache_lock = asyncio.Lock()
 
 _GAUGE_DELTA_KEYS = [
     "pain",
@@ -75,6 +81,34 @@ def _safe_dashboard_definition() -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("[dashboard] failed to load gauge definition base: %s", exc)
         return {}
+
+
+async def _get_cached_dashboard(user_id: str, day: date) -> tuple[Dict[str, Any] | None, float]:
+    if _DASHBOARD_CACHE_TTL_SECONDS <= 0:
+        return None, 0.0
+    key = (user_id, day.isoformat())
+    now = time.monotonic()
+    async with _dashboard_cache_lock:
+        cached = _dashboard_cache.get(key)
+        if not cached:
+            return None, 0.0
+        stored_at, payload = cached
+        age = now - stored_at
+        if age > _DASHBOARD_CACHE_TTL_SECONDS:
+            _dashboard_cache.pop(key, None)
+            return None, 0.0
+        return copy.deepcopy(payload), age
+
+
+async def _set_cached_dashboard(user_id: str, day: date, payload: Dict[str, Any]) -> None:
+    if _DASHBOARD_CACHE_TTL_SECONDS <= 0:
+        return
+    key = (user_id, day.isoformat())
+    async with _dashboard_cache_lock:
+        if len(_dashboard_cache) >= _DASHBOARD_CACHE_MAX_ITEMS and key not in _dashboard_cache:
+            oldest_key = min(_dashboard_cache, key=lambda item: _dashboard_cache[item][0])
+            _dashboard_cache.pop(oldest_key, None)
+        _dashboard_cache[key] = (time.monotonic(), copy.deepcopy(payload))
 
 
 def _normalized_default_zones(definition: Dict[str, Any]) -> list[Dict[str, Any]]:
@@ -703,6 +737,7 @@ async def dashboard(
     request: Request,
     day: Optional[date] = Query(None),
     debug: bool = Query(False),
+    force: bool = Query(False),
     conn=Depends(get_db),
 ):
     started = time.perf_counter()
@@ -710,6 +745,20 @@ async def dashboard(
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id missing from request context")
     day = _coerce_day(day)
+
+    if not debug and not force:
+        cached_payload, cache_age = await _get_cached_dashboard(user_id, day)
+        if cached_payload is not None:
+            logger.info(
+                "[dashboard] cache hit user=%s day=%s age=%.1fs",
+                user_id,
+                day.isoformat(),
+                cache_age,
+            )
+            cached_payload["cache_hit"] = True
+            cached_payload["cache_age_seconds"] = round(cache_age, 1)
+            return cached_payload
+
     payload, rpc_fallback_used = await _call_dashboard_payload(conn, user_id, day)
     if not isinstance(payload, dict):
         payload = {}
@@ -915,6 +964,11 @@ async def dashboard(
             ),
             "geomagnetic_context_available": bool(out.get("geomagnetic_context")),
         }
+
+    if not debug:
+        await _set_cached_dashboard(user_id, day, out)
+        out["cache_hit"] = False
+        out["cache_age_seconds"] = 0.0
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
     logger.info(
