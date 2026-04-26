@@ -63,6 +63,20 @@ def _pool_connection(pool, timeout: float = _POOL_ACQUIRE_TIMEOUT_SECONDS):
         return pool.connection()
 
 
+def _ingest_availability_reason(monitor=None) -> Optional[str]:
+    monitor = monitor or get_health_monitor()
+    if not monitor:
+        return None
+    try:
+        snapshot = monitor.snapshot()
+    except Exception:
+        logger.debug("[BATCH] unable to read db monitor snapshot", exc_info=True)
+        return None
+    if not snapshot.get("db_ok", True):
+        return "db_unavailable"
+    return None
+
+
 class BatchInsertError(Exception):
     def __init__(self, reason: str, exc: Optional[BaseException] = None) -> None:
         super().__init__(reason)
@@ -456,25 +470,25 @@ async def samples_batch(
     }
 
     monitor = get_health_monitor()
-    pressure_reason = _summary_module._db_pressure_reason(monitor)
-    if pressure_reason:
+    availability_reason = _ingest_availability_reason(monitor)
+    if availability_reason:
         if valid_rows:
             await _enqueue_backlog(buffer_entry)
         monitor_snapshot = monitor.snapshot() if monitor else {}
         pool_snapshot = monitor_snapshot.get("pool") or {}
         logger.warning(
-            "[BATCH] db pressure; buffering batch size=%d valid=%d backlog=%d reason=%s sticky_age_ms=%s consec_fail=%s waiting=%s",
+            "[BATCH] db unavailable; buffering batch size=%d valid=%d backlog=%d reason=%s sticky_age_ms=%s consec_fail=%s waiting=%s",
             received,
             len(valid_rows),
             len(_backlog),
-            pressure_reason,
+            availability_reason,
             monitor_snapshot.get("sticky_age_ms"),
             monitor_snapshot.get("consec_fail"),
             pool_snapshot.get("waiting"),
         )
         errors = list(validation_errors)
         if not errors:
-            errors = [{"reason": pressure_reason}]
+            errors = [{"reason": availability_reason}]
         _log_batch_summary(
             effective_user or "<unknown>",
             received,

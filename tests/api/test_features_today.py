@@ -36,7 +36,7 @@ def _set_dev_bearer():
 
 @pytest.fixture
 def client():
-    transport = ASGITransport(app=app, lifespan="off")
+    transport = ASGITransport(app=app)
     return AsyncClient(transport=transport, base_url="http://test")
 
 
@@ -155,6 +155,14 @@ class _FlakyPool:
                 return False
 
         return _Ctx()
+
+
+class _MonitorSnapshot:
+    def __init__(self, snapshot):
+        self._snapshot = snapshot
+
+    def snapshot(self):
+        return self._snapshot
 
 
 @pytest.fixture
@@ -279,6 +287,63 @@ async def test_ingest_accepts_supabase_jwt_and_uses_authenticated_user(monkeypat
     assert resp.json()["ok"] is True
     assert captured["insert_user"] == auth_user_id
     assert captured["refresh_user"] == auth_user_id
+
+
+@pytest.mark.anyio
+async def test_ingest_attempts_insert_when_monitor_only_shows_pool_waiting(monkeypatch, client: AsyncClient):
+    ingest._backlog.clear()
+    fake_pool = _FakePool()
+
+    async def _fake_get_pool():
+        return fake_pool
+
+    async def _fake_schedule_refresh(user_id, day_local, inserted, tz_name="UTC"):  # noqa: ARG001
+        return True
+
+    monkeypatch.setattr(ingest, "get_pool", _fake_get_pool)
+    monkeypatch.setattr(ingest, "_maybe_schedule_refresh", _fake_schedule_refresh)
+    monkeypatch.setattr(
+        ingest,
+        "get_health_monitor",
+        lambda: _MonitorSnapshot(
+            {
+                "db_ok": True,
+                "pool": {"open": 8, "free": 0, "used": 8, "waiting": 3},
+            }
+        ),
+    )
+
+    user_id = str(uuid4())
+    payload = {
+        "samples": [
+            {
+                "user_id": user_id,
+                "device_os": "ios",
+                "source": "watch",
+                "type": "sleep_stage",
+                "start_time": "2024-04-03T12:00:00Z",
+                "end_time": "2024-04-03T12:01:00Z",
+                "value_text": "asleep",
+            }
+        ]
+    }
+
+    resp = await client.post(
+        "/v1/samples/batch",
+        headers={
+            "Authorization": "Bearer test-token",
+            "X-Dev-UserId": user_id,
+        },
+        params={"tz": "UTC"},
+        json=payload,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["db"] is True
+    assert body["buffered"] == 0
+    assert len(ingest._backlog) == 0
 
 
 @pytest.mark.anyio

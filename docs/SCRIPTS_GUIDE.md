@@ -53,6 +53,7 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 | Script | Purpose & Outputs | Key environment variables |
 | --- | --- | --- |
 | `audit_workflows.py` | Audits GitHub Actions workflows for configured repos, reporting latest runs, failures, and secret references. | `GITHUB_TOKEN` (repo + workflow scopes) |
+| `load_test_ingest.py` | Sends synthetic multi-user `/v1/samples/batch` traffic with optional app read fan-out. Defaults to localhost and requires `--allow-non-local-write` before writing to staging/production. | `GAIA_LOAD_BASE_URL`, `GAIA_LOAD_AUTH_BEARER` or `DEV_BEARER`/`WRITE_TOKENS`; optional `GAIA_LOAD_TZ` |
 | `check_site_assets.py` | HEAD/GET checks third-party assets listed in `docs/web/ASSET_INVENTORY.json` and reports failures. | `inventory` CLI arg (defaults internally) |
 | `scan-secrets.sh` | Greps workflow files (or supplied paths) for `${{ secrets.* }}`/`${{ vars.* }}` references using `rg`. | None (requires `rg` in PATH) |
 
