@@ -724,8 +724,6 @@ def _seed_space_context_drivers(space_context: Mapping[str, Any]) -> list[Dict[s
     bz_now = _safe_float(daily.get("bz_now"))
     bz_min = _safe_float(daily.get("bz_min"))
     bz_value = bz_now if bz_now is not None else bz_min
-    if bz_now is not None and bz_min is not None and bz_now > -3.0:
-        bz_value = bz_min
     if bz_value is not None and bz_value <= -3.0:
         if bz_value <= -10.0:
             severity = "high"

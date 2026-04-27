@@ -53,12 +53,25 @@ router = APIRouter(prefix="/v1", tags=["dashboard"])
 logger = logging.getLogger(__name__)
 
 _SIGNAL_CONTEXT_TIMEOUT_SECONDS = 6.0
-_DASHBOARD_CACHE_TTL_SECONDS = max(0, int(os.getenv("GAIA_DASHBOARD_CACHE_TTL_SECONDS", "300")))
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid integer env %s=%r; using default %s", name, raw, default)
+        return default
+
+
+_DASHBOARD_CACHE_TTL_SECONDS = max(0, _env_int("GAIA_DASHBOARD_CACHE_TTL_SECONDS", 300))
 _DASHBOARD_STALE_TTL_SECONDS = max(
     _DASHBOARD_CACHE_TTL_SECONDS,
-    int(os.getenv("GAIA_DASHBOARD_STALE_TTL_SECONDS", str(6 * 60 * 60))),
+    _env_int("GAIA_DASHBOARD_STALE_TTL_SECONDS", 6 * 60 * 60),
 )
-_DASHBOARD_CACHE_MAX_ITEMS = max(1, int(os.getenv("GAIA_DASHBOARD_CACHE_MAX_ITEMS", "512")))
+_DASHBOARD_CACHE_MAX_ITEMS = max(1, _env_int("GAIA_DASHBOARD_CACHE_MAX_ITEMS", 512))
 _dashboard_cache: dict[tuple[str, str], tuple[float, Dict[str, Any]]] = {}
 _dashboard_cache_lock = asyncio.Lock()
 _dashboard_build_locks: dict[tuple[str, str], asyncio.Lock] = {}

@@ -71,6 +71,12 @@ def anyio_backend():
     return "asyncio"
 
 
+def test_drivers_cache_env_int_falls_back_for_invalid_value(monkeypatch):
+    monkeypatch.setenv("GAIA_DRIVERS_CACHE_TTL_SECONDS", "not-an-int")
+
+    assert drivers_router._env_int("GAIA_DRIVERS_CACHE_TTL_SECONDS", 300) == 300
+
+
 @pytest.mark.anyio
 async def test_user_drivers_endpoint_returns_snapshot(monkeypatch, client: AsyncClient):
     user_id = str(uuid4())

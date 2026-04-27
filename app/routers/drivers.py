@@ -21,12 +21,24 @@ router = APIRouter(prefix="/v1/users/me", tags=["drivers"])
 DEFAULT_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
 logger = logging.getLogger(__name__)
 
-_DRIVERS_CACHE_TTL_SECONDS = max(0, int(os.getenv("GAIA_DRIVERS_CACHE_TTL_SECONDS", "300")))
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid integer env %s=%r; using default %s", name, raw, default)
+        return default
+
+
+_DRIVERS_CACHE_TTL_SECONDS = max(0, _env_int("GAIA_DRIVERS_CACHE_TTL_SECONDS", 300))
 _DRIVERS_STALE_TTL_SECONDS = max(
     _DRIVERS_CACHE_TTL_SECONDS,
-    int(os.getenv("GAIA_DRIVERS_STALE_TTL_SECONDS", str(6 * 60 * 60))),
+    _env_int("GAIA_DRIVERS_STALE_TTL_SECONDS", 6 * 60 * 60),
 )
-_DRIVERS_CACHE_MAX_ITEMS = max(1, int(os.getenv("GAIA_DRIVERS_CACHE_MAX_ITEMS", "512")))
+_DRIVERS_CACHE_MAX_ITEMS = max(1, _env_int("GAIA_DRIVERS_CACHE_MAX_ITEMS", 512))
 _drivers_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
 _drivers_cache_lock = asyncio.Lock()
 _drivers_build_locks: dict[tuple[str, str], asyncio.Lock] = {}

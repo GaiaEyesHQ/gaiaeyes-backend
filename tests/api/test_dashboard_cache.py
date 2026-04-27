@@ -28,6 +28,12 @@ def anyio_backend():
     return "asyncio"
 
 
+def test_dashboard_cache_env_int_falls_back_for_invalid_value(monkeypatch):
+    monkeypatch.setenv("GAIA_DASHBOARD_CACHE_TTL_SECONDS", "not-an-int")
+
+    assert dashboard_router._env_int("GAIA_DASHBOARD_CACHE_TTL_SECONDS", 300) == 300
+
+
 @pytest.mark.anyio
 async def test_dashboard_cache_returns_payload_copy(monkeypatch):
     monkeypatch.setattr(dashboard_router, "_DASHBOARD_CACHE_TTL_SECONDS", 60)

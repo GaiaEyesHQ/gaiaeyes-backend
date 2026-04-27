@@ -151,3 +151,17 @@ def test_seed_space_context_drivers_adds_southward_bz() -> None:
     assert bz["value"] == -7.8
     assert bz["reading"] == "-7.8 nT"
     assert "Southward Bz" in bz["short_reason"]
+
+
+def test_seed_space_context_drivers_uses_current_bz_when_available() -> None:
+    rows = _seed_space_context_drivers(
+        {
+            "daily": {
+                "bz_now": -1.2,
+                "bz_min": -9.1,
+                "updated_at": "2026-04-25T03:24:00+00:00",
+            }
+        }
+    )
+
+    assert [row for row in rows if row["key"] == "bz"] == []

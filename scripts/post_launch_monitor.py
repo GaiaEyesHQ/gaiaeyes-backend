@@ -61,6 +61,7 @@ ADMIN_BEARER = _first_token_env(
 REQUEST_TIMEOUT = float(os.getenv("GAIA_MONITOR_TIMEOUT_SECONDS") or "20")
 LAST_PROBE_WARN_MS = int(os.getenv("GAIA_MONITOR_LAST_PROBE_WARN_MS") or "60000")
 ANALYTICS_MIN_EVENTS_24H = int(os.getenv("GAIA_MONITOR_ANALYTICS_MIN_EVENTS_24H") or "1")
+QUEUE_DEPTH_WARN = int(os.getenv("GAIA_MONITOR_QUEUE_DEPTH_WARN") or "0")
 
 
 @dataclass
@@ -120,6 +121,47 @@ def _iso_age_ms(value: Any) -> int | None:
     return int((datetime.now(timezone.utc) - parsed).total_seconds() * 1000)
 
 
+def _int_from_payload(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _ingest_queue_health(payload: Mapping[str, Any]) -> tuple[str, str]:
+    queue = payload.get("ingest_queue") if isinstance(payload.get("ingest_queue"), dict) else {}
+    if not queue:
+        return "warn", "ingest_queue missing from /health"
+
+    enabled = bool(queue.get("enabled"))
+    redis_enabled = bool(queue.get("redis_enabled"))
+    redis_depth_raw = queue.get("redis_depth")
+    redis_error = str(queue.get("redis_error") or "")
+    active_writes = _int_from_payload(queue.get("active_writes"))
+    max_active_writes = _int_from_payload(queue.get("max_active_writes"))
+    backlog_batches = _int_from_payload(queue.get("backlog_batches"))
+    redis_depth = _int_from_payload(redis_depth_raw)
+
+    detail_parts = [
+        f"queue_enabled={str(enabled).lower()}",
+        f"redis_enabled={str(redis_enabled).lower()}",
+        f"redis_depth={redis_depth if redis_depth_raw is not None else 'unknown'}",
+        f"backlog_batches={backlog_batches}",
+        f"active_writes={active_writes}/{max_active_writes}",
+    ]
+    detail = " ".join(detail_parts)
+
+    if redis_error:
+        return "warn", f"{detail} redis_error={redis_error}"
+    if redis_enabled and redis_depth_raw is None:
+        return "warn", detail
+    if redis_depth > QUEUE_DEPTH_WARN:
+        return "warn", detail
+    if backlog_batches > 0:
+        return "warn", detail
+    return "pass", detail
+
+
 def check_backend_health() -> CheckResult:
     try:
         payload = _get_json("/health")
@@ -137,15 +179,18 @@ def check_backend_health() -> CheckResult:
     waiting = int(pool.get("waiting") or 0)
     consec_fail = int(monitor.get("consec_fail") or 0)
     last_probe_age_ms = _iso_age_ms(monitor.get("last_probe"))
+    queue_status, queue_detail = _ingest_queue_health(payload)
     if waiting > 0:
-        return _result("backend_health", "warn", f"DB pool has waiting={waiting}")
+        return _result("backend_health", "warn", f"DB pool has waiting={waiting}; {queue_detail}")
     if consec_fail > 0:
-        return _result("backend_health", "warn", f"DB monitor has consec_fail={consec_fail}")
+        return _result("backend_health", "warn", f"DB monitor has consec_fail={consec_fail}; {queue_detail}")
     if last_probe_age_ms is None:
-        return _result("backend_health", "warn", "DB monitor has no last_probe timestamp")
+        return _result("backend_health", "warn", f"DB monitor has no last_probe timestamp; {queue_detail}")
     if last_probe_age_ms > LAST_PROBE_WARN_MS:
-        return _result("backend_health", "warn", f"DB monitor last_probe_age_ms={last_probe_age_ms}")
-    return _result("backend_health", "pass", f"db=true healthy_state_age_ms={sticky_age} last_probe_age_ms={last_probe_age_ms}")
+        return _result("backend_health", "warn", f"DB monitor last_probe_age_ms={last_probe_age_ms}; {queue_detail}")
+    if queue_status != "pass":
+        return _result("backend_health", "warn", f"db=true healthy_state_age_ms={sticky_age} last_probe_age_ms={last_probe_age_ms}; {queue_detail}")
+    return _result("backend_health", "pass", f"db=true healthy_state_age_ms={sticky_age} last_probe_age_ms={last_probe_age_ms}; {queue_detail}")
 
 
 def _has_pollen(row: Mapping[str, Any]) -> bool:
