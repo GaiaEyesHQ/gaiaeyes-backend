@@ -134,11 +134,25 @@ async def _release_ingest_write_slot() -> None:
         _ingest_active_writes = max(0, _ingest_active_writes - 1)
 
 
-def ingest_queue_status() -> Dict[str, Any]:
+async def ingest_queue_status() -> Dict[str, Any]:
+    redis_depth: Optional[int] = None
+    redis_error: Optional[str] = None
+    if INGEST_REDIS_QUEUE_ENABLED:
+        try:
+            client = await _get_redis_queue_client()
+            if client is not None:
+                redis_depth = int(await client.llen(INGEST_REDIS_QUEUE_KEY))
+            else:
+                redis_error = "redis_unavailable"
+        except Exception as exc:
+            redis_error = str(exc)[:160] or exc.__class__.__name__
+
     return {
         "enabled": INGEST_QUEUE_ENABLED,
         "redis_enabled": INGEST_REDIS_QUEUE_ENABLED,
         "redis_key": INGEST_REDIS_QUEUE_KEY if INGEST_REDIS_QUEUE_ENABLED else None,
+        "redis_depth": redis_depth,
+        "redis_error": redis_error,
         "active_writes": _ingest_active_writes,
         "max_active_writes": INGEST_MAX_ACTIVE_WRITES,
         "backlog_batches": len(_backlog),

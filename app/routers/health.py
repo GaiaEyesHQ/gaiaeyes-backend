@@ -32,7 +32,7 @@ async def service_health() -> Dict[str, Any]:
     try:
         from app.routers.ingest import ingest_queue_status
 
-        response["ingest_queue"] = ingest_queue_status()
+        response["ingest_queue"] = await ingest_queue_status()
     except Exception:
         pass
 

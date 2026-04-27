@@ -1181,3 +1181,25 @@ async def test_db_ping_retries_connection_failure(monkeypatch):
     assert result == {"ok": True, "db": True}
     assert failure_calls == ["boom"]
     assert pool.attempts == 2
+
+
+@pytest.mark.anyio
+async def test_ingest_queue_status_includes_redis_depth(monkeypatch):
+    class _FakeRedis:
+        async def llen(self, key):
+            assert key == "gaia:ingest:samples"
+            return 7
+
+    async def _fake_redis_client():
+        return _FakeRedis()
+
+    monkeypatch.setattr(ingest, "INGEST_REDIS_QUEUE_ENABLED", True)
+    monkeypatch.setattr(ingest, "INGEST_REDIS_QUEUE_KEY", "gaia:ingest:samples")
+    monkeypatch.setattr(ingest, "_get_redis_queue_client", _fake_redis_client)
+
+    status = await ingest.ingest_queue_status()
+
+    assert status["redis_enabled"] is True
+    assert status["redis_key"] == "gaia:ingest:samples"
+    assert status["redis_depth"] == 7
+    assert status["redis_error"] is None
