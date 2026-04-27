@@ -85,6 +85,7 @@ def _percentile(values: list[float], pct: float) -> float:
 
 @dataclass(frozen=True)
 class RequestResult:
+    target: str
     status: int
     ok: bool
     db: bool | None
@@ -102,7 +103,9 @@ def _sample_for(user_id: str, index: int, base_time: datetime) -> dict[str, Any]
     kind = index % 4
     common = {
         "user_id": user_id,
-        "device_os": "ios-loadtest",
+        # Production constrains this column to real client OS values.
+        # Keep synthetic rows identifiable through source/user_id instead.
+        "device_os": "ios",
         "source": "loadtest",
         "start_time": _iso_z(sample_time),
         "end_time": _iso_z(end_time),
@@ -178,6 +181,7 @@ def _post_chunk(
         timeout,
     )
     return RequestResult(
+        target="POST /v1/samples/batch",
         status=status,
         ok=bool(data.get("ok")),
         db=data.get("db") if isinstance(data.get("db"), bool) else None,
@@ -199,6 +203,7 @@ def _get_read_path(base_url: str, bearer: str, user_id: str, path: str, timeout:
         timeout,
     )
     return RequestResult(
+        target=f"GET /{path.lstrip('/')}",
         status=status,
         ok=200 <= status <= 299 and data.get("ok") is not False,
         db=data.get("db") if isinstance(data.get("db"), bool) else None,
@@ -252,6 +257,28 @@ def _print_summary(results: list[RequestResult], started: float) -> int:
     failures = [result for result in results if not result.ok and result.buffered == 0]
     buffered_failures = [result for result in results if result.buffered > 0]
 
+    by_target: dict[str, dict[str, Any]] = {}
+    for target in sorted({result.target for result in results}):
+        target_results = [result for result in results if result.target == target]
+        target_latencies = [result.elapsed_ms for result in target_results]
+        by_target[target] = {
+            "requests": len(target_results),
+            "received": sum(result.received for result in target_results),
+            "inserted": sum(result.inserted for result in target_results),
+            "buffered": sum(result.buffered for result in target_results),
+            "skipped": sum(result.skipped for result in target_results),
+            "status_counts": {
+                str(status): sum(1 for result in target_results if result.status == status)
+                for status in sorted({result.status for result in target_results})
+            },
+            "latency_ms": {
+                "min": round(min(target_latencies), 1) if target_latencies else 0,
+                "p50": round(statistics.median(target_latencies), 1) if target_latencies else 0,
+                "p95": round(_percentile(target_latencies, 95), 1),
+                "max": round(max(target_latencies), 1) if target_latencies else 0,
+            },
+        }
+
     print(json.dumps(
         {
             "requests": len(results),
@@ -269,6 +296,7 @@ def _print_summary(results: list[RequestResult], started: float) -> int:
                 "p95": round(_percentile(latencies, 95), 1),
                 "max": round(max(latencies), 1) if latencies else 0,
             },
+            "by_target": by_target,
         },
         indent=2,
         sort_keys=True,

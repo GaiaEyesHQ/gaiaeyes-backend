@@ -52,7 +52,7 @@ router = APIRouter(prefix="/v1", tags=["dashboard"])
 logger = logging.getLogger(__name__)
 
 _SIGNAL_CONTEXT_TIMEOUT_SECONDS = 6.0
-_DASHBOARD_CACHE_TTL_SECONDS = max(0, int(os.getenv("GAIA_DASHBOARD_CACHE_TTL_SECONDS", "60")))
+_DASHBOARD_CACHE_TTL_SECONDS = max(0, int(os.getenv("GAIA_DASHBOARD_CACHE_TTL_SECONDS", "300")))
 _DASHBOARD_CACHE_MAX_ITEMS = max(1, int(os.getenv("GAIA_DASHBOARD_CACHE_MAX_ITEMS", "512")))
 _dashboard_cache: dict[tuple[str, str], tuple[float, Dict[str, Any]]] = {}
 _dashboard_cache_lock = asyncio.Lock()

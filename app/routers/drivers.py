@@ -20,7 +20,7 @@ router = APIRouter(prefix="/v1/users/me", tags=["drivers"])
 DEFAULT_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
 logger = logging.getLogger(__name__)
 
-_DRIVERS_CACHE_TTL_SECONDS = max(0, int(os.getenv("GAIA_DRIVERS_CACHE_TTL_SECONDS", "60")))
+_DRIVERS_CACHE_TTL_SECONDS = max(0, int(os.getenv("GAIA_DRIVERS_CACHE_TTL_SECONDS", "300")))
 _DRIVERS_CACHE_MAX_ITEMS = max(1, int(os.getenv("GAIA_DRIVERS_CACHE_MAX_ITEMS", "512")))
 _drivers_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
 _drivers_cache_lock = asyncio.Lock()

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional, Literal
+import importlib
+from typing import Any, Optional, Literal
 import datetime as dt
 
 import psycopg
-import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
@@ -15,6 +15,7 @@ from app.security.auth import require_supabase_jwt
 router = APIRouter(prefix="/v1/billing", tags=["billing"])
 
 logger = logging.getLogger(__name__)
+_stripe_module: Any | None = None
 
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "").strip()
 SUCCESS_URL = os.environ.get("CHECKOUT_SUCCESS_URL", "").strip()
@@ -27,6 +28,13 @@ PRICE_MAP = {
     "pro_monthly": os.environ.get("STRIPE_PRICE_PRO_MONTHLY", "").strip(),
     "pro_yearly": os.environ.get("STRIPE_PRICE_PRO_YEARLY", "").strip(),
 }
+
+
+def _stripe() -> Any:
+    global _stripe_module
+    if _stripe_module is None:
+        _stripe_module = importlib.import_module("stripe")
+    return _stripe_module
 
 
 def _db_conn():
@@ -180,7 +188,8 @@ def _get_or_create_customer(email: Optional[str], user_id: str) -> str:
                 customer_id = row[0]
 
     if not customer_id:
-        customer = stripe.Customer.create(email=email) if email else stripe.Customer.create()
+        stripe_client = _stripe()
+        customer = stripe_client.Customer.create(email=email) if email else stripe_client.Customer.create()
         customer_id = customer["id"]
 
     with _db_conn() as conn, conn.cursor() as cur:
@@ -222,7 +231,8 @@ def create_checkout_session(payload: CheckoutReq, request: Request, _: None = De
 
     if not STRIPE_API_KEY:
         raise HTTPException(status_code=500, detail="STRIPE_API_KEY not configured")
-    stripe.api_key = STRIPE_API_KEY
+    stripe_client = _stripe()
+    stripe_client.api_key = STRIPE_API_KEY
 
     price_id = PRICE_MAP.get(payload.plan)
     if payload.plan not in PRICE_MAP:
@@ -239,7 +249,7 @@ def create_checkout_session(payload: CheckoutReq, request: Request, _: None = De
     customer_id = _get_or_create_customer(email, user_id)
 
     try:
-        session = stripe.checkout.Session.create(
+        session = stripe_client.checkout.Session.create(
             mode="subscription",
             customer=customer_id,
             metadata={"user_id": user_id},
@@ -249,7 +259,7 @@ def create_checkout_session(payload: CheckoutReq, request: Request, _: None = De
             cancel_url=cancel_url,
             allow_promotion_codes=True,
         )
-    except stripe.error.StripeError as exc:
+    except stripe_client.error.StripeError as exc:
         logger.exception("stripe checkout session failed", extra={"user_id": user_id})
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc.user_message or str(exc)}") from exc
 
