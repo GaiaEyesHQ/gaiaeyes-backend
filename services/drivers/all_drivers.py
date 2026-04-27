@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
@@ -1526,16 +1527,28 @@ async def build_all_drivers_payload(
     from services.personalization.health_context import build_personalization_profile
 
     generated_at = datetime.now(UTC).isoformat()
+    build_started = time.perf_counter()
+    step_started = build_started
+    timings_ms: dict[str, float] = {}
+
+    def mark_step(name: str) -> None:
+        nonlocal step_started
+        now = time.perf_counter()
+        timings_ms[name] = round((now - step_started) * 1000.0, 1)
+        step_started = now
+
     try:
         definition, _ = load_definition_base()
     except Exception:
         definition = {}
+    mark_step("definition")
 
     _, active_states, local_payload = await resolve_current_drivers(
         user_id=user_id,
         day=day,
         definition=definition,
     )
+    mark_step("current_drivers")
     normalized_local = _normalize_local_payload(local_payload)
     environmental = normalize_environmental_drivers(
         active_states=active_states,
@@ -1559,16 +1572,25 @@ async def build_all_drivers_payload(
     health_status_task = asyncio.create_task(asyncio.to_thread(fetch_health_status_context, user_id, day))
 
     pattern_rows = await fetch_best_pattern_rows(conn, user_id)
+    mark_step("patterns")
     recent_outcomes = await fetch_recent_outcome_summary(conn, user_id, day)
+    mark_step("recent_outcomes")
     current_symptom_rows = await _fetch_current_symptom_rows(conn, user_id)
+    mark_step("current_symptoms")
     latest_ulf = await ulf_db.get_latest_ulf_context(conn)
+    mark_step("ulf")
     outlook_payload = await build_user_outlook_payload(conn, user_id)
+    mark_step("outlook")
     space_context = await _fetch_space_context(conn, day)
+    mark_step("space_context")
 
     user_tags = await user_tags_task
+    mark_step("user_tags")
     profile = build_personalization_profile(user_tags)
     exposure_summary = await asyncio.to_thread(fetch_exposure_summary, user_id, day, profile=profile)
+    mark_step("exposures")
     health_status_explainer = await health_status_task
+    mark_step("health_status")
 
     seed_drivers: list[Dict[str, Any]] = []
     seed_drivers.extend(_seed_environmental_drivers(environmental, local_payload=normalized_local, generated_at=generated_at))
@@ -1588,7 +1610,7 @@ async def build_all_drivers_payload(
         seed_drivers.append(fallback_symptom_driver)
     seed_drivers.extend(_seed_body_context_drivers(health_status_explainer, generated_at=generated_at))
 
-    return compose_all_drivers_payload(
+    payload = compose_all_drivers_payload(
         day=day,
         seed_drivers=_dedupe_seed_drivers(seed_drivers),
         pattern_rows=[dict(item) for item in pattern_rows or [] if isinstance(item, Mapping)],
@@ -1599,3 +1621,7 @@ async def build_all_drivers_payload(
         local_payload=normalized_local,
         outlook_payload=dict(outlook_payload or {}),
     )
+    mark_step("compose")
+    timings_ms["total"] = round((time.perf_counter() - build_started) * 1000.0, 1)
+    payload["build_timings_ms"] = timings_ms
+    return payload

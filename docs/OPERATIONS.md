@@ -101,8 +101,21 @@ A successful response confirms the credentials, pgBouncer endpoint, and SSL sett
 - `/v1/samples/batch` now checks the health monitor before touching the database. When `db:false`
   the handler immediately rejects the batch with `error:"db_unavailable"`, allowing callers to back
   off without waiting for a timeout. Once the monitor reports healthy again, normal inserts resume.
-- Successful inserts trigger at most one mart refresh per user every ~20 seconds. The refresh runs
-  via a background task after a 2-second delay (`[MART] scheduled refresh (delayed) ...`), ensuring
+- Health ingest writes are gated by `GAIA_INGEST_MAX_ACTIVE_WRITES` per Render instance. When all
+  write slots are busy, batches are accepted into the ingest queue instead of opening more Postgres
+  work. `/health` exposes `ingest_queue.active_writes` and `ingest_queue.backlog_batches`.
+- For launch bursts, configure a Redis/Render Key Value service, set `REDIS_URL` and
+  `GAIA_INGEST_REDIS_QUEUE_ENABLED=1`, then run a Render worker with:
+  ```
+  python workers/ingest_queue_worker.py
+  ```
+  This drains queued health batches independently from the web service. Without Redis, the web
+  service still uses an in-process backlog, but that backlog is not durable across deploys/restarts.
+- For queue-enabled load tests, run `scripts/load_test_ingest.py` with `--allow-deferred`. Queued
+  batches are then treated as an accepted backpressure path; verify `/health.ingest_queue.backlog_batches`
+  drains back to `0` before considering the run healthy.
+- Successful inserts trigger at most one mart refresh per user/day about every 120 seconds. The refresh runs
+  via a short delayed background task (`[MART] scheduled refresh (delayed) ...`), ensuring
   bursts of batches do not flood Postgres while allowing fresh features shortly after recovery.
 
 ## 2025-11 Stabilization Updates

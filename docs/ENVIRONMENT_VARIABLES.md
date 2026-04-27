@@ -8,6 +8,11 @@
 | `DATABASE_URL` | Supabase Postgres connection | `postgresql://postgres:***@db.<project>.supabase.co:5432/postgres` | `app/db/__init__.py` |
 | `DIRECT_URL` | Optional direct Postgres fallback | `postgresql://postgres:***@db.<project>.supabase.co:5432/postgres` | `app/db/__init__.py` |
 | `SUPABASE_DB_URL` | Supabase pooled Postgres connection (scripts/bots) | `postgresql://postgres:***@db.<project>.supabase.co:6543/postgres` | `services/db.py` |
+| `DB_POOL_MIN_SIZE` | Minimum async Postgres pool connections per Render instance | `2` | `app/db/__init__.py` |
+| `DB_POOL_MAX_SIZE` | Maximum async Postgres pool connections per Render instance | `8` | `app/db/__init__.py` |
+| `DB_POOL_TIMEOUT_SECONDS` | Pool acquire timeout before retry/failover behavior | `8` | `app/db/__init__.py` |
+| `DB_POOL_MAX_IDLE_SECONDS` | Max idle seconds before pool closes idle connections | `300` | `app/db/__init__.py` |
+| `DB_STATEMENT_TIMEOUT_MS` | Per-connection Postgres statement timeout | `60000` | `app/db/__init__.py` |
 | `SUPABASE_JWT_SECRET` | Validate Supabase JWTs | `supabase-jwt-secret` | `app/utils/auth.py` |
 | `SUPABASE_URL` | Supabase REST/Auth/Storage base URL | `https://<project>.supabase.co` | `app/utils/supabase_storage.py`, `app/routers/profile.py` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Preferred service-role key for storage uploads and authenticated account deletion | `service-role-key` | `app/utils/supabase_storage.py`, `app/routers/profile.py` |
@@ -52,6 +57,13 @@
 | `ULF_MIN_HISTORY_ROWS` | Minimum prior rows before station percentile normalization is emitted | `72` | `bots/geomag_ulf/ingest_ulf.py` |
 | `ULF_BOOTSTRAP_MIN_ROWS` | Minimum rows needed for the sparse-history bootstrap percentile fallback | `12` | `bots/geomag_ulf/ingest_ulf.py` |
 | `MART_REFRESH_DISABLE` | Disable mart refresh on ingest | `0` | `app/routers/ingest.py` |
+| `GAIA_INGEST_QUEUE_ENABLED` | Enable in-process health ingest write gating and overflow queue | `1` | `app/routers/ingest.py` |
+| `GAIA_INGEST_REDIS_QUEUE_ENABLED` | Enable Redis-backed durable ingest overflow queue when `REDIS_URL` is configured | `0` | `app/routers/ingest.py`, `workers/ingest_queue_worker.py` |
+| `GAIA_INGEST_REDIS_QUEUE_KEY` | Redis list key for queued health ingest batches | `gaia:ingest:samples` | `app/routers/ingest.py`, `workers/ingest_queue_worker.py` |
+| `GAIA_INGEST_MAX_ACTIVE_WRITES` | Max concurrent `/v1/samples/batch` DB write operations per Render instance | `4` | `app/routers/ingest.py` |
+| `GAIA_INGEST_BACKLOG_MAX_BATCHES` | Max queued health ingest batches held per Render instance | `500` | `app/routers/ingest.py` |
+| `GAIA_INGEST_BACKLOG_RETRY_DELAY_SECONDS` | Delay while backlog drain waits for an ingest write slot | `1.0` | `app/routers/ingest.py` |
+| `GAIA_INGEST_WORKER_RETRY_DELAY` | Redis ingest worker retry delay after DB pressure/failure | `5.0` | `workers/ingest_queue_worker.py` |
 | `DEBUG_FEATURES_DIAG` | Enable features diagnostics | `1` | `app/routers/summary.py` |
 | `WEBHOOK_SECRET` | HMAC secret for `/hooks/*` | `webhook-secret` | `api/middleware.py`, `api/webhooks.py` |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | `whsec_...` | `app/api/webhooks.py` |

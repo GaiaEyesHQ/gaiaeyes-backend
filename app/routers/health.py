@@ -29,4 +29,11 @@ async def service_health() -> Dict[str, Any]:
     if snapshot is not None:
         response["monitor"] = snapshot
 
+    try:
+        from app.routers.ingest import ingest_queue_status
+
+        response["ingest_queue"] = ingest_queue_status()
+    except Exception:
+        pass
+
     return response

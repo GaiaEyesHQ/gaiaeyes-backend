@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import date, datetime, timezone
 from typing import Annotated, Awaitable, Dict, List, Optional, Union, Callable, Tuple, Any
 
@@ -32,11 +33,21 @@ router = APIRouter(tags=["ingest"])
 
 DEFAULT_TIMEZONE = "America/Chicago"
 REFRESH_DISABLED = getenv("MART_REFRESH_DISABLE", "0").lower() in {"1", "true", "yes", "on"}
+INGEST_QUEUE_ENABLED = getenv("GAIA_INGEST_QUEUE_ENABLED", "1").lower() in {"1", "true", "yes", "on"}
+INGEST_REDIS_QUEUE_ENABLED = getenv("GAIA_INGEST_REDIS_QUEUE_ENABLED", "0").lower() in {"1", "true", "yes", "on"}
+INGEST_REDIS_QUEUE_KEY = getenv("GAIA_INGEST_REDIS_QUEUE_KEY", "gaia:ingest:samples")
+INGEST_MAX_ACTIVE_WRITES = max(1, int(getenv("GAIA_INGEST_MAX_ACTIVE_WRITES", "4")))
+INGEST_BACKLOG_MAX_BATCHES = max(1, int(getenv("GAIA_INGEST_BACKLOG_MAX_BATCHES", "500")))
+INGEST_BACKLOG_RETRY_DELAY_SECONDS = max(0.25, float(getenv("GAIA_INGEST_BACKLOG_RETRY_DELAY_SECONDS", "1.0")))
 
 _backlog = deque()
 _backlog_lock = asyncio.Lock()
 _backlog_drain_lock = asyncio.Lock()
 _backlog_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
+_redis_queue_client: Any = None
+_redis_queue_lock = asyncio.Lock()
+_ingest_active_writes = 0
+_ingest_active_lock = asyncio.Lock()
 _recent_refresh_requests: Dict[Tuple[str, date], float] = {}
 _recent_refresh_lock = asyncio.Lock()
 _DELAYED_REFRESH_DELAY_SECONDS = 0.5
@@ -90,6 +101,93 @@ def _sample_to_dict(sample: SampleIn) -> Dict[str, Any]:
     return sample.dict()
 
 
+def _sample_to_queue_payload(sample: SampleIn) -> Dict[str, Any]:
+    payload = _sample_to_dict(sample)
+    for key in ("start_time", "end_time"):
+        value = payload.get(key)
+        if isinstance(value, datetime):
+            payload[key] = value.isoformat()
+    return payload
+
+
+async def _try_claim_ingest_write_slot() -> bool:
+    global _ingest_active_writes
+    if not INGEST_QUEUE_ENABLED:
+        return True
+    async with _ingest_active_lock:
+        if _ingest_active_writes >= INGEST_MAX_ACTIVE_WRITES:
+            return False
+        _ingest_active_writes += 1
+        return True
+
+
+async def _wait_for_ingest_write_slot() -> None:
+    while not await _try_claim_ingest_write_slot():
+        await asyncio.sleep(INGEST_BACKLOG_RETRY_DELAY_SECONDS)
+
+
+async def _release_ingest_write_slot() -> None:
+    global _ingest_active_writes
+    if not INGEST_QUEUE_ENABLED:
+        return
+    async with _ingest_active_lock:
+        _ingest_active_writes = max(0, _ingest_active_writes - 1)
+
+
+def ingest_queue_status() -> Dict[str, Any]:
+    return {
+        "enabled": INGEST_QUEUE_ENABLED,
+        "redis_enabled": INGEST_REDIS_QUEUE_ENABLED,
+        "redis_key": INGEST_REDIS_QUEUE_KEY if INGEST_REDIS_QUEUE_ENABLED else None,
+        "active_writes": _ingest_active_writes,
+        "max_active_writes": INGEST_MAX_ACTIVE_WRITES,
+        "backlog_batches": len(_backlog),
+        "backlog_max_batches": INGEST_BACKLOG_MAX_BATCHES,
+        "draining": _backlog_drain_lock.locked(),
+    }
+
+
+async def _get_redis_queue_client():
+    global _redis_queue_client
+    if not INGEST_REDIS_QUEUE_ENABLED:
+        return None
+    redis_url = getenv("REDIS_URL", "").strip()
+    if not redis_url:
+        return None
+    if _redis_queue_client is not None:
+        return _redis_queue_client
+    async with _redis_queue_lock:
+        if _redis_queue_client is not None:
+            return _redis_queue_client
+        try:
+            from redis.asyncio import Redis  # type: ignore
+
+            client = Redis.from_url(redis_url, decode_responses=True)
+            await client.ping()
+        except Exception as exc:
+            logger.warning("[BATCH] redis ingest queue unavailable: %s", exc)
+            return None
+        _redis_queue_client = client
+        return _redis_queue_client
+
+
+async def _enqueue_redis_backlog(entry: Dict[str, Any]) -> bool:
+    client = await _get_redis_queue_client()
+    if client is None:
+        return False
+    try:
+        await client.rpush(INGEST_REDIS_QUEUE_KEY, json.dumps(entry, separators=(",", ":")))
+        logger.warning(
+            "[BATCH] queued payload in redis size=%d key=%s",
+            len(entry.get("samples", [])),
+            INGEST_REDIS_QUEUE_KEY,
+        )
+        return True
+    except Exception as exc:
+        logger.warning("[BATCH] redis ingest queue push failed: %s", exc)
+        return False
+
+
 def _resolve_timezone(value: Optional[str]) -> tuple[str, ZoneInfo]:
     if not value:
         return DEFAULT_TIMEZONE, ZoneInfo(DEFAULT_TIMEZONE)
@@ -118,17 +216,28 @@ def _sample_refresh_days(samples: List["SampleIn"], tzinfo: ZoneInfo) -> List[da
     return sorted(days)
 
 
-async def _enqueue_backlog(entry: Dict[str, Any]) -> None:
+async def _enqueue_backlog(entry: Dict[str, Any]) -> bool:
+    if await _enqueue_redis_backlog(entry):
+        return True
     async with _backlog_lock:
+        if len(_backlog) >= INGEST_BACKLOG_MAX_BATCHES:
+            logger.error(
+                "[BATCH] backlog full; dropping payload size=%d backlog_len=%d max=%d",
+                len(entry.get("samples", [])),
+                len(_backlog),
+                INGEST_BACKLOG_MAX_BATCHES,
+            )
+            return False
         _backlog.append(entry)
         logger.warning(
             "[BATCH] buffered payload size=%d backlog_len=%d",
             len(entry.get("samples", [])),
             len(_backlog),
         )
+        return True
 
 
-async def _drain_backlog(pool) -> None:
+async def _drain_backlog() -> None:
     if _backlog_drain_lock.locked():
         return
 
@@ -156,9 +265,19 @@ async def _drain_backlog(pool) -> None:
 
             prepared = [(sample, idx) for idx, sample in enumerate(models)]
             try:
-                inserted, skipped, _ = await safe_insert_batch(pool, prepared, dev_uid)
+                await _wait_for_ingest_write_slot()
+                try:
+                    pool = await get_pool()
+                    inserted, skipped, _ = await safe_insert_batch(pool, prepared, dev_uid)
+                finally:
+                    await _release_ingest_write_slot()
             except BatchInsertError as exc:
                 logger.warning("[BATCH] backlog drain halted: %s", exc.reason)
+                async with _backlog_lock:
+                    _backlog.appendleft(entry)
+                break
+            except Exception as exc:
+                logger.warning("[BATCH] backlog drain halted: %s", exc)
                 async with _backlog_lock:
                     _backlog.appendleft(entry)
                 break
@@ -183,12 +302,12 @@ async def _drain_backlog(pool) -> None:
                     logger.debug("[BATCH] backlog refresh scheduled user=%s", refresh_user)
 
 
-def _start_backlog_drain(pool) -> None:
+def _start_backlog_drain() -> None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:  # pragma: no cover - no running loop
         return
-    _backlog_task_factory(_drain_backlog(pool))
+    _backlog_task_factory(_drain_backlog())
 
 
 async def safe_insert_batch(
@@ -463,7 +582,7 @@ async def samples_batch(
         refresh_user = batch_user_id
 
     buffer_entry = {
-        "samples": [_sample_to_dict(sample) for sample, _ in valid_rows],
+        "samples": [_sample_to_queue_payload(sample) for sample, _ in valid_rows],
         "dev_uid": dev_uid,
         "refresh_user": refresh_user,
         "tz": tz_name,
@@ -472,8 +591,9 @@ async def samples_batch(
     monitor = get_health_monitor()
     availability_reason = _ingest_availability_reason(monitor)
     if availability_reason:
+        queued = True
         if valid_rows:
-            await _enqueue_backlog(buffer_entry)
+            queued = await _enqueue_backlog(buffer_entry)
         monitor_snapshot = monitor.snapshot() if monitor else {}
         pool_snapshot = monitor_snapshot.get("pool") or {}
         logger.warning(
@@ -501,10 +621,11 @@ async def samples_batch(
             "received": received,
             "inserted": 0,
             "skipped": validation_skipped + len(valid_rows),
-            "buffered": len(valid_rows),
+            "buffered": len(valid_rows) if queued else 0,
+            "queued": queued and bool(valid_rows),
             "db": False,
             "errors": errors,
-            "error": "db_unavailable",
+            "error": "db_unavailable" if queued else "queue_full",
         }
 
     inserted = 0
@@ -512,66 +633,107 @@ async def samples_batch(
     db_errors: List[Dict[str, Any]] = []
     db_healthy = True
 
-    try:
-        pool = await get_pool()
-    except PoolTimeout as exc:
-        logger.error("/samples/batch pool acquisition failed: %s", exc)
-        await handle_pool_timeout("ingest pool acquisition timeout")
-        if valid_rows:
-            await _enqueue_backlog(buffer_entry)
-        errors = list(validation_errors)
-        if not errors:
-            errors = [{"reason": "db_timeout"}]
-        _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped + len(valid_rows), False)
+    if not valid_rows:
+        if _backlog:
+            _start_backlog_drain()
+        _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped, True)
         return {
-            "ok": False,
+            "ok": True,
             "received": received,
             "inserted": 0,
-            "skipped": validation_skipped + len(valid_rows),
-            "buffered": len(valid_rows) if valid_rows else 0,
-            "db": False,
-            "errors": errors,
-            "error": "db_timeout",
-        }
-    except Exception as exc:
-        logger.exception("/samples/batch unexpected pool error: %s", exc)
-        await handle_connection_failure(exc)
-        errors = list(validation_errors)
-        if not errors:
-            errors = [{"reason": "server_error", "message": str(exc)[:200]}]
-        _log_batch_summary(effective_user or "<unknown>", received, 0, received, False)
-        return {
-            "ok": False,
-            "received": received,
-            "inserted": 0,
-            "skipped": received,
+            "skipped": validation_skipped,
             "buffered": 0,
-            "db": False,
-            "errors": errors,
-            "error": "server_error",
+            "queued": False,
+            "db": True,
+            "errors": validation_errors,
+            "error": None,
         }
 
-    if valid_rows:
+    write_slot_claimed = await _try_claim_ingest_write_slot()
+    if not write_slot_claimed:
+        queued = await _enqueue_backlog(buffer_entry)
+        if queued:
+            _start_backlog_drain()
+        _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped, bool(queued))
+        return {
+            "ok": bool(queued),
+            "received": received,
+            "inserted": 0,
+            "skipped": validation_skipped,
+            "buffered": len(valid_rows) if queued else 0,
+            "queued": bool(queued),
+            "db": True,
+            "errors": validation_errors if queued else [{"reason": "queue_full"}],
+            "error": None if queued else "queue_full",
+        }
+
+    try:
         try:
-            inserted, db_skipped, db_errors = await safe_insert_batch(pool, valid_rows, dev_uid)
-        except BatchInsertError as exc:
-            db_healthy = False
-            if valid_rows:
-                await _enqueue_backlog(buffer_entry)
-            combined_errors = validation_errors + (db_errors or [])
-            if not combined_errors:
-                combined_errors = [{"reason": exc.reason}]
+            pool = await get_pool()
+        except PoolTimeout as exc:
+            logger.error("/samples/batch pool acquisition failed: %s", exc)
+            await handle_pool_timeout("ingest pool acquisition timeout")
+            queued = await _enqueue_backlog(buffer_entry)
+            if queued:
+                _start_backlog_drain()
+            errors = list(validation_errors)
+            if not errors:
+                errors = [{"reason": "db_timeout" if queued else "queue_full"}]
             _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped + len(valid_rows), False)
             return {
                 "ok": False,
                 "received": received,
                 "inserted": 0,
                 "skipped": validation_skipped + len(valid_rows),
-                "buffered": len(valid_rows),
+                "buffered": len(valid_rows) if queued else 0,
+                "queued": queued,
+                "db": False,
+                "errors": errors,
+                "error": "db_timeout" if queued else "queue_full",
+            }
+        except Exception as exc:
+            logger.exception("/samples/batch unexpected pool error: %s", exc)
+            await handle_connection_failure(exc)
+            errors = list(validation_errors)
+            if not errors:
+                errors = [{"reason": "server_error", "message": str(exc)[:200]}]
+            _log_batch_summary(effective_user or "<unknown>", received, 0, received, False)
+            return {
+                "ok": False,
+                "received": received,
+                "inserted": 0,
+                "skipped": received,
+                "buffered": 0,
+                "queued": False,
+                "db": False,
+                "errors": errors,
+                "error": "server_error",
+            }
+
+        try:
+            inserted, db_skipped, db_errors = await safe_insert_batch(pool, valid_rows, dev_uid)
+        except BatchInsertError as exc:
+            db_healthy = False
+            queued = await _enqueue_backlog(buffer_entry)
+            if queued:
+                _start_backlog_drain()
+            combined_errors = validation_errors + (db_errors or [])
+            if not combined_errors:
+                combined_errors = [{"reason": exc.reason if queued else "queue_full"}]
+            _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped + len(valid_rows), False)
+            return {
+                "ok": False,
+                "received": received,
+                "inserted": 0,
+                "skipped": validation_skipped + len(valid_rows),
+                "buffered": len(valid_rows) if queued else 0,
+                "queued": queued,
                 "db": False,
                 "errors": combined_errors,
-                "error": exc.reason,
+                "error": exc.reason if queued else "queue_full",
             }
+    finally:
+        await _release_ingest_write_slot()
 
     total_skipped = validation_skipped + db_skipped
     combined_errors = validation_errors + db_errors
@@ -593,7 +755,7 @@ async def samples_batch(
             for day_local in refresh_days:
                 await _maybe_schedule_refresh(refresh_user, day_local, inserted, tz_name)
         if valid_rows or _backlog:
-            _start_backlog_drain(pool)
+            _start_backlog_drain()
 
     _log_batch_summary(effective_user, received, inserted, total_skipped, db_healthy)
 
@@ -603,6 +765,7 @@ async def samples_batch(
         "inserted": inserted,
         "skipped": total_skipped,
         "buffered": 0,
+        "queued": False,
         "db": db_healthy,
         "errors": combined_errors,
         "error": None,

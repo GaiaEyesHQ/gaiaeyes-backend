@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 from functools import lru_cache
 from typing import Any, Dict, Optional
@@ -53,9 +54,16 @@ logger = logging.getLogger(__name__)
 
 _SIGNAL_CONTEXT_TIMEOUT_SECONDS = 6.0
 _DASHBOARD_CACHE_TTL_SECONDS = max(0, int(os.getenv("GAIA_DASHBOARD_CACHE_TTL_SECONDS", "300")))
+_DASHBOARD_STALE_TTL_SECONDS = max(
+    _DASHBOARD_CACHE_TTL_SECONDS,
+    int(os.getenv("GAIA_DASHBOARD_STALE_TTL_SECONDS", str(6 * 60 * 60))),
+)
 _DASHBOARD_CACHE_MAX_ITEMS = max(1, int(os.getenv("GAIA_DASHBOARD_CACHE_MAX_ITEMS", "512")))
 _dashboard_cache: dict[tuple[str, str], tuple[float, Dict[str, Any]]] = {}
 _dashboard_cache_lock = asyncio.Lock()
+_dashboard_build_locks: dict[tuple[str, str], asyncio.Lock] = {}
+_dashboard_build_locks_lock = asyncio.Lock()
+_dashboard_refresh_tasks: set[asyncio.Task] = set()
 
 _GAUGE_DELTA_KEYS = [
     "pain",
@@ -83,21 +91,29 @@ def _safe_dashboard_definition() -> Dict[str, Any]:
         return {}
 
 
-async def _get_cached_dashboard(user_id: str, day: date) -> tuple[Dict[str, Any] | None, float]:
+async def _get_cached_dashboard(
+    user_id: str,
+    day: date,
+    *,
+    allow_stale: bool = False,
+) -> tuple[Dict[str, Any] | None, float, bool]:
     if _DASHBOARD_CACHE_TTL_SECONDS <= 0:
-        return None, 0.0
+        return None, 0.0, False
     key = (user_id, day.isoformat())
     now = time.monotonic()
     async with _dashboard_cache_lock:
         cached = _dashboard_cache.get(key)
         if not cached:
-            return None, 0.0
+            return None, 0.0, False
         stored_at, payload = cached
         age = now - stored_at
-        if age > _DASHBOARD_CACHE_TTL_SECONDS:
+        if age <= _DASHBOARD_CACHE_TTL_SECONDS:
+            return copy.deepcopy(payload), age, False
+        if allow_stale and age <= _DASHBOARD_STALE_TTL_SECONDS:
+            return copy.deepcopy(payload), age, True
+        if age > _DASHBOARD_STALE_TTL_SECONDS:
             _dashboard_cache.pop(key, None)
-            return None, 0.0
-        return copy.deepcopy(payload), age
+        return None, 0.0, False
 
 
 async def _set_cached_dashboard(user_id: str, day: date, payload: Dict[str, Any]) -> None:
@@ -109,6 +125,16 @@ async def _set_cached_dashboard(user_id: str, day: date, payload: Dict[str, Any]
             oldest_key = min(_dashboard_cache, key=lambda item: _dashboard_cache[item][0])
             _dashboard_cache.pop(oldest_key, None)
         _dashboard_cache[key] = (time.monotonic(), copy.deepcopy(payload))
+
+
+async def _get_dashboard_build_lock(user_id: str, day: date) -> asyncio.Lock:
+    key = (user_id, day.isoformat())
+    async with _dashboard_build_locks_lock:
+        lock = _dashboard_build_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            _dashboard_build_locks[key] = lock
+        return lock
 
 
 def _normalized_default_zones(definition: Dict[str, Any]) -> list[Dict[str, Any]]:
@@ -732,42 +758,34 @@ async def _fetch_latest_gauges(
     }
 
 
-@router.get("/dashboard", dependencies=[Depends(require_read_auth)])
-async def dashboard(
-    request: Request,
-    day: Optional[date] = Query(None),
-    debug: bool = Query(False),
-    force: bool = Query(False),
-    conn=Depends(get_db),
-):
-    started = time.perf_counter()
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id missing from request context")
-    day = _coerce_day(day)
+async def _build_dashboard_payload(
+    conn,
+    user_id: str,
+    day: date,
+    *,
+    debug: bool,
+) -> tuple[Dict[str, Any], Dict[str, float]]:
+    build_started = time.perf_counter()
+    step_started = build_started
+    timings_ms: Dict[str, float] = {}
 
-    if not debug and not force:
-        cached_payload, cache_age = await _get_cached_dashboard(user_id, day)
-        if cached_payload is not None:
-            logger.info(
-                "[dashboard] cache hit user=%s day=%s age=%.1fs",
-                user_id,
-                day.isoformat(),
-                cache_age,
-            )
-            cached_payload["cache_hit"] = True
-            cached_payload["cache_age_seconds"] = round(cache_age, 1)
-            return cached_payload
+    def mark_step(name: str) -> None:
+        nonlocal step_started
+        now = time.perf_counter()
+        timings_ms[name] = round((now - step_started) * 1000.0, 1)
+        step_started = now
 
     payload, rpc_fallback_used = await _call_dashboard_payload(conn, user_id, day)
     if not isinstance(payload, dict):
         payload = {}
+    mark_step("rpc_payload")
 
     paid_probe = await _probe_paid_user(conn, user_id)
     entitled = paid_probe.get("entitled")
     public_post = await _fetch_public_post(conn, day)
     member_post = await _fetch_member_post(conn, user_id, day)
     personal_post = payload.get("personal_post")
+    mark_step("posts_entitlement")
 
     resolved_member = member_post or personal_post
 
@@ -782,6 +800,7 @@ async def dashboard(
     except Exception as exc:
         logger.warning("[dashboard] geomagnetic context lookup failed user=%s day=%s err=%s", user_id, day, exc)
         out.update(build_ulf_payload(None, include_empty=True))
+    mark_step("ulf")
 
     definition = _safe_dashboard_definition()
     gauge_fallback = await _fetch_latest_gauges(
@@ -805,9 +824,13 @@ async def dashboard(
         if isinstance(gauges, dict):
             out["gauges_meta"] = _decorate_gauges(gauges, definition)
     out["alerts"] = _normalized_alerts(out.get("alerts"))
+    mark_step("gauges")
+
     out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
+    mark_step("gauge_delta")
 
     active_states, local_payload = await _resolve_signal_context(user_id, day, definition)
+    mark_step("signal_context")
     (
         user_tags,
         pattern_rows,
@@ -829,6 +852,8 @@ async def dashboard(
         _fetch_latest_pending_follow_up(conn, user_id),
         _fetch_guide_seen_state(conn, user_id),
     )
+    mark_step("personalization_inputs")
+
     drivers = normalize_environmental_drivers(
         active_states=active_states,
         local_payload=local_payload,
@@ -893,6 +918,7 @@ async def dashboard(
             out["gauges_meta"],
             recent_boosts,
         )
+    mark_step("drivers")
 
     gauges_payload = out.get("gauges") if isinstance(out.get("gauges"), dict) else {}
     gauges_meta_payload = out.get("gauges_meta") if isinstance(out.get("gauges_meta"), dict) else {}
@@ -941,6 +967,8 @@ async def dashboard(
         last_viewed_signature=(guide_seen_state or {}).get("last_viewed_signature"),
         last_viewed_at=(guide_seen_state or {}).get("last_viewed_at"),
     )
+    mark_step("models_and_guide")
+    timings_ms["total"] = round((time.perf_counter() - build_started) * 1000.0, 1)
 
     if debug:
         out["_debug"] = {
@@ -963,25 +991,150 @@ async def dashboard(
                 if isinstance(item, dict) and str(item.get("exposure_key") or "").strip()
             ),
             "geomagnetic_context_available": bool(out.get("geomagnetic_context")),
+            "build_timings_ms": timings_ms,
         }
+    else:
+        out["build_timings_ms"] = timings_ms
 
-    if not debug:
-        await _set_cached_dashboard(user_id, day, out)
-        out["cache_hit"] = False
-        out["cache_age_seconds"] = 0.0
+    return out, timings_ms
+
+
+@asynccontextmanager
+async def _acquire_dashboard_conn():
+    agen = get_db()
+    try:
+        try:
+            conn = await agen.__anext__()
+        except StopAsyncIteration:  # pragma: no cover - defensive guard
+            raise RuntimeError("database dependency yielded no connection")
+
+        try:
+            yield conn
+        except BaseException as exc:
+            try:
+                await agen.athrow(type(exc), exc, exc.__traceback__)
+            except StopAsyncIteration:
+                pass
+            raise
+        else:
+            try:
+                await agen.asend(None)
+            except StopAsyncIteration:
+                pass
+    finally:
+        try:
+            await agen.aclose()
+        except (RuntimeError, StopAsyncIteration):
+            pass
+
+
+async def _refresh_stale_dashboard(user_id: str, day: date) -> None:
+    lock = await _get_dashboard_build_lock(user_id, day)
+    if lock.locked():
+        logger.info("[dashboard] stale refresh skipped; build already active user=%s day=%s", user_id, day)
+        return
+    async with lock:
+        cached_payload, _, is_stale = await _get_cached_dashboard(user_id, day, allow_stale=True)
+        if cached_payload is not None and not is_stale:
+            return
+        started = time.perf_counter()
+        try:
+            async with _acquire_dashboard_conn() as conn:
+                out, timings_ms = await _build_dashboard_payload(conn, user_id, day, debug=False)
+                await _set_cached_dashboard(user_id, day, out)
+            elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
+            logger.info(
+                "[dashboard] stale refresh built user=%s day=%s ms=%s timings=%s",
+                user_id,
+                day.isoformat(),
+                elapsed_ms,
+                timings_ms,
+            )
+        except Exception as exc:
+            logger.warning("[dashboard] stale refresh failed user=%s day=%s err=%s", user_id, day, exc)
+
+
+def _schedule_dashboard_refresh(user_id: str, day: date) -> bool:
+    try:
+        task = asyncio.create_task(_refresh_stale_dashboard(user_id, day))
+    except RuntimeError:
+        return False
+    _dashboard_refresh_tasks.add(task)
+    task.add_done_callback(_dashboard_refresh_tasks.discard)
+    return True
+
+
+@router.get("/dashboard", dependencies=[Depends(require_read_auth)])
+async def dashboard(
+    request: Request,
+    day: Optional[date] = Query(None),
+    debug: bool = Query(False),
+    force: bool = Query(False),
+):
+    started = time.perf_counter()
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id missing from request context")
+    day = _coerce_day(day)
+
+    if not debug and not force:
+        cached_payload, cache_age, is_stale = await _get_cached_dashboard(user_id, day, allow_stale=True)
+        if cached_payload is not None:
+            refresh_scheduled = False
+            if is_stale:
+                refresh_scheduled = _schedule_dashboard_refresh(user_id, day)
+            logger.info(
+                "[dashboard] cache hit user=%s day=%s age=%.1fs stale=%s refresh_scheduled=%s",
+                user_id,
+                day.isoformat(),
+                cache_age,
+                is_stale,
+                refresh_scheduled,
+            )
+            cached_payload["cache_hit"] = True
+            cached_payload["cache_age_seconds"] = round(cache_age, 1)
+            cached_payload["stale"] = is_stale
+            cached_payload["refresh_scheduled"] = refresh_scheduled
+            return cached_payload
+
+    lock = await _get_dashboard_build_lock(user_id, day)
+    async with lock:
+        if not debug and not force:
+            cached_payload, cache_age, _ = await _get_cached_dashboard(user_id, day)
+            if cached_payload is not None:
+                cached_payload["cache_hit"] = True
+                cached_payload["cache_age_seconds"] = round(cache_age, 1)
+                cached_payload["stale"] = False
+                cached_payload["refresh_scheduled"] = False
+                return cached_payload
+
+        async with _acquire_dashboard_conn() as conn:
+            out, timings_ms = await _build_dashboard_payload(conn, user_id, day, debug=debug)
+
+        if not debug:
+            await _set_cached_dashboard(user_id, day, out)
+            out["cache_hit"] = False
+            out["cache_age_seconds"] = 0.0
+            out["stale"] = False
+            out["refresh_scheduled"] = False
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
     logger.info(
-        "[dashboard] user=%s day=%s ms=%s gauges=%s alerts=%s entitled=%s probe=%s member=%s public=%s",
+        "[dashboard] user=%s day=%s ms=%s gauges=%s alerts=%s entitled=%s probe=%s member=%s public=%s timings=%s",
         user_id,
         day.isoformat(),
         elapsed_ms,
         bool(out.get("gauges")),
         len(out.get("alerts") or []),
         out.get("entitled"),
-        paid_probe.get("matched_strategy"),
+        (
+            ((out.get("_debug") or {}).get("entitlement_probe") or {}).get("matched_strategy")
+            if isinstance(out.get("_debug"), dict)
+            else None
+        ),
         bool(out.get("member_post")),
         bool(out.get("public_post")),
+        timings_ms,
     )
     return out
 

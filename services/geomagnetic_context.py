@@ -208,6 +208,7 @@ def build_ulf_payload(
             "ulf_station_count": None,
             "ulf_missing_samples": False,
             "ulf_low_history": False,
+            "ulf_ts_utc": None,
             "geomagnetic_context": None,
         }
 
@@ -226,5 +227,6 @@ def build_ulf_payload(
         "ulf_station_count": context["station_count"],
         "ulf_missing_samples": context["missing_samples"],
         "ulf_low_history": context["low_history"],
+        "ulf_ts_utc": context["ts_utc"],
         "geomagnetic_context": context,
     }

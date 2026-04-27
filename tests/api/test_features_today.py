@@ -34,6 +34,17 @@ def _set_dev_bearer():
         settings.DEV_BEARER = original
 
 
+@pytest.fixture(autouse=True)
+def _reset_ingest_queue_state():
+    ingest._backlog.clear()
+    ingest._ingest_active_writes = 0
+    try:
+        yield
+    finally:
+        ingest._backlog.clear()
+        ingest._ingest_active_writes = 0
+
+
 @pytest.fixture
 def client():
     transport = ASGITransport(app=app)
@@ -344,6 +355,52 @@ async def test_ingest_attempts_insert_when_monitor_only_shows_pool_waiting(monke
     assert body["db"] is True
     assert body["buffered"] == 0
     assert len(ingest._backlog) == 0
+
+
+@pytest.mark.anyio
+async def test_ingest_queues_when_active_write_slots_are_full(monkeypatch, client: AsyncClient):
+    monkeypatch.setattr(ingest, "INGEST_QUEUE_ENABLED", True)
+    monkeypatch.setattr(ingest, "INGEST_MAX_ACTIVE_WRITES", 1)
+    monkeypatch.setattr(ingest, "_start_backlog_drain", lambda: None)
+    ingest._ingest_active_writes = 1
+
+    async def _unexpected_get_pool():
+        raise AssertionError("queued ingest should not acquire a DB pool")
+
+    monkeypatch.setattr(ingest, "get_pool", _unexpected_get_pool)
+
+    user_id = str(uuid4())
+    payload = {
+        "samples": [
+            {
+                "user_id": user_id,
+                "device_os": "ios",
+                "source": "watch",
+                "type": "heart_rate",
+                "start_time": "2024-04-03T12:00:00Z",
+                "end_time": "2024-04-03T12:01:00Z",
+                "value": 70,
+            }
+        ]
+    }
+
+    resp = await client.post(
+        "/v1/samples/batch",
+        headers={
+            "Authorization": "Bearer test-token",
+            "X-Dev-UserId": user_id,
+        },
+        params={"tz": "UTC"},
+        json=payload,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["queued"] is True
+    assert body["buffered"] == 1
+    assert body["inserted"] == 0
+    assert len(ingest._backlog) == 1
 
 
 @pytest.mark.anyio
@@ -697,7 +754,7 @@ async def test_features_error_envelope(monkeypatch, client: AsyncClient):
 
     monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
 
-    async def _fake_collect(conn, user_id, tz_name, tzinfo):  # noqa: ARG001
+    async def _fake_collect(conn, user_id, tz_name, tzinfo, cached_payload=None):  # noqa: ARG001
         return {}, {
             "branch": "scoped",
             "statement_timeout_ms": summary.STATEMENT_TIMEOUT_MS,

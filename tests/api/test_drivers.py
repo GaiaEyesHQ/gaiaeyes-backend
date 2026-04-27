@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from datetime import date
 from pathlib import Path
 from uuid import uuid4
@@ -30,11 +31,12 @@ def override_dev_bearer():
 
 
 @pytest.fixture(autouse=True)
-def override_db_dependency():
+def override_db_dependency(monkeypatch):
     async def _fake_db():
         yield object()
 
     app.dependency_overrides[get_db] = _fake_db
+    monkeypatch.setattr(drivers_router, "get_db", _fake_db)
     try:
         yield
     finally:
@@ -44,10 +46,14 @@ def override_db_dependency():
 @pytest.fixture(autouse=True)
 def clear_drivers_route_cache():
     drivers_router._drivers_cache.clear()
+    drivers_router._drivers_build_locks.clear()
+    drivers_router._drivers_refresh_tasks.clear()
     try:
         yield
     finally:
         drivers_router._drivers_cache.clear()
+        drivers_router._drivers_build_locks.clear()
+        drivers_router._drivers_refresh_tasks.clear()
 
 
 @pytest.fixture
@@ -228,3 +234,32 @@ async def test_user_drivers_endpoint_reuses_short_cache(monkeypatch, client: Asy
     assert forced.json()["cache_hit"] is False
     assert forced.json()["drivers"][0]["key"] == "bz-2"
     assert calls == 2
+
+
+@pytest.mark.anyio
+async def test_drivers_cache_can_return_stale_payload(monkeypatch):
+    monkeypatch.setattr(drivers_router, "_DRIVERS_CACHE_TTL_SECONDS", 60)
+    monkeypatch.setattr(drivers_router, "_DRIVERS_STALE_TTL_SECONDS", 600)
+    target_day = date(2026, 3, 26)
+    payload = {
+        "day": target_day.isoformat(),
+        "summary": {"active_driver_count": 1},
+        "drivers": [{"key": "bz_coupling"}],
+    }
+
+    await drivers_router._set_cached_drivers("user-1", target_day, payload)
+    async with drivers_router._drivers_cache_lock:
+        drivers_router._drivers_cache[("user-1", target_day.isoformat())] = (
+            time.monotonic() - 120,
+            payload,
+        )
+
+    cached, age, stale = await drivers_router._get_cached_drivers(
+        "user-1",
+        target_day,
+        allow_stale=True,
+    )
+
+    assert cached == payload
+    assert age >= 120
+    assert stale is True

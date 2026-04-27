@@ -92,6 +92,7 @@ class RequestResult:
     received: int
     inserted: int
     buffered: int
+    queued: bool
     skipped: int
     error: str
     elapsed_ms: float
@@ -188,6 +189,7 @@ def _post_chunk(
         received=int(data.get("received") or 0),
         inserted=int(data.get("inserted") or 0),
         buffered=int(data.get("buffered") or 0),
+        queued=bool(data.get("queued")),
         skipped=int(data.get("skipped") or 0),
         error=str(data.get("error") or ""),
         elapsed_ms=elapsed_ms,
@@ -210,6 +212,7 @@ def _get_read_path(base_url: str, bearer: str, user_id: str, path: str, timeout:
         received=0,
         inserted=0,
         buffered=0,
+        queued=False,
         skipped=0,
         error=str(data.get("error") or data.get("detail") or ""),
         elapsed_ms=elapsed_ms,
@@ -240,7 +243,7 @@ def _run_user(args: argparse.Namespace, user_index: int) -> list[RequestResult]:
     return results
 
 
-def _print_summary(results: list[RequestResult], started: float) -> int:
+def _print_summary(results: list[RequestResult], started: float, *, allow_deferred: bool) -> int:
     elapsed = time.perf_counter() - started
     latencies = [result.elapsed_ms for result in results]
     status_counts: dict[int, int] = {}
@@ -253,9 +256,10 @@ def _print_summary(results: list[RequestResult], started: float) -> int:
     total_received = sum(result.received for result in results)
     total_inserted = sum(result.inserted for result in results)
     total_buffered = sum(result.buffered for result in results)
+    total_queued = sum(1 for result in results if result.queued)
     total_skipped = sum(result.skipped for result in results)
     failures = [result for result in results if not result.ok and result.buffered == 0]
-    buffered_failures = [result for result in results if result.buffered > 0]
+    buffered_failures = [result for result in results if result.buffered > 0 and not allow_deferred]
 
     by_target: dict[str, dict[str, Any]] = {}
     for target in sorted({result.target for result in results}):
@@ -266,6 +270,7 @@ def _print_summary(results: list[RequestResult], started: float) -> int:
             "received": sum(result.received for result in target_results),
             "inserted": sum(result.inserted for result in target_results),
             "buffered": sum(result.buffered for result in target_results),
+            "queued_requests": sum(1 for result in target_results if result.queued),
             "skipped": sum(result.skipped for result in target_results),
             "status_counts": {
                 str(status): sum(1 for result in target_results if result.status == status)
@@ -287,6 +292,7 @@ def _print_summary(results: list[RequestResult], started: float) -> int:
             "received": total_received,
             "inserted": total_inserted,
             "buffered": total_buffered,
+            "queued_requests": total_queued,
             "skipped": total_skipped,
             "status_counts": status_counts,
             "error_counts": error_counts,
@@ -323,6 +329,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
     parser.add_argument("--chunk-pause-ms", type=int, default=60, help="Pause between chunks for each user.")
     parser.add_argument("--include-reads", action="store_true", help="Also hit common app read endpoints per user.")
+    parser.add_argument(
+        "--allow-deferred",
+        action="store_true",
+        help="Exit successfully when queue-enabled ingest buffers/dequeues requests instead of writing immediately.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print plan and first sample without writing.")
     parser.add_argument(
         "--allow-non-local-write",
@@ -382,7 +393,7 @@ def main() -> int:
         futures = [executor.submit(_run_user, args, user_index) for user_index in range(args.users)]
         for future in concurrent.futures.as_completed(futures):
             all_results.extend(future.result())
-    return _print_summary(all_results, started)
+    return _print_summary(all_results, started, allow_deferred=args.allow_deferred)
 
 
 if __name__ == "__main__":

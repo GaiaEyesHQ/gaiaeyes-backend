@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     FEATURES_CACHE_TTL_SECONDS: Optional[int] = None
     SCHUMANN_FUSE_TOMSK: bool = True
     SCHUMANN_TOMSK_MIN_QUALITY_SCORE: float = 0.55
+    DB_POOL_MIN_SIZE: int = 2
+    DB_POOL_MAX_SIZE: int = 8
+    DB_POOL_TIMEOUT_SECONDS: float = 8.0
+    DB_POOL_MAX_IDLE_SECONDS: int = 300
+    DB_STATEMENT_TIMEOUT_MS: int = 60000
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
@@ -70,7 +75,25 @@ def _ensure_conninfo_prepared() -> None:
     if _pool_conninfo_primary is None:
         _prepare_conninfo()
 
-_STATEMENT_TIMEOUT_MS = 60000
+_STATEMENT_TIMEOUT_MS = max(1000, int(settings.DB_STATEMENT_TIMEOUT_MS or 60000))
+
+
+def _pool_min_size() -> int:
+    return max(0, int(settings.DB_POOL_MIN_SIZE or 0))
+
+
+def _pool_max_size() -> int:
+    min_size = _pool_min_size()
+    configured = max(1, int(settings.DB_POOL_MAX_SIZE or 1))
+    return max(configured, min_size or 1)
+
+
+def _pool_timeout_seconds() -> float:
+    return max(0.1, float(settings.DB_POOL_TIMEOUT_SECONDS or 8.0))
+
+
+def _pool_max_idle_seconds() -> int:
+    return max(30, int(settings.DB_POOL_MAX_IDLE_SECONDS or 300))
 
 
 def _reset_timeout_counter() -> None:
@@ -193,10 +216,10 @@ def _make_pool(conninfo: str) -> AsyncConnectionPool:
 
     return AsyncConnectionPool(
         conninfo=conninfo,
-        min_size=2,
-        max_size=8,
-        timeout=8,
-        max_idle=300,
+        min_size=_pool_min_size(),
+        max_size=_pool_max_size(),
+        timeout=_pool_timeout_seconds(),
+        max_idle=_pool_max_idle_seconds(),
         open=False,
         check=_check_on_acquire,
         # NOTE: pgBouncer (transaction mode) cannot preserve prepared statements across
@@ -477,6 +500,13 @@ def get_pool_configuration() -> Dict[str, Any]:
         if _pool_conninfo_fallback
         else None,
         "active_label": _pool_active_label,
+        "pool": {
+            "min_size": _pool_min_size(),
+            "max_size": _pool_max_size(),
+            "timeout_seconds": _pool_timeout_seconds(),
+            "max_idle_seconds": _pool_max_idle_seconds(),
+            "statement_timeout_ms": _STATEMENT_TIMEOUT_MS,
+        },
     }
 
 
@@ -637,4 +667,6 @@ def get_pool_metrics() -> Dict[str, Any]:
         "ok": db_ok,
         "backend": _pool_active_label,
         "fallback_available": bool(_pool_conninfo_fallback),
+        "max_size": _pool_max_size(),
+        "min_size": _pool_min_size(),
     }
