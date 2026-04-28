@@ -260,7 +260,7 @@ struct OnboardingFlowView: View {
     }
 
     private var healthImportAvailable: Bool {
-        healthPermissionGrantedThisSession || (profile.healthkitRequestedAt != nil && !healthReadAccessUnavailable)
+        healthPermissionGrantedThisSession || profile.healthkitRequestedAt != nil
     }
 
     private var progressLabel: String {
@@ -1000,7 +1000,7 @@ struct OnboardingFlowView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else if healthReadAccessUnavailable {
-                    Text("Health reads still look off in Apple Health, so Gaia will skip import until access is enabled.")
+                    Text("Health reads still look off in Apple Health. You can still try the import now, or continue and retry later from Settings.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

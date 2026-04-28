@@ -571,7 +571,6 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             if !healthkitReadUnavailableAtISO.isEmpty {
                 append("⚠️ Health read access still looks off in Apple Health.")
                 append("Open Apple Health > Sharing > Apps > Gaia Eyes and confirm categories are enabled.")
-                return false
             }
             return true
         } catch {

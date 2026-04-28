@@ -3419,7 +3419,7 @@ struct ContentView: View {
         guard lastAuthUserScope != nextScope || cacheNeedsReset else { return }
         let previousScope = lastAuthUserScope
         let isSignedInScope = nextScope != "signed_out"
-        clearUserScopedRuntimeState(resetOnboarding: false)
+        clearUserScopedRuntimeState(resetOnboarding: nextScope == "signed_out")
         lastAuthUserScope = nextScope
         let previousLabel = previousScope.isEmpty ? "unset" : String(previousScope.prefix(8))
         let nextLabel = String(nextScope.prefix(8))
@@ -5081,6 +5081,9 @@ struct ContentView: View {
     }
 
     private var shouldAutoSyncSleepWhenTodayEmpty: Bool {
+        guard onboardingCompleted else {
+            return false
+        }
         guard state.selectedHealthPermissionKeys.contains(HealthPermissionOption.sleep.rawValue) else {
             return false
         }
@@ -8161,26 +8164,21 @@ struct ContentView: View {
                 experienceProfile.healthkitRequestedAt = requestedAt
             }
             if readAccessStillOff {
-                healthPermissionsMessage = "Health request finished, but reads still look off. Open Apple Health > Sharing > Apps > Gaia Eyes and confirm categories are enabled."
+                healthPermissionsMessage = granted
+                    ? "Health permission request finished. Gaia will try to import whatever Health categories are enabled."
+                    : "Health request finished, but reads still look off. You can keep going and retry later in Settings."
             } else {
                 healthPermissionsMessage = granted
                     ? "Health permission request finished. Gaia will use whatever Health categories are enabled."
                     : "Gaia could not update Health access right now. You can keep going and retry later in Settings."
             }
         }
-        let accessUpdated = granted && !readAccessStillOff
+        let accessUpdated = granted
         AppAnalytics.track(accessUpdated ? "healthkit_permission_completed" : "healthkit_permission_failed")
         return accessUpdated
     }
 
     private func runUnifiedHealthBackfill() async -> Bool {
-        if await MainActor.run(body: { healthReadAccessLooksDisconnected }) {
-            await MainActor.run {
-                backfillMessage = "Health reads look off in Apple Health. Enable Gaia Eyes in Apple Health, then retry the import."
-            }
-            AppAnalytics.track("health_backfill_failed", properties: ["window": "30d", "reason": "health_read_access_off"])
-            return false
-        }
         let alreadyRunning = await MainActor.run {
             if backfillInFlight {
                 return true
@@ -9151,7 +9149,9 @@ struct ContentView: View {
                         let sleepSyncNow = Date()
                         if data.day == chicagoTodayString(), todayTotal == 0, shouldAttemptAutoSleepSync(now: sleepSyncNow) {
                             guard shouldAutoSyncSleepWhenTodayEmpty else {
-                                if !state.selectedHealthPermissionKeys.contains(HealthPermissionOption.sleep.rawValue) {
+                                if !onboardingCompleted {
+                                    appLog("[UI] today has 0 sleep — skipping auto sleep sync until onboarding is complete")
+                                } else if !state.selectedHealthPermissionKeys.contains(HealthPermissionOption.sleep.rawValue) {
                                     appLog("[UI] today has 0 sleep — skipping auto sleep sync because Sleep is not selected")
                                 } else {
                                     appLog("[UI] today has 0 sleep — waiting for on-device sleep read evidence before auto sync")
@@ -9169,7 +9169,11 @@ struct ContentView: View {
                         let sleepSyncNow = Date()
                         if shouldAttemptAutoSleepSync(now: sleepSyncNow) {
                             guard shouldAutoSyncSleepWhenTodayEmpty else {
-                                appLog("[UI] today sleep total missing — waiting for on-device sleep read evidence before auto sync")
+                                if !onboardingCompleted {
+                                    appLog("[UI] today sleep total missing — skipping auto sleep sync until onboarding is complete")
+                                } else {
+                                    appLog("[UI] today sleep total missing — waiting for on-device sleep read evidence before auto sync")
+                                }
                                 return
                             }
                             lastAutoSleepSyncAttemptAt = sleepSyncNow
