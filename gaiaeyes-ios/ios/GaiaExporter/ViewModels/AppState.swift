@@ -30,16 +30,10 @@ private struct AnyDecodable: Decodable, CustomStringConvertible {
 import SwiftUI
 // MARK: - Symptom POST helpers
 private struct SymptomPOSTResponse: Decodable {
-    let id: UUID?
+    let id: String?
     let tsUtc: String?
     enum CodingKeys: String, CodingKey { case id; case tsUtc = "ts_utc" }
 }
-private struct SymptomEnvelope: Decodable {
-    let ok: Bool?
-    let data: SymptomPOSTResponse?
-    let error: String?
-}
-private enum LocalSymptomUploadError: Error { case unknownSymptomCode; case server(String) }
 import CoreBluetooth
 import HealthKit
 
@@ -315,22 +309,22 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             symptomQueueCount = 0
             return
         }
-        _ = override ?? apiWithAuth()
+        let uploadAPI = override ?? apiWithAuth()
         var sentIds = Set<UUID>()
         for event in pending {
             do {
-                let resp = try await self.postSymptomEvent(from: event)
+                let resp = try await self.postSymptomEvent(from: event, api: uploadAPI)
                 sentIds.insert(event.id)
-                let idText = resp.id?.uuidString ?? "-"
+                let idText = resp.id ?? "-"
                 append("[Symptoms] uploaded \(event.symptomCode) → id=\(idText)")
-            } catch LocalSymptomUploadError.unknownSymptomCode {
+            } catch SymptomUploadError.unknownSymptomCode {
                 appLog("[SYM] using code=OTHER (fallback)")
                 append("[SYM] using code=OTHER (fallback)")
                 let fallbackEvent = event.replacingSymptomCode(with: SymptomCodeHelper.fallbackCode, keepId: true)
                 do {
-                    let resp = try await self.postSymptomEvent(from: fallbackEvent)
+                    let resp = try await self.postSymptomEvent(from: fallbackEvent, api: uploadAPI)
                     sentIds.insert(fallbackEvent.id)
-                    let idText = resp.id?.uuidString ?? "-"
+                    let idText = resp.id ?? "-"
                     append("[Symptoms] uploaded \(fallbackEvent.symptomCode) → id=\(idText)")
                 } catch {
                     await queue.replace(id: event.id, with: fallbackEvent)
@@ -440,57 +434,10 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         trimmedUserId.isEmpty || trimmedUserId.lowercased() == "anonymous"
     }
 
-    // MARK: - Symptoms upload helper (uses raw URLSession)
-    private func postSymptomEvent(from event: SymptomQueuedEvent) async throws -> SymptomPOSTResponse {
-        let base = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: (base.isEmpty ? "http://127.0.0.1:8000" : base))?.appendingPathComponent("v1/symptoms") else {
-            throw LocalSymptomUploadError.server("bad_url")
-        }
-        let storedBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
-        let supabaseBearer = AuthManager.shared.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let activeBearer = supabaseBearer.isEmpty ? storedBearer : supabaseBearer
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if !activeBearer.isEmpty { req.setValue("Bearer \(activeBearer)", forHTTPHeaderField: "Authorization") }
-        if supabaseBearer.isEmpty, let eff = effectiveDeveloperUserId() { req.setValue(eff, forHTTPHeaderField: "X-Dev-UserId") }
-        appLog("[SYM] POST /v1/symptoms X-Dev-UserId=\(req.value(forHTTPHeaderField: "X-Dev-UserId") ?? "nil") bearerEmpty=\(bearer.isEmpty)")
-        struct Body: Encodable {
-            let symptom_code: String
-            let ts_utc: String?
-            let severity: Int?
-            let free_text: String?
-            let tags: [String]?
-        }
-        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let body = Body(
-            symptom_code: event.symptomCode,
-            ts_utc: iso.string(from: event.tsUtc),
-            severity: event.severity,
-            free_text: event.freeText,
-            tags: event.tags
-        )
-        req.httpBody = try JSONEncoder().encode(body)
-        // Short request timeout via task cancellation window
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse else { throw LocalSymptomUploadError.server("no_http") }
-        // Accept 200 even on logical errors; backend envelopes errors in JSON
-        if (200..<300).contains(http.statusCode) {
-            let dec = JSONDecoder(); dec.keyDecodingStrategy = .convertFromSnakeCase
-            if let env = try? dec.decode(SymptomEnvelope.self, from: data) {
-                if env.ok == true, let out = env.data { return out }
-                let msg = (env.error ?? "upload_failed").lowercased()
-                if msg.contains("unknown") && msg.contains("symptom") { throw LocalSymptomUploadError.unknownSymptomCode }
-                throw LocalSymptomUploadError.server(env.error ?? "upload_failed")
-            } else {
-                // Some servers may return bare {id,ts_utc}
-                if let out = try? dec.decode(SymptomPOSTResponse.self, from: data) { return out }
-                throw LocalSymptomUploadError.server("decode_failed")
-            }
-        } else {
-            let preview = String(data: data.prefix(200), encoding: .utf8) ?? "<non-utf8>"
-            throw LocalSymptomUploadError.server("http_\(http.statusCode): \(preview)")
-        }
+    // MARK: - Symptoms upload helper
+    private func postSymptomEvent(from event: SymptomQueuedEvent, api: APIClient) async throws -> SymptomPOSTResponse {
+        let response = try await api.postSymptomEvent(from: event)
+        return SymptomPOSTResponse(id: response.id.map(String.init), tsUtc: response.tsUtc)
     }
 
     // MARK: - Status
