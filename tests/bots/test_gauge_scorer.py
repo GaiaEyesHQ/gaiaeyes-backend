@@ -150,8 +150,37 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertIsNotNone(health_status)
         self.assertGreater(health_status or 0.0, 10.0)
         self.assertGreater(meta["recovery_penalty_total"], 10.0)
-        self.assertIn("sleep_debt_proxy", meta["recovery_penalties"])
+        self.assertIn("sleep_vs_14d_baseline_delta", meta["recovery_penalties"])
+        self.assertNotIn("sleep_debt_proxy", meta["recovery_penalties"])
         self.assertIn("resting_hr_baseline_delta", meta["recovery_penalties"])
+
+    def test_compute_health_status_uses_total_sleep_when_baseline_delta_is_implausible(self) -> None:
+        baseline_rows = [_baseline_row(idx) for idx in range(14)]
+        today_row = {
+            **_baseline_row(0),
+            "sleep_total_minutes": 308.0,
+            "sleep_debt_proxy": 450.0,
+            "sleep_vs_14d_baseline_delta": -450.0,
+        }
+
+        health_status, meta = compute_health_status(
+            today_row,
+            baseline_rows,
+            {"total_24h": 0, "max_severity": None, "top_symptoms": []},
+        )
+        payload = build_health_status_explainer(
+            today_row,
+            {"max_severity": None, "top_symptoms": []},
+            health_status,
+            meta,
+        )
+
+        self.assertNotIn("sleep_vs_14d_baseline_delta", meta["recovery_penalties"])
+        self.assertNotIn("sleep_debt_proxy", meta["recovery_penalties"])
+        self.assertIn("short_sleep", meta["recovery_penalties"])
+        sleep_driver = next(driver for driver in payload["drivers"] if driver["key"] == "short_sleep")
+        self.assertEqual(sleep_driver["label"], "Less Sleep")
+        self.assertEqual(sleep_driver["display"], "5h 8m total")
 
     def test_compute_health_status_can_use_recovery_penalties_without_metric_zscores(self) -> None:
         baseline_rows = [

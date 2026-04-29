@@ -51,6 +51,17 @@ def _redis_url() -> str:
     return os.getenv("REDIS_URL", "").strip()
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid float env %s=%r; using default %s", name, raw, default)
+        return default
+
+
 async def _process_entry(entry: Dict[str, Any]) -> tuple[int, int]:
     samples_data = entry.get("samples") or []
     dev_uid = entry.get("dev_uid")
@@ -139,7 +150,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Drain Redis-backed Gaia Eyes health ingest queue.")
     parser.add_argument("--redis-url", default="")
     parser.add_argument("--queue-key", default=_queue_key())
-    parser.add_argument("--retry-delay", type=float, default=float(os.getenv("GAIA_INGEST_WORKER_RETRY_DELAY", "5.0")))
+    parser.add_argument("--retry-delay", type=float, default=_env_float("GAIA_INGEST_WORKER_RETRY_DELAY", 5.0))
     parser.add_argument("--log-level", default=os.getenv("GAIA_LOG_LEVEL", "INFO"))
     return parser.parse_args()
 

@@ -79,9 +79,10 @@ struct ShareCardView: View {
             if let eyebrow = panelEyebrow {
                 Text(eyebrow.uppercased())
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.58))
+                    .foregroundColor(accentColor.opacity(0.94))
                     .tracking(1.2)
                     .lineLimit(1)
+                    .shadow(color: accentColor.opacity(0.35), radius: 5, x: 0, y: 0)
             }
 
             Text(model.title)
@@ -103,32 +104,17 @@ struct ShareCardView: View {
             }
 
             if !panelSupportLines.isEmpty {
-                VStack(alignment: .leading, spacing: 7) {
-                    ForEach(Array(panelSupportLines.prefix(2).enumerated()), id: \.offset) { _, line in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Circle()
-                                .fill(accentColor.opacity(0.86))
-                                .frame(width: 6, height: 6)
-                            Text(line)
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundColor(.white.opacity(0.78))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.78)
-                        }
-                    }
-                }
+                panelSupportView
             }
 
             Spacer(minLength: 4)
-
-            brandingBlock
-                .layoutPriority(2)
         }
         .padding(.horizontal, padding)
         .padding(.top, panelVerticalPadding)
         .padding(.bottom, panelBottomPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.black.opacity(0.90))
+        .background(textPanelBackground)
+        .overlay(textPanelGlow)
     }
 
     private var textPanelRatio: CGFloat {
@@ -143,21 +129,38 @@ struct ShareCardView: View {
         max(26, padding + 3)
     }
 
-    private var brandingBlock: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(model.branding.title)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(.white.opacity(0.88))
-                .lineLimit(1)
-            Text("·")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundColor(.white.opacity(0.42))
-            Text(model.branding.url)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundColor(.white.opacity(0.52))
-                .lineLimit(1)
+    private var textPanelBackground: some View {
+        ZStack {
+            Color.black.opacity(0.91)
+
+            LinearGradient(
+                colors: [
+                    accentColor.opacity(0.13),
+                    Color.black.opacity(0.18),
+                    Color.black.opacity(0.34)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         }
-        .minimumScaleFactor(0.82)
+    }
+
+    private var textPanelGlow: some View {
+        RoundedRectangle(cornerRadius: 30, style: .continuous)
+            .strokeBorder(
+                LinearGradient(
+                    colors: [
+                        accentColor.opacity(0.70),
+                        Color.white.opacity(0.12),
+                        accentColor.opacity(0.32)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1.15
+            )
+            .shadow(color: accentColor.opacity(0.50), radius: 12, x: 0, y: 0)
+            .shadow(color: accentColor.opacity(0.18), radius: 22, x: 0, y: -2)
     }
 
     private var panelEyebrow: String? {
@@ -189,6 +192,48 @@ struct ShareCardView: View {
 
     private var panelSupportLines: [String] {
         uniquePanelLines(model.bullets.map { cleanPatternLine($0) })
+    }
+
+    @ViewBuilder
+    private var panelSupportView: some View {
+        if model.layout == .dailyState {
+            LazyVGrid(columns: dailyStateSupportColumns, alignment: .leading, spacing: 8) {
+                ForEach(Array(panelSupportLines.prefix(6).enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.88))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.68)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .background(accentColor.opacity(0.15), in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(accentColor.opacity(0.34), lineWidth: 1)
+                        )
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(Array(panelSupportLines.prefix(2).enumerated()), id: \.offset) { _, line in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Circle()
+                            .fill(accentColor.opacity(0.86))
+                            .frame(width: 6, height: 6)
+                        Text(line)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.78))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+                    }
+                }
+            }
+        }
+    }
+
+    private var dailyStateSupportColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .center), count: 3)
     }
 
     private func uniquePanelLines(_ values: [String?]) -> [String] {

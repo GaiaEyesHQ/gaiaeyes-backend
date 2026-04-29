@@ -125,7 +125,7 @@ enum ShareBackgroundResolver {
             ].compactMap { $0 }
         case .cme:
             return [
-                spaceVisualURL("nasa/lasco_c2/latest.jpg"),
+                spaceVisualURL("nasa/enlil/latest.jpg"),
                 spaceVisualURL("nasa/lasco_c3/latest.jpg"),
                 MediaPaths.playbookImage(),
             ].compactMap { $0 }

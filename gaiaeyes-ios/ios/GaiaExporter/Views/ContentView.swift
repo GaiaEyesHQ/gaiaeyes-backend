@@ -6926,6 +6926,19 @@ struct ContentView: View {
             .first
     }
 
+    private func signalBarTomskSeriesF1(from response: SignalBarTomskSeriesResponse) -> (value: Double, updatedAt: String?)? {
+        response.points?
+            .sorted { ($0.ts ?? "") < ($1.ts ?? "") }
+            .reversed()
+            .compactMap { point -> (value: Double, updatedAt: String?)? in
+                guard let f1 = normalizedSchumannHz(signalBarTomskMetricValue(point.values, key: "F1")) else {
+                    return nil
+                }
+                return (f1, point.ts)
+            }
+            .first
+    }
+
     private func normalizedSchumannHz(_ value: Double?) -> Double? {
         guard var value else { return nil }
         while value > 40 {
@@ -6949,6 +6962,7 @@ struct ContentView: View {
 
     private func fetchLiveSchumannSignalBarItem(api: APIClient) async -> SignalPill? {
         var tomskPill: SignalPill? = nil
+        var needsQ1Fallback = false
         if let tomskEnvelope: SignalBarSchumannTomskLatestEnvelope = await bestEffortDashboardJSON(
             api: api,
             path: "v1/earth/schumann/tomsk_params/latest?station_id=tomsk",
@@ -6964,50 +6978,52 @@ struct ContentView: View {
                 }
             }
             tomskPill = signalBarSchumannPill(from: tomskEnvelope)
-
-            let needsQ1Fallback =
+            needsQ1Fallback =
                 signalBarTomskMetricValue(tomskEnvelope.qFactor, key: "Q1") == nil &&
                 tomskEnvelope.coherence?.q1Value == nil
+        }
+
+        if tomskPill == nil || needsQ1Fallback,
+           let seriesResponse: SignalBarTomskSeriesResponse = await bestEffortDashboardJSON(
+            api: api,
+            path: "v1/earth/schumann/tomsk_params/series?hours=48&station_id=tomsk",
+            as: SignalBarTomskSeriesResponse.self,
+            timeout: 5,
+            label: "signal bar tomsk series"
+           ) {
             if needsQ1Fallback,
-               let seriesResponse: SignalBarTomskSeriesResponse = await bestEffortDashboardJSON(
-                api: api,
-                path: "v1/earth/schumann/tomsk_params/series?hours=48&station_id=tomsk",
-                as: SignalBarTomskSeriesResponse.self,
-                timeout: 5,
-                label: "signal bar tomsk series"
-               ),
                let q1 = signalBarTomskSeriesQ1(from: seriesResponse) {
                 await MainActor.run {
                     schumannSignalBarTomskQ1Value = String(q1)
                 }
             }
-        }
-
-        let latestEnvelope: SignalBarSchumannLatestEnvelope? = await bestEffortDashboardJSON(
-            api: api,
-            path: "v1/earth/schumann/latest",
-            as: SignalBarSchumannLatestEnvelope.self,
-            timeout: 5,
-            label: "signal bar schumann"
-        )
-        if let latestEnvelope {
-            await MainActor.run {
-                liveSchumannLatestEnvelope = latestEnvelope
-                if let data = try? JSONEncoder().encode(latestEnvelope),
-                   let json = String(data: data, encoding: .utf8) {
-                    schumannSignalBarLatestCacheJSON = json
-                }
+            if tomskPill == nil,
+               let f1 = signalBarTomskSeriesF1(from: seriesResponse) {
+                tomskPill = SignalPill(
+                    key: "schumann",
+                    label: "SR",
+                    value: String(format: "%.2f Hz", f1.value),
+                    state: .watch,
+                    driverKey: "schumann",
+                    detailTarget: "schumann",
+                    updatedAt: f1.updatedAt
+                )
             }
         }
+
         if let tomskPill {
             return tomskPill
         }
-        let latestPill = latestEnvelope.flatMap { signalBarSchumannPill(from: $0) }
-        if latestPill?.value.localizedCaseInsensitiveContains("Hz") == true {
-            return latestPill
+        if let cachedTomsk = await MainActor.run(body: { liveSchumannTomskLatest }),
+           let cachedPill = signalBarSchumannPill(from: cachedTomsk) {
+            return cachedPill
+        }
+        if let cachedLatest = await MainActor.run(body: { liveSchumannLatestEnvelope }),
+           let cachedPill = signalBarSchumannPill(from: cachedLatest) {
+            return cachedPill
         }
 
-        return latestPill
+        return nil
     }
 
     private func refreshLiveSchumannSignalBar(api: APIClient? = nil) async {
@@ -14558,8 +14574,6 @@ struct ContentView: View {
             let accent = dailyAccentColor(index: index)
             let title = dailyTitle(day)
             let dateText = dailyDateText(day.day)
-            let summary = dailySummary(day)
-            let support = dailySupportLine(day)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -14586,7 +14600,6 @@ struct ContentView: View {
                 }
 
                 domainPills(domains, primary: drivers.first)
-                dailyNarrativeBlock(summary: summary, support: support)
             }
             .padding(12)
             .padding(.leading, 3)

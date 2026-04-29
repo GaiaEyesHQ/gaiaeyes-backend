@@ -31,14 +31,37 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ingest"])
 
+
+def _env_int(name: str, default: int) -> int:
+    raw = getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid integer env %s=%r; using default %s", name, raw, default)
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid float env %s=%r; using default %s", name, raw, default)
+        return default
+
+
 DEFAULT_TIMEZONE = "America/Chicago"
 REFRESH_DISABLED = getenv("MART_REFRESH_DISABLE", "0").lower() in {"1", "true", "yes", "on"}
 INGEST_QUEUE_ENABLED = getenv("GAIA_INGEST_QUEUE_ENABLED", "1").lower() in {"1", "true", "yes", "on"}
 INGEST_REDIS_QUEUE_ENABLED = getenv("GAIA_INGEST_REDIS_QUEUE_ENABLED", "0").lower() in {"1", "true", "yes", "on"}
 INGEST_REDIS_QUEUE_KEY = getenv("GAIA_INGEST_REDIS_QUEUE_KEY", "gaia:ingest:samples")
-INGEST_MAX_ACTIVE_WRITES = max(1, int(getenv("GAIA_INGEST_MAX_ACTIVE_WRITES", "4")))
-INGEST_BACKLOG_MAX_BATCHES = max(1, int(getenv("GAIA_INGEST_BACKLOG_MAX_BATCHES", "500")))
-INGEST_BACKLOG_RETRY_DELAY_SECONDS = max(0.25, float(getenv("GAIA_INGEST_BACKLOG_RETRY_DELAY_SECONDS", "1.0")))
+INGEST_MAX_ACTIVE_WRITES = max(1, _env_int("GAIA_INGEST_MAX_ACTIVE_WRITES", 4))
+INGEST_BACKLOG_MAX_BATCHES = max(1, _env_int("GAIA_INGEST_BACKLOG_MAX_BATCHES", 500))
+INGEST_BACKLOG_RETRY_DELAY_SECONDS = max(0.25, _env_float("GAIA_INGEST_BACKLOG_RETRY_DELAY_SECONDS", 1.0))
 
 _backlog = deque()
 _backlog_lock = asyncio.Lock()

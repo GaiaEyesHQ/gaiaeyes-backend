@@ -980,10 +980,56 @@ def _penalty_from_threshold(
     return min(cap, ((value - threshold) / span) * cap)
 
 
+_SLEEP_BASELINE_MIN_MINUTES = 180.0
+_SLEEP_BASELINE_MAX_MINUTES = 720.0
+_SLEEP_DELTA_ABS_MAX_MINUTES = 300.0
+_SHORT_SLEEP_TOTAL_THRESHOLD_MINUTES = 360.0
+
+
+def _sleep_minutes_display(minutes: float) -> str:
+    total = max(0, int(round(minutes)))
+    hours, mins = divmod(total, 60)
+    if hours and mins:
+        return f"{hours}h {mins}m"
+    if hours:
+        return f"{hours}h"
+    return f"{mins}m"
+
+
+def _sane_sleep_delta_minutes(delta: Optional[float], sleep_total: Optional[float]) -> Optional[float]:
+    if delta is None:
+        return None
+    if abs(delta) > _SLEEP_DELTA_ABS_MAX_MINUTES:
+        return None
+    if sleep_total is not None:
+        implied_baseline = sleep_total - delta
+        if implied_baseline < _SLEEP_BASELINE_MIN_MINUTES or implied_baseline > _SLEEP_BASELINE_MAX_MINUTES:
+            return None
+    return delta
+
+
+def _sane_sleep_debt_minutes(debt: Optional[float], sleep_total: Optional[float]) -> Optional[float]:
+    if debt is None:
+        return None
+    if debt < 0:
+        return None
+    if debt > _SLEEP_DELTA_ABS_MAX_MINUTES:
+        return None
+    if sleep_total is not None:
+        implied_need = sleep_total + debt
+        if implied_need < _SLEEP_BASELINE_MIN_MINUTES or implied_need > _SLEEP_BASELINE_MAX_MINUTES:
+            return None
+    return debt
+
+
 def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str, float | str]]:
     penalties: Dict[str, Dict[str, float | str]] = {}
 
-    sleep_delta = _safe_float(today_row.get("sleep_vs_14d_baseline_delta"))
+    sleep_total = _safe_float(today_row.get("sleep_total_minutes"))
+    sleep_delta = _sane_sleep_delta_minutes(
+        _safe_float(today_row.get("sleep_vs_14d_baseline_delta")),
+        sleep_total,
+    )
     sleep_delta_points = _penalty_from_threshold(
         abs(sleep_delta) if sleep_delta is not None and sleep_delta < -30.0 else None,
         threshold=30.0,
@@ -997,19 +1043,35 @@ def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str
             "points": round(sleep_delta_points, 2),
         }
 
-    sleep_debt = _safe_float(today_row.get("sleep_debt_proxy"))
+    sleep_debt = _sane_sleep_debt_minutes(_safe_float(today_row.get("sleep_debt_proxy")), sleep_total)
     sleep_debt_points = _penalty_from_threshold(
         sleep_debt,
         threshold=30.0,
         span=180.0,
         cap=12.0,
     )
-    if sleep_debt_points and sleep_delta is None:
+    if sleep_debt_points and not sleep_delta_points:
         penalties["sleep_debt_proxy"] = {
             "label": "Built-up sleep debt",
             "value": sleep_debt or 0.0,
             "points": round(sleep_debt_points, 2),
         }
+
+    if not sleep_delta_points and not sleep_debt_points and sleep_total is not None:
+        short_sleep_points = _penalty_from_threshold(
+            _SHORT_SLEEP_TOTAL_THRESHOLD_MINUTES - sleep_total
+            if sleep_total < _SHORT_SLEEP_TOTAL_THRESHOLD_MINUTES
+            else None,
+            threshold=0.0,
+            span=180.0,
+            cap=8.0,
+        )
+        if short_sleep_points:
+            penalties["short_sleep"] = {
+                "label": "Less Sleep",
+                "value": sleep_total,
+                "points": round(short_sleep_points, 2),
+            }
 
     resting_hr_delta = _safe_float(today_row.get("resting_hr_baseline_delta"))
     resting_hr_points = _penalty_from_threshold(
@@ -1254,6 +1316,8 @@ def _format_health_driver_display(key: str, value: Any) -> str:
         return f"{int(round(numeric))}m behind sleep need"
     if key == "sleep_vs_14d_baseline_delta":
         return f"{int(round(abs(numeric)))}m below your baseline"
+    if key == "short_sleep":
+        return f"{_sleep_minutes_display(numeric)} total"
     if key == "resting_hr_baseline_delta":
         return f"+{numeric:.1f} bpm vs usual"
     if key == "respiratory_rate_baseline_delta":

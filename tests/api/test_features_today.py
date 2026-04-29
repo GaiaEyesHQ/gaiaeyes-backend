@@ -100,6 +100,14 @@ def test_pool_metrics_show_pressure_requires_waiting_requests():
     assert summary._pool_metrics_show_pressure({"open": 8, "free": 0, "used": 8, "waiting": 1}) is True
 
 
+def test_ingest_queue_env_parsing_falls_back_for_invalid_values(monkeypatch):
+    monkeypatch.setenv("GAIA_INGEST_MAX_ACTIVE_WRITES", "not-an-int")
+    monkeypatch.setenv("GAIA_INGEST_BACKLOG_RETRY_DELAY_SECONDS", "not-a-float")
+
+    assert ingest._env_int("GAIA_INGEST_MAX_ACTIVE_WRITES", 4) == 4
+    assert ingest._env_float("GAIA_INGEST_BACKLOG_RETRY_DELAY_SECONDS", 1.0) == 1.0
+
+
 class _RecordingCursor:
     def __init__(self):
         self.calls: List[tuple[str, tuple]] = []
