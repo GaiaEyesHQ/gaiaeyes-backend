@@ -1,0 +1,539 @@
+{
+  "generated_at": "2026-05-03T19:11:47Z",
+  "source_mode": "db_snapshot",
+  "space_weather": {
+    "timestamp_utc": "2026-05-03T18:49:00Z",
+    "now": {
+      "kp": 2.3,
+      "bz_nt": 0.1,
+      "solar_wind_kms": 408.0
+    },
+    "last_24h": {
+      "kp_max": 3.33
+    },
+    "xray_max_class": null,
+    "flares_count": 0,
+    "cmes_count": 1
+  },
+  "space_daily": {
+    "day": "2026-05-03",
+    "kp_now": null,
+    "kp_max": 3.33,
+    "bz_now": null,
+    "bz_min": -5.72,
+    "sw_speed_now_kms": null,
+    "sw_speed_avg": 422.58236966824643,
+    "xray_max_class": null,
+    "flares_count": 0,
+    "cmes_count": 1,
+    "updated_at": "2026-05-03T18:33:05Z"
+  },
+  "schumann": {
+    "zscore_30d": -0.7404637367743235,
+    "pct_30d": 0.08888888888888889,
+    "stddev_24h": 0.010675858951180395,
+    "value_hz": 7.70232142857143,
+    "combined": {
+      "f1_hz": 7.70232142857143
+    },
+    "station_id": "cumiana",
+    "day": "2026-05-03",
+    "sample_count": 45
+  },
+  "active_states": [],
+  "quakes": {
+    "events": [
+      {
+        "time_utc": "2026-05-03T16:36:14Z",
+        "mag": 5.0,
+        "depth_km": 292.274,
+        "lat": -18.5355,
+        "lon": -175.7821,
+        "place": "190 km W of Neiafu, Tonga",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shze",
+        "id": "us7000shze"
+      },
+      {
+        "time_utc": "2026-05-03T10:00:34Z",
+        "mag": 5.1,
+        "depth_km": 10.0,
+        "lat": 42.2525,
+        "lon": 88.2014,
+        "place": "111 km SW of Turpan, China",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shy4",
+        "id": "us7000shy4"
+      },
+      {
+        "time_utc": "2026-05-02T21:19:13Z",
+        "mag": 5.1,
+        "depth_km": 35.0,
+        "lat": -37.5613,
+        "lon": 178.2023,
+        "place": "9 km WNW of Hicks Bay, New Zealand",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shut",
+        "id": "us7000shut"
+      },
+      {
+        "time_utc": "2026-05-02T10:31:40Z",
+        "mag": 5.0,
+        "depth_km": 10.0,
+        "lat": -59.3027,
+        "lon": -25.0767,
+        "place": "South Sandwich Islands region",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shsi",
+        "id": "us7000shsi"
+      },
+      {
+        "time_utc": "2026-05-02T10:27:07Z",
+        "mag": 5.2,
+        "depth_km": 130.863,
+        "lat": -5.9589,
+        "lon": 130.8204,
+        "place": "217 km W of Tual, Indonesia",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shsh",
+        "id": "us7000shsh"
+      },
+      {
+        "time_utc": "2026-05-02T09:28:40Z",
+        "mag": 5.7,
+        "depth_km": 59.087,
+        "lat": 34.107,
+        "lon": 135.4857,
+        "place": "17 km SW of Kōya, Japan",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shs2",
+        "id": "us7000shs2"
+      },
+      {
+        "time_utc": "2026-05-02T05:04:56Z",
+        "mag": 5.0,
+        "depth_km": 10.0,
+        "lat": -30.0095,
+        "lon": -66.5123,
+        "place": "43 km NNW of Chamical, Argentina",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shps",
+        "id": "us7000shps"
+      },
+      {
+        "time_utc": "2026-05-02T02:06:36Z",
+        "mag": 5.1,
+        "depth_km": 532.819,
+        "lat": -24.4373,
+        "lon": 178.8233,
+        "place": "south of the Fiji Islands",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shnl",
+        "id": "us7000shnl"
+      }
+    ]
+  },
+  "hazards": {
+    "items": [
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "190 km W of Neiafu, Tonga",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us7000shze",
+          "ts": "2026-05-03T16:36:14Z",
+          "lat": -18.5355,
+          "lon": -175.7821,
+          "mag": 5,
+          "body": "190 km W of Neiafu, Tonga",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shze"
+          ],
+          "title": "190 km W of Neiafu, Tonga",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Australia",
+        "location": "Australia",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1028583",
+          "ts": "2026-05-03T15:00:16Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 30/04/2026, a forest fire started in Australia,  until 03/05/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1028583"
+          ],
+          "title": "Green forest fire notification in Australia",
+          "source": "gdacs",
+          "details": "On 30/04/2026, a forest fire started in Australia,  until 03/05/2026.",
+          "location": "Australia",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "111 km SW of Turpan, China",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us7000shy4",
+          "ts": "2026-05-03T10:00:34Z",
+          "lat": 42.2525,
+          "lon": 88.2014,
+          "mag": 5.1,
+          "body": "111 km SW of Turpan, China",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shy4"
+          ],
+          "title": "111 km SW of Turpan, China",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "9 km WNW of Hicks Bay, New Zealand",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us7000shut",
+          "ts": "2026-05-02T21:19:13Z",
+          "lat": -37.5613,
+          "lon": 178.2023,
+          "mag": 5.1,
+          "body": "9 km WNW of Hicks Bay, New Zealand",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shut"
+          ],
+          "title": "9 km WNW of Hicks Bay, New Zealand",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Guinea",
+        "location": "Guinea",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1028581",
+          "ts": "2026-05-03T15:01:22Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 25/04/2026, a forest fire started in Guinea,  until 02/05/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1028581"
+          ],
+          "title": "Green forest fire notification in Guinea",
+          "source": "gdacs",
+          "details": "On 25/04/2026, a forest fire started in Guinea,  until 02/05/2026.",
+          "location": "Guinea",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Guinea",
+        "location": "Guinea",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1028582",
+          "ts": "2026-05-03T15:05:30Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 19/04/2026, a forest fire started in Guinea,  until 02/05/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1028582"
+          ],
+          "title": "Green forest fire notification in Guinea",
+          "source": "gdacs",
+          "details": "On 19/04/2026, a forest fire started in Guinea,  until 02/05/2026.",
+          "location": "Guinea",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "quake",
+        "title": "Green earthquake (Magnitude 5.7M, Depth:59.087km) in Japan 02/05/2026 09:28 UTC, 310 thousand in MMI V.",
+        "location": "Japan 02/05/2026 09:28 UTC, 310 thousand in MMI V.",
+        "severity": "red",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "EQ1538608",
+          "ts": "2026-05-02T09:44:52Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 5/2/2026 9:28:40 AM, an earthquake occurred in Japan potentially affecting 310 thousand in MMI V. The earthquake had Magnitude 5.7M, Depth:59.087km.",
+          "type": "quake",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1538608"
+          ],
+          "title": "Green earthquake (Magnitude 5.7M, Depth:59.087km) in Japan 02/05/2026 09:28 UTC, 310 thousand in MMI V.",
+          "source": "gdacs",
+          "details": "On 5/2/2026 9:28:40 AM, an earthquake occurred in Japan potentially affecting 310 thousand in MMI V. The earthquake had Magnitude 5.7M, Depth:59.087km.",
+          "location": "Japan 02/05/2026 09:28 UTC, 310 thousand in MMI V.",
+          "severity": "red"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "South Sandwich Islands region",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us7000shsi",
+          "ts": "2026-05-02T10:31:40Z",
+          "lat": -59.3027,
+          "lon": -25.0767,
+          "mag": 5,
+          "body": "South Sandwich Islands region",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shsi"
+          ],
+          "title": "South Sandwich Islands region",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "217 km W of Tual, Indonesia",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us7000shsh",
+          "ts": "2026-05-02T10:27:07Z",
+          "lat": -5.9589,
+          "lon": 130.8204,
+          "mag": 5.2,
+          "body": "217 km W of Tual, Indonesia",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shsh"
+          ],
+          "title": "217 km W of Tual, Indonesia",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "17 km SW of Kōya, Japan",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us7000shs2",
+          "ts": "2026-05-02T09:28:40Z",
+          "lat": 34.107,
+          "lon": 135.4857,
+          "mag": 5.7,
+          "body": "17 km SW of Kōya, Japan",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shs2"
+          ],
+          "title": "17 km SW of Kōya, Japan",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "quake",
+        "title": "Green earthquake (Magnitude 5.7M, Depth:59.087km) in Japan 02/05/2026 09:28 UTC, 140 thousand in MMI V.",
+        "location": "Japan 02/05/2026 09:28 UTC, 140 thousand in MMI V.",
+        "severity": "red",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "EQ1538608",
+          "ts": "2026-05-02T09:44:52Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 5/2/2026 9:28:40 AM, an earthquake occurred in Japan potentially affecting 140 thousand in MMI V. The earthquake had Magnitude 5.7M, Depth:59.087km.",
+          "type": "quake",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1538608"
+          ],
+          "title": "Green earthquake (Magnitude 5.7M, Depth:59.087km) in Japan 02/05/2026 09:28 UTC, 140 thousand in MMI V.",
+          "source": "gdacs",
+          "details": "On 5/2/2026 9:28:40 AM, an earthquake occurred in Japan potentially affecting 140 thousand in MMI V. The earthquake had Magnitude 5.7M, Depth:59.087km.",
+          "location": "Japan 02/05/2026 09:28 UTC, 140 thousand in MMI V.",
+          "severity": "red"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Russian Federation",
+        "location": "Russian Federation",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1028580",
+          "ts": "2026-05-02T07:00:07Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 30/04/2026, a forest fire started in Russian Federation,  until 02/05/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1028580"
+          ],
+          "title": "Green forest fire notification in Russian Federation",
+          "source": "gdacs",
+          "details": "On 30/04/2026, a forest fire started in Russian Federation,  until 02/05/2026.",
+          "location": "Russian Federation",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "43 km NNW of Chamical, Argentina",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us7000shps",
+          "ts": "2026-05-02T05:04:56Z",
+          "lat": -30.0095,
+          "lon": -66.5123,
+          "mag": 5,
+          "body": "43 km NNW of Chamical, Argentina",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shps"
+          ],
+          "title": "43 km NNW of Chamical, Argentina",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "south of the Fiji Islands",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us7000shnl",
+          "ts": "2026-05-02T02:06:36Z",
+          "lat": -24.4373,
+          "lon": 178.8233,
+          "mag": 5.1,
+          "body": "south of the Fiji Islands",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us7000shnl"
+          ],
+          "title": "south of the Fiji Islands",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Australia",
+        "location": "Australia",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1028579",
+          "ts": "2026-05-02T03:01:17Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 25/04/2026, a forest fire started in Australia,  until 02/05/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1028579"
+          ],
+          "title": "Green forest fire notification in Australia",
+          "source": "gdacs",
+          "details": "On 25/04/2026, a forest fire started in Australia,  until 02/05/2026.",
+          "location": "Australia",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Vanuatu",
+        "location": "Vanuatu",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1028578",
+          "ts": "2026-05-02T03:01:45Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 25/04/2026, a forest fire started in Vanuatu,  until 02/05/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1028578"
+          ],
+          "title": "Green forest fire notification in Vanuatu",
+          "source": "gdacs",
+          "details": "On 25/04/2026, a forest fire started in Vanuatu,  until 02/05/2026.",
+          "location": "Vanuatu",
+          "severity": "info"
+        }
+      }
+    ]
+  },
+  "source_refs": [
+    "marts.space_weather_daily",
+    "ext.space_weather",
+    "marts.schumann_daily_v2_or_daily",
+    "ext.earthquakes",
+    "ext.global_hazards"
+  ]
+}

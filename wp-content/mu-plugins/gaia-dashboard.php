@@ -63,7 +63,7 @@ add_action('wp_enqueue_scripts', function () {
         'privacyUrl' => esc_url_raw(home_url('/privacy/')),
         'termsUrl' => esc_url_raw(home_url('/terms/')),
         'publicLinks' => [
-            'spaceWeather' => esc_url_raw(home_url('/space-weather/')),
+            'spaceWeather' => esc_url_raw(home_url('/space-dashboard/')),
             'schumann' => esc_url_raw(home_url('/schumann-resonance/')),
             'magnetosphere' => esc_url_raw(home_url('/magnetosphere/')),
             'aurora' => esc_url_raw(home_url('/aurora-tracker/')),

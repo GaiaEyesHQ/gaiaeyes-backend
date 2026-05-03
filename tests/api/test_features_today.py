@@ -412,6 +412,179 @@ async def test_ingest_queues_when_active_write_slots_are_full(monkeypatch, clien
 
 
 @pytest.mark.anyio
+async def test_ingest_accepts_android_health_connect_minimum_contract(monkeypatch, client: AsyncClient):
+    fake_pool = _FakePool()
+
+    async def _fake_get_pool():
+        return fake_pool
+
+    captured: dict[str, object] = {}
+
+    async def _fake_safe_insert_batch(pool, rows, dev_uid):  # noqa: ARG001
+        captured["dev_uid"] = dev_uid
+        captured["samples"] = [sample for sample, _idx in rows]
+        return len(rows), 0, []
+
+    async def _fake_schedule_refresh(user_id, day_local, inserted, tz_name="UTC"):  # noqa: ARG001
+        captured["refresh_user"] = user_id
+        captured["refresh_inserted"] = inserted
+        return True
+
+    monkeypatch.setattr(ingest, "get_pool", _fake_get_pool)
+    monkeypatch.setattr(ingest, "safe_insert_batch", _fake_safe_insert_batch)
+    monkeypatch.setattr(ingest, "_maybe_schedule_refresh", _fake_schedule_refresh)
+
+    user_id = str(uuid4())
+    payload = {
+        "samples": [
+            {
+                "user_id": user_id,
+                "device_os": "android",
+                "source": "health_connect",
+                "type": "sleep_stage",
+                "start_time": "2026-05-01T06:00:00Z",
+                "end_time": "2026-05-01T06:30:00Z",
+                "value_text": "deep",
+            },
+            {
+                "user_id": user_id,
+                "device_os": "android",
+                "source": "health_connect",
+                "type": "step_count",
+                "start_time": "2026-05-01T12:00:00Z",
+                "end_time": "2026-05-01T13:00:00Z",
+                "value": 1840,
+                "unit": "count",
+            },
+            {
+                "user_id": user_id,
+                "device_os": "android",
+                "source": "health_connect",
+                "type": "heart_rate",
+                "start_time": "2026-05-01T12:00:00Z",
+                "end_time": "2026-05-01T12:01:00Z",
+                "value": 72,
+                "unit": "bpm",
+            },
+            {
+                "user_id": user_id,
+                "device_os": "android",
+                "source": "health_connect",
+                "type": "resting_heart_rate",
+                "start_time": "2026-05-01T08:00:00Z",
+                "end_time": "2026-05-01T08:01:00Z",
+                "value": 58,
+                "unit": "bpm",
+            },
+            {
+                "user_id": user_id,
+                "device_os": "android",
+                "source": "health_connect",
+                "type": "respiratory_rate",
+                "start_time": "2026-05-01T08:00:00Z",
+                "end_time": "2026-05-01T08:01:00Z",
+                "value": 14.5,
+                "unit": "br/min",
+            },
+            {
+                "user_id": user_id,
+                "device_os": "android",
+                "source": "health_connect",
+                "type": "spo2",
+                "start_time": "2026-05-01T08:00:00Z",
+                "end_time": "2026-05-01T08:01:00Z",
+                "value": 97,
+                "unit": "%",
+            },
+        ]
+    }
+
+    resp = await client.post(
+        "/v1/samples/batch",
+        headers={
+            "Authorization": "Bearer test-token",
+            "X-Dev-UserId": user_id,
+        },
+        params={"tz": "UTC"},
+        json=payload,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["received"] == 6
+    assert body["inserted"] == 6
+    assert body["queued"] is False
+    assert captured["dev_uid"] == user_id
+    assert captured["refresh_user"] == user_id
+    assert captured["refresh_inserted"] == 6
+
+    samples = captured["samples"]
+    assert len(samples) == 6
+    assert {sample.device_os for sample in samples} == {"android"}
+    assert {sample.source for sample in samples} == {"health_connect"}
+    assert {sample.type for sample in samples} == {
+        "sleep_stage",
+        "step_count",
+        "heart_rate",
+        "resting_heart_rate",
+        "respiratory_rate",
+        "spo2",
+    }
+
+
+@pytest.mark.anyio
+async def test_ingest_queues_android_health_connect_when_write_slots_are_full(monkeypatch, client: AsyncClient):
+    monkeypatch.setattr(ingest, "INGEST_QUEUE_ENABLED", True)
+    monkeypatch.setattr(ingest, "INGEST_MAX_ACTIVE_WRITES", 1)
+    monkeypatch.setattr(ingest, "_start_backlog_drain", lambda: None)
+    ingest._ingest_active_writes = 1
+
+    async def _unexpected_get_pool():
+        raise AssertionError("queued ingest should not acquire a DB pool")
+
+    monkeypatch.setattr(ingest, "get_pool", _unexpected_get_pool)
+
+    user_id = str(uuid4())
+    payload = {
+        "samples": [
+            {
+                "user_id": user_id,
+                "device_os": "android",
+                "source": "health_connect",
+                "type": "sleep_stage",
+                "start_time": "2026-05-01T06:00:00Z",
+                "end_time": "2026-05-01T06:30:00Z",
+                "value_text": "asleep",
+            }
+        ]
+    }
+
+    resp = await client.post(
+        "/v1/samples/batch",
+        headers={
+            "Authorization": "Bearer test-token",
+            "X-Dev-UserId": user_id,
+        },
+        params={"tz": "UTC"},
+        json=payload,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["queued"] is True
+    assert body["buffered"] == 1
+    assert len(ingest._backlog) == 1
+
+    queued_sample = ingest._backlog[0]["samples"][0]
+    assert queued_sample["device_os"] == "android"
+    assert queued_sample["source"] == "health_connect"
+    assert queued_sample["type"] == "sleep_stage"
+    assert queued_sample["value_text"] == "asleep"
+
+
+@pytest.mark.anyio
 async def test_insert_batch_provisions_gaia_user_before_samples():
     user_id = str(uuid4())
     pool = _RecordingPool()

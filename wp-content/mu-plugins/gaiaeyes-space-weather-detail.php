@@ -10,6 +10,14 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/gaiaeyes-api-helpers.php';
 
+add_action('template_redirect', function () {
+  $request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
+  $path = parse_url($request_uri, PHP_URL_PATH);
+  if (untrailingslashit((string) $path) !== '/space-weather') return;
+  wp_safe_redirect(home_url('/space-dashboard/'), 301);
+  exit;
+});
+
 /* ---------- Defaults (GitHub Pages + jsDelivr mirror) ---------- */
 if (!defined('GAIAEYES_SW_URL')) {
   define('GAIAEYES_SW_URL', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json');

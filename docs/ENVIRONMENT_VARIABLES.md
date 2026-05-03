@@ -99,6 +99,16 @@
 | `REVENUECAT_PRO_MONTHLY_PRODUCT_ID` | App Store product id mapped to Pro monthly | `Info.plist` / build setting |
 | `REVENUECAT_PRO_YEARLY_PRODUCT_ID` | App Store product id mapped to Pro yearly | `Info.plist` / build setting |
 
+## Android (planned runtime/build config)
+| Variable | Purpose | Where set |
+| --- | --- | --- |
+| `GAIA_API_BASE` | Backend base URL for Android API and entitlement flows | Android build config / local non-committed secrets |
+| `SUPABASE_URL` | Supabase auth base URL | Android build config / local non-committed secrets |
+| `SUPABASE_ANON_KEY` | Supabase anon key | Android build config / local non-committed secrets |
+| `REVENUECAT_ANDROID_API_KEY` | RevenueCat public Google Play SDK key (`goog_...`) | Android build config / local non-committed secrets |
+| `REVENUECAT_PLUS_MONTHLY_PRODUCT_ID` | Google Play product id mapped to Plus monthly | Android build config / local non-committed secrets |
+| `REVENUECAT_PLUS_YEARLY_PRODUCT_ID` | Google Play product id mapped to Plus yearly | Android build config / local non-committed secrets |
+
 ## WordPress (wp-content)
 | Variable | Purpose | Example placeholder | Where used |
 | --- | --- | --- | --- |

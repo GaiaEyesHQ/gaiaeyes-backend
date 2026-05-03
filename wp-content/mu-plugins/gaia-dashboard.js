@@ -4645,7 +4645,7 @@
               </div>
             </div>
             <div class="gaia-dashboard__link-grid gaia-dashboard__link-grid--settings">
-              <a class="gaia-dashboard__link-card" href="${esc(publicLinks.spaceWeather || "/space-weather/")}"><strong>Space Weather</strong><small>Scientific forecast and current conditions.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(publicLinks.spaceWeather || "/space-dashboard/")}"><strong>Space Weather</strong><small>Scientific forecast and current conditions.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(publicLinks.schumann || "/schumann-resonance/")}"><strong>Schumann</strong><small>Current resonance detail and scientific context.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(publicLinks.magnetosphere || "/magnetosphere/")}"><strong>Magnetosphere</strong><small>Shield state, compression, and recent change.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(publicLinks.aurora || "/aurora-tracker/")}"><strong>Aurora</strong><small>Live tracker and viewlines.</small></a>

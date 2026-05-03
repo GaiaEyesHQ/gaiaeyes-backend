@@ -1,0 +1,134 @@
+{
+  "schema_version": "social_alerts_shadow_v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "generated_at": "2026-05-03T19:11:47Z",
+  "source_mode": "existing_signal_snapshot",
+  "draft_count": 1,
+  "drafts": [
+    {
+      "id": "social_alert.global_hazard.high.211b84229d04",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "global_hazard",
+      "severity": "high",
+      "asof": "2026-05-03T19:11:47Z",
+      "title": "Global hazards are active",
+      "subtitle": "Share only verified location and advisory context from official feeds.",
+      "caption": "Global hazards are active. Share only verified location and advisory context from official feeds. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "notable_count": 10,
+        "high_count": 2
+      },
+      "source_refs": [
+        {
+          "label": "Global hazards brief",
+          "path": "/v1/hazards/brief"
+        },
+        {
+          "label": "GDACS hazards",
+          "path": "/v1/hazards/gdacs/full"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "title": "Global hazards are active",
+          "subtitle": "Share only verified location and advisory context from official feeds.",
+          "metric_chips": [
+            {
+              "label": "Notable",
+              "value": "10"
+            },
+            {
+              "label": "High",
+              "value": "2"
+            }
+          ],
+          "footer": "Gaia Eyes - Decode the unseen",
+          "theme_keys": [
+            "hazards",
+            "earthscope",
+            "local_conditions"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/hazards.jpg",
+            "social/share/backgrounds/earthscope.jpg"
+          ],
+          "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background"
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "Global hazards are active"
+            },
+            {
+              "role": "signal",
+              "text": "Share only verified location and advisory context from official feeds.",
+              "metric_chips": [
+                {
+                  "label": "Notable",
+                  "value": "10"
+                },
+                {
+                  "label": "High",
+                  "value": "2"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Open Gaia Eyes for the full signal read."
+            }
+          ],
+          "theme_keys": [
+            "hazards",
+            "earthscope",
+            "local_conditions"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/hazards.jpg",
+            "social/share/backgrounds/earthscope.jpg"
+          ],
+          "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "global_hazard",
+        "severity": "high"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.global_hazard.high"
+    }
+  ],
+  "review_notes": [
+    "Human review is required before any social publish.",
+    "Payload is text, metadata, and overlay specs only; no media rendering or platform posting is performed.",
+    "Copy intentionally avoids medical causality and symptom prediction."
+  ]
+}
