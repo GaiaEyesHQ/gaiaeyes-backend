@@ -2675,14 +2675,14 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
           <span class="gaia-dashboard__mode">${isPaid ? "Member" : "Free"}</span>
           ${email ? `<span class="gaia-dashboard__muted">${esc(email)}</span>` : ""}
-          <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Email link</button>
+          <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Switch account</button>
           <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-signout>Sign out</button>
         </div>
       </div>
       ${
         hasData
           ? ""
-          : '<div class="gaia-dashboard__muted" style="margin-bottom:10px">No dashboard data yet for this account. Use a magic link for another email, or refresh shortly.</div>'
+          : '<div class="gaia-dashboard__muted" style="margin-bottom:10px">No dashboard data yet for this account. Switch accounts, or refresh shortly.</div>'
       }
       ${
         alerts.length
@@ -4531,7 +4531,7 @@
       state.ui.accountDeletionStatus = "Account deleted.";
       renderMemberHub(root, state);
       if (state.authCtx && typeof state.authCtx.onSignOut === "function") {
-        await state.authCtx.onSignOut("Account deleted. Sign in with email if you want to return.");
+        await state.authCtx.onSignOut("Account deleted. Use your email and password if you want to return.");
       }
     } catch (err) {
       state.ui.accountDeletionStatus = err && err.message ? err.message : "Could not delete your account.";
@@ -4585,7 +4585,7 @@
               </div>
             </div>
             <div class="gaia-dashboard__section-actions">
-              <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Email link</button>
+              <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Switch account</button>
               <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-signout>Sign out</button>
             </div>
             <div class="gaia-dashboard__empty">
@@ -4777,33 +4777,67 @@
     removeMissionMobileNavPortal(root);
     root.innerHTML = `
       <div class="gaia-dashboard__signin">
-        <span class="gaia-dashboard__status">${esc(statusText || "Sign in to view your dashboard.")}</span>
-        <button class="gaia-dashboard__btn" type="button">Sign in with email</button>
+        <div class="gaia-dashboard__signin-copy">
+          <span class="gaia-dashboard__shell-kicker">Member Hub</span>
+          <h2 class="gaia-dashboard__title">Sign in to Mission Control</h2>
+          <p class="gaia-dashboard__status" data-gaia-auth-status aria-live="polite">${esc(statusText || "Use your Gaia Eyes email and password to view your dashboard.")}</p>
+        </div>
+        <form class="gaia-dashboard__signin-form" data-gaia-signin-form>
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" autocomplete="email" required>
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" name="password" autocomplete="current-password" required>
+          </label>
+          <label class="gaia-dashboard__signin-check">
+            <input type="checkbox" name="create" checked>
+            <span>Create account if this is new</span>
+          </label>
+          <div class="gaia-dashboard__signin-actions">
+            <button class="gaia-dashboard__btn" type="submit">Continue</button>
+          </div>
+        </form>
       </div>
     `;
-    const button = root.querySelector("button");
-    if (!button) return;
+    const form = root.querySelector("[data-gaia-signin-form]");
+    const statusEl = root.querySelector("[data-gaia-auth-status]");
+    const submit = form ? form.querySelector('button[type="submit"]') : null;
+    if (!form || !submit || !statusEl) return;
 
-    button.addEventListener("click", async () => {
-      const email = window.prompt("Enter your email for a magic link:");
-      if (!email) return;
-      button.disabled = true;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const email = String(formData.get("email") || "").trim();
+      const password = String(formData.get("password") || "");
+      const create = formData.get("create") === "on";
+      if (!email || !password) {
+        statusEl.textContent = "Email and password are required.";
+        return;
+      }
+      submit.disabled = true;
+      statusEl.textContent = "Signing in...";
       try {
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo:
-              cfg.redirectUrl ||
-              `${window.location.origin}${window.location.pathname}${window.location.search}`,
-          },
-        });
-        if (error) throw error;
-        root.querySelector(".gaia-dashboard__status").textContent =
-          "Check your email for the sign-in link, then return to this page.";
+        const signIn = await supabase.auth.signInWithPassword({ email, password });
+        if (signIn.error) {
+          if (!create) throw signIn.error;
+          statusEl.textContent = "Creating account...";
+          const signUp = await supabase.auth.signUp({ email, password });
+          if (signUp.error) throw signUp.error;
+          if (!(signUp.data && signUp.data.session)) {
+            statusEl.textContent = "Check your email to verify the account, then return here to sign in.";
+            return;
+          }
+        } else if (!(signIn.data && signIn.data.session)) {
+          throw new Error("Sign-in did not return a session. Please try again.");
+        }
+        statusEl.textContent = "Loading dashboard...";
+        await load(root);
       } catch (err) {
-        root.querySelector(".gaia-dashboard__status").textContent = `Sign-in failed: ${err.message || err}`;
+        statusEl.textContent = `Sign-in failed: ${err.message || err}`;
       } finally {
-        button.disabled = false;
+        submit.disabled = false;
       }
     });
   };
@@ -4955,26 +4989,18 @@
           try {
             await supabase.auth.signOut();
           } finally {
-            renderSignInPrompt(root, supabase, message || "Signed out. Sign in with email.");
+            renderSignInPrompt(root, supabase, message || "Signed out. Use your email and password to return.");
           }
         },
         onSwitch: async () => {
-          const email = window.prompt("Use this email for a new magic link:");
-          if (!email) return;
+          if (!window.confirm("Sign out and use another Gaia Eyes account?")) return;
           try {
-            const { error: signErr } = await supabase.auth.signInWithOtp({
-              email,
-              options: {
-                emailRedirectTo:
-                  cfg.redirectUrl ||
-              `${window.location.origin}${window.location.pathname}${window.location.search}`,
-              },
-            });
-            if (signErr) throw signErr;
-            window.alert("Magic link sent. Open your email, then return to this page.");
+            await supabase.auth.signOut();
           } catch (switchErr) {
-            window.alert(`Could not send magic link: ${switchErr && switchErr.message ? switchErr.message : switchErr}`);
+            window.alert(`Could not switch accounts: ${switchErr && switchErr.message ? switchErr.message : switchErr}`);
+            return;
           }
+          renderSignInPrompt(root, supabase, "Use another email and password.");
         },
         },
         ui: {
@@ -5022,7 +5048,7 @@
         try {
           await supabase.auth.signOut();
         } catch (_) {}
-        renderSignInPrompt(root, supabase, "Session expired. Sign in with email.");
+        renderSignInPrompt(root, supabase, "Session expired. Use your email and password to return.");
       } else {
         root.innerHTML = `<div class="gaia-dashboard__status">Failed to load dashboard: ${esc(msg)}</div>`;
       }

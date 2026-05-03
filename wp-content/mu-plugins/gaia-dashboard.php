@@ -149,8 +149,16 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__es-content{position:relative;z-index:1;padding:12px;color:#fff}
         .gaia-dashboard__es-title{margin:0 0 8px;font-size:15px;line-height:1.25}
         .gaia-dashboard__es-body{margin:0;white-space:pre-line;line-height:1.45;font-size:14px}
-        .gaia-dashboard__signin{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+        .gaia-dashboard__signin{display:grid;gap:14px;max-width:560px}
+        .gaia-dashboard__signin-copy{display:flex;flex-direction:column;gap:5px}
+        .gaia-dashboard__signin-form{display:grid;gap:10px}
+        .gaia-dashboard__signin-form label{display:grid;gap:5px;font-size:12px;color:#c7d3eb}
+        .gaia-dashboard__signin-form input[type=email],.gaia-dashboard__signin-form input[type=password]{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:10px 12px;color:#f5fffb;background:rgba(0,0,0,.22)}
+        .gaia-dashboard__signin-check{display:flex!important;align-items:center;gap:8px}
+        .gaia-dashboard__signin-check input{width:auto}
+        .gaia-dashboard__signin-actions{display:flex;gap:8px;flex-wrap:wrap}
         .gaia-dashboard__btn{border:0;border-radius:999px;padding:8px 14px;background:#2b8cff;color:#fff;font-weight:600;cursor:pointer}
+        .gaia-dashboard__btn[disabled]{opacity:.62;cursor:not-allowed}
         .gaia-dashboard__btn--ghost{background:#1f2a3a;color:#d7e6ff}
         .gaia-dashboard__btn--quiet{background:#172130;color:#d7e6ff;border:1px solid rgba(255,255,255,.08)}
         .gaia-dashboard__btn--danger{background:rgba(187,92,97,.16);color:#ffd5d8;border:1px solid rgba(230,122,126,.32)}

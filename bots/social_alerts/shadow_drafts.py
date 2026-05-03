@@ -10,7 +10,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 
 CTA = "Open Gaia Eyes for the full signal read."
-CONTEXT_LINE = "Context only; not medical advice or a forecast of symptoms."
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
 
@@ -93,6 +92,33 @@ def _source_ref(label: str, path: str) -> Dict[str, str]:
     return {"label": label, "path": path}
 
 
+def _viral_background_candidate(kind: str) -> Optional[str]:
+    try:
+        from bots.earthscope_post.gaia_eyes_viral_bot import MEDIA_REPO_PATH, _choose_background
+
+        path = _choose_background(None, kind=kind)
+    except Exception:
+        return None
+    if path is None:
+        return None
+    try:
+        return f"media_repo:{path.relative_to(MEDIA_REPO_PATH).as_posix()}"
+    except Exception:
+        return str(path)
+
+
+def _social_background_candidates(fallbacks: Sequence[str]) -> List[str]:
+    candidates: List[str] = []
+    for kind in ("square", "tall"):
+        candidate = _viral_background_candidate(kind)
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+    for fallback in fallbacks:
+        if fallback not in candidates:
+            candidates.append(fallback)
+    return candidates
+
+
 def _base_overlay(
     *,
     category: str,
@@ -113,6 +139,7 @@ def _base_overlay(
             "footer": "Gaia Eyes - Decode the unseen",
             "theme_keys": theme_keys,
             "background_candidates": background_candidates,
+            "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
         },
         "story_reel": {
             "canvas": {"width": 1080, "height": 1920},
@@ -124,6 +151,7 @@ def _base_overlay(
             ],
             "theme_keys": theme_keys,
             "background_candidates": background_candidates,
+            "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
             "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled.",
         },
         "rendering_status": "spec_only",
@@ -133,7 +161,7 @@ def _base_overlay(
 
 
 def _caption(title: str, subtitle: str, *, hashtags: str = DEFAULT_HASHTAGS) -> str:
-    return f"{title}. {subtitle} {CTA} {CONTEXT_LINE}\n\n{hashtags}"
+    return f"{title}. {subtitle} {CTA}\n\n{hashtags}"
 
 
 def _draft(
@@ -258,9 +286,9 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
     drafts: List[Dict[str, Any]] = []
     geomagnetic_severity: Optional[str] = None
     if kp_signal is not None:
-        if kp_signal >= 6:
+        if kp_signal >= 5:
             geomagnetic_severity = "high"
-        elif kp_signal >= 5:
+        elif kp_signal >= 3.5:
             geomagnetic_severity = "watch"
     if bz is not None and solar_wind is not None:
         if bz <= -12 or (solar_wind >= 650 and bz <= -8):
@@ -285,11 +313,13 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                     {"label": "SW", "value": _fmt_number(solar_wind, digits=0, suffix=" km/s")},
                 ],
                 theme_keys=["geomagnetic", "solar", "space_weather"],
-                background_candidates=[
-                    "nasa/geospace_3h/latest.jpg",
-                    "nasa/aia_304/latest.jpg",
-                    "aurora/viewline/tonight-north.png",
-                ],
+                background_candidates=_social_background_candidates(
+                    [
+                        "nasa/geospace_3h/latest.jpg",
+                        "nasa/aia_304/latest.jpg",
+                        "aurora/viewline/tonight-north.png",
+                    ]
+                ),
                 source_refs=[
                     _source_ref("SWPC space weather", "space_weather.now"),
                     _source_ref("Space daily mart", "marts.space_weather_daily"),
@@ -316,7 +346,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                 metrics={"xray_max_class": flare_class},
                 chips=[{"label": "Max flare", "value": flare_class}],
                 theme_keys=["solar_flare", "solar", "space_weather"],
-                background_candidates=["nasa/aia_304/latest.jpg", "nasa/lasco_c2/latest.jpg"],
+                background_candidates=_social_background_candidates(["nasa/aia_304/latest.jpg", "nasa/lasco_c2/latest.jpg"]),
                 source_refs=[
                     _source_ref("GOES X-ray", "space_weather.xray_max_class"),
                     _source_ref("SWPC flare feed", "GOES_XRS_URL"),
@@ -369,105 +399,18 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
             {"label": "F1", "value": _fmt_number(value, suffix=" Hz")},
         ],
         theme_keys=["schumann", "resonance", "earthscope"],
-        background_candidates=[
-            "social/earthscope/latest/tomsk_share_latest.jpg",
-            "social/earthscope/latest/cumiana_share_latest.jpg",
-        ],
+        background_candidates=_social_background_candidates(
+            [
+                "social/earthscope/latest/tomsk_share_latest.jpg",
+                "social/earthscope/latest/cumiana_share_latest.jpg",
+            ]
+        ),
         source_refs=[
             _source_ref("Tomsk/Cumiana Schumann", "schumann"),
             _source_ref("Schumann active state", "active_states.schumann.variability_24h"),
         ],
         asof=asof,
     )
-
-
-def _local_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict[str, Any]]:
-    aqi = _first_float(
-        snapshot,
-        [
-            ("local", "air", "aqi"),
-            ("air", "aqi"),
-            ("forecast_daily", "0", "aqi_forecast"),
-        ],
-    )
-    drafts: List[Dict[str, Any]] = []
-    if aqi is not None and aqi >= 101:
-        severity = "high" if aqi >= 151 else "watch"
-        drafts.append(
-            _draft(
-                category="air_quality",
-                severity=severity,
-                title="Air quality is elevated" if severity == "watch" else "Air quality alert",
-                subtitle="Local AQI is high enough to make this a reviewable public post.",
-                metrics={"aqi": aqi},
-                chips=[{"label": "AQI", "value": _fmt_number(aqi, digits=0)}],
-                theme_keys=["aqi", "air_quality", "local_conditions"],
-                background_candidates=["social/share/backgrounds/aqi.jpg", "social/share/backgrounds/air_quality.jpg"],
-                source_refs=[
-                    _source_ref("Local check", "/v1/local/check"),
-                    _source_ref("AirNow", "local.air"),
-                ],
-                asof=asof,
-            )
-        )
-
-    pollen_level = _clean_text(
-        _first(
-            snapshot,
-            [
-                ("local", "allergens", "overall_level"),
-                ("allergens", "overall_level"),
-                ("local", "forecast_daily", "0", "pollen_overall_level"),
-                ("forecast_daily", "0", "pollen_overall_level"),
-            ],
-        )
-    ).lower()
-    pollen_index = _first_float(
-        snapshot,
-        [
-            ("local", "allergens", "overall_index"),
-            ("allergens", "overall_index"),
-            ("local", "forecast_daily", "0", "pollen_overall_index"),
-            ("forecast_daily", "0", "pollen_overall_index"),
-        ],
-    )
-    primary = _clean_text(
-        _first(
-            snapshot,
-            [
-                ("local", "allergens", "primary_label"),
-                ("allergens", "primary_label"),
-                ("local", "forecast_daily", "0", "pollen_primary_label"),
-                ("forecast_daily", "0", "pollen_primary_label"),
-            ],
-        )
-    )
-    pollen_triggered = pollen_level in {"high", "very_high"} or (pollen_index is not None and pollen_index >= 4)
-    if pollen_triggered:
-        severity = "high" if pollen_level == "very_high" or (pollen_index is not None and pollen_index >= 5) else "watch"
-        label = primary or "Pollen"
-        drafts.append(
-            _draft(
-                category="pollen",
-                severity=severity,
-                title=f"{label} is elevated",
-                subtitle="Allergen context is notable locally; avoid symptom-cause language.",
-                metrics={"overall_level": pollen_level or None, "overall_index": pollen_index, "primary_label": primary or None},
-                chips=[
-                    {"label": "Pollen", "value": (pollen_level or "high").replace("_", " ").title()},
-                    {"label": "Index", "value": _fmt_number(pollen_index)},
-                ],
-                theme_keys=["pollen", "allergens", "seasonal_irritants"],
-                background_candidates=["social/share/backgrounds/pollen.jpg", "social/share/backgrounds/allergens.jpg"],
-                source_refs=[
-                    _source_ref("Local check", "/v1/local/check"),
-                    _source_ref("Google Pollen", "local.allergens"),
-                ],
-                asof=asof,
-            )
-        )
-
-    return drafts
 
 
 def _quake_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -509,7 +452,9 @@ def _quake_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optional[D
             {"label": "M5+ count", "value": str(m5_count or "--")},
         ],
         theme_keys=["earthquake", "hazards", "earthscope"],
-        background_candidates=["social/share/backgrounds/earthquake.jpg", "social/share/backgrounds/earthscope.jpg"],
+        background_candidates=_social_background_candidates(
+            ["social/share/backgrounds/earthquake.jpg", "social/share/backgrounds/earthscope.jpg"]
+        ),
         source_refs=[
             _source_ref("USGS earthquakes", "/v1/quakes/events"),
             _source_ref("Quake daily mart", "marts.quakes_daily"),
@@ -549,7 +494,9 @@ def _hazard_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optional[
             {"label": "High", "value": str(high_count)},
         ],
         theme_keys=["hazards", "earthscope", "local_conditions"],
-        background_candidates=["social/share/backgrounds/hazards.jpg", "social/share/backgrounds/earthscope.jpg"],
+        background_candidates=_social_background_candidates(
+            ["social/share/backgrounds/hazards.jpg", "social/share/backgrounds/earthscope.jpg"]
+        ),
         source_refs=[
             _source_ref("Global hazards brief", "/v1/hazards/brief"),
             _source_ref("GDACS hazards", "/v1/hazards/gdacs/full"),
@@ -571,7 +518,6 @@ def build_shadow_payload(
     schumann = _schumann_draft(snapshot, asof)
     if schumann:
         drafts.append(schumann)
-    drafts.extend(_local_drafts(snapshot, asof))
     quake = _quake_draft(snapshot, asof)
     if quake:
         drafts.append(quake)
@@ -607,15 +553,97 @@ def write_shadow_payload(payload: Mapping[str, Any], output_path: Path | str) ->
     return path
 
 
+def build_review_markdown(payload: Mapping[str, Any]) -> str:
+    lines = [
+        "# Social Alerts Shadow Review",
+        "",
+        f"- Mode: `{payload.get('mode', 'shadow')}`",
+        f"- Auto publish: `{payload.get('auto_publish', False)}`",
+        f"- Generated at: `{payload.get('generated_at') or '--'}`",
+        f"- Draft count: `{payload.get('draft_count', 0)}`",
+        "",
+    ]
+    drafts = payload.get("drafts") if isinstance(payload.get("drafts"), list) else []
+    if not drafts:
+        lines.extend(["No reviewable drafts were generated.", ""])
+        return "\n".join(lines)
+
+    for index, draft in enumerate(drafts, start=1):
+        if not isinstance(draft, Mapping):
+            continue
+        overlay = draft.get("overlay_spec") if isinstance(draft.get("overlay_spec"), Mapping) else {}
+        square = overlay.get("square_image") if isinstance(overlay.get("square_image"), Mapping) else {}
+        backgrounds = square.get("background_candidates") if isinstance(square.get("background_candidates"), list) else []
+        metrics = draft.get("metrics") if isinstance(draft.get("metrics"), Mapping) else {}
+        sources = draft.get("source_refs") if isinstance(draft.get("source_refs"), list) else []
+        lines.extend(
+            [
+                f"## {index}. {draft.get('title') or 'Untitled Draft'}",
+                "",
+                f"- Category: `{draft.get('category') or '--'}`",
+                f"- Severity: `{draft.get('severity') or '--'}`",
+                f"- Review status: `{draft.get('review_status') or '--'}`",
+                f"- As of: `{draft.get('asof') or '--'}`",
+                "",
+                "Caption:",
+                "",
+                "```text",
+                str(draft.get("caption") or "").strip(),
+                "```",
+                "",
+                "Metrics:",
+            ]
+        )
+        if metrics:
+            for key, value in metrics.items():
+                lines.append(f"- `{key}`: `{value}`")
+        else:
+            lines.append("- `none`: `--`")
+        lines.extend(["", "Background candidates:"])
+        if backgrounds:
+            for candidate in backgrounds[:4]:
+                lines.append(f"- `{candidate}`")
+        else:
+            lines.append("- `none`: `--`")
+        lines.extend(["", "Sources:"])
+        if sources:
+            for source in sources:
+                if isinstance(source, Mapping):
+                    lines.append(f"- {source.get('label') or 'Source'}: `{source.get('path') or '--'}`")
+        else:
+            lines.append("- `none`: `--`")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def write_shadow_review_markdown(payload: Mapping[str, Any], output_path: Path | str) -> Path:
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(build_review_markdown(payload), encoding="utf-8")
+    return path
+
+
 def _default_output_path() -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return Path("tmp") / "social_alerts_shadow" / f"{stamp}.json"
+
+
+def _default_review_path(json_output_path: Path | str) -> Path:
+    return Path(json_output_path).with_suffix(".md")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build shadow-mode social alert drafts from a Gaia Eyes signal JSON snapshot.")
     parser.add_argument("--input", required=True, help="Path to a JSON snapshot from existing Gaia Eyes signal outputs.")
     parser.add_argument("--output", default="", help="Output JSON path. Defaults to tmp/social_alerts_shadow/<timestamp>.json.")
+    parser.add_argument(
+        "--review-output",
+        nargs="?",
+        const="auto",
+        default="",
+        help="Optional Markdown review path. Use without a value to write beside the JSON output.",
+    )
     parser.add_argument("--max-drafts", type=int, default=6, help="Maximum drafts to include.")
     args = parser.parse_args()
 
@@ -626,6 +654,10 @@ def main() -> None:
     payload = build_shadow_payload(snapshot, max_drafts=args.max_drafts)
     out_path = write_shadow_payload(payload, args.output or _default_output_path())
     print(f"[social_alerts.shadow] wrote {payload['draft_count']} draft(s) -> {out_path}")
+    if args.review_output:
+        review_path = _default_review_path(out_path) if args.review_output == "auto" else Path(args.review_output)
+        write_shadow_review_markdown(payload, review_path)
+        print(f"[social_alerts.shadow] wrote review markdown -> {review_path}")
 
 
 if __name__ == "__main__":

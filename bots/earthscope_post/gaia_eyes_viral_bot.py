@@ -98,7 +98,6 @@ from dotenv import load_dotenv
 # CONFIG / PATHS
 # -------------------------
 OUTPUT_DIR = HERE / "Output"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 load_dotenv(HERE / ".env")
 MEDIA_REPO_PATH = Path(os.getenv("MEDIA_REPO_PATH", "/Users/jenniferobrien/Documents/gaiaeyes-media")).expanduser()
@@ -261,11 +260,15 @@ TARGET_DAY = os.getenv("TARGET_DAY")  # YYYY-MM-DD; if None → today
 # LOGGING
 # -------------------------
 LOG_PATH = OUTPUT_DIR / "gaia_eyes.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[logging.FileHandler(LOG_PATH), logging.StreamHandler(sys.stdout)],
-)
+
+def _configure_logging(log_level: str = "INFO") -> None:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=getattr(logging, str(log_level).upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[logging.FileHandler(LOG_PATH), logging.StreamHandler(sys.stdout)],
+        force=True,
+    )
 
 # HTTP session with retries
 session = requests.Session()
@@ -1406,6 +1409,7 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
 # -------------------------
 def save_images(sch: float, kp: float, energy: str, mood: str, tip: str) -> Tuple[Path, Path]:
     ensure_repo_paths()
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     im = render_card(energy, mood, sch, kp)
     ts = dt.datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
     local_path = OUTPUT_DIR / f"earthscope_{ts}.jpg"
@@ -1522,7 +1526,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 def main(args: Optional[argparse.Namespace] = None):
     if args is None:
         args = parse_args()
-    logging.getLogger().setLevel(getattr(logging, str(args.log_level).upper(), logging.INFO))
+    _configure_logging(args.log_level)
     RUN_BG_USED.clear()
     key_prefix = (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY)[:8] if (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY) else "(none)"
     logging.info("Supabase REST: url=%s key[0:8]=%s", SUPABASE_REST_URL or "(unset)", key_prefix)
