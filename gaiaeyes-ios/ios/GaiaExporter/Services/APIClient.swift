@@ -659,12 +659,16 @@ final class APIClient {
         do {
             let response = try await postJSON("v1/symptoms", body: payload, as: SymptomPostResponse.self)
             if response.ok == false {
-                logger?("[SYM] POST ok=false — treating as success")
+                let message = response.error ?? "upload_failed"
+                if message.lowercased().contains("unknown") && message.lowercased().contains("symptom") {
+                    throw SymptomUploadError.unknownSymptomCode(valid: [])
+                }
+                throw APIError.server(code: 200, body: message)
             }
             return response
         } catch let decodeError as DecodingError {
             logger?("[SYM] POST decode fallback: \(decodeError)")
-            return SymptomPostResponse(ok: nil, id: nil, tsUtc: nil)
+            return SymptomPostResponse(ok: nil, id: nil, tsUtc: nil, error: nil)
         } catch APIError.server(let code, let body) {
             if code == 400, let data = body.data(using: .utf8) {
                 let decoder = APIClient.tolerantJSONDecoder()

@@ -10133,18 +10133,18 @@ struct ContentView: View {
                         HStack(spacing: 8) {
                             Text(sectionTitle.uppercased())
                                 .font(.caption2.weight(.bold))
-                                .foregroundColor(.white.opacity(0.52))
+                                .foregroundStyle(tint)
                                 .tracking(0.8)
                         }
                         if let title = item.displayTitle {
                             Text(title)
                                 .font(.headline.weight(.semibold))
-                                .foregroundColor(.white.opacity(0.94))
+                                .foregroundStyle(.primary)
                         }
                         if let body = item.displayBody {
                             Text(body)
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.70))
+                                .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -10154,7 +10154,7 @@ struct ContentView: View {
                     Button(action: onDismiss) {
                         Image(systemName: "xmark")
                             .font(.caption.weight(.bold))
-                            .foregroundColor(.white.opacity(0.56))
+                            .foregroundStyle(.secondary)
                             .padding(8)
                     }
                     .buttonStyle(.plain)
@@ -10178,12 +10178,11 @@ struct ContentView: View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color.white.opacity(0.055))
+                        .fill(Color(.secondarySystemBackground))
                     LinearGradient(
                         colors: [
-                            tint.opacity(0.11),
-                            Color.white.opacity(0.025),
-                            Color.black.opacity(0.16)
+                            tint.opacity(0.12),
+                            Color.clear
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -10193,7 +10192,7 @@ struct ContentView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(tint.opacity(0.18), lineWidth: 1)
+                    .stroke(tint.opacity(0.35), lineWidth: 1)
             )
             .shadow(color: tint.opacity(0.14), radius: 16, x: 0, y: 8)
         }
@@ -10229,15 +10228,15 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(sectionTitle.uppercased())
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(.white.opacity(0.52))
+                            .foregroundStyle(tint)
                             .tracking(0.8)
                         Text(notice.trimmedTitle ?? sectionTitle)
                             .font(.headline.weight(.semibold))
-                            .foregroundColor(.white.opacity(0.94))
+                            .foregroundStyle(.primary)
                         if let message = notice.trimmedMessage {
                             Text(message)
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.70))
+                                .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -10247,7 +10246,7 @@ struct ContentView: View {
                     Button(action: onDismiss) {
                         Image(systemName: "xmark")
                             .font(.caption.weight(.bold))
-                            .foregroundColor(.white.opacity(0.56))
+                            .foregroundStyle(.secondary)
                             .padding(8)
                     }
                     .buttonStyle(.plain)
@@ -10271,8 +10270,9 @@ struct ContentView: View {
             .background(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.065),
-                        tint.opacity(0.10)
+                        Color(.secondarySystemBackground),
+                        Color(.secondarySystemBackground).opacity(0.92),
+                        tint.opacity(0.12)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing

@@ -9,6 +9,7 @@
 - Fallback mode: fetch JSON snapshots from `gaiaeyes-media` (GitHub Pages/jsDelivr) or NOAA endpoints.
 
 ## Key mu-plugins + shortcodes
+- **App Store launch page** (`gaiaeyes-app-landing.php`): shortcode `[gaiaeyes_app_landing]` renders the iOS app promo/funnel page with the live App Store link. To publish the public launch offer, use `[gaiaeyes_app_landing show_public_code="1" public_code="GAIAEARLY"]`; keep founder/team codes for direct sharing only.
 - **Checkout (signed-in Stripe)** (`ge-checkout.php` + `ge-checkout.js`): shortcode `[ge_checkout plan="plus"]` or `[ge_checkout plan="pro"]` renders monthly + yearly buttons using plan keys (backend expects plan keys, not Stripe price IDs). You can also use a single plan key like `plan="plus_monthly"`.
 - **Checkout plan cards** (`ge-checkout.php`): shortcode `[ge_checkout_plans]` renders Plus/Pro cards with pricing, features, and buttons. Override labels via attributes like `plus_price_monthly`, `pro_features`, etc.
 - **Pricing table (legacy backup)** (`gaia-subscriptions.php`): shortcode `[ge_pricing_table]` for Stripe’s hosted pricing table (kept as fallback).

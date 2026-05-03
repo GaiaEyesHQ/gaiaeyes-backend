@@ -437,7 +437,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     // MARK: - Symptoms upload helper
     private func postSymptomEvent(from event: SymptomQueuedEvent, api: APIClient) async throws -> SymptomPOSTResponse {
         let response = try await api.postSymptomEvent(from: event)
-        return SymptomPOSTResponse(id: response.id.map(String.init), tsUtc: response.tsUtc)
+        return SymptomPOSTResponse(id: response.id, tsUtc: response.tsUtc)
     }
 
     // MARK: - Status

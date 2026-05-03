@@ -40,8 +40,67 @@ struct SymptomDiagSummary: Decodable, Identifiable {
 
 struct SymptomPostResponse: Decodable {
     let ok: Bool?
-    let id: Int?
+    let id: String?
     let tsUtc: String?
+    let error: String?
+
+    private struct StringBackedID: Decodable {
+        let value: String
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let stringValue = try? container.decode(String.self) {
+                value = stringValue
+            } else if let intValue = try? container.decode(Int.self) {
+                value = String(intValue)
+            } else {
+                throw DecodingError.typeMismatch(
+                    String.self,
+                    DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Expected string or integer id")
+                )
+            }
+        }
+    }
+
+    private struct DataPayload: Decodable {
+        let id: String?
+        let tsUtc: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case tsUtc
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeIfPresent(StringBackedID.self, forKey: .id)?.value
+            tsUtc = try container.decodeIfPresent(String.self, forKey: .tsUtc)
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
+        case id
+        case tsUtc
+        case error
+        case data
+    }
+
+    init(ok: Bool? = nil, id: String? = nil, tsUtc: String? = nil, error: String? = nil) {
+        self.ok = ok
+        self.id = id
+        self.tsUtc = tsUtc
+        self.error = error
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let payload = try container.decodeIfPresent(DataPayload.self, forKey: .data)
+        ok = try container.decodeIfPresent(Bool.self, forKey: .ok)
+        id = try container.decodeIfPresent(StringBackedID.self, forKey: .id)?.value ?? payload?.id
+        tsUtc = try container.decodeIfPresent(String.self, forKey: .tsUtc) ?? payload?.tsUtc
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+    }
 }
 
 struct SymptomCodeDefinition: Decodable {

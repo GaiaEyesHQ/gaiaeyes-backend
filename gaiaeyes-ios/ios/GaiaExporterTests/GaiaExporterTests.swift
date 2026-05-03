@@ -45,7 +45,51 @@ struct SymptomEnvelopeTests {
         let event = SymptomQueuedEvent(symptomCode: "nerve pain")
         #expect(event.symptomCode == "NERVE_PAIN")
         #expect(event.severity == 5)
-}
+    }
+
+    @Test
+    func decodesSymptomPostEnvelopeData() throws {
+        let payload = """
+        {
+            "ok": true,
+            "data": {
+                "id": "evt-123",
+                "ts_utc": "2026-04-28T18:30:00Z"
+            },
+            "error": null
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let response = try decoder.decode(SymptomPostResponse.self, from: payload)
+
+        #expect(response.ok == true)
+        #expect(response.id == "evt-123")
+        #expect(response.tsUtc == "2026-04-28T18:30:00Z")
+        #expect(response.error == nil)
+    }
+
+    @Test
+    func decodesSymptomPostEnvelopeError() throws {
+        let payload = """
+        {
+            "ok": false,
+            "data": null,
+            "error": "Failed to record symptom event"
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let response = try decoder.decode(SymptomPostResponse.self, from: payload)
+
+        #expect(response.ok == false)
+        #expect(response.id == nil)
+        #expect(response.error == "Failed to record symptom event")
+    }
 
     @Test
     func fallsBackToSnapshotPayload() throws {

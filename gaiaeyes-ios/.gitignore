@@ -3,6 +3,9 @@
 *.gif
 *.webp
 *.mp4
+!ios/GaiaExporter/Assets.xcassets/AppIcon.appiconset/*.png
+!ios/GaiaExporter/Assets.xcassets/AppIcon.appiconset/*.jpg
+!ios/GaiaExporter/Assets.xcassets/AppIcon.appiconset/*.jpeg
 docs/.DS_Store
 .DS_Store
 docs/backend-docs/.DS_Store

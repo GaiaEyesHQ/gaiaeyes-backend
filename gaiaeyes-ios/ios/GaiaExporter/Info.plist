@@ -29,6 +29,12 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Gaia Eyes may use Bluetooth to connect to optional heart-rate sensors for recovery and signal tracking. Bluetooth is only used when you choose to connect a supported device.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Gaia Eyes may use Bluetooth to connect to optional heart-rate sensors when you choose to pair a supported device.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Gaia Eyes may use the camera for an optional wellness check that estimates pulse-related signals from fingertip video. Camera data is processed for the check and is not used unless you start it.</string>
 	<key>REVENUECAT_IOS_API_KEY</key>
 	<string>appl_yiYbPrukxNEjnWCTlzKULBDhaJL</string>
 	<key>REVENUECAT_PLUS_ENTITLEMENT_ID</key>
@@ -46,7 +52,8 @@
 		<string>fetch</string>
 		<string>processing</string>
 		<string>remote-notification</string>
-		<string>location</string>
 	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 </dict>
 </plist>
