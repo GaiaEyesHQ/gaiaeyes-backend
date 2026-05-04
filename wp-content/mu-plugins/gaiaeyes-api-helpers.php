@@ -18,21 +18,26 @@ if (!function_exists('gaiaeyes_http_get_json_api_cached')){
 }
 
 if (!function_exists('gaiaeyes_public_member_cta')) {
-  function gaiaeyes_public_member_cta($context = '', $copy = '') {
+  function gaiaeyes_public_member_cta($context = '', $copy = '', $label_override = '', $eyebrow = 'Member context') {
     static $style_printed = false;
 
     $context = trim((string) $context);
     $copy = trim((string) $copy);
+    $label_override = trim((string) $label_override);
+    $eyebrow = trim((string) $eyebrow);
     if ($copy === '') {
       $copy = 'Members can connect public signals with personal gauges, symptoms, optional Apple Health context, patterns, drivers, and Outlook. Gaia Eyes looks for repeated timing and context; it does not diagnose or prove a signal caused a symptom.';
     }
+    if ($eyebrow === '') {
+      $eyebrow = 'Member context';
+    }
 
-    $label = $context ? $context . ' + your patterns' : 'Public signals + your patterns';
+    $label = $label_override !== '' ? $label_override : ($context ? $context . ' + your patterns' : 'Public signals + your patterns');
 
     ob_start(); ?>
     <aside class="gaia-public-cta" aria-label="Gaia Eyes member context">
       <div>
-        <span class="gaia-public-cta__eyebrow">Member context</span>
+        <span class="gaia-public-cta__eyebrow"><?php echo esc_html($eyebrow); ?></span>
         <strong><?php echo esc_html($label); ?></strong>
         <p><?php echo esc_html($copy); ?></p>
       </div>
@@ -57,4 +62,21 @@ if (!function_exists('gaiaeyes_public_member_cta')) {
     <?php
     return ob_get_clean();
   }
+}
+
+if (!function_exists('gaiaeyes_member_cta_shortcode')) {
+  function gaiaeyes_member_cta_shortcode($atts = []) {
+    $a = shortcode_atts([
+      'eyebrow' => 'Gaia Eyes Plus',
+      'title' => 'New Member Dashboard + App',
+      'copy' => 'Gaia Eyes Plus includes My Dashboard gauges, personal drivers, Outlook, pattern tracking, symptoms and body context, local conditions with pollen and forecasts, and optional Apple Health context in the iPhone app. Use the same email for website and app access.',
+    ], $atts, 'gaiaeyes_member_cta');
+
+    return gaiaeyes_public_member_cta('', (string) $a['copy'], (string) $a['title'], (string) $a['eyebrow']);
+  }
+}
+
+if (function_exists('add_shortcode')) {
+  add_shortcode('gaiaeyes_member_cta', 'gaiaeyes_member_cta_shortcode');
+  add_shortcode('gaiaeyes_member_banner', 'gaiaeyes_member_cta_shortcode');
 }
