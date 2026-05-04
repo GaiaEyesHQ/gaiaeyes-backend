@@ -862,6 +862,15 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         </div>
       </div>
 
+      <?php
+        if ( function_exists( 'gaiaeyes_public_member_cta' ) ) {
+          echo gaiaeyes_public_member_cta(
+            'EarthScope',
+            'Members turn the public daily signal into personal gauges, drivers, body context, pattern tracking, and Outlook. Gaia Eyes looks for timing and context patterns, not medical diagnoses.'
+          );
+        }
+      ?>
+
       <style>
         .gaia-es{border-radius:14px;padding:14px;background:#101015;color:#eee}
         .gaia-es__head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap}

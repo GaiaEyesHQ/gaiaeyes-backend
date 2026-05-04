@@ -1101,9 +1101,9 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <article class="ge-card">
         <h3 id="health">Health context <a class="anchor-link" href="#health" aria-label="Link to Health Context">🔗</a></h3>
         <ul class="ge-list">
-          <li>Rapid pressure and ground-motion changes can challenge the vestibular system; if sensitive, pace activities on high-activity days.</li>
+          <li>Use local and global activity as situational context; if you already feel sensitive, pace activities on high-activity days.</li>
           <li>Hydration and short daylight breaks may help stabilize autonomic tone.</li>
-          <li>During global seismic clusters, keep evenings calm and light exposure lower to support sleep continuity.</li>
+          <li>If the wider signal feels stressful, keep evenings calm and light exposure lower to support sleep continuity.</li>
         </ul>
       </article>
 
@@ -1114,8 +1114,15 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <div class="ge-cta" style="margin-top:10px;">
         <a class="gaia-link btn-compare" href="/compare/?a=m5p_daily&b=kp_daily_max&range=90">Compare with Space Weather →</a>
         <span style="margin-left:10px;"><a class="gaia-link" href="/space-dashboard/#kp">Space Dashboard →</a></span>
-        <span style="margin-left:10px;"><a class="gaia-link" href="/health-context/">Health context →</a></span>
       </div>
+      <?php
+        if (function_exists('gaiaeyes_public_member_cta')) {
+          echo gaiaeyes_public_member_cta(
+            'Earthquakes',
+            'Members can keep earthquake activity as situational context beside local conditions, sleep, symptoms, gauges, and Outlook. Gaia Eyes does not claim seismic activity caused body changes.'
+          );
+        }
+      ?>
     </div>
 
     <style>

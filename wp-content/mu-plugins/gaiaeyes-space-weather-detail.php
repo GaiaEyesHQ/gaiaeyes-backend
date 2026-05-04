@@ -758,6 +758,14 @@ function gaia_space_weather_detail_shortcode($atts){
         } catch(e){}
       })();
     </script>
+    <?php
+      if (function_exists('gaiaeyes_public_member_cta')) {
+        echo gaiaeyes_public_member_cta(
+          'Space Weather',
+          'Members can connect Kp, Bz, solar wind, flares, and CME watches with personal gauges, symptoms, optional Apple Health context, drivers, and Outlook. Gaia Eyes treats these as timing and context signals, not proof of cause.'
+        );
+      }
+    ?>
   </section>
   <?php
   return ob_get_clean();

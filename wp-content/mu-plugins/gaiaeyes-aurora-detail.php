@@ -101,6 +101,12 @@ if (!function_exists('gaia_aurora_render_detail')) {
             $gaia_aurora_context = $context; // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
             include $template;
         }
+        if (function_exists('gaiaeyes_public_member_cta')) {
+            echo gaiaeyes_public_member_cta(
+                'Aurora Tracker',
+                'Members can keep aurora and geomagnetic context beside gauges, symptoms, optional Apple Health context, drivers, and Outlook. Gaia Eyes uses this as observational context, not medical advice.'
+            );
+        }
         return ob_get_clean();
     }
 }

@@ -459,6 +459,14 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
       })();
       </script>
     <?php endif; ?>
+    <?php
+      if (function_exists('gaiaeyes_public_member_cta')) {
+        echo gaiaeyes_public_member_cta(
+          'Magnetosphere',
+          'Members can see whether Kp, Bz, solar wind, and shield-state changes are active drivers in their daily gauges and Outlook. Gaia Eyes uses this as observational context, not medical advice.'
+        );
+      }
+    ?>
   </section>
   <?php
   return ob_get_clean();

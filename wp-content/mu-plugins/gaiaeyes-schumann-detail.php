@@ -185,9 +185,9 @@ function gaiaeyes_schumann_detail_shortcode($atts){
       <article class="ge-card">
         <h3 id="health">Health context <a class="anchor-link" href="#health" aria-label="Link to Health Context">🔗</a></h3>
         <ul class="health-list">
-          <li><strong>Nervous system:</strong> Shifts in EM environment can increase reactivity in sensitives; paced breathing and brief outdoor breaks may help.</li>
+          <li><strong>Nervous system:</strong> Some people track reactivity alongside changing EM conditions; paced breathing and brief outdoor breaks may help.</li>
           <li><strong>Sleep:</strong> Keep evenings low-light and devices dimmed during elevated variability.</li>
-          <li><strong>Cardio/HRV:</strong> Some see HRV dips during geomagnetic activity; hydrate and take short daylight breaks.</li>
+          <li><strong>Cardio/HRV:</strong> If you track HRV, note any dips as personal context and use simple support habits like hydration and daylight breaks.</li>
         </ul>
       </article>
 
@@ -196,6 +196,14 @@ function gaiaeyes_schumann_detail_shortcode($atts){
         <p>The Schumann resonances are global EM resonances excited mainly by lightning discharges. The fundamental (f1) is near ~7.8 Hz with higher harmonics. Measurements vary by station, time, and processing, so a combined snapshot offers a practical indicator for daily monitoring.</p>
       </article>
     </div>
+    <?php
+      if (function_exists('gaiaeyes_public_member_cta')) {
+        echo gaiaeyes_public_member_cta(
+          'Schumann Resonance',
+          'Members can compare resonance windows with their own sleep, HRV, symptoms, gauges, patterns, and Outlook. Gaia Eyes treats this as timing context, not proof of cause.'
+        );
+      }
+    ?>
 
     <style>
       .ge-panel{background:#0f121a;color:#e9eef7;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px}
