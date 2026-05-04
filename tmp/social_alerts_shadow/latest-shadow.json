@@ -2,9 +2,9 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-05-03T19:11:47Z",
+  "generated_at": "2026-05-03T21:39:15Z",
   "source_mode": "existing_signal_snapshot",
-  "draft_count": 1,
+  "draft_count": 2,
   "drafts": [
     {
       "id": "social_alert.global_hazard.high.211b84229d04",
@@ -13,7 +13,7 @@
       "review_status": "needs_human_review",
       "category": "global_hazard",
       "severity": "high",
-      "asof": "2026-05-03T19:11:47Z",
+      "asof": "2026-05-03T21:39:15Z",
       "title": "Global hazards are active",
       "subtitle": "Share only verified location and advisory context from official feeds.",
       "caption": "Global hazards are active. Share only verified location and advisory context from official feeds. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
@@ -43,6 +43,10 @@
             "top": 104,
             "bottom": 132
           },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
           "title": "Global hazards are active",
           "subtitle": "Share only verified location and advisory context from official feeds.",
           "metric_chips": [
@@ -61,11 +65,16 @@
             "earthscope",
             "local_conditions"
           ],
+          "background_keywords": [
+            "hazards",
+            "earthscope"
+          ],
           "background_candidates": [
             "social/share/backgrounds/hazards.jpg",
             "social/share/backgrounds/earthscope.jpg"
           ],
-          "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background"
+          "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
+          "still_candidates": []
         },
         "story_reel": {
           "canvas": {
@@ -77,6 +86,10 @@
             "right": 92,
             "top": 220,
             "bottom": 260
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
           },
           "frames": [
             {
@@ -107,11 +120,17 @@
             "earthscope",
             "local_conditions"
           ],
+          "background_keywords": [
+            "hazards",
+            "earthscope"
+          ],
           "background_candidates": [
             "social/share/backgrounds/hazards.jpg",
             "social/share/backgrounds/earthscope.jpg"
           ],
           "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
+          "video_candidates": [],
+          "still_candidates": [],
           "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
         },
         "rendering_status": "spec_only",
@@ -124,6 +143,161 @@
         "requires_review_before_publish": true
       },
       "dedupe_key": "social_alert.global_hazard.high"
+    },
+    {
+      "id": "social_alert.cme.watch.daa0ce5407eb",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "cme",
+      "severity": "watch",
+      "asof": "2026-05-03T21:39:15Z",
+      "title": "CME activity is on the board",
+      "subtitle": "Review coronagraph and ENLIL context before sharing.",
+      "caption": "CME activity is on the board. Review coronagraph and ENLIL context before sharing. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "cmes_count": 1.0,
+        "cmes_max_speed_kms": null
+      },
+      "source_refs": [
+        {
+          "label": "CCOR-1",
+          "path": "nasa/ccor1/latest.mp4"
+        },
+        {
+          "label": "ENLIL",
+          "path": "nasa/enlil/latest.mp4"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
+          "title": "CME activity is on the board",
+          "subtitle": "Review coronagraph and ENLIL context before sharing.",
+          "metric_chips": [
+            {
+              "label": "CMEs",
+              "value": "1"
+            },
+            {
+              "label": "Max speed",
+              "value": "--"
+            }
+          ],
+          "footer": "Gaia Eyes - Decode the unseen",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ]
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "CME activity is on the board"
+            },
+            {
+              "role": "signal",
+              "text": "Review coronagraph and ENLIL context before sharing.",
+              "metric_chips": [
+                {
+                  "label": "CMEs",
+                  "value": "1"
+                },
+                {
+                  "label": "Max speed",
+                  "value": "--"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Open Gaia Eyes for the full signal read."
+            }
+          ],
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "cme",
+        "severity": "watch"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.cme.watch"
     }
   ],
   "review_notes": [

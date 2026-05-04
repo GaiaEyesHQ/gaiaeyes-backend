@@ -196,6 +196,7 @@ def build_existing_signal_snapshot(
             "xray_max_class": str(daily.get("xray_max_class") or "").strip() or None,
             "flares_count": daily.get("flares_count"),
             "cmes_count": daily.get("cmes_count"),
+            "cmes_max_speed_kms": daily.get("cmes_max_speed_kms"),
         },
         "space_daily": _jsonable(daily),
         "schumann": _jsonable(schumann),
@@ -240,6 +241,7 @@ def _fetch_space_daily(conn: psycopg.Connection) -> Dict[str, Any]:
                xray_max_class,
                flares_count,
                cmes_count,
+               cmes_max_speed_kms,
                updated_at
           from marts.space_weather_daily
          where day <= (now() at time zone 'utc')::date

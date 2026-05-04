@@ -1,0 +1,103 @@
+{
+  "schema_version": "social_alerts_preview_v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "generated_at": "2026-05-04T03:20:07Z",
+  "source_payload_generated_at": "2026-05-03T22:35:00Z",
+  "rendered_count": 3,
+  "rendered": [
+    {
+      "draft_id": "social_alert.schumann.high.f895c4f3cb50",
+      "category": "schumann",
+      "severity": "high",
+      "title": "Schumann spike detected",
+      "outputs": [
+        {
+          "format": "square_image",
+          "path": "tmp/social_alerts_shadow/previews-schumann-flare-cme/schumann-high-f895c4f3cb50-square.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/schumann/latest/tomsk_share_latest.jpg",
+          "warnings": []
+        },
+        {
+          "format": "story_reel_frame",
+          "path": "tmp/social_alerts_shadow/previews-schumann-flare-cme/schumann-high-f895c4f3cb50-story.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/schumann/latest/tomsk_share_latest.jpg",
+          "video_candidates": [],
+          "warnings": []
+        }
+      ]
+    },
+    {
+      "draft_id": "social_alert.solar_flare.high.d747188738c3",
+      "category": "solar_flare",
+      "severity": "high",
+      "title": "X-class solar flare watch",
+      "outputs": [
+        {
+          "format": "square_image",
+          "path": "tmp/social_alerts_shadow/previews-schumann-flare-cme/solar-flare-high-d747188738c3-square.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/nasa/ccor1/latest.jpg",
+          "warnings": []
+        },
+        {
+          "format": "story_reel_frame",
+          "path": "tmp/social_alerts_shadow/previews-schumann-flare-cme/solar-flare-high-d747188738c3-story.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/nasa/ccor1/latest.jpg",
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "warnings": []
+        }
+      ]
+    },
+    {
+      "draft_id": "social_alert.cme.watch.5e7901351da2",
+      "category": "cme",
+      "severity": "watch",
+      "title": "CME activity is on the board",
+      "outputs": [
+        {
+          "format": "square_image",
+          "path": "tmp/social_alerts_shadow/previews-schumann-flare-cme/cme-watch-5e7901351da2-square.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/nasa/ccor1/latest.jpg",
+          "warnings": []
+        },
+        {
+          "format": "story_reel_frame",
+          "path": "tmp/social_alerts_shadow/previews-schumann-flare-cme/cme-watch-5e7901351da2-story.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/nasa/ccor1/latest.jpg",
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "warnings": []
+        }
+      ]
+    }
+  ]
+}

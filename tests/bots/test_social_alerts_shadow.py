@@ -28,6 +28,8 @@ def test_build_shadow_payload_generates_reviewable_drafts_without_publish() -> N
             "space_weather": {
                 "now": {"kp": 5.6, "bz_nt": -8.4, "solar_wind_kms": 575},
                 "xray_max_class": "M5.6",
+                "cmes_count": 1,
+                "cmes_max_speed_kms": 720,
             },
             "schumann": {"zscore_30d": 3.2, "combined": {"f1_hz": 7.91}},
             "local": {
@@ -42,8 +44,8 @@ def test_build_shadow_payload_generates_reviewable_drafts_without_publish() -> N
     assert payload["schema_version"] == "social_alerts_shadow_v1"
     assert payload["mode"] == "shadow"
     assert payload["auto_publish"] is False
-    assert payload["draft_count"] >= 4
-    assert {"geomagnetic", "solar_flare", "schumann", "earthquake"} <= _categories(payload)
+    assert payload["draft_count"] >= 5
+    assert {"geomagnetic", "solar_flare", "cme", "schumann", "earthquake"} <= _categories(payload)
     assert "air_quality" not in _categories(payload)
     assert "pollen" not in _categories(payload)
 
@@ -94,14 +96,51 @@ def test_background_candidates_reuse_viral_bot_picker(monkeypatch) -> None:
     payload = build_shadow_payload({"space_weather": {"now": {"kp": 3.5}}})
     draft = payload["drafts"][0]
 
-    assert draft["overlay_spec"]["square_image"]["background_candidates"][:2] == [
-        "media_repo:backgrounds/square/picked.jpg",
-        "media_repo:backgrounds/tall/picked.jpg",
+    assert draft["overlay_spec"]["square_image"]["background_candidates"][:4] == [
+        "social/share/backgrounds/space_weather.jpg",
+        "social/share/backgrounds/kp.jpg",
+        "social/share/backgrounds/bz.jpg",
+        "social/share/backgrounds/solar_wind.jpg",
     ]
-    assert (
-        draft["overlay_spec"]["square_image"]["background_source"]
-        == "bots.earthscope_post.gaia_eyes_viral_bot._choose_background"
+    assert "media_repo:backgrounds/square/picked.jpg" in draft["overlay_spec"]["square_image"]["background_candidates"]
+    assert "media_repo:backgrounds/tall/picked.jpg" in draft["overlay_spec"]["square_image"]["background_candidates"]
+    assert draft["overlay_spec"]["square_image"]["background_keywords"] == [
+        "space_weather",
+        "kp",
+        "bz",
+        "solar_wind",
+    ]
+    assert draft["overlay_spec"]["square_image"]["visual_style"]["layout"] == "background_image_with_flowing_pill_blocks"
+    assert draft["overlay_spec"]["square_image"]["background_source"] == (
+        "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py"
     )
+
+
+def test_known_media_assets_are_attached_to_reel_specs() -> None:
+    payload = build_shadow_payload(
+        {
+            "space_weather": {"xray_max_class": "X1.2", "cmes_count": 1, "cmes_max_speed_kms": 720},
+            "schumann": {"zscore_30d": 3.2, "combined": {"f1_hz": 7.91}},
+        }
+    )
+
+    drafts = {draft["category"]: draft for draft in payload["drafts"]}
+    flare_reel = drafts["solar_flare"]["overlay_spec"]["story_reel"]
+    cme_reel = drafts["cme"]["overlay_spec"]["story_reel"]
+    schumann_square = drafts["schumann"]["overlay_spec"]["square_image"]
+
+    assert flare_reel["video_candidates"] == ["nasa/ccor1/latest.mp4", "nasa/enlil/latest.mp4"]
+    assert cme_reel["video_candidates"] == ["nasa/ccor1/latest.mp4", "nasa/enlil/latest.mp4"]
+    assert "nasa/ccor1/latest.jpg" in flare_reel["still_candidates"]
+    assert "nasa/enlil/latest.jpg" in cme_reel["still_candidates"]
+    assert schumann_square["still_candidates"] == [
+        "schumann/latest/tomsk_share_latest.jpg",
+        "social/earthscope/latest/tomsk_share_latest.jpg",
+    ]
+    assert schumann_square["background_candidates"][:2] == [
+        "social/share/backgrounds/schumann.jpg",
+        "social/share/backgrounds/earthscope.jpg",
+    ]
 
 
 def test_write_shadow_payload_writes_json(tmp_path: Path) -> None:
@@ -133,4 +172,7 @@ def test_review_markdown_is_human_scannable(tmp_path: Path) -> None:
 
     out_path = write_shadow_review_markdown(payload, tmp_path / "social-alerts.md")
     assert out_path.exists()
-    assert "Background candidates:" in out_path.read_text(encoding="utf-8")
+    written = out_path.read_text(encoding="utf-8")
+    assert "Background candidates:" in written
+    assert "Background keywords:" in written
+    assert "Visual style:" in written

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
@@ -12,6 +13,33 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 CTA = "Open Gaia Eyes for the full signal read."
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
+SOCIAL_BACKGROUND_PREFIX = "social/share/backgrounds"
+VISUAL_STYLE = {
+    "layout": "background_image_with_flowing_pill_blocks",
+    "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style.",
+}
+BACKGROUND_KEYWORDS = {
+    "geomagnetic": ["space_weather", "kp", "bz", "solar_wind"],
+    "solar_flare": ["solar_flare", "space_weather"],
+    "cme": ["cme", "space_weather", "solar_wind"],
+    "schumann": ["schumann", "earthscope"],
+    "earthquake": ["earthquake", "hazards"],
+    "global_hazard": ["hazards", "earthscope"],
+}
+MEDIA_ASSETS = {
+    "solar_flare": {
+        "videos": ["nasa/ccor1/latest.mp4", "nasa/enlil/latest.mp4"],
+        "stills": ["nasa/ccor1/latest.jpg", "nasa/enlil/latest.jpg", "nasa/aia_304/latest.jpg"],
+    },
+    "cme": {
+        "videos": ["nasa/ccor1/latest.mp4", "nasa/enlil/latest.mp4"],
+        "stills": ["nasa/ccor1/latest.jpg", "nasa/enlil/latest.jpg"],
+    },
+    "schumann": {
+        "videos": [],
+        "stills": ["schumann/latest/tomsk_share_latest.jpg", "social/earthscope/latest/tomsk_share_latest.jpg"],
+    },
+}
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -93,22 +121,39 @@ def _source_ref(label: str, path: str) -> Dict[str, str]:
 
 
 def _viral_background_candidate(kind: str) -> Optional[str]:
-    try:
-        from bots.earthscope_post.gaia_eyes_viral_bot import MEDIA_REPO_PATH, _choose_background
+    media_roots = [
+        Path(os.getenv("MEDIA_REPO_PATH", "/Users/jenniferobrien/Documents/gaiaeyes-media")).expanduser(),
+        Path(__file__).resolve().parents[2] / "gaiaeyes-media",
+    ]
+    subdir = "wide"
+    if kind == "square":
+        subdir = "square"
+    elif kind == "tall":
+        subdir = "tall"
+    for media_root in media_roots:
+        base = media_root / "backgrounds" / subdir
+        if not base.exists():
+            continue
+        files = sorted(path for path in base.glob("*.*") if path.suffix.lower() in {".jpg", ".jpeg", ".png"})
+        if not files:
+            continue
+        try:
+            return f"media_repo:{files[0].relative_to(media_root).as_posix()}"
+        except Exception:
+            return str(files[0])
 
-        path = _choose_background(None, kind=kind)
-    except Exception:
-        return None
-    if path is None:
-        return None
-    try:
-        return f"media_repo:{path.relative_to(MEDIA_REPO_PATH).as_posix()}"
-    except Exception:
-        return str(path)
+    return None
 
 
-def _social_background_candidates(fallbacks: Sequence[str]) -> List[str]:
+def _background_paths_for_keywords(keywords: Sequence[str]) -> List[str]:
+    return [f"{SOCIAL_BACKGROUND_PREFIX}/{keyword}.jpg" for keyword in keywords]
+
+
+def _social_background_candidates(keywords: Sequence[str], fallbacks: Sequence[str]) -> List[str]:
     candidates: List[str] = []
+    for candidate in _background_paths_for_keywords(keywords):
+        if candidate not in candidates:
+            candidates.append(candidate)
     for kind in ("square", "tall"):
         candidate = _viral_background_candidate(kind)
         if candidate and candidate not in candidates:
@@ -128,30 +173,42 @@ def _base_overlay(
     chips: List[Dict[str, str]],
     theme_keys: List[str],
     background_candidates: List[str],
+    background_keywords: List[str],
+    media_assets: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> Dict[str, Any]:
+    assets = media_assets or {}
+    videos = list(assets.get("videos") or [])
+    stills = list(assets.get("stills") or [])
     return {
         "square_image": {
             "canvas": {"width": 1080, "height": 1080},
             "safe_area": {"left": 96, "right": 96, "top": 104, "bottom": 132},
+            "visual_style": VISUAL_STYLE,
             "title": title,
             "subtitle": subtitle,
             "metric_chips": chips,
             "footer": "Gaia Eyes - Decode the unseen",
             "theme_keys": theme_keys,
+            "background_keywords": background_keywords,
             "background_candidates": background_candidates,
-            "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
+            "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+            "still_candidates": stills,
         },
         "story_reel": {
             "canvas": {"width": 1080, "height": 1920},
             "safe_area": {"left": 92, "right": 92, "top": 220, "bottom": 260},
+            "visual_style": VISUAL_STYLE,
             "frames": [
                 {"role": "hook", "text": title},
                 {"role": "signal", "text": subtitle, "metric_chips": chips},
                 {"role": "cta", "text": CTA},
             ],
             "theme_keys": theme_keys,
+            "background_keywords": background_keywords,
             "background_candidates": background_candidates,
-            "background_source": "bots.earthscope_post.gaia_eyes_viral_bot._choose_background",
+            "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+            "video_candidates": videos,
+            "still_candidates": stills,
             "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled.",
         },
         "rendering_status": "spec_only",
@@ -176,8 +233,11 @@ def _draft(
     background_candidates: List[str],
     source_refs: List[Dict[str, str]],
     asof: Optional[str],
+    background_keywords: Optional[List[str]] = None,
+    media_assets: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> Dict[str, Any]:
     event_id = _event_id(category, severity, metrics)
+    resolved_background_keywords = background_keywords or BACKGROUND_KEYWORDS.get(category, [])
     return {
         "id": event_id,
         "mode": "shadow",
@@ -199,6 +259,8 @@ def _draft(
             chips=chips,
             theme_keys=theme_keys,
             background_candidates=background_candidates,
+            background_keywords=resolved_background_keywords,
+            media_assets=media_assets,
         ),
         "guardrails": {
             "claim_strength": "context_only",
@@ -282,6 +344,25 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
             ],
         )
     ).upper()
+    cmes_count = _first_float(
+        snapshot,
+        [
+            ("space_weather", "cmes_count"),
+            ("space_daily", "cmes_count"),
+            ("cmes", "count_24h"),
+            ("today", "cmes_24h"),
+            ("cmes_count",),
+        ],
+    )
+    cmes_max_speed = _first_float(
+        snapshot,
+        [
+            ("space_weather", "cmes_max_speed_kms"),
+            ("space_daily", "cmes_max_speed_kms"),
+            ("cmes", "max_speed_kms"),
+            ("cmes_max_speed_kms",),
+        ],
+    )
 
     drafts: List[Dict[str, Any]] = []
     geomagnetic_severity: Optional[str] = None
@@ -314,6 +395,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                 ],
                 theme_keys=["geomagnetic", "solar", "space_weather"],
                 background_candidates=_social_background_candidates(
+                    BACKGROUND_KEYWORDS["geomagnetic"],
                     [
                         "nasa/geospace_3h/latest.jpg",
                         "nasa/aia_304/latest.jpg",
@@ -346,12 +428,60 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                 metrics={"xray_max_class": flare_class},
                 chips=[{"label": "Max flare", "value": flare_class}],
                 theme_keys=["solar_flare", "solar", "space_weather"],
-                background_candidates=_social_background_candidates(["nasa/aia_304/latest.jpg", "nasa/lasco_c2/latest.jpg"]),
+                background_candidates=_social_background_candidates(
+                    BACKGROUND_KEYWORDS["solar_flare"],
+                    [
+                        "nasa/ccor1/latest.jpg",
+                        "nasa/enlil/latest.jpg",
+                        "nasa/aia_304/latest.jpg",
+                        "nasa/lasco_c2/latest.jpg",
+                    ],
+                ),
                 source_refs=[
                     _source_ref("GOES X-ray", "space_weather.xray_max_class"),
                     _source_ref("SWPC flare feed", "GOES_XRS_URL"),
                 ],
                 asof=asof,
+                media_assets=MEDIA_ASSETS["solar_flare"],
+            )
+        )
+
+    cme_severity: Optional[str] = None
+    if cmes_count is not None:
+        if cmes_count >= 3:
+            cme_severity = "high"
+        elif cmes_count >= 1:
+            cme_severity = "watch"
+    if cmes_max_speed is not None:
+        if cmes_max_speed >= 1000:
+            cme_severity = "high"
+        elif cmes_max_speed >= 600:
+            cme_severity = cme_severity or "watch"
+    if cme_severity:
+        title = "CME activity is on the board" if cme_severity == "watch" else "CME activity is elevated"
+        subtitle = "Review coronagraph and ENLIL context before sharing."
+        drafts.append(
+            _draft(
+                category="cme",
+                severity=cme_severity,
+                title=title,
+                subtitle=subtitle,
+                metrics={"cmes_count": cmes_count, "cmes_max_speed_kms": cmes_max_speed},
+                chips=[
+                    {"label": "CMEs", "value": _fmt_number(cmes_count, digits=0)},
+                    {"label": "Max speed", "value": _fmt_number(cmes_max_speed, digits=0, suffix=" km/s")},
+                ],
+                theme_keys=["cme", "solar", "space_weather"],
+                background_candidates=_social_background_candidates(
+                    BACKGROUND_KEYWORDS["cme"],
+                    ["nasa/ccor1/latest.jpg", "nasa/enlil/latest.jpg"],
+                ),
+                source_refs=[
+                    _source_ref("CCOR-1", "nasa/ccor1/latest.mp4"),
+                    _source_ref("ENLIL", "nasa/enlil/latest.mp4"),
+                ],
+                asof=asof,
+                media_assets=MEDIA_ASSETS["cme"],
             )
         )
 
@@ -400,7 +530,9 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
         ],
         theme_keys=["schumann", "resonance", "earthscope"],
         background_candidates=_social_background_candidates(
+            BACKGROUND_KEYWORDS["schumann"],
             [
+                "schumann/latest/tomsk_share_latest.jpg",
                 "social/earthscope/latest/tomsk_share_latest.jpg",
                 "social/earthscope/latest/cumiana_share_latest.jpg",
             ]
@@ -410,6 +542,7 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
             _source_ref("Schumann active state", "active_states.schumann.variability_24h"),
         ],
         asof=asof,
+        media_assets=MEDIA_ASSETS["schumann"],
     )
 
 
@@ -453,7 +586,8 @@ def _quake_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optional[D
         ],
         theme_keys=["earthquake", "hazards", "earthscope"],
         background_candidates=_social_background_candidates(
-            ["social/share/backgrounds/earthquake.jpg", "social/share/backgrounds/earthscope.jpg"]
+            BACKGROUND_KEYWORDS["earthquake"],
+            ["social/share/backgrounds/earthquake.jpg", "social/share/backgrounds/earthscope.jpg"],
         ),
         source_refs=[
             _source_ref("USGS earthquakes", "/v1/quakes/events"),
@@ -495,7 +629,8 @@ def _hazard_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optional[
         ],
         theme_keys=["hazards", "earthscope", "local_conditions"],
         background_candidates=_social_background_candidates(
-            ["social/share/backgrounds/hazards.jpg", "social/share/backgrounds/earthscope.jpg"]
+            BACKGROUND_KEYWORDS["global_hazard"],
+            ["social/share/backgrounds/hazards.jpg", "social/share/backgrounds/earthscope.jpg"],
         ),
         source_refs=[
             _source_ref("Global hazards brief", "/v1/hazards/brief"),
@@ -573,7 +708,12 @@ def build_review_markdown(payload: Mapping[str, Any]) -> str:
             continue
         overlay = draft.get("overlay_spec") if isinstance(draft.get("overlay_spec"), Mapping) else {}
         square = overlay.get("square_image") if isinstance(overlay.get("square_image"), Mapping) else {}
+        story = overlay.get("story_reel") if isinstance(overlay.get("story_reel"), Mapping) else {}
         backgrounds = square.get("background_candidates") if isinstance(square.get("background_candidates"), list) else []
+        background_keywords = square.get("background_keywords") if isinstance(square.get("background_keywords"), list) else []
+        stills = square.get("still_candidates") if isinstance(square.get("still_candidates"), list) else []
+        videos = story.get("video_candidates") if isinstance(story.get("video_candidates"), list) else []
+        visual_style = square.get("visual_style") if isinstance(square.get("visual_style"), Mapping) else {}
         metrics = draft.get("metrics") if isinstance(draft.get("metrics"), Mapping) else {}
         sources = draft.get("source_refs") if isinstance(draft.get("source_refs"), list) else []
         lines.extend(
@@ -605,6 +745,33 @@ def build_review_markdown(payload: Mapping[str, Any]) -> str:
                 lines.append(f"- `{candidate}`")
         else:
             lines.append("- `none`: `--`")
+        lines.extend(["", "Background keywords:"])
+        if background_keywords:
+            for keyword in background_keywords:
+                lines.append(f"- `{keyword}`")
+        else:
+            lines.append("- `none`: `--`")
+        lines.extend(["", "Still candidates:"])
+        if stills:
+            for still in stills:
+                lines.append(f"- `{still}`")
+        else:
+            lines.append("- `none`: `--`")
+        lines.extend(["", "Reel video candidates:"])
+        if videos:
+            for video in videos:
+                lines.append(f"- `{video}`")
+        else:
+            lines.append("- `none`: `--`")
+        if visual_style:
+            lines.extend(
+                [
+                    "",
+                    "Visual style:",
+                    f"- Layout: `{visual_style.get('layout') or '--'}`",
+                    f"- Notes: {visual_style.get('notes') or '--'}",
+                ]
+            )
         lines.extend(["", "Sources:"])
         if sources:
             for source in sources:

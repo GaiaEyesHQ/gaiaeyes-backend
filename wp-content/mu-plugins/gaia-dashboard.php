@@ -68,6 +68,7 @@ add_action('wp_enqueue_scripts', function () {
             'magnetosphere' => esc_url_raw(home_url('/magnetosphere/')),
             'aurora' => esc_url_raw(home_url('/aurora-tracker/')),
             'earthquakes' => esc_url_raw(home_url('/earthquakes/')),
+            'localConditions' => esc_url_raw(home_url('/local-conditions/')),
         ],
     ]);
 

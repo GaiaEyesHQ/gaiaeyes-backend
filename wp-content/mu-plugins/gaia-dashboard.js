@@ -4650,6 +4650,7 @@
               <a class="gaia-dashboard__link-card" href="${esc(publicLinks.magnetosphere || "/magnetosphere/")}"><strong>Magnetosphere</strong><small>Shield state, compression, and recent change.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(publicLinks.aurora || "/aurora-tracker/")}"><strong>Aurora</strong><small>Live tracker and viewlines.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(publicLinks.earthquakes || "/earthquakes/")}"><strong>Earthquakes</strong><small>Global quake activity and recent clusters.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(publicLinks.localConditions || "/local-conditions/")}"><strong>Local Conditions</strong><small>ZIP-based weather, air quality, pollen, and forecast context.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(supportUrl)}"><strong>Help Center</strong><small>Support, sync help, billing, and account guidance.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(privacyUrl)}"><strong>Privacy Policy</strong><small>Public privacy disclosures for the app and website.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(termsUrl)}"><strong>Terms of Use</strong><small>Public terms, billing boundaries, and app-use conditions.</small></a>

@@ -1,0 +1,468 @@
+{
+  "schema_version": "social_alerts_shadow_v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "generated_at": "2026-05-03T22:35:00Z",
+  "source_mode": "existing_signal_snapshot",
+  "draft_count": 3,
+  "drafts": [
+    {
+      "id": "social_alert.schumann.high.f895c4f3cb50",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "schumann",
+      "severity": "high",
+      "asof": "2026-05-03T22:30:00Z",
+      "title": "Schumann spike detected",
+      "subtitle": "The resonance feed is moving more than usual; keep the post observational.",
+      "caption": "Schumann spike detected. The resonance feed is moving more than usual; keep the post observational. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "zscore_30d": 3.2,
+        "value_hz": 7.91
+      },
+      "source_refs": [
+        {
+          "label": "Tomsk/Cumiana Schumann",
+          "path": "schumann"
+        },
+        {
+          "label": "Schumann active state",
+          "path": "active_states.schumann.variability_24h"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
+          "title": "Schumann spike detected",
+          "subtitle": "The resonance feed is moving more than usual; keep the post observational.",
+          "metric_chips": [
+            {
+              "label": "Z-score",
+              "value": "3.2"
+            },
+            {
+              "label": "F1",
+              "value": "7.9 Hz"
+            }
+          ],
+          "footer": "Gaia Eyes - Decode the unseen",
+          "theme_keys": [
+            "schumann",
+            "resonance",
+            "earthscope"
+          ],
+          "background_keywords": [
+            "schumann",
+            "earthscope"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/schumann.jpg",
+            "social/share/backgrounds/earthscope.jpg",
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/cumiana_share_latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "still_candidates": [
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg"
+          ]
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "Schumann spike detected"
+            },
+            {
+              "role": "signal",
+              "text": "The resonance feed is moving more than usual; keep the post observational.",
+              "metric_chips": [
+                {
+                  "label": "Z-score",
+                  "value": "3.2"
+                },
+                {
+                  "label": "F1",
+                  "value": "7.9 Hz"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Open Gaia Eyes for the full signal read."
+            }
+          ],
+          "theme_keys": [
+            "schumann",
+            "resonance",
+            "earthscope"
+          ],
+          "background_keywords": [
+            "schumann",
+            "earthscope"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/schumann.jpg",
+            "social/share/backgrounds/earthscope.jpg",
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/cumiana_share_latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "video_candidates": [],
+          "still_candidates": [
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg"
+          ],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "schumann",
+        "severity": "high"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.schumann.high"
+    },
+    {
+      "id": "social_alert.solar_flare.high.d747188738c3",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "solar_flare",
+      "severity": "high",
+      "asof": "2026-05-03T22:30:00Z",
+      "title": "X-class solar flare watch",
+      "subtitle": "The flare signal is notable; review the live solar context before posting.",
+      "caption": "X-class solar flare watch. The flare signal is notable; review the live solar context before posting. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "xray_max_class": "X1.2"
+      },
+      "source_refs": [
+        {
+          "label": "GOES X-ray",
+          "path": "space_weather.xray_max_class"
+        },
+        {
+          "label": "SWPC flare feed",
+          "path": "GOES_XRS_URL"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
+          "title": "X-class solar flare watch",
+          "subtitle": "The flare signal is notable; review the live solar context before posting.",
+          "metric_chips": [
+            {
+              "label": "Max flare",
+              "value": "X1.2"
+            }
+          ],
+          "footer": "Gaia Eyes - Decode the unseen",
+          "theme_keys": [
+            "solar_flare",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "solar_flare",
+            "space_weather"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/solar_flare.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "nasa/lasco_c2/latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg"
+          ]
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "X-class solar flare watch"
+            },
+            {
+              "role": "signal",
+              "text": "The flare signal is notable; review the live solar context before posting.",
+              "metric_chips": [
+                {
+                  "label": "Max flare",
+                  "value": "X1.2"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Open Gaia Eyes for the full signal read."
+            }
+          ],
+          "theme_keys": [
+            "solar_flare",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "solar_flare",
+            "space_weather"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/solar_flare.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "nasa/lasco_c2/latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg"
+          ],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "solar_flare",
+        "severity": "high"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.solar_flare.high"
+    },
+    {
+      "id": "social_alert.cme.watch.5e7901351da2",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "cme",
+      "severity": "watch",
+      "asof": "2026-05-03T22:30:00Z",
+      "title": "CME activity is on the board",
+      "subtitle": "Review coronagraph and ENLIL context before sharing.",
+      "caption": "CME activity is on the board. Review coronagraph and ENLIL context before sharing. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "cmes_count": 1.0,
+        "cmes_max_speed_kms": 720.0
+      },
+      "source_refs": [
+        {
+          "label": "CCOR-1",
+          "path": "nasa/ccor1/latest.mp4"
+        },
+        {
+          "label": "ENLIL",
+          "path": "nasa/enlil/latest.mp4"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
+          "title": "CME activity is on the board",
+          "subtitle": "Review coronagraph and ENLIL context before sharing.",
+          "metric_chips": [
+            {
+              "label": "CMEs",
+              "value": "1"
+            },
+            {
+              "label": "Max speed",
+              "value": "720 km/s"
+            }
+          ],
+          "footer": "Gaia Eyes - Decode the unseen",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ]
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "background_image_with_flowing_pill_blocks",
+            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "CME activity is on the board"
+            },
+            {
+              "role": "signal",
+              "text": "Review coronagraph and ENLIL context before sharing.",
+              "metric_chips": [
+                {
+                  "label": "CMEs",
+                  "value": "1"
+                },
+                {
+                  "label": "Max speed",
+                  "value": "720 km/s"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Open Gaia Eyes for the full signal read."
+            }
+          ],
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "cme",
+        "severity": "watch"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.cme.watch"
+    }
+  ],
+  "review_notes": [
+    "Human review is required before any social publish.",
+    "Payload is text, metadata, and overlay specs only; no media rendering or platform posting is performed.",
+    "Copy intentionally avoids medical causality and symptom prediction."
+  ]
+}

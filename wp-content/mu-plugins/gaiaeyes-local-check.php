@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: Gaia Eyes – Local Health Check
- * Description: Renders a local health snapshot from the backend /v1/local/check endpoint.
+ * Plugin Name: Gaia Eyes – Local Conditions
+ * Description: Renders local weather, air quality, allergen, moon, and forecast context from /v1/local/check.
  * Version: 1.0.0
  */
 
@@ -40,6 +40,123 @@ function gaiaeyes_trend_label($t) {
   if ($t === 'falling') return '↓ falling';
   if ($t === 'steady') return '→ steady';
   return $t ?: '—';
+}
+
+function gaiaeyes_local_labelize($value) {
+  $text = trim(str_replace(['_', '-'], ' ', (string)$value));
+  return $text ? ucwords($text) : '—';
+}
+
+function gaiaeyes_local_allergen_state_label($level, $fallback = '') {
+  $raw = strtolower(trim((string)$level));
+  if ($raw === 'very_high') return 'Very high';
+  if ($raw === 'high') return 'High';
+  if ($raw === 'moderate') return 'Elevated';
+  if ($raw === 'low') return 'Low';
+  if ($raw === 'quiet') return 'Quiet';
+  return $fallback ? (string)$fallback : gaiaeyes_local_labelize($level);
+}
+
+function gaiaeyes_local_allergen_type_label($type) {
+  $raw = strtolower(trim((string)$type));
+  if ($raw === 'tree') return 'Tree pollen';
+  if ($raw === 'grass') return 'Grass pollen';
+  if ($raw === 'weed') return 'Weed pollen';
+  if ($raw === 'mold') return 'Mold';
+  return $raw ? gaiaeyes_local_labelize($raw) : '—';
+}
+
+function gaiaeyes_local_level_class($level) {
+  $raw = strtolower(trim((string)$level));
+  if (in_array($raw, ['very_high', 'high', 'alert', 'unhealthy'], true)) return 'ge-pill--alert';
+  if (in_array($raw, ['moderate', 'elevated', 'usg'], true)) return 'ge-pill--elevated';
+  if (in_array($raw, ['low', 'quiet', 'good'], true)) return 'ge-pill--ok';
+  return '';
+}
+
+function gaiaeyes_local_number($value, $decimals = 1) {
+  if ($value === null || $value === '' || $value === false || !is_numeric($value)) return '—';
+  return number_format_i18n((float)$value, $decimals);
+}
+
+function gaiaeyes_local_percent($value) {
+  if ($value === null || $value === '' || $value === false || !is_numeric($value)) return '—';
+  return number_format_i18n((float)$value, 0) . '%';
+}
+
+function gaiaeyes_local_c_to_f($c) {
+  if ($c === null || $c === '' || $c === false || !is_numeric($c)) return null;
+  return ((float)$c * 9 / 5) + 32;
+}
+
+function gaiaeyes_local_temp_range($high_c, $low_c) {
+  $high_f = gaiaeyes_local_c_to_f($high_c);
+  $low_f = gaiaeyes_local_c_to_f($low_c);
+  if ($high_f === null && $low_f === null) return '—';
+  if ($high_f !== null && $low_f !== null) {
+    return number_format_i18n($low_f, 0) . '–' . number_format_i18n($high_f, 0) . ' °F';
+  }
+  $only = $high_f !== null ? $high_f : $low_f;
+  return number_format_i18n($only, 0) . ' °F';
+}
+
+function gaiaeyes_local_day_label($day) {
+  $ts = strtotime((string)$day);
+  if (!$ts) return 'Forecast';
+  $today = wp_date('Y-m-d');
+  $date = wp_date('Y-m-d', $ts);
+  if ($date === $today) return 'Today';
+  if ($date === wp_date('Y-m-d', strtotime('+1 day'))) return 'Tomorrow';
+  return wp_date('D, M j', $ts);
+}
+
+function gaiaeyes_local_forecast_has_pollen($day) {
+  if (!is_array($day)) return false;
+  if (!empty($day['pollen_overall_level']) || isset($day['pollen_overall_index'])) return true;
+  foreach (['tree', 'grass', 'weed', 'mold'] as $type) {
+    if (!empty($day['pollen_' . $type . '_level']) || isset($day['pollen_' . $type . '_index'])) return true;
+  }
+  return false;
+}
+
+function gaiaeyes_local_forecast_pollen_value($day) {
+  if (!is_array($day)) return '—';
+  $level = $day['pollen_overall_level'] ?? '';
+  $index = $day['pollen_overall_index'] ?? null;
+  $primary = $day['pollen_primary_type'] ?? '';
+  if (!$level && $primary) {
+    $key = 'pollen_' . strtolower((string)$primary) . '_level';
+    $index_key = 'pollen_' . strtolower((string)$primary) . '_index';
+    $level = $day[$key] ?? '';
+    $index = $day[$index_key] ?? $index;
+  }
+  $label = $level ? gaiaeyes_local_allergen_state_label($level) : 'Index';
+  $type = gaiaeyes_local_allergen_type_label($primary);
+  if ($type !== '—') {
+    $label .= ' · ' . $type;
+  }
+  if (is_numeric($index)) {
+    $label .= ' ' . number_format_i18n((float)$index, 1);
+  }
+  return $label;
+}
+
+function gaiaeyes_local_speed_label($value) {
+  if ($value === null || $value === '' || $value === false || !is_numeric($value)) return '—';
+  return number_format_i18n((float)$value, 1) . ' m/s';
+}
+
+function gaiaeyes_local_filter_forecast_days($rows) {
+  if (!is_array($rows)) return [];
+  $today = wp_date('Y-m-d');
+  $filtered = [];
+  foreach ($rows as $row) {
+    if (!is_array($row)) continue;
+    $day = isset($row['day']) ? substr((string)$row['day'], 0, 10) : '';
+    if ($day && $day < $today) continue;
+    $filtered[] = $row;
+  }
+  return $filtered ?: array_values(array_filter($rows, 'is_array'));
 }
 
 function gaiaeyes_resolve_zip_default($atts_zip) {
@@ -102,6 +219,8 @@ add_shortcode('gaia_local_check', function ($atts) {
   $weather = $payload['weather'] ?? [];
   $air = $payload['air'] ?? [];
   $moon = $payload['moon'] ?? [];
+  $allergens = is_array($payload['allergens'] ?? null) ? $payload['allergens'] : [];
+  $forecast_days = array_slice(gaiaeyes_local_filter_forecast_days($payload['forecast_daily'] ?? []), 0, 7);
 
   // Optional derived health signals from backend (with client-side fallback)
   $health           = $payload['health'] ?? [];
@@ -267,15 +386,45 @@ add_shortcode('gaia_local_check', function ($atts) {
     ? number_format_i18n((float)$moon['illum'] * 100, 0) . ' %'
     : '—';
 
+  $allergen_state_raw = $allergens['overall_level'] ?? ($allergens['state'] ?? null);
+  $allergen_state = gaiaeyes_local_allergen_state_label(
+    $allergen_state_raw,
+    $allergens['overall_label'] ?? ($allergens['state_label'] ?? '')
+  );
+  $allergen_primary = $allergens['primary_label'] ?? gaiaeyes_local_allergen_type_label($allergens['primary_type'] ?? '');
+  $allergen_index = isset($allergens['overall_index']) && is_numeric($allergens['overall_index'])
+    ? number_format_i18n((float)$allergens['overall_index'], 1)
+    : '—';
+  $has_allergens = !empty($allergens) && (
+    !empty($allergens['overall_level']) ||
+    !empty($allergens['state']) ||
+    !empty($allergens['primary_type']) ||
+    isset($allergens['overall_index']) ||
+    !empty($allergens['tree_level']) ||
+    !empty($allergens['grass_level']) ||
+    !empty($allergens['weed_level']) ||
+    !empty($allergens['mold_level'])
+  );
+  $pollen_types = [
+    ['Tree', $allergens['tree_level'] ?? null, $allergens['tree_index'] ?? null],
+    ['Grass', $allergens['grass_level'] ?? null, $allergens['grass_index'] ?? null],
+    ['Weed', $allergens['weed_level'] ?? null, $allergens['weed_index'] ?? null],
+    ['Mold', $allergens['mold_level'] ?? null, $allergens['mold_index'] ?? null],
+  ];
+
   ob_start();
   ?>
-  <section class="ge-panel ge-local-health">
-    <h3>
-      Local Health (<?php echo esc_html($zip); ?>)
+  <section class="ge-panel ge-local-health ge-local-conditions">
+    <header class="ge-local-hero">
+      <div>
+        <span class="ge-local-eyebrow">Local Conditions</span>
+        <h3>ZIP <?php echo esc_html($zip); ?></h3>
+        <p>Weather, air quality, allergen, moon, and forecast context for your area. In the app, members can save this local context into daily gauges, drivers, Outlook, and body logs.</p>
+      </div>
       <?php if ($asof_display) : ?>
-        <small class="ge-asof"><?php echo esc_html($asof_label); ?> <?php echo esc_html($asof_display); ?></small>
+        <span class="ge-asof"><?php echo esc_html($asof_label); ?> <?php echo esc_html($asof_display); ?></span>
       <?php endif; ?>
-    </h3>
+    </header>
     <?php if (!empty($health_pills) || !empty($health_messages)) : ?>
       <div class="ge-pills" role="status" aria-label="Local health signals">
         <?php foreach ((array)$health_pills as $f):
@@ -297,7 +446,7 @@ add_shortcode('gaia_local_check', function ($atts) {
         </div>
       <?php endif; ?>
     <?php endif; ?>
-    <div class="ge-grid">
+    <div class="ge-grid ge-grid--summary">
       <div class="ge-card">
         <h4>Weather</h4>
         <div class="ge-row"><span>Temp</span><strong><?php echo esc_html($temp); ?></strong></div>
@@ -320,25 +469,102 @@ add_shortcode('gaia_local_check', function ($atts) {
         <div class="ge-row"><span>Category</span><strong><?php echo esc_html($aqi_category); ?></strong></div>
         <div class="ge-row"><span>Pollutant</span><strong><?php echo esc_html($pollutant); ?></strong></div>
       </div>
+      <?php if ($has_allergens) : ?>
+        <div class="ge-card ge-card--allergens">
+          <h4>Allergens</h4>
+          <div class="ge-row"><span>Overall</span><strong><?php echo esc_html($allergen_state); ?></strong></div>
+          <div class="ge-row"><span>Primary</span><strong><?php echo esc_html($allergen_primary); ?></strong></div>
+          <div class="ge-row"><span>Index</span><strong><?php echo esc_html($allergen_index); ?></strong></div>
+          <div class="ge-chip-row" aria-label="Pollen by type">
+            <?php foreach ($pollen_types as $pollen_row) :
+              $pollen_label = $pollen_row[0];
+              $pollen_level = $pollen_row[1];
+              $pollen_index = $pollen_row[2];
+              if (!$pollen_level && !is_numeric($pollen_index)) continue;
+              $pollen_value = gaiaeyes_local_allergen_state_label($pollen_level);
+              if (is_numeric($pollen_index)) {
+                $pollen_value .= ' ' . number_format_i18n((float)$pollen_index, 1);
+              }
+            ?>
+              <span class="ge-microchip <?php echo esc_attr(gaiaeyes_local_level_class($pollen_level)); ?>">
+                <span><?php echo esc_html($pollen_label); ?></span>
+                <strong><?php echo esc_html($pollen_value); ?></strong>
+              </span>
+            <?php endforeach; ?>
+          </div>
+        </div>
+      <?php endif; ?>
       <div class="ge-card">
         <h4>Moon</h4>
         <div class="ge-row"><span>Phase</span><strong><?php echo esc_html($moon_phase); ?></strong></div>
         <div class="ge-row"><span>Illumination</span><strong><?php echo esc_html($moon_illum); ?></strong></div>
       </div>
     </div>
+    <?php if (!empty($forecast_days)) : ?>
+      <article class="ge-card ge-forecast-card">
+        <div class="ge-card-head">
+          <div>
+            <span class="ge-local-eyebrow">Forecast</span>
+            <h4>7-Day Local Forecast</h4>
+          </div>
+          <span class="ge-asof">Members use this as local driver context</span>
+        </div>
+        <div class="ge-forecast-list">
+          <?php foreach ($forecast_days as $day) :
+            $condition = $day['condition_summary'] ?? gaiaeyes_local_labelize($day['condition_code'] ?? 'Forecast');
+            $pollen_level_for_class = $day['pollen_overall_level'] ?? '';
+          ?>
+            <section class="ge-forecast-day">
+              <div class="ge-forecast-main">
+                <div>
+                  <strong><?php echo esc_html(gaiaeyes_local_day_label($day['day'] ?? '')); ?></strong>
+                  <span><?php echo esc_html($condition); ?></span>
+                </div>
+                <b><?php echo esc_html(gaiaeyes_local_temp_range($day['temp_high_c'] ?? null, $day['temp_low_c'] ?? null)); ?></b>
+              </div>
+              <div class="ge-forecast-chips">
+                <span class="ge-forecast-chip"><span>Humidity</span><strong><?php echo esc_html(gaiaeyes_local_percent($day['humidity_avg'] ?? null)); ?></strong></span>
+                <span class="ge-forecast-chip"><span>Precip</span><strong><?php echo esc_html(gaiaeyes_local_percent($day['precip_probability'] ?? null)); ?></strong></span>
+                <span class="ge-forecast-chip"><span>Wind</span><strong><?php echo esc_html(gaiaeyes_local_speed_label($day['wind_speed'] ?? null)); ?></strong></span>
+                <?php if (gaiaeyes_local_forecast_has_pollen($day)) : ?>
+                  <span class="ge-forecast-chip <?php echo esc_attr(gaiaeyes_local_level_class($pollen_level_for_class)); ?>"><span>Allergens</span><strong><?php echo esc_html(gaiaeyes_local_forecast_pollen_value($day)); ?></strong></span>
+                <?php endif; ?>
+                <?php if (isset($day['aqi_forecast']) && is_numeric($day['aqi_forecast'])) : ?>
+                  <span class="ge-forecast-chip"><span>AQI</span><strong><?php echo esc_html(number_format_i18n((float)$day['aqi_forecast'], 0)); ?></strong></span>
+                <?php endif; ?>
+              </div>
+            </section>
+          <?php endforeach; ?>
+        </div>
+      </article>
+    <?php endif; ?>
+    <div class="ge-local-upgrade">
+      <strong>Want this tied to your own patterns?</strong>
+      <p>Gaia Eyes members can use local conditions alongside HealthKit context, symptoms, gauges, drivers, and Outlook. The app looks for patterns; it does not diagnose or prove a signal caused a symptom.</p>
+      <a href="<?php echo esc_url(home_url('/app/')); ?>">Get the app</a>
+    </div>
     <style>
+      .ge-local-health { display:grid; gap:16px; border-radius:18px; padding:18px; background:linear-gradient(180deg,rgba(13,21,28,.96),rgba(11,14,20,.98)); color:#edf6f8; border:1px solid rgba(255,255,255,.1); }
+      .ge-local-health .ge-local-hero { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+      .ge-local-health .ge-local-hero h3 { margin:2px 0 6px; font-size:clamp(24px,3vw,34px); line-height:1.1; }
+      .ge-local-health .ge-local-hero p { margin:0; max-width:760px; color:#b7c6cf; line-height:1.55; }
+      .ge-local-health .ge-local-eyebrow { display:block; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#8bc6d8; font-weight:800; }
       .ge-local-health .ge-grid { display: grid; gap: 12px; }
-      @media (min-width: 900px) { .ge-local-health .ge-grid { grid-template-columns: repeat(3, 1fr); } }
-      .ge-local-health .ge-card { padding: 16px; border-radius: 12px; background: rgba(20, 20, 20, 0.6); }
-      .ge-local-health .ge-row { display: flex; justify-content: space-between; margin-top: 6px; }
-      .ge-local-health h4 { margin-bottom: 8px; }
-      .ge-local-health .ge-asof { font-weight: normal; font-size: 0.85em; margin-left: 8px; opacity: 0.8; }
-      .ge-local-health .ge-pills { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px; }
+      @media (min-width: 780px) { .ge-local-health .ge-grid--summary { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+      @media (min-width: 1100px) { .ge-local-health .ge-grid--summary { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+      .ge-local-health .ge-card { padding: 16px; border-radius: 14px; background: rgba(255,255,255,0.055); border:1px solid rgba(255,255,255,.08); box-shadow:0 18px 34px rgba(0,0,0,.18); }
+      .ge-local-health .ge-card h4 { margin:0 0 10px; font-size:17px; line-height:1.2; }
+      .ge-local-health .ge-card-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; flex-wrap:wrap; margin-bottom:12px; }
+      .ge-local-health .ge-card-head h4 { margin:2px 0 0; }
+      .ge-local-health .ge-row { display: flex; justify-content: space-between; gap:14px; margin-top: 8px; color:#aebdc9; font-size:14px; }
+      .ge-local-health .ge-row strong { color:#fff; text-align:right; }
+      .ge-local-health .ge-asof { display:inline-flex; align-items:center; border:1px solid rgba(139,198,216,.22); border-radius:999px; padding:5px 10px; color:#b7d9e4; font-weight:700; font-size:12px; white-space:nowrap; }
+      .ge-local-health .ge-pills { display:flex; flex-wrap:wrap; gap:8px; margin:0; }
       .ge-local-health .ge-pill {
-        padding: 4px 10px;
+        padding: 6px 10px;
         border-radius: 999px;
-        font-weight: 600;
-        font-size: 0.85em;
+        font-weight: 700;
+        font-size: 12px;
         background: rgba(255,255,255,0.08);
         border: 1px solid rgba(255,255,255,0.15);
       }
@@ -356,8 +582,25 @@ add_shortcode('gaia_local_check', function ($atts) {
         background: rgba(60,179,113,0.18);
         border-color: rgba(60,179,113,0.35);
       }
-      .ge-local-health .ge-mini-hints { font-size: .88em; opacity: .9; margin-bottom: 6px; }
-      .ge-local-health .ge-mini-hints .ge-hint { margin-top: 2px; }
+      .ge-local-health .ge-mini-hints { display:grid; gap:6px; font-size: 13px; color:#d4e0e6; }
+      .ge-local-health .ge-mini-hints .ge-hint { padding:10px 12px; border-radius:12px; background:rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.08); }
+      .ge-local-health .ge-chip-row,.ge-local-health .ge-forecast-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+      .ge-local-health .ge-microchip,.ge-local-health .ge-forecast-chip { display:inline-flex; align-items:baseline; gap:7px; padding:7px 9px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:#dbe7ed; font-size:12px; }
+      .ge-local-health .ge-microchip span,.ge-local-health .ge-forecast-chip span { color:#9fb0bb; }
+      .ge-local-health .ge-microchip strong,.ge-local-health .ge-forecast-chip strong { color:#fff; }
+      .ge-local-health .ge-forecast-card { display:grid; gap:12px; }
+      .ge-local-health .ge-forecast-list { display:grid; gap:10px; }
+      @media (min-width: 900px) { .ge-local-health .ge-forecast-list { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+      .ge-local-health .ge-forecast-day { padding:13px; border-radius:13px; background:rgba(8,12,18,.48); border:1px solid rgba(255,255,255,.08); }
+      .ge-local-health .ge-forecast-main { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+      .ge-local-health .ge-forecast-main div { display:flex; flex-direction:column; gap:3px; }
+      .ge-local-health .ge-forecast-main strong { color:#fff; }
+      .ge-local-health .ge-forecast-main span { color:#aebdc9; font-size:13px; line-height:1.35; }
+      .ge-local-health .ge-forecast-main b { color:#fff; white-space:nowrap; font-size:14px; }
+      .ge-local-health .ge-local-upgrade { display:flex; justify-content:space-between; gap:14px; align-items:center; flex-wrap:wrap; padding:14px; border-radius:14px; background:rgba(48,112,147,.14); border:1px solid rgba(139,198,216,.18); }
+      .ge-local-health .ge-local-upgrade strong { color:#fff; }
+      .ge-local-health .ge-local-upgrade p { flex:1 1 420px; margin:0; color:#c3d1d8; line-height:1.5; font-size:14px; }
+      .ge-local-health .ge-local-upgrade a { display:inline-flex; align-items:center; justify-content:center; min-height:38px; padding:0 15px; border-radius:999px; background:#2b8cff; color:#fff; font-weight:800; text-decoration:none; }
     </style>
   </section>
   <?php
