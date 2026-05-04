@@ -459,6 +459,12 @@ if (!function_exists('gaiaeyes_schumann_dashboard_render')) {
             <div class="ge-sch-loading" aria-live="polite">Loading Schumann dashboard...</div>
         </section>
         <?php
+        if (function_exists('gaiaeyes_public_member_cta')) {
+            echo gaiaeyes_public_member_cta(
+                'Schumann Resonance',
+                'Members can compare resonance windows with their own sleep, HRV, symptoms, gauges, patterns, and Outlook. Gaia Eyes treats this as timing context, not proof of cause.'
+            );
+        }
         return ob_get_clean();
     }
 }
