@@ -73,6 +73,7 @@ add_shortcode('ge_checkout', function ($atts) {
         </div>
         <div class="ge-checkout-msg" aria-live="polite" style="margin-top:8px;"></div>
         <div class="ge-checkout-help">
+            <a href="<?php echo esc_url(home_url('/app/')); ?>">Get the app</a>
             <a href="<?php echo esc_url(home_url('/support/#need-help-with-billing')); ?>">Billing help</a>
             <a href="<?php echo esc_url(home_url('/support/#restore-purchases')); ?>">Restore access</a>
             <a href="<?php echo esc_url(home_url('/support/#free-vs-plus')); ?>">Free vs Plus</a>
@@ -84,20 +85,22 @@ add_shortcode('ge_checkout', function ($atts) {
 
 add_shortcode('ge_checkout_plans', function ($atts) {
     $a = shortcode_atts([
-        'title' => 'Choose your plan',
-        'subtitle' => 'Access premium insights and personalized guidance.',
+        'title' => 'Choose Gaia Eyes access',
+        'subtitle' => 'Use the iPhone app for App Store purchases, or subscribe on the web for Stripe-managed website access.',
+        'app_url' => home_url('/app/'),
+        'billing_note' => 'iOS subscriptions are managed through Apple. Web checkout is managed through Stripe. Use the same Gaia Eyes email and password when you want app and website access tied together.',
         'plus_label' => 'Plus',
         'pro_label' => 'Pro',
         'plus_badge' => 'Most popular',
         'pro_badge' => 'Advanced',
-        'plus_desc' => 'Daily EarthScope insights with a ZIP-tuned Health Overview, plus space + local weather signals, alert badges, and web/app access.',
-        'pro_desc' => 'Everything in Plus, plus HealthKit device integration, in-app health checks, deeper trends, KP/Bz/Schumann gauges, multi-day outlooks, and priority event alerts across web and app.',
+        'plus_desc' => 'Personalized gauges, drivers, Outlook, pattern history, ZIP-based local context, and optional Apple Health context in the app.',
+        'pro_desc' => 'Everything in Plus, plus deeper trend views, expanded driver detail, and early access to advanced member surfaces when available.',
         'plus_price_monthly' => '$4.99 / month',
         'plus_price_yearly' => '$49.99 / year',
         'pro_price_monthly' => '$9.99 / month',
         'pro_price_yearly' => '$99.99 / year',
-        'plus_features' => 'Daily personalized insights|Space weather + health overlays|Priority support',
-        'pro_features' => 'All Plus features|Advanced trend analytics|Early access to new features',
+        'plus_features' => 'Mission Control gauges and daily context|Personal drivers and Outlook|Patterns, symptoms, and body-context history|Local conditions, allergens, AQI, pressure, and space-weather context',
+        'pro_features' => 'All Plus features|Deeper trend and driver review|Priority event alerts where supported|Early access to advanced member views',
         'plus_label_monthly' => 'Get Plus (Monthly)',
         'plus_label_yearly' => 'Get Plus (Yearly)',
         'pro_label_monthly' => 'Get Pro (Monthly)',
@@ -113,6 +116,10 @@ add_shortcode('ge_checkout_plans', function ($atts) {
         <header class="ge-plans-header">
             <h2 class="ge-plans-title"><?php echo esc_html($a['title']); ?></h2>
             <p class="ge-plans-subtitle"><?php echo esc_html($a['subtitle']); ?></p>
+            <div class="ge-plans-channel-note">
+                <span><?php echo esc_html($a['billing_note']); ?></span>
+                <a href="<?php echo esc_url($a['app_url']); ?>">Get the iPhone app</a>
+            </div>
         </header>
         <div class="ge-plan-grid">
             <article class="ge-plan-card ge-plan-card--plus">
@@ -185,6 +192,7 @@ add_shortcode('ge_checkout_plans', function ($atts) {
         </div>
         <div class="ge-plans-support">
             <span>Need billing help before checkout?</span>
+            <a href="<?php echo esc_url($a['app_url']); ?>">Get the app</a>
             <a href="<?php echo esc_url(home_url('/support/#need-help-with-billing')); ?>">Billing help</a>
             <a href="<?php echo esc_url(home_url('/support/#restore-purchases')); ?>">Restore access</a>
             <a href="<?php echo esc_url(home_url('/support/#what-gaia-eyes-does')); ?>">Understanding Gaia Eyes</a>
@@ -211,6 +219,9 @@ add_action('wp_enqueue_scripts', function () {
         .ge-plans-header { text-align: center; margin-bottom: 24px; }
         .ge-plans-title { font-size: 32px; margin: 0 0 8px; }
         .ge-plans-subtitle { margin: 0; color: #4d5c57; }
+        .ge-plans-channel-note { margin: 14px auto 0; max-width: 760px; display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; background: #eef7f4; color: #31423d; font-size: 13px; line-height: 1.45; }
+        .ge-plans-channel-note a { color: #0f6f5c; font-weight: 700; text-decoration: none; white-space: nowrap; }
+        .ge-plans-channel-note a:hover { text-decoration: underline; }
         .ge-plan-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
         .ge-plan-card { background: #0f1a17; color: #f2f7f4; border-radius: 16px; padding: 20px; box-shadow: 0 16px 40px rgba(0,0,0,0.2); }
         .ge-plan-card--pro { background: #0b1412; border: 1px solid rgba(255,255,255,0.08); }
