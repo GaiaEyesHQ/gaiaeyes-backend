@@ -28,7 +28,22 @@ def _aqi_missing(payload: dict) -> bool:
 
 def _allergens_missing(payload: dict) -> bool:
     allergens = payload.get("allergens") if isinstance(payload, dict) else {}
-    return not isinstance(allergens, dict) or not allergens or not allergens.get("source")
+    if not isinstance(allergens, dict) or not allergens or not allergens.get("source"):
+        return True
+    signal_keys = (
+        "state",
+        "overall_level",
+        "overall_index",
+        "primary_type",
+        "primary_label",
+        "tree_level",
+        "tree_index",
+        "grass_level",
+        "grass_index",
+        "weed_level",
+        "weed_index",
+    )
+    return not any(allergens.get(key) is not None for key in signal_keys)
 
 
 def _merge_payload(primary: dict, fallback: dict) -> dict:

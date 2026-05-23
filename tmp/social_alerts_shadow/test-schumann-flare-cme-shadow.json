@@ -2,7 +2,7 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-05-03T22:35:00Z",
+  "generated_at": "2026-05-15T18:05:00Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 3,
   "drafts": [
@@ -13,10 +13,10 @@
       "review_status": "needs_human_review",
       "category": "schumann",
       "severity": "high",
-      "asof": "2026-05-03T22:30:00Z",
-      "title": "Schumann spike detected",
-      "subtitle": "The resonance feed is moving more than usual; keep the post observational.",
-      "caption": "Schumann spike detected. The resonance feed is moving more than usual; keep the post observational. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "asof": "2026-05-15T18:00:00Z",
+      "title": "Feeling mentally noisy today?",
+      "subtitle": "Schumann activity is running above its recent baseline.",
+      "caption": "Feeling mentally noisy today? Schumann activity is running above its recent baseline. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
       "metrics": {
         "zscore_30d": 3.2,
         "value_hz": 7.91
@@ -44,11 +44,17 @@
             "bottom": 132
           },
           "visual_style": {
-            "layout": "background_image_with_flowing_pill_blocks",
-            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
           },
-          "title": "Schumann spike detected",
-          "subtitle": "The resonance feed is moving more than usual; keep the post observational.",
+          "label": "SIGNAL WATCH",
+          "title": "Feeling mentally noisy today?",
+          "subtitle": "Schumann activity is running above its recent baseline.",
+          "context_chips": [
+            "Restless",
+            "Wired",
+            "Harder to settle"
+          ],
           "metric_chips": [
             {
               "label": "Z-score",
@@ -59,7 +65,63 @@
               "value": "7.9 Hz"
             }
           ],
-          "footer": "Gaia Eyes - Decode the unseen",
+          "footer": "Facts, not fear.",
+          "theme_keys": [
+            "schumann",
+            "resonance",
+            "earthscope"
+          ],
+          "background_keywords": [
+            "schumann",
+            "earthscope"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/schumann.jpg",
+            "social/share/backgrounds/earthscope.jpg",
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/cumiana_share_latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "still_candidates": [
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg"
+          ]
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+          },
+          "label": "SIGNAL WATCH",
+          "title": "Feeling mentally noisy today?",
+          "subtitle": "Schumann activity is running above its recent baseline.",
+          "context_chips": [
+            "Restless",
+            "Wired",
+            "Harder to settle"
+          ],
+          "metric_chips": [
+            {
+              "label": "Z-score",
+              "value": "3.2"
+            },
+            {
+              "label": "F1",
+              "value": "7.9 Hz"
+            }
+          ],
+          "footer": "Facts, not fear.",
           "theme_keys": [
             "schumann",
             "resonance",
@@ -94,17 +156,22 @@
             "bottom": 260
           },
           "visual_style": {
-            "layout": "background_image_with_flowing_pill_blocks",
-            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
           },
           "frames": [
             {
               "role": "hook",
-              "text": "Schumann spike detected"
+              "text": "Feeling mentally noisy today?"
             },
             {
               "role": "signal",
-              "text": "The resonance feed is moving more than usual; keep the post observational.",
+              "text": "Schumann activity is running above its recent baseline.",
+              "context_chips": [
+                "Restless",
+                "Wired",
+                "Harder to settle"
+              ],
               "metric_chips": [
                 {
                   "label": "Z-score",
@@ -121,6 +188,25 @@
               "text": "Open Gaia Eyes for the full signal read."
             }
           ],
+          "label": "SIGNAL WATCH",
+          "title": "Feeling mentally noisy today?",
+          "subtitle": "Schumann activity is running above its recent baseline.",
+          "context_chips": [
+            "Restless",
+            "Wired",
+            "Harder to settle"
+          ],
+          "metric_chips": [
+            {
+              "label": "Z-score",
+              "value": "3.2"
+            },
+            {
+              "label": "F1",
+              "value": "7.9 Hz"
+            }
+          ],
+          "footer": "Facts, not fear.",
           "theme_keys": [
             "schumann",
             "resonance",
@@ -163,7 +249,7 @@
       "review_status": "needs_human_review",
       "category": "solar_flare",
       "severity": "high",
-      "asof": "2026-05-03T22:30:00Z",
+      "asof": "2026-05-15T18:00:00Z",
       "title": "X-class solar flare watch",
       "subtitle": "The flare signal is notable; review the live solar context before posting.",
       "caption": "X-class solar flare watch. The flare signal is notable; review the live solar context before posting. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
@@ -193,18 +279,70 @@
             "bottom": 132
           },
           "visual_style": {
-            "layout": "background_image_with_flowing_pill_blocks",
-            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
           },
+          "label": "SIGNAL WATCH",
           "title": "X-class solar flare watch",
           "subtitle": "The flare signal is notable; review the live solar context before posting.",
+          "context_chips": [],
           "metric_chips": [
             {
               "label": "Max flare",
               "value": "X1.2"
             }
           ],
-          "footer": "Gaia Eyes - Decode the unseen",
+          "footer": "Facts, not fear.",
+          "theme_keys": [
+            "solar_flare",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "solar_flare",
+            "space_weather"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/solar_flare.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "nasa/lasco_c2/latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg"
+          ]
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+          },
+          "label": "SIGNAL WATCH",
+          "title": "X-class solar flare watch",
+          "subtitle": "The flare signal is notable; review the live solar context before posting.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "Max flare",
+              "value": "X1.2"
+            }
+          ],
+          "footer": "Facts, not fear.",
           "theme_keys": [
             "solar_flare",
             "solar",
@@ -241,8 +379,8 @@
             "bottom": 260
           },
           "visual_style": {
-            "layout": "background_image_with_flowing_pill_blocks",
-            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
           },
           "frames": [
             {
@@ -252,6 +390,7 @@
             {
               "role": "signal",
               "text": "The flare signal is notable; review the live solar context before posting.",
+              "context_chips": [],
               "metric_chips": [
                 {
                   "label": "Max flare",
@@ -264,6 +403,17 @@
               "text": "Open Gaia Eyes for the full signal read."
             }
           ],
+          "label": "SIGNAL WATCH",
+          "title": "X-class solar flare watch",
+          "subtitle": "The flare signal is notable; review the live solar context before posting.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "Max flare",
+              "value": "X1.2"
+            }
+          ],
+          "footer": "Facts, not fear.",
           "theme_keys": [
             "solar_flare",
             "solar",
@@ -311,7 +461,7 @@
       "review_status": "needs_human_review",
       "category": "cme",
       "severity": "watch",
-      "asof": "2026-05-03T22:30:00Z",
+      "asof": "2026-05-15T18:00:00Z",
       "title": "CME activity is on the board",
       "subtitle": "Review coronagraph and ENLIL context before sharing.",
       "caption": "CME activity is on the board. Review coronagraph and ENLIL context before sharing. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
@@ -342,11 +492,13 @@
             "bottom": 132
           },
           "visual_style": {
-            "layout": "background_image_with_flowing_pill_blocks",
-            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
           },
+          "label": "SIGNAL WATCH",
           "title": "CME activity is on the board",
           "subtitle": "Review coronagraph and ENLIL context before sharing.",
+          "context_chips": [],
           "metric_chips": [
             {
               "label": "CMEs",
@@ -357,7 +509,60 @@
               "value": "720 km/s"
             }
           ],
-          "footer": "Gaia Eyes - Decode the unseen",
+          "footer": "Facts, not fear.",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ]
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+          },
+          "label": "SIGNAL WATCH",
+          "title": "CME activity is on the board",
+          "subtitle": "Review coronagraph and ENLIL context before sharing.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "CMEs",
+              "value": "1"
+            },
+            {
+              "label": "Max speed",
+              "value": "720 km/s"
+            }
+          ],
+          "footer": "Facts, not fear.",
           "theme_keys": [
             "cme",
             "solar",
@@ -393,8 +598,8 @@
             "bottom": 260
           },
           "visual_style": {
-            "layout": "background_image_with_flowing_pill_blocks",
-            "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style."
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
           },
           "frames": [
             {
@@ -404,6 +609,7 @@
             {
               "role": "signal",
               "text": "Review coronagraph and ENLIL context before sharing.",
+              "context_chips": [],
               "metric_chips": [
                 {
                   "label": "CMEs",
@@ -420,6 +626,21 @@
               "text": "Open Gaia Eyes for the full signal read."
             }
           ],
+          "label": "SIGNAL WATCH",
+          "title": "CME activity is on the board",
+          "subtitle": "Review coronagraph and ENLIL context before sharing.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "CMEs",
+              "value": "1"
+            },
+            {
+              "label": "Max speed",
+              "value": "720 km/s"
+            }
+          ],
+          "footer": "Facts, not fear.",
           "theme_keys": [
             "cme",
             "solar",

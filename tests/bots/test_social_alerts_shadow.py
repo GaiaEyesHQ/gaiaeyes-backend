@@ -55,6 +55,7 @@ def test_build_shadow_payload_generates_reviewable_drafts_without_publish() -> N
         assert draft["review_status"] == "needs_human_review"
         assert draft["overlay_spec"]["rendering_status"] == "spec_only"
         assert draft["overlay_spec"]["square_image"]["canvas"] == {"width": 1080, "height": 1080}
+        assert draft["overlay_spec"]["feed_card"]["canvas"] == {"width": 1080, "height": 1350}
         assert draft["overlay_spec"]["story_reel"]["canvas"] == {"width": 1080, "height": 1920}
 
 
@@ -110,7 +111,7 @@ def test_background_candidates_reuse_viral_bot_picker(monkeypatch) -> None:
         "bz",
         "solar_wind",
     ]
-    assert draft["overlay_spec"]["square_image"]["visual_style"]["layout"] == "background_image_with_flowing_pill_blocks"
+    assert draft["overlay_spec"]["square_image"]["visual_style"]["layout"] == "trust_first_alert_card"
     assert draft["overlay_spec"]["square_image"]["background_source"] == (
         "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py"
     )
@@ -141,6 +142,28 @@ def test_known_media_assets_are_attached_to_reel_specs() -> None:
         "social/share/backgrounds/schumann.jpg",
         "social/share/backgrounds/earthscope.jpg",
     ]
+
+
+def test_schumann_alert_uses_human_first_trust_copy() -> None:
+    payload = build_shadow_payload(
+        {"schumann": {"zscore_30d": 3.2, "combined": {"f1_hz": 7.91}}},
+        generated_at="2026-04-30T12:05:00Z",
+    )
+
+    draft = next(draft for draft in payload["drafts"] if draft["category"] == "schumann")
+    square = draft["overlay_spec"]["square_image"]
+
+    assert draft["title"] == "Feeling mentally noisy today?"
+    assert draft["subtitle"] == "Schumann activity is running above its recent baseline."
+    assert square["label"] == "SIGNAL WATCH"
+    assert square["context_chips"] == ["Restless", "Wired", "Harder to settle"]
+    assert len(square["context_chips"]) <= 3
+    assert len(square["metric_chips"]) <= 2
+    joined = json.dumps(draft).lower()
+    assert "spike detected" not in joined
+    assert "danger" not in joined
+    assert "warning" not in joined
+    assert "impacting you" not in joined
 
 
 def test_write_shadow_payload_writes_json(tmp_path: Path) -> None:

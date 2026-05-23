@@ -386,7 +386,7 @@ add_shortcode('gaiaeyes_app_landing', function ($atts) {
                 <h1 class="gea-app-title">Your body reacts to more than you think. <span>Gaia Eyes helps you see why.</span></h1>
                 <p class="gea-app-subtitle">
                     Gaia Eyes compares your symptoms, optional Apple Health trends, local conditions, and
-                    space-weather signals so you can see what keeps repeating without turning it into medical advice.
+                    space-weather signals so you can see what keeps repeating.
                 </p>
                 <div class="gea-app-actions">
                     <a class="gea-app-button gea-app-button-primary" href="<?php echo esc_url($a['app_url']); ?>" target="_blank" rel="noopener">

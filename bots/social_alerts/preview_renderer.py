@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -23,6 +23,20 @@ FALLBACK_GRADIENTS = {
     "cme": ((7, 18, 32), (68, 148, 214), (240, 144, 54)),
     "schumann": ((8, 18, 25), (64, 196, 155), (150, 108, 216)),
     "geomagnetic": ((6, 18, 34), (73, 131, 236), (125, 213, 154)),
+}
+ACCENTS = {
+    "cyan": (71, 225, 255),
+    "green": (121, 247, 172),
+    "amber": (244, 194, 95),
+    "violet": (198, 130, 255),
+}
+DEFAULT_CONTEXT_CHIPS = {
+    "schumann": ["Restless", "Wired", "Harder to settle"],
+    "solar_flare": ["Solar activity", "Bright signal", "Worth watching"],
+    "cme": ["Solar motion", "Review first", "In the mix"],
+    "geomagnetic": ["Kp/Bz active", "Solar wind", "Worth watching"],
+    "earthquake": ["Official feeds", "Location context", "Review first"],
+    "global_hazard": ["Verified feeds", "Location context", "Review first"],
 }
 
 
@@ -268,6 +282,128 @@ def _add_shadow_layer(base: Image.Image, intensity: int = 138) -> Image.Image:
     return Image.alpha_composite(image, overlay)
 
 
+def _poster_background(base: Image.Image, size: Tuple[int, int], category: str) -> Image.Image:
+    image = _cover(base, size)
+    image = ImageEnhance.Color(image).enhance(1.18)
+    image = ImageEnhance.Contrast(image).enhance(1.04)
+    image = image.filter(ImageFilter.GaussianBlur(radius=1.2)).convert("RGBA")
+
+    width, height = size
+    overlay = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    for y in range(height):
+        t = y / max(height - 1, 1)
+        alpha = int(168 + 64 * t)
+        blue = int(18 + 12 * (1 - t))
+        draw.line((0, y, width, y), fill=(1, 5, blue, alpha))
+    draw.rectangle((0, 0, width, height), fill=(0, 0, 0, 42))
+
+    glow = Image.new("RGBA", size, (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
+    cyan = ACCENTS["cyan"]
+    green = ACCENTS["green"] if category == "schumann" else ACCENTS["amber"]
+    glow_draw.ellipse((-width * 0.25, height * 0.05, width * 0.42, height * 0.55), fill=(*cyan, 40))
+    glow_draw.ellipse((width * 0.55, height * 0.28, width * 1.18, height * 0.92), fill=(*green, 34))
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=86))
+    return Image.alpha_composite(Image.alpha_composite(image, overlay), glow)
+
+
+def _draw_glass_panel(
+    draw: ImageDraw.ImageDraw,
+    box: Tuple[int, int, int, int],
+    *,
+    radius: int,
+    accent: Tuple[int, int, int],
+) -> None:
+    x1, y1, x2, y2 = box
+    for step, alpha in enumerate((26, 18, 12), start=1):
+        inset = step * 8
+        draw.rounded_rectangle(
+            (x1 - inset, y1 - inset, x2 + inset, y2 + inset),
+            radius=radius + inset,
+            outline=(*accent, alpha),
+            width=2,
+        )
+    draw.rounded_rectangle(box, radius=radius, fill=(3, 12, 24, 205), outline=(*accent, 118), width=2)
+    draw.rounded_rectangle((x1 + 2, y1 + 2, x2 - 2, y2 - 2), radius=radius - 2, outline=(255, 255, 255, 24), width=1)
+
+
+def _fit_font(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    max_width: int,
+    *,
+    max_size: int,
+    min_size: int,
+    bold: bool = False,
+    max_lines: int = 3,
+) -> ImageFont.ImageFont:
+    for size in range(max_size, min_size - 1, -2):
+        font = _font(size, bold=bold)
+        lines = _wrap_text(draw, text, font, max_width)
+        if len(lines) <= max_lines and all(_text_size(draw, line, font)[0] <= max_width for line in lines):
+            return font
+    return _font(min_size, bold=bold)
+
+
+def _metrics_line(chips: Sequence[Mapping[str, Any]]) -> str:
+    parts: List[str] = []
+    for chip in chips[:2]:
+        label = _safe_text(chip.get("label") if isinstance(chip, Mapping) else "")
+        value = _safe_text(chip.get("value") if isinstance(chip, Mapping) else "")
+        if label and value and value != "--":
+            parts.append(f"{label} {value}")
+    return " | ".join(parts)
+
+
+def _context_chips(spec: Mapping[str, Any], category: str) -> List[str]:
+    values = spec.get("context_chips")
+    if isinstance(values, list):
+        chips = [_safe_text(item) for item in values if _safe_text(item)]
+        if chips:
+            return chips[:3]
+    return DEFAULT_CONTEXT_CHIPS.get(category, ["Worth watching"])[:3]
+
+
+def _draw_context_chips(
+    draw: ImageDraw.ImageDraw,
+    chips: Sequence[str],
+    *,
+    x: int,
+    y: int,
+    max_width: int,
+    font: ImageFont.ImageFont,
+) -> int:
+    cur_x = x
+    cur_y = y
+    gap = 14
+    row_height = 56
+    accents = [ACCENTS["cyan"], ACCENTS["green"], ACCENTS["amber"], ACCENTS["violet"]]
+    for index, chip in enumerate(chips[:3]):
+        label = _safe_text(chip)
+        if not label:
+            continue
+        text_width, text_height = _text_size(draw, label, font)
+        pill_width = text_width + 42
+        if cur_x > x and cur_x + pill_width > x + max_width:
+            cur_x = x
+            cur_y += row_height + gap
+        accent = accents[index % len(accents)]
+        box = (cur_x, cur_y, cur_x + pill_width, cur_y + row_height)
+        draw.rounded_rectangle(box, radius=28, fill=(*accent, 24), outline=(*accent, 128), width=1)
+        draw.text((cur_x + 21, cur_y + (row_height - text_height) // 2 - 1), label, font=font, fill=(235, 245, 250, 236))
+        cur_x += pill_width + gap
+    return cur_y + row_height
+
+
+def _draw_label(draw: ImageDraw.ImageDraw, box: Tuple[int, int, int, int], text: str, accent: Tuple[int, int, int]) -> None:
+    font = _font(24, bold=True)
+    x1, y1, x2, y2 = box
+    draw.rounded_rectangle(box, radius=(y2 - y1) // 2, fill=(*accent, 20), outline=(*accent, 125), width=1)
+    width, height = _text_size(draw, text, font)
+    draw.text((x1 + (x2 - x1 - width) // 2, y1 + (y2 - y1 - height) // 2 - 1), text, font=font, fill=(222, 252, 255, 235))
+
+
 def _chip_palette(index: int) -> Tuple[Tuple[int, int, int, int], Tuple[int, int, int, int], Tuple[int, int, int, int]]:
     palettes = [
         ((36, 82, 155, 130), (101, 157, 255, 220), (214, 229, 255, 255)),
@@ -317,17 +453,24 @@ def _candidate_images(spec: Mapping[str, Any]) -> List[str]:
     return candidates
 
 
-def _render_square(
+def _render_alert_card(
     draft: Mapping[str, Any],
     *,
     output_path: Path,
+    spec_name: str,
+    default_size: Tuple[int, int],
+    format_name: str,
     media_base_url: Optional[str],
     local_asset_overrides: Optional[Mapping[str, Path | str]],
 ) -> Dict[str, Any]:
     overlay = draft.get("overlay_spec") if isinstance(draft.get("overlay_spec"), Mapping) else {}
-    spec = overlay.get("square_image") if isinstance(overlay.get("square_image"), Mapping) else {}
+    spec = overlay.get(spec_name) if isinstance(overlay.get(spec_name), Mapping) else {}
+    if not spec and spec_name == "feed_card":
+        spec = overlay.get("square_image") if isinstance(overlay.get("square_image"), Mapping) else {}
     canvas = spec.get("canvas") if isinstance(spec.get("canvas"), Mapping) else {}
-    size = (int(canvas.get("width") or 1080), int(canvas.get("height") or 1080))
+    size = (int(canvas.get("width") or default_size[0]), int(canvas.get("height") or default_size[1]))
+    if spec_name == "feed_card" and size == (1080, 1080):
+        size = default_size
     candidates = _candidate_images(spec)
     category = _safe_text(draft.get("category")) or "social_alert"
     background, used_source, warnings = resolve_background_image(
@@ -337,47 +480,120 @@ def _render_square(
         media_base_url=media_base_url,
         local_asset_overrides=local_asset_overrides,
     )
-    image = _add_shadow_layer(_cover(background, size), intensity=128)
+    image = _poster_background(background, size, category)
     draw = ImageDraw.Draw(image)
 
-    margin = 76
-    draw.rounded_rectangle((margin, 54, size[0] - margin, 118), radius=30, fill=(6, 17, 30, 138), outline=(142, 180, 211, 96), width=1)
-    eyebrow = "GAIA EYES - SOCIAL ALERT"
-    eyebrow_font = _font(25, bold=True)
-    eyebrow_width, _ = _text_size(draw, eyebrow, eyebrow_font)
-    draw.text(((size[0] - eyebrow_width) // 2, 73), eyebrow, font=eyebrow_font, fill=(223, 232, 244, 230))
+    width, height = size
+    accent = ACCENTS["green"] if category == "schumann" else ACCENTS["cyan"]
+    margin = 74 if height <= 1100 else 86
+    if height <= 1100:
+        panel = (margin, 150, width - margin, height - 112)
+        title_max = 70
+        subtitle_size = 33
+        body_gap = 22
+    elif height <= 1500:
+        panel = (margin, 230, width - margin, height - 170)
+        title_max = 80
+        subtitle_size = 36
+        body_gap = 26
+    else:
+        panel = (margin, 420, width - margin, height - 310)
+        title_max = 92
+        subtitle_size = 42
+        body_gap = 34
 
-    title_font = _font(82, bold=True)
-    subtitle_font = _font(37)
-    title = _safe_text(draft.get("title") or spec.get("title")).upper()
+    _draw_glass_panel(draw, panel, radius=44, accent=accent)
+
+    brand_font = _font(25, bold=True)
+    brand = "Gaia Eyes"
+    brand_width, brand_height = _text_size(draw, brand, brand_font)
+    draw.text((width - margin - brand_width, max(52, panel[1] - 78)), brand, font=brand_font, fill=(230, 241, 249, 178))
+
+    x1, y1, x2, y2 = panel
+    inner_x = x1 + 58
+    inner_w = x2 - x1 - 116
+    y = y1 + 54
+    label = _safe_text(spec.get("label")) or "SIGNAL WATCH"
+    _draw_label(draw, (inner_x, y, inner_x + 218, y + 48), label.upper(), ACCENTS["cyan"])
+    y += 82
+
+    title = _safe_text(draft.get("title") or spec.get("title"))
     subtitle = _safe_text(draft.get("subtitle") or spec.get("subtitle"))
-    y = 170
-    y = _draw_wrapped_text(draw, (margin + 12, y), title, title_font, size[0] - margin * 2 - 24, fill=(211, 248, 224, 255), line_gap=8, align="center")
-    y += 18
-    y = _draw_wrapped_text(draw, (margin + 72, y), subtitle, subtitle_font, size[0] - margin * 2 - 144, fill=(236, 240, 246, 230), line_gap=8, align="center")
+    title_font = _fit_font(draw, title, inner_w, max_size=title_max, min_size=52, bold=True, max_lines=3)
+    y = _draw_wrapped_text(draw, (inner_x, y), title, title_font, inner_w, fill=(238, 255, 244, 255), line_gap=10)
+    y += body_gap
 
-    chips = spec.get("metric_chips") if isinstance(spec.get("metric_chips"), list) else []
-    chip_y = max(y + 52, 600)
-    for index, (x1, y1, x2, y2, chip) in enumerate(_chip_rows(chips, width=size[0] - margin * 2, x=margin, y=chip_y)):
-        if isinstance(chip, Mapping):
-            _draw_chip(draw, (x1, y1, x2, y2), _safe_text(chip.get("label")), _safe_text(chip.get("value")), index)
+    subtitle_font = _font(subtitle_size)
+    y = _draw_wrapped_text(draw, (inner_x, y), subtitle, subtitle_font, inner_w, fill=(226, 235, 244, 232), line_gap=10)
+    y += body_gap + 4
 
-    note_box = (margin, size[1] - 246, size[0] - margin, size[1] - 116)
-    draw.rounded_rectangle(note_box, radius=30, fill=(4, 14, 25, 154), outline=(126, 219, 165, 115), width=2)
-    footer_font = _font(32)
-    cta_font = _font(36, bold=True)
-    draw.text((note_box[0] + 42, note_box[1] + 28), "Open Gaia Eyes for the full signal read.", font=cta_font, fill=(222, 255, 235, 245))
-    draw.text((note_box[0] + 42, note_box[1] + 78), _safe_text(spec.get("footer")) or "Gaia Eyes", font=footer_font, fill=(229, 234, 242, 210))
+    context_font = _font(28 if height <= 1100 else 31, bold=True)
+    y = _draw_context_chips(draw, _context_chips(spec, category), x=inner_x, y=y, max_width=inner_w, font=context_font)
+    y += body_gap + 6
+
+    draw.line((inner_x, y, inner_x + inner_w, y), fill=(*accent, 104), width=2)
+    y += body_gap
+
+    metrics = spec.get("metric_chips") if isinstance(spec.get("metric_chips"), list) else []
+    metric_text = _metrics_line(metrics)
+    if metric_text:
+        metric_font = _font(30 if height <= 1100 else 34, bold=True)
+        draw.text((inner_x, y), metric_text, font=metric_font, fill=(255, 220, 148, 245))
+        y += _text_size(draw, metric_text, metric_font)[1] + body_gap
+
+    cta_title = _safe_text(spec.get("footer")) or "Facts, not fear."
+    cta_font = _font(34 if height <= 1100 else 38, bold=True)
+    cta_body_font = _font(29 if height <= 1100 else 32)
+    cta_y = min(max(y, y2 - 168), y2 - 134)
+    draw.text((inner_x, cta_y), cta_title, font=cta_font, fill=(215, 255, 232, 250))
+    draw.text((inner_x, cta_y + 52), "Open Gaia Eyes for the full signal read.", font=cta_body_font, fill=(232, 239, 248, 226))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image.convert("RGB").save(output_path, "PNG")
     return {
-        "format": "square_image",
+        "format": format_name,
         "path": str(output_path),
         "canvas": {"width": size[0], "height": size[1]},
         "asset_source": used_source,
+        "video_candidates": spec.get("video_candidates") if isinstance(spec.get("video_candidates"), list) else [],
         "warnings": warnings,
     }
+
+
+def _render_square(
+    draft: Mapping[str, Any],
+    *,
+    output_path: Path,
+    media_base_url: Optional[str],
+    local_asset_overrides: Optional[Mapping[str, Path | str]],
+) -> Dict[str, Any]:
+    return _render_alert_card(
+        draft,
+        output_path=output_path,
+        spec_name="square_image",
+        default_size=(1080, 1080),
+        format_name="square_image",
+        media_base_url=media_base_url,
+        local_asset_overrides=local_asset_overrides,
+    )
+
+
+def _render_feed_card(
+    draft: Mapping[str, Any],
+    *,
+    output_path: Path,
+    media_base_url: Optional[str],
+    local_asset_overrides: Optional[Mapping[str, Path | str]],
+) -> Dict[str, Any]:
+    return _render_alert_card(
+        draft,
+        output_path=output_path,
+        spec_name="feed_card",
+        default_size=(1080, 1350),
+        format_name="feed_card",
+        media_base_url=media_base_url,
+        local_asset_overrides=local_asset_overrides,
+    )
 
 
 def _render_story(
@@ -387,71 +603,15 @@ def _render_story(
     media_base_url: Optional[str],
     local_asset_overrides: Optional[Mapping[str, Path | str]],
 ) -> Dict[str, Any]:
-    overlay = draft.get("overlay_spec") if isinstance(draft.get("overlay_spec"), Mapping) else {}
-    spec = overlay.get("story_reel") if isinstance(overlay.get("story_reel"), Mapping) else {}
-    canvas = spec.get("canvas") if isinstance(spec.get("canvas"), Mapping) else {}
-    size = (int(canvas.get("width") or 1080), int(canvas.get("height") or 1920))
-    candidates = _candidate_images(spec)
-    category = _safe_text(draft.get("category")) or "social_alert"
-    background, used_source, warnings = resolve_background_image(
-        candidates,
-        category=category,
-        size=size,
+    return _render_alert_card(
+        draft,
+        output_path=output_path,
+        spec_name="story_reel",
+        default_size=(1080, 1920),
+        format_name="story_reel_frame",
         media_base_url=media_base_url,
         local_asset_overrides=local_asset_overrides,
     )
-    image = _add_shadow_layer(_cover(background, size), intensity=146)
-    draw = ImageDraw.Draw(image)
-
-    margin = 86
-    draw.rounded_rectangle((margin, 100, size[0] - margin, 170), radius=34, fill=(5, 17, 31, 152), outline=(142, 180, 211, 100), width=1)
-    label = "GAIA EYES - REVIEW DRAFT"
-    label_font = _font(27, bold=True)
-    label_width, _ = _text_size(draw, label, label_font)
-    draw.text(((size[0] - label_width) // 2, 122), label, font=label_font, fill=(226, 234, 244, 230))
-
-    title = _safe_text(draft.get("title")).upper()
-    subtitle = _safe_text(draft.get("subtitle"))
-    title_font = _font(92, bold=True)
-    subtitle_font = _font(42)
-    y = 250
-    y = _draw_wrapped_text(draw, (margin, y), title, title_font, size[0] - margin * 2, fill=(211, 248, 224, 255), line_gap=12, align="center")
-    y += 34
-    y = _draw_wrapped_text(draw, (margin + 30, y), subtitle, subtitle_font, size[0] - margin * 2 - 60, fill=(238, 241, 247, 232), line_gap=12, align="center")
-
-    chips = spec.get("frames", [{}])[1].get("metric_chips") if isinstance(spec.get("frames"), list) and len(spec.get("frames")) > 1 and isinstance(spec.get("frames")[1], Mapping) else []
-    if not isinstance(chips, list):
-        chips = []
-    panel_top = max(y + 82, 900)
-    panel = (margin, panel_top, size[0] - margin, panel_top + 410)
-    draw.rounded_rectangle(panel, radius=42, fill=(3, 13, 23, 158), outline=(128, 199, 224, 115), width=2)
-    panel_title = "Current Signal"
-    panel_font = _font(36, bold=True)
-    draw.text((panel[0] + 44, panel[1] + 36), panel_title, font=panel_font, fill=(126, 219, 165, 240))
-    chip_width = panel[2] - panel[0] - 88
-    for index, chip in enumerate(chips[:4]):
-        if not isinstance(chip, Mapping):
-            continue
-        top = panel[1] + 98 + index * 76
-        _draw_chip(draw, (panel[0] + 44, top, panel[0] + 44 + chip_width, top + 60), _safe_text(chip.get("label")), _safe_text(chip.get("value")), index)
-
-    cta_box = (margin, size[1] - 360, size[0] - margin, size[1] - 190)
-    draw.rounded_rectangle(cta_box, radius=42, fill=(5, 16, 29, 165), outline=(197, 132, 243, 125), width=2)
-    cta_font = _font(43, bold=True)
-    body_font = _font(31)
-    draw.text((cta_box[0] + 44, cta_box[1] + 42), "Open Gaia Eyes", font=cta_font, fill=(236, 218, 255, 246))
-    draw.text((cta_box[0] + 44, cta_box[1] + 100), "Review the full signal context before sharing.", font=body_font, fill=(234, 238, 246, 220))
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    image.convert("RGB").save(output_path, "PNG")
-    return {
-        "format": "story_reel_frame",
-        "path": str(output_path),
-        "canvas": {"width": size[0], "height": size[1]},
-        "asset_source": used_source,
-        "video_candidates": spec.get("video_candidates") if isinstance(spec.get("video_candidates"), list) else [],
-        "warnings": warnings,
-    }
 
 
 def render_shadow_previews(
@@ -478,6 +638,12 @@ def render_shadow_previews(
             media_base_url=media_base_url,
             local_asset_overrides=local_asset_overrides,
         )
+        feed = _render_feed_card(
+            draft,
+            output_path=out_dir / f"{stem}-feed.png",
+            media_base_url=media_base_url,
+            local_asset_overrides=local_asset_overrides,
+        )
         story = _render_story(
             draft,
             output_path=out_dir / f"{stem}-story.png",
@@ -490,7 +656,7 @@ def render_shadow_previews(
                 "category": category,
                 "severity": draft.get("severity"),
                 "title": draft.get("title"),
-                "outputs": [square, story],
+                "outputs": [square, feed, story],
             }
         )
 

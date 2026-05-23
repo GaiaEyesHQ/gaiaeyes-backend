@@ -15,8 +15,8 @@ DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
 SOCIAL_BACKGROUND_PREFIX = "social/share/backgrounds"
 VISUAL_STYLE = {
-    "layout": "background_image_with_flowing_pill_blocks",
-    "notes": "Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style.",
+    "layout": "trust_first_alert_card",
+    "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics.",
 }
 BACKGROUND_KEYWORDS = {
     "geomagnetic": ["space_weather", "kp", "bz", "solar_wind"],
@@ -171,6 +171,7 @@ def _base_overlay(
     title: str,
     subtitle: str,
     chips: List[Dict[str, str]],
+    context_chips: Optional[List[str]],
     theme_keys: List[str],
     background_candidates: List[str],
     background_keywords: List[str],
@@ -184,10 +185,28 @@ def _base_overlay(
             "canvas": {"width": 1080, "height": 1080},
             "safe_area": {"left": 96, "right": 96, "top": 104, "bottom": 132},
             "visual_style": VISUAL_STYLE,
+            "label": "SIGNAL WATCH",
             "title": title,
             "subtitle": subtitle,
-            "metric_chips": chips,
-            "footer": "Gaia Eyes - Decode the unseen",
+            "context_chips": list(context_chips or [])[:3],
+            "metric_chips": chips[:2],
+            "footer": "Facts, not fear.",
+            "theme_keys": theme_keys,
+            "background_keywords": background_keywords,
+            "background_candidates": background_candidates,
+            "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+            "still_candidates": stills,
+        },
+        "feed_card": {
+            "canvas": {"width": 1080, "height": 1350},
+            "safe_area": {"left": 86, "right": 86, "top": 132, "bottom": 142},
+            "visual_style": VISUAL_STYLE,
+            "label": "SIGNAL WATCH",
+            "title": title,
+            "subtitle": subtitle,
+            "context_chips": list(context_chips or [])[:3],
+            "metric_chips": chips[:2],
+            "footer": "Facts, not fear.",
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
@@ -200,9 +219,15 @@ def _base_overlay(
             "visual_style": VISUAL_STYLE,
             "frames": [
                 {"role": "hook", "text": title},
-                {"role": "signal", "text": subtitle, "metric_chips": chips},
+                {"role": "signal", "text": subtitle, "context_chips": list(context_chips or [])[:3], "metric_chips": chips[:2]},
                 {"role": "cta", "text": CTA},
             ],
+            "label": "SIGNAL WATCH",
+            "title": title,
+            "subtitle": subtitle,
+            "context_chips": list(context_chips or [])[:3],
+            "metric_chips": chips[:2],
+            "footer": "Facts, not fear.",
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
@@ -218,7 +243,10 @@ def _base_overlay(
 
 
 def _caption(title: str, subtitle: str, *, hashtags: str = DEFAULT_HASHTAGS) -> str:
-    return f"{title}. {subtitle} {CTA}\n\n{hashtags}"
+    lead = _clean_text(title)
+    if lead and lead[-1] not in ".?!":
+        lead = f"{lead}."
+    return f"{lead} {subtitle} {CTA}\n\n{hashtags}"
 
 
 def _draft(
@@ -233,6 +261,7 @@ def _draft(
     background_candidates: List[str],
     source_refs: List[Dict[str, str]],
     asof: Optional[str],
+    context_chips: Optional[List[str]] = None,
     background_keywords: Optional[List[str]] = None,
     media_assets: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> Dict[str, Any]:
@@ -257,6 +286,7 @@ def _draft(
             title=title,
             subtitle=subtitle,
             chips=chips,
+            context_chips=context_chips,
             theme_keys=theme_keys,
             background_candidates=background_candidates,
             background_keywords=resolved_background_keywords,
@@ -521,13 +551,14 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
     return _draft(
         category="schumann",
         severity=severity,
-        title="Schumann variability is elevated" if severity == "watch" else "Schumann spike detected",
-        subtitle="The resonance feed is moving more than usual; keep the post observational.",
+        title="Feeling mentally noisy today?",
+        subtitle="Schumann activity is running above its recent baseline.",
         metrics={"zscore_30d": zscore, "value_hz": value},
         chips=[
             {"label": "Z-score", "value": _fmt_number(zscore)},
             {"label": "F1", "value": _fmt_number(value, suffix=" Hz")},
         ],
+        context_chips=["Restless", "Wired", "Harder to settle"],
         theme_keys=["schumann", "resonance", "earthscope"],
         background_candidates=_social_background_candidates(
             BACKGROUND_KEYWORDS["schumann"],

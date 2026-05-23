@@ -1022,14 +1022,26 @@ def _sane_sleep_debt_minutes(debt: Optional[float], sleep_total: Optional[float]
     return debt
 
 
+def _usable_sleep_total_minutes(minutes: Optional[float]) -> Optional[float]:
+    if minutes is None:
+        return None
+    if minutes <= 0:
+        return None
+    return minutes
+
+
 def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str, float | str]]:
     penalties: Dict[str, Dict[str, float | str]] = {}
 
-    sleep_total = _safe_float(today_row.get("sleep_total_minutes"))
-    sleep_delta = _sane_sleep_delta_minutes(
-        _safe_float(today_row.get("sleep_vs_14d_baseline_delta")),
-        sleep_total,
-    )
+    raw_sleep_total = _safe_float(today_row.get("sleep_total_minutes"))
+    sleep_total = _usable_sleep_total_minutes(raw_sleep_total)
+    sleep_data_missing = sleep_total is None
+    sleep_delta = None
+    if not sleep_data_missing:
+        sleep_delta = _sane_sleep_delta_minutes(
+            _safe_float(today_row.get("sleep_vs_14d_baseline_delta")),
+            sleep_total,
+        )
     sleep_delta_points = _penalty_from_threshold(
         abs(sleep_delta) if sleep_delta is not None and sleep_delta < -30.0 else None,
         threshold=30.0,
@@ -1043,7 +1055,9 @@ def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str
             "points": round(sleep_delta_points, 2),
         }
 
-    sleep_debt = _sane_sleep_debt_minutes(_safe_float(today_row.get("sleep_debt_proxy")), sleep_total)
+    sleep_debt = None
+    if not sleep_data_missing:
+        sleep_debt = _sane_sleep_debt_minutes(_safe_float(today_row.get("sleep_debt_proxy")), sleep_total)
     sleep_debt_points = _penalty_from_threshold(
         sleep_debt,
         threshold=30.0,

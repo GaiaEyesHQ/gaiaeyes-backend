@@ -2,20 +2,20 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-05-03T22:35:00Z`
+- Generated at: `2026-05-15T18:05:00Z`
 - Draft count: `3`
 
-## 1. Schumann spike detected
+## 1. Feeling mentally noisy today?
 
 - Category: `schumann`
 - Severity: `high`
 - Review status: `needs_human_review`
-- As of: `2026-05-03T22:30:00Z`
+- As of: `2026-05-15T18:00:00Z`
 
 Caption:
 
 ```text
-Schumann spike detected. The resonance feed is moving more than usual; keep the post observational. Open Gaia Eyes for the full signal read.
+Feeling mentally noisy today? Schumann activity is running above its recent baseline. Open Gaia Eyes for the full signal read.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```
@@ -42,8 +42,8 @@ Reel video candidates:
 - `none`: `--`
 
 Visual style:
-- Layout: `background_image_with_flowing_pill_blocks`
-- Notes: Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style.
+- Layout: `trust_first_alert_card`
+- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics.
 
 Sources:
 - Tomsk/Cumiana Schumann: `schumann`
@@ -54,7 +54,7 @@ Sources:
 - Category: `solar_flare`
 - Severity: `high`
 - Review status: `needs_human_review`
-- As of: `2026-05-03T22:30:00Z`
+- As of: `2026-05-15T18:00:00Z`
 
 Caption:
 
@@ -87,8 +87,8 @@ Reel video candidates:
 - `nasa/enlil/latest.mp4`
 
 Visual style:
-- Layout: `background_image_with_flowing_pill_blocks`
-- Notes: Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style.
+- Layout: `trust_first_alert_card`
+- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics.
 
 Sources:
 - GOES X-ray: `space_weather.xray_max_class`
@@ -99,7 +99,7 @@ Sources:
 - Category: `cme`
 - Severity: `watch`
 - Review status: `needs_human_review`
-- As of: `2026-05-03T22:30:00Z`
+- As of: `2026-05-15T18:00:00Z`
 
 Caption:
 
@@ -133,8 +133,8 @@ Reel video candidates:
 - `nasa/enlil/latest.mp4`
 
 Visual style:
-- Layout: `background_image_with_flowing_pill_blocks`
-- Notes: Use a dark, cinematic background with translucent rounded metric pills and small glass blocks that match the Gaia Eyes app style.
+- Layout: `trust_first_alert_card`
+- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics.
 
 Sources:
 - CCOR-1: `nasa/ccor1/latest.mp4`

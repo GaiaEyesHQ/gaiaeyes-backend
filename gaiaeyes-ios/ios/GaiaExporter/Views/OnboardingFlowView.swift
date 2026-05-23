@@ -111,7 +111,7 @@ private struct OnboardingFlowCopy {
                     balanced: "Choose what Gaia can read. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
                     humorous: "Choose what Gaia can read. You can leave anything sensitive unchecked and keep the useful stuff."
                 ),
-                healthEmptySelectionBody: "Select at least one metric to request Health access.",
+                healthEmptySelectionBody: "Nothing is selected. Tap Not Now, or check at least one metric to request Health access.",
                 backfillTitle: "Sync your last 30 days",
                 backfillSubtitle: "Import recent data so Gaia Eyes can recognize patterns sooner.",
                 notificationsTitle: "Would you like helpful alerts?",
@@ -179,7 +179,7 @@ private struct OnboardingFlowCopy {
                     balanced: "Choose what Gaia can read. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
                     humorous: "Choose what Gaia can read. You can leave anything sensitive unchecked and keep the useful stuff."
                 ),
-                healthEmptySelectionBody: "Select at least one metric to request Health access.",
+                healthEmptySelectionBody: "Nothing is selected. Tap Not Now, or check at least one metric to request Health access.",
                 backfillTitle: "Sync your last 30 days",
                 backfillSubtitle: "Import recent data so Gaia Eyes can recognize patterns sooner.",
                 notificationsTitle: "Would you like helpful alerts?",
@@ -948,6 +948,14 @@ struct OnboardingFlowView: View {
                 }
 
                 HStack {
+                    Button("Not Now") {
+                        Task {
+                            await onPersistExperience(UserExperienceProfileUpdate(onboardingStep: .backfill))
+                            currentStep = .backfill
+                        }
+                    }
+                    .buttonStyle(.bordered)
+
                     Spacer()
                     Button("Connect Health Data") {
                         Task {

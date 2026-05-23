@@ -15,7 +15,8 @@
 
 ## API surface (routes)
 ### Health + diagnostics
-- `GET /health` (health check)
+- `GET /health/live` (fast process liveness; no DB/Redis dependency)
+- `GET /health` (readiness/diagnostics with DB monitor and ingest queue snapshot)
 - `GET /v1/diag/db` (db diagnostics)
 - `GET /v1/diag/dbpool` (pool diagnostics)
 - `GET /v1/db/ping` (db ping)

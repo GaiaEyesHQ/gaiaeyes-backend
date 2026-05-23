@@ -3565,7 +3565,7 @@ struct ContentView: View {
         async let dashboardTask: Void = fetchDashboardPayload(force: true)
         async let featuresTask: Void = fetchFeaturesToday(trigger: .initial, bypassGuard: true)
         async let profileTask: Void = fetchProfileSettings()
-        async let notificationTask: Void = fetchNotificationPreferences()
+        async let notificationTask: Void = reconcilePushRegistration(reason: "auth scope changed")
         async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
         async let dailyCheckInTask: Void = fetchDailyCheckInStatus(api: api)
         async let driversTask: Void = fetchMissionDriversPreview(api: api, force: true)
@@ -4044,13 +4044,8 @@ struct ContentView: View {
 
     private var healthAccessNoticeText: String? {
         let hasRequestedHealth = !state.healthkitRequestedAtISO.isEmpty || experienceProfile.healthkitRequestedAt != nil
-        let readUnavailableAt = parseDebugDate(state.healthkitReadUnavailableAtISO)
-        let readVerifiedAt = parseDebugDate(state.healthkitReadVerifiedAtISO)
         let localRequestNeeded = healthReadAuthorizationNeededOnThisDevice
-        let readLooksDisconnected = readUnavailableAt.map { unavailableAt in
-            guard let readVerifiedAt else { return true }
-            return unavailableAt > readVerifiedAt
-        } ?? false
+        let readLooksDisconnected = healthReadAccessLooksDisconnected
         guard state.selectedHealthPermissionKeys.isEmpty || !hasRequestedHealth || localRequestNeeded || readLooksDisconnected else { return nil }
         return "Health data not connected. Body and sleep personalization will stay limited until Apple Health or a wearable is connected."
     }
@@ -4486,7 +4481,11 @@ struct ContentView: View {
 
     private static func scrubError(_ error: String?) -> String? {
         guard let raw = error?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
-        if raw.lowercased() == "cancelled" { return nil }
+        let normalized = raw.lowercased()
+        if normalized == "cancelled" { return nil }
+        if normalized.contains("<!doctype html") || normalized.contains("<html") {
+            return "This feed is temporarily unavailable. Gaia will retry shortly."
+        }
         return raw
     }
 
@@ -4939,6 +4938,30 @@ struct ContentView: View {
         parseDebugDate(healthDiagnosticsValue(prefix: prefix, metric: metric))
     }
 
+    private var latestHealthReadEvidenceAt: Date? {
+        let metrics = [
+            "heart_rate",
+            "hrv_sdnn",
+            "spo2",
+            "step_count",
+            "sleep_stage",
+            "temperature_deviation",
+            "resting_heart_rate",
+            "respiratory_rate",
+            "menstrual_flow",
+        ]
+        let prefixes = ["last_sample", "anchor_advanced", "observer_event"]
+        var dates = [parseDebugDate(state.healthkitReadVerifiedAtISO)].compactMap { $0 }
+        for metric in metrics {
+            for prefix in prefixes {
+                if let date = healthDiagnosticsDate(prefix: prefix, metric: metric) {
+                    dates.append(date)
+                }
+            }
+        }
+        return dates.max()
+    }
+
     private func billingPlan(for entitlements: [Entitlement], hasAccessToken: Bool) -> MembershipPlan {
         guard hasAccessToken else { return .free }
         if entitlements.contains(where: { ($0.isActive == true) && $0.key.lowercased().contains("pro") }) {
@@ -5056,12 +5079,18 @@ struct ContentView: View {
             return true
         }
         guard let readUnavailableAt = parseDebugDate(state.healthkitReadUnavailableAtISO) else { return false }
+        if let latestHealthReadEvidenceAt, latestHealthReadEvidenceAt >= readUnavailableAt {
+            return false
+        }
         guard let readVerifiedAt = parseDebugDate(state.healthkitReadVerifiedAtISO) else { return true }
         return readUnavailableAt > readVerifiedAt
     }
 
     private var healthReadAuthorizationNeededOnThisDevice: Bool {
         guard let requestNeededAt = parseDebugDate(state.healthkitLocalRequestNeededAtISO) else { return false }
+        if let latestHealthReadEvidenceAt, latestHealthReadEvidenceAt >= requestNeededAt {
+            return false
+        }
         guard let readVerifiedAt = parseDebugDate(state.healthkitReadVerifiedAtISO) else { return true }
         return requestNeededAt > readVerifiedAt
     }
@@ -8031,6 +8060,34 @@ struct ContentView: View {
     private func refreshPushState() async {
         await PushNotificationService.refreshAuthorizationState()
         await applyStoredPushState()
+    }
+
+    private func reconcilePushRegistration(reason: String) async {
+        await refreshPushState()
+        let localPushState = await MainActor.run {
+            (granted: pushPermissionGranted, token: pushDeviceToken)
+        }
+        guard localPushState.granted,
+              let deviceToken = localPushState.token,
+              !deviceToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        do {
+            let prefs = try await PushNotificationService.fetchPreferences()
+            await MainActor.run {
+                notificationPreferences = prefs
+                pushPermissionGranted = PushNotificationService.storedPermissionGranted()
+                pushDeviceToken = PushNotificationService.storedDeviceToken()
+                notificationSettingsMessage = nil
+            }
+            guard prefs.enabled else { return }
+            let synced = await PushNotificationService.syncTokenRegistration(preferences: prefs)
+            appLog("[PUSH] registration reconcile \(synced ? "ok" : "waiting") reason=\(reason)")
+        } catch {
+            if isCancellationError(error) { return }
+            appLog("[PUSH] registration reconcile failed reason=\(reason): \(error.localizedDescription)")
+        }
     }
 
     private func fetchNotificationPreferences() async {
@@ -18201,7 +18258,8 @@ struct ContentView: View {
                             async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
                             async let healthEvidenceRefresh: Void = state.refreshHealthReadAccessEvidence(reason: "became active")
                             async let homeFeedRefresh: Void = fetchHomeFeed()
-                            _ = await (dashboardRefresh, healthKick, healthEvidenceRefresh, schumannRefresh, noticeRefresh, homeFeedRefresh)
+                            async let pushRegistrationRefresh: Void = reconcilePushRegistration(reason: "became active")
+                            _ = await (dashboardRefresh, healthKick, healthEvidenceRefresh, schumannRefresh, noticeRefresh, homeFeedRefresh, pushRegistrationRefresh)
                         } else {
                             _ = await (schumannRefresh, noticeRefresh)
                         }
@@ -18458,6 +18516,7 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushAuthorizationDidChange).receive(on: RunLoop.main)) { _ in
                 Task {
                     await applyStoredPushState()
+                    await reconcilePushRegistration(reason: "authorization changed")
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushDeepLinkReceived).receive(on: RunLoop.main)) { note in
@@ -18465,7 +18524,7 @@ struct ContentView: View {
                 handleIncomingPushRoute(route)
             }
             .task {
-                await refreshPushState()
+                await reconcilePushRegistration(reason: "initial task")
                 if let pendingRoute = PushNotificationService.consumePendingRoute() {
                     handleIncomingPushRoute(pendingRoute)
                 }

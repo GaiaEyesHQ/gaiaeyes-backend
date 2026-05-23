@@ -19,7 +19,8 @@ After the first 72 hours:
 
 | Area | Healthy signal | Action if unhealthy |
 | --- | --- | --- |
-| Backend health | `/health` returns `ok=true`, `db=true`, no pool wait spike. | Check Render logs and DB pool state before investigating app-side issues. |
+| Backend liveness | `/health/live` returns immediately with `ok=true`, `live=true`. | Use this as the Render health check path so DB/Redis slowness does not restart the web process. |
+| Backend readiness | `/health` returns `ok=true`, `db=true`, no pool wait spike. | Check Render logs, DB pool state, and Redis queue state before investigating app-side issues. |
 | DB monitor | `db=true`, `consec_fail=0`, and `last_probe` stays recent. `sticky_age_ms` may grow while DB state remains healthy. | Treat repeated DB monitor failures as launch-critical. |
 | Ingest queue | `/health.ingest_queue.redis_depth=0`, no `redis_error`, and `backlog_batches=0` outside short burst windows. | Check worker logs, worker instance count, Redis/Key Value health, and DB pressure before retrying client uploads. |
 | Auth/session | No burst of `401 Missing or invalid Authorization header` from normal signed-in app use. | Inspect auth diagnostics and token refresh logs; avoid creating duplicate anonymous users. |
@@ -91,7 +92,7 @@ Repository > Settings > Secrets and variables > Actions > Variables
 ## Triage Order
 
 1. Confirm the phone is on the latest build and the backend is deployed.
-2. Check `/health` before diagnosing app symptoms.
+2. Check `/health/live`, then `/health`, before diagnosing app symptoms.
 3. If a feature looks stale in-app, verify the backend payload directly before changing iOS.
 4. If the backend payload is correct, suspect persisted app snapshot/cache next.
 5. If analytics or bug reports are missing, check auth status and endpoint status before changing reporting UI.

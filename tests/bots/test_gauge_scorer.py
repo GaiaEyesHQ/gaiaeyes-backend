@@ -182,6 +182,58 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertEqual(sleep_driver["label"], "Less Sleep")
         self.assertEqual(sleep_driver["display"], "5h 8m total")
 
+    def test_compute_health_status_ignores_zero_sleep_as_missing_upload(self) -> None:
+        baseline_rows = [_baseline_row(idx) for idx in range(14)]
+        today_row = {
+            **_baseline_row(0),
+            "sleep_total_minutes": 0.0,
+            "sleep_debt_proxy": 180.0,
+            "sleep_vs_14d_baseline_delta": -180.0,
+        }
+
+        health_status, meta = compute_health_status(
+            today_row,
+            baseline_rows,
+            {"total_24h": 0, "max_severity": None, "top_symptoms": []},
+        )
+        payload = build_health_status_explainer(
+            today_row,
+            {"max_severity": None, "top_symptoms": []},
+            health_status,
+            meta,
+        )
+
+        self.assertNotIn("sleep_vs_14d_baseline_delta", meta["recovery_penalties"])
+        self.assertNotIn("sleep_debt_proxy", meta["recovery_penalties"])
+        self.assertNotIn("short_sleep", meta["recovery_penalties"])
+        self.assertFalse(any(driver["label"] == "Less Sleep" for driver in payload["drivers"]))
+
+    def test_compute_health_status_ignores_missing_sleep_total_for_sleep_penalties(self) -> None:
+        baseline_rows = [_baseline_row(idx) for idx in range(14)]
+        today_row = {
+            **_baseline_row(0),
+            "sleep_total_minutes": None,
+            "sleep_debt_proxy": 180.0,
+            "sleep_vs_14d_baseline_delta": -180.0,
+        }
+
+        health_status, meta = compute_health_status(
+            today_row,
+            baseline_rows,
+            {"total_24h": 0, "max_severity": None, "top_symptoms": []},
+        )
+        payload = build_health_status_explainer(
+            today_row,
+            {"max_severity": None, "top_symptoms": []},
+            health_status,
+            meta,
+        )
+
+        self.assertNotIn("sleep_vs_14d_baseline_delta", meta["recovery_penalties"])
+        self.assertNotIn("sleep_debt_proxy", meta["recovery_penalties"])
+        self.assertNotIn("short_sleep", meta["recovery_penalties"])
+        self.assertFalse(any(driver["label"] == "Less Sleep" for driver in payload["drivers"]))
+
     def test_compute_health_status_can_use_recovery_penalties_without_metric_zscores(self) -> None:
         baseline_rows = [
             {

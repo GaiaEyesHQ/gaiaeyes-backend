@@ -189,6 +189,60 @@ async def test_local_check_refreshes_cached_payload_when_allergens_are_missing(m
 
 
 @pytest.mark.anyio
+async def test_local_check_refreshes_cached_payload_when_allergens_have_source_without_signal(monkeypatch, client: AsyncClient):
+    cached_payload = {
+        "ok": True,
+        "where": {"zip": "78754", "lat": 30.3, "lon": -97.6},
+        "weather": {
+            "temp_c": 25.0,
+            "temp_delta_24h_c": 1.0,
+            "humidity_pct": 66.0,
+            "precip_prob_pct": 20.0,
+            "pressure_hpa": 1011.0,
+            "baro_delta_24h_hpa": -0.4,
+            "baro_trend": "steady",
+        },
+        "air": {"aqi": 60, "category": "Moderate", "pollutant": "PM2.5"},
+        "allergens": {"source": "google-pollen:forecast"},
+        "asof": "2026-04-22T22:35:00+00:00",
+    }
+    refreshed_payload = {
+        **cached_payload,
+        "allergens": {
+            "source": "google-pollen:forecast",
+            "state": "moderate",
+            "primary_type": "grass",
+            "primary_label": "Grass pollen",
+        },
+    }
+    persisted: list[dict] = []
+
+    async def _fake_attach_forecast_daily_best_effort(zip_code: str, payload: dict):  # noqa: ARG001
+        return payload
+
+    async def _fake_assemble_for_zip(zip_code: str):  # noqa: ARG001
+        return refreshed_payload
+
+    monkeypatch.setattr(local, "latest_for_zip", lambda zip_code: cached_payload)  # noqa: ARG005
+    monkeypatch.setattr(local, "assemble_for_zip", _fake_assemble_for_zip)
+    monkeypatch.setattr(local, "_attach_forecast_daily_best_effort", _fake_attach_forecast_daily_best_effort)
+    monkeypatch.setattr(local, "upsert_zip_payload", lambda zip_code, payload: persisted.append(payload))  # noqa: ARG005
+
+    response = await client.get(
+        "/v1/local/check",
+        headers={"Authorization": "Bearer test-token"},
+        params={"zip": "78754"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["allergens"]["state"] == "moderate"
+    assert data["allergens"]["primary_type"] == "grass"
+    assert persisted
+    assert persisted[0]["allergens"]["state"] == "moderate"
+
+
+@pytest.mark.anyio
 async def test_local_check_returns_current_payload_when_forecast_attachment_fails(monkeypatch, client: AsyncClient):
     payload = {
         "ok": True,
