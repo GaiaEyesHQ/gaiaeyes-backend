@@ -298,13 +298,22 @@ def _poster_background(base: Image.Image, size: Tuple[int, int], category: str) 
         draw.line((0, y, width, y), fill=(1, 5, blue, alpha))
     draw.rectangle((0, 0, width, height), fill=(0, 0, 0, 42))
 
-    glow = Image.new("RGBA", size, (0, 0, 0, 0))
+    glow_scale = 4
+    glow_size = (max(1, width // glow_scale), max(1, height // glow_scale))
+    glow = Image.new("RGBA", glow_size, (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow)
+    glow_width, glow_height = glow_size
     cyan = ACCENTS["cyan"]
     green = ACCENTS["green"] if category == "schumann" else ACCENTS["amber"]
-    glow_draw.ellipse((-width * 0.25, height * 0.05, width * 0.42, height * 0.55), fill=(*cyan, 40))
-    glow_draw.ellipse((width * 0.55, height * 0.28, width * 1.18, height * 0.92), fill=(*green, 34))
-    glow = glow.filter(ImageFilter.GaussianBlur(radius=86))
+    glow_draw.ellipse(
+        (-glow_width * 0.25, glow_height * 0.05, glow_width * 0.42, glow_height * 0.55),
+        fill=(*cyan, 40),
+    )
+    glow_draw.ellipse(
+        (glow_width * 0.55, glow_height * 0.28, glow_width * 1.18, glow_height * 0.92),
+        fill=(*green, 34),
+    )
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=22)).resize(size, Image.Resampling.BICUBIC)
     return Image.alpha_composite(Image.alpha_composite(image, overlay), glow)
 
 

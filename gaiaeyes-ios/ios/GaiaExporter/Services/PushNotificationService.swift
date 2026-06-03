@@ -225,8 +225,8 @@ enum PushNotificationService {
     private static let pendingRouteKey = "gaia.push.pending_route_json"
     private static let tokenSyncCooldownSeconds: TimeInterval = 15
     private static let registrationThrottleSeconds: TimeInterval = 5
-    private static let requestTimeout: TimeInterval = 60
-    private static let resourceTimeout: TimeInterval = 90
+    private static let requestTimeout: TimeInterval = 15
+    private static let resourceTimeout: TimeInterval = 30
     private static var lastRemoteRegistrationRequestAt: Date?
     private static var lastTokenSyncAt: Date?
     private static var lastSyncedDeviceToken: String?
@@ -262,11 +262,13 @@ enum PushNotificationService {
     static func refreshAuthorizationState() async {
         let status = await currentAuthorizationStatus()
         let granted = authorizationGranted(status)
+        let previousGranted = storedPermissionGranted()
         UserDefaults.standard.set(granted, forKey: permissionGrantedKey)
-        NotificationCenter.default.post(name: .gaiaPushAuthorizationDidChange, object: nil, userInfo: ["granted": granted])
         if granted {
             registerForRemoteNotifications()
         }
+        guard granted != previousGranted else { return }
+        NotificationCenter.default.post(name: .gaiaPushAuthorizationDidChange, object: nil, userInfo: ["granted": granted])
     }
 
     static func currentAuthorizationStatus() async -> UNAuthorizationStatus {
@@ -288,6 +290,7 @@ enum PushNotificationService {
 
     @discardableResult
     static func requestAuthorization() async -> Bool {
+        let previousGranted = storedPermissionGranted()
         let granted = await withCheckedContinuation { continuation in
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
                 continuation.resume(returning: granted)
@@ -297,7 +300,9 @@ enum PushNotificationService {
         if granted {
             registerForRemoteNotifications()
         }
-        NotificationCenter.default.post(name: .gaiaPushAuthorizationDidChange, object: nil, userInfo: ["granted": granted])
+        if granted != previousGranted {
+            NotificationCenter.default.post(name: .gaiaPushAuthorizationDidChange, object: nil, userInfo: ["granted": granted])
+        }
         return granted
     }
 
