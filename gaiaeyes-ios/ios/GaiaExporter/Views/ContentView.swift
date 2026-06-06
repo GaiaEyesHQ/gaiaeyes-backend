@@ -10087,6 +10087,7 @@ struct ContentView: View {
                 gaugeRecentLogBoosts: dashboardGaugeRecentLogBoosts,
                 lastSymptomUpdateAt: dashboardLastSymptomUpdateAt,
                 healthStatusExplainer: dashboardHealthStatusExplainer,
+                activePatternRefs: dashboardPayload?.activePatternRefs ?? [],
                 userOutlook: resolvedUserOutlookPayload,
                 userOutlookLoading: userOutlookLoading,
                 userOutlookError: userOutlookError,
@@ -10355,6 +10356,7 @@ struct ContentView: View {
         let gaugeRecentLogBoosts: [String: Double]
         let lastSymptomUpdateAt: String?
         let healthStatusExplainer: DashboardHealthStatusExplainer?
+        let activePatternRefs: [DashboardPatternRef]
         let userOutlook: UserForecastOutlook?
         let userOutlookLoading: Bool
         let userOutlookError: String?
@@ -12060,10 +12062,295 @@ struct ContentView: View {
             let severity: StatusPill.Severity
         }
 
+        private struct HomeSymptomChip: Identifiable {
+            let id: String
+            let label: String
+            let tint: Color
+        }
+
+        private struct HomeTriggerRow: Identifiable {
+            let id: String
+            let label: String
+            let detail: String
+            let progress: Double
+            let tint: Color
+            let driverKey: String?
+        }
+
+        private struct HomeSymptomChipView: View {
+            let chip: HomeSymptomChip
+
+            var body: some View {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(chip.tint)
+                        .frame(width: 7, height: 7)
+                    Text(chip.label)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.90))
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(chip.tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(chip.tint.opacity(0.18), lineWidth: 1)
+                )
+            }
+        }
+
+        private struct HomeTriggerRowView: View {
+            let row: HomeTriggerRow
+
+            var body: some View {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.label)
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.90))
+                            Text(row.detail)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 8)
+                        Text("\(Int((row.progress * 100).rounded()))%")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(row.tint)
+                    }
+
+                    LocalConditionsBar(progress: row.progress, tint: row.tint)
+                }
+                .padding(12)
+                .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(row.tint.opacity(0.16), lineWidth: 1)
+                )
+            }
+        }
+
         private func combinedWhatMattersDrivers() -> [DashboardDriverItem] {
             let primaryStack = dedupedDrivers(([primaryDriver].compactMap { $0 }) + supportingDrivers + drivers)
             guard primaryStack.count < 3 else { return primaryStack }
             return dedupedDrivers(primaryStack + previewDrivers)
+        }
+
+        private func normalizedScore(_ raw: Double?) -> Double? {
+            guard let raw else { return nil }
+            let value = max(0, raw)
+            if value <= 1 { return value }
+            if value <= 5 { return value / 5.0 }
+            return min(1, value / 100.0)
+        }
+
+        private func triggerLabel(for driver: DashboardDriverItem) -> String {
+            let key = normalizedDriverKey(driver.key)
+            switch key {
+            case "pressure":
+                return "Pressure shift"
+            case "temp":
+                return "Temperature swing"
+            case "allergens":
+                return "Pollen / allergens"
+            case "aqi":
+                return "Air quality"
+            case "humidity":
+                return "Humidity"
+            case "kp":
+                return "Geomagnetic activity"
+            case "bz":
+                return "Bz coupling"
+            case "solar_wind":
+                return "Solar wind"
+            case "schumann":
+                return "Schumann"
+            case "cme":
+                return "CME activity"
+            case "sleep", "less_sleep", "sleep_debt":
+                return "Sleep debt"
+            default:
+                return driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
+            }
+        }
+
+        private func triggerDetail(for driver: DashboardDriverItem, role: WhatMattersRole) -> String {
+            let value = (driver.display ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty {
+                return value
+            }
+            if let state = driver.state, !state.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return role == .leading ? "Leading now - \(state)" : "\(role.title) - \(state)"
+            }
+            return role.title
+        }
+
+        private func triggerProgress(for driver: DashboardDriverItem) -> Double {
+            let severityProgress = driverProgress(driver.severity ?? driver.state)
+            let personalProgress = normalizedScore(driver.personalRelevanceScore)
+            let rawProgress = normalizedScore(driver.rawSeverityScore)
+            let base = max(severityProgress, personalProgress ?? 0, rawProgress ?? 0)
+            let key = normalizedDriverKey(driver.key)
+            let patternBoost = activePatternRefs.contains { ref in
+                normalizedDriverKey(ref.driverKey ?? ref.signalKey ?? ref.signal) == key
+            } ? 0.10 : 0
+            return min(1, max(0.16, base + patternBoost))
+        }
+
+        private func priorityTriggerRows() -> [HomeTriggerRow] {
+            let orderedItems = topWhatMattersDrivers()
+            let fallbackItems = combinedWhatMattersDrivers().enumerated().map { index, driver in
+                WhatMattersCardItem(
+                    driver: driver,
+                    role: index == 0 ? .leading : (index < 3 ? .supporting : .background)
+                )
+            }
+            let items = orderedItems.isEmpty ? fallbackItems : orderedItems
+            var seen: Set<String> = []
+            var rows: [HomeTriggerRow] = []
+
+            for item in items {
+                let key = normalizedDriverKey(item.driver.key)
+                guard !key.isEmpty, !seen.contains(key) else { continue }
+                seen.insert(key)
+                let tint = GaugePalette.contextAccent("\(item.driver.key) \(item.driver.label ?? "")")
+                rows.append(
+                    HomeTriggerRow(
+                        id: "trigger-\(key)",
+                        label: triggerLabel(for: item.driver),
+                        detail: triggerDetail(for: item.driver, role: item.role),
+                        progress: triggerProgress(for: item.driver),
+                        tint: tint,
+                        driverKey: item.driver.key
+                    )
+                )
+                if rows.count >= 5 { break }
+            }
+
+            if rows.isEmpty {
+                for ref in activePatternRefs.prefix(4) {
+                    let label = (ref.signal ?? ref.driverKey ?? ref.signalKey ?? "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !label.isEmpty else { continue }
+                    let key = normalizedDriverKey(label)
+                    guard !seen.contains(key) else { continue }
+                    seen.insert(key)
+                    rows.append(
+                        HomeTriggerRow(
+                            id: "pattern-\(key)",
+                            label: label.replacingOccurrences(of: "_", with: " ").capitalized,
+                            detail: ref.confidence ?? ref.usedTodayLabel ?? "Pattern context",
+                            progress: normalizedScore(ref.relevanceScore) ?? 0.58,
+                            tint: GaugePalette.contextAccent(label),
+                            driverKey: nil
+                        )
+                    )
+                }
+            }
+
+            return rows
+        }
+
+        private func symptomLabels(for driver: DashboardDriverItem) -> [String] {
+            let key = normalizedDriverKey(driver.key)
+            switch key {
+            case "allergens", "aqi":
+                return ["Head / sinus pressure", "Headache", "Irritation"]
+            case "humidity":
+                return ["Sinus pressure", "Fatigue"]
+            case "pressure":
+                return ["Headache", "Energy dip", "Body aches"]
+            case "temp":
+                return ["Energy dip", "Poor sleep"]
+            case "schumann", "ulf":
+                return ["Focus shifts", "Restlessness"]
+            case "kp", "bz", "solar_wind", "cme":
+                return ["Focus shifts", "Body tension"]
+            case "sleep", "less_sleep", "sleep_debt":
+                return ["Poor sleep", "Fatigue"]
+            default:
+                return []
+            }
+        }
+
+        private func symptomLabels(for gauge: GaugeRow) -> [String] {
+            guard gaugeShowsAffordance(zoneKey: gauge.zoneKey, zoneLabel: gauge.zoneLabel) else { return [] }
+            switch gauge.key {
+            case "pain":
+                return ["Pain flare", "Headache"]
+            case "focus":
+                return ["Brain fog", "Focus shifts"]
+            case "energy", "stamina":
+                return ["Fatigue", "Energy dip"]
+            case "sleep":
+                return ["Poor sleep", "Fatigue"]
+            case "mood":
+                return ["Irritation"]
+            case "heart", "health_status":
+                return ["Body strain"]
+            default:
+                return []
+            }
+        }
+
+        private func possibleSymptomChips(from rows: [GaugeRow]) -> [HomeSymptomChip] {
+            var seen: Set<String> = []
+            var output: [HomeSymptomChip] = []
+
+            func append(_ label: String, tint: Color) {
+                let clean = label.trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = clean.lowercased()
+                guard !clean.isEmpty, !seen.contains(key), output.count < 4 else { return }
+                seen.insert(key)
+                output.append(HomeSymptomChip(id: "symptom-\(key)", label: clean, tint: tint))
+            }
+
+            if let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 {
+                for label in snapshot.semanticActiveLabelPreview {
+                    append(label, tint: GaugePalette.rose)
+                }
+            }
+
+            for trigger in priorityTriggerRows() {
+                let driver = combinedWhatMattersDrivers().first { normalizedDriverKey($0.key) == normalizedDriverKey(trigger.driverKey) }
+                guard let driver else { continue }
+                for label in symptomLabels(for: driver) {
+                    append(label, tint: trigger.tint)
+                }
+            }
+
+            for row in rows {
+                for label in symptomLabels(for: row) {
+                    append(label, tint: GaugePalette.contextAccent(row.label))
+                }
+            }
+
+            return output
+        }
+
+        private func possibleSymptomsLead(chips: [HomeSymptomChip]) -> String {
+            if let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 {
+                return "You have active symptoms logged. Compare them with the signals below."
+            }
+            if !chips.isEmpty {
+                return "These are the body signals most worth checking against today."
+            }
+            return "No strong symptom pattern is leading right now. Log anything new so Gaia can learn your baseline."
+        }
+
+        private func supportNudge(for triggers: [HomeTriggerRow]) -> String {
+            if let summary = healthStatusExplainer?.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !summary.isEmpty {
+                return summary
+            }
+            guard let first = triggers.first else {
+                return "A quick check-in gives future patterns something real to compare."
+            }
+            return "Start by noticing \(first.label.lowercased()); then log how the day actually feels."
         }
 
         private func topWhatMattersDrivers() -> [WhatMattersCardItem] {
@@ -12405,6 +12692,173 @@ struct ContentView: View {
             }
         }
 
+        private func possibleSymptomsCard(rows: [GaugeRow]) -> some View {
+            let chips = possibleSymptomChips(from: rows)
+            let triggers = priorityTriggerRows()
+            let accent = chips.first?.tint ?? triggers.first?.tint ?? GaugePalette.aqua
+            let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+            return VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(accent)
+                        .frame(width: 32, height: 32)
+                        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Possible Symptoms")
+                            .font(.headline.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text("Start with what you may notice.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                Text(possibleSymptomsLead(chips: chips))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if chips.isEmpty {
+                    Text("Nothing obvious is leading yet.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.72))
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else {
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(chips) { chip in
+                            HomeSymptomChipView(chip: chip)
+                        }
+                    }
+                }
+
+                Text(supportNudge(for: triggers))
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.74))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                currentSymptomsButton
+                dailyCheckInButton
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GaugePalette.softCardGradient(
+                    accent: accent,
+                    highlightOpacity: 0.13,
+                    baseOpacity: 0.06,
+                    shadowOpacity: 0.20
+                ),
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(accent.opacity(0.22), lineWidth: 1)
+            )
+        }
+
+        private func possibleTriggersCard() -> some View {
+            let rows = priorityTriggerRows()
+            let accent = rows.first?.tint ?? GaugePalette.aqua
+
+            return VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "waveform.path.ecg.rectangle")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(accent)
+                        .frame(width: 32, height: 32)
+                        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Possible Triggers")
+                            .font(.headline.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text("Signal strength, not diagnosis.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                if rows.isEmpty {
+                    Text("No major signal stack is standing out yet.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(rows.prefix(4)) { row in
+                            HomeTriggerRowView(row: row)
+                        }
+                    }
+                }
+
+                Button("All drivers") {
+                    onOpenAllDrivers(nil)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GaugePalette.softCardGradient(
+                    accent: accent,
+                    highlightOpacity: 0.10,
+                    baseOpacity: 0.05,
+                    shadowOpacity: 0.18
+                ),
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(accent.opacity(0.20), lineWidth: 1)
+            )
+        }
+
+        private func gaugeGridSection(rows: [GaugeRow]) -> some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Mission Control Gauges")
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.92))
+
+                if rows.isEmpty {
+                    Text(isLoading
+                         ? "Health data is flowing in. First gauges can take a few minutes after install, login, or permission changes."
+                         : "Gauges are still calibrating. Open Apple Health or your wearable app if this is your first sync, then check back in a few minutes.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    let cols = [GridItem(.flexible()), GridItem(.flexible())]
+                    LazyVGrid(columns: cols, spacing: 10) {
+                        ForEach(rows) { row in
+                            ArcGaugeCard(
+                                row: row,
+                                onTap: row.tappable ? { presentGaugeModal(row.key) } : nil
+                            )
+                        }
+                    }
+                    HStack(spacing: 10) {
+                        ForEach(["low", "mild", "elevated", "high"], id: \.self) { key in
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(GaugePalette.zoneColor(key))
+                                    .frame(width: 7, height: 7)
+                                Text(key.capitalized)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         var body: some View {
             let rows = gaugeRows(gauges)
             GroupBox {
@@ -12417,35 +12871,10 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    if rows.isEmpty {
-                        Text(isLoading
-                             ? "Health data is flowing in. First gauges can take a few minutes after install, login, or permission changes."
-                             : "Gauges are still calibrating. Open Apple Health or your wearable app if this is your first sync, then check back in a few minutes.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else {
-                        let cols = [GridItem(.flexible()), GridItem(.flexible())]
-                        LazyVGrid(columns: cols, spacing: 10) {
-                            ForEach(rows) { row in
-                                ArcGaugeCard(
-                                    row: row,
-                                    onTap: row.tappable ? { presentGaugeModal(row.key) } : nil
-                                )
-                            }
-                        }
-                        HStack(spacing: 10) {
-                            ForEach(["low", "mild", "elevated", "high"], id: \.self) { key in
-                                HStack(spacing: 4) {
-                                    Circle()
-                                        .fill(GaugePalette.zoneColor(key))
-                                        .frame(width: 7, height: 7)
-                                    Text(key.capitalized)
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                    }
+
+                    possibleSymptomsCard(rows: rows)
+                    possibleTriggersCard()
+
                     if let healthAccessNotice {
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: "heart.text.square.fill")
@@ -12465,35 +12894,7 @@ struct ContentView: View {
                         )
                     }
 
-                    if let summary = healthStatusExplainer?.summary,
-                       !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Body Context")
-                                .font(.headline)
-                            Text(summary)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            currentSymptomsButton
-                            dailyCheckInButton
-                        }
-                        .padding(12)
-                        .background(
-                            LinearGradient(
-                                colors: [
-                                    GaugePalette.low.opacity(0.11),
-                                    GaugePalette.aqua.opacity(0.06),
-                                    Color.black.opacity(0.22)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(GaugePalette.low.opacity(0.18), lineWidth: 1)
-                        )
-                    }
+                    gaugeGridSection(rows: rows)
 
                     VStack(alignment: .leading, spacing: 8) {
                         let visibleDrivers = topWhatMattersDrivers()
@@ -12582,7 +12983,7 @@ struct ContentView: View {
                 }
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("Mission Control", systemImage: "dial.medium")
+                    Label("Today’s Read", systemImage: "sparkles")
                     alertPills(limit: 3)
                 }
             }
