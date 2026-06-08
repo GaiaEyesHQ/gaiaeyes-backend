@@ -25,7 +25,8 @@ Scientific mode should feel educational, practical, and evidence-aware:
 - Explain what Gaia Eyes watches.
 - Clarify limits without sounding defensive.
 - Avoid diagnosis or treatment claims.
-- Prefer "can line up with" or "may overlap with" over causal claims.
+- Use evidence-scaled association or causal language when it is grounded in studies, reported effects, or app-observed user patterns.
+- Prefer phrases like "may contribute to", "has been associated with", "has been reported alongside", "often lines up with", or "Gaia Eyes has seen this pattern in user logs".
 
 Mystical mode should feel grounded, poetic, and calm:
 - Use nature/Gaia language without implying certainty.
@@ -64,7 +65,8 @@ set mode = excluded.mode,
 
 ## Quality Rules
 - No medical diagnosis.
-- No guaranteed causation.
+- No guaranteed causation, treatment promise, or one-signal-explains-everything claim.
+- Evidence-scaled causal and association language is allowed when the content has a clear basis.
 - No repetitive phrasing across items.
 - No long essays.
 - No links unless the destination exists and is stable.

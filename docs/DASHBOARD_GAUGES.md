@@ -121,8 +121,8 @@ Idempotency:
   - adds bounded penalties from `sleep_debt_proxy`, `sleep_vs_14d_baseline_delta`,
     `resting_hr_baseline_delta`, `respiratory_rate_baseline_delta`,
     `temperature_deviation_baseline_delta`, and sleep consistency scores
-  - these body-state inputs are observational only and are intended to reflect short-term recovery load,
-    not diagnosis
+  - these body-state inputs are evidence-informed recovery-load signals, not diagnosis;
+    copy may describe likely contributors when supported by current data or user history
 - If the legacy z-score inputs are sparse but recovery penalties are present, the gauge can still compute
   from the recovery overlay instead of staying null.
 - If baseline is insufficient, `health_status = null` and an alert pill is added:

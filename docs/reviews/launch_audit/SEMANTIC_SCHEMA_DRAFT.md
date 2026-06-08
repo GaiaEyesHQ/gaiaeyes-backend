@@ -245,7 +245,7 @@ Suggested shape:
   ],
   "medical_disclaimer_level": "light",
   "avoid_fear_language": true,
-  "avoid_causal_language": true,
+  "causal_language_policy": "evidence_scaled",
   "max_urgency": "watch"
 }
 ```
@@ -261,6 +261,9 @@ Important:
 
 - renderer must not exceed `claim_strength`
 - humorous renderers still obey `max_urgency` and `avoid_fear_language`
+- renderers may use evidence-backed association / implication language when the payload supports it; do not flatten everything into "maybe unrelated" phrasing
+- avoid diagnosis, treatment promises, guaranteed outcomes, and claims that one signal explains everything
+- prefer scaled language such as `may contribute to`, `has been associated with`, `has been reported alongside`, `often lines up with`, and `Gaia Eyes has seen this pattern in user logs`
 
 ## `render_hints`
 
@@ -464,7 +467,7 @@ Rules:
     "evidence_basis": ["live_signal_threshold", "personal_pattern_history"],
     "medical_disclaimer_level": "light",
     "avoid_fear_language": true,
-    "avoid_causal_language": true,
+    "causal_language_policy": "evidence_scaled",
     "max_urgency": "watch"
   },
   "render_hints": {

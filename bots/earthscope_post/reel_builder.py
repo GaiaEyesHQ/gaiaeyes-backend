@@ -23,7 +23,7 @@ Runtime deps:
 - Python: requests (pip install requests)
 
 Basic flow:
-1) Pick three IG cards: daily_stats.jpg, daily_playbook.jpg, daily_affects.jpg (fallback: any 3 images).
+1) Pick three IG cards: daily_affects.jpg, daily_playbook.jpg, daily_stats.jpg (fallback: any 3 images).
 2) Build still clips (6.5s each) and crossfade (0.3s) into one 1080x1920 video.
 3) Build VO via OpenAI TTS (optional); pull a music bed WAV from Supabase (tracks.json -> wav).
 4) Sidechain-compress bed under VO; export MP4 with AAC audio and H.264 video.
@@ -247,9 +247,9 @@ FPS = 30
 # ------------ Image selection ------------
 
 PREFERRED_CARD_NAMES = [
-    "daily_stats.jpg",
-    "daily_playbook.jpg",
     "daily_affects.jpg",
+    "daily_playbook.jpg",
+    "daily_stats.jpg",
 ]
 
 def pick_card_images(images_dir: Path, max_count: int = 3) -> List[Path]:

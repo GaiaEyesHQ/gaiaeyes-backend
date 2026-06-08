@@ -166,6 +166,30 @@ def test_ig_post_carousel_falls_back_to_single_image(monkeypatch):
     assert result["post_id"] == "ig_fallback_post"
 
 
+def test_carousel_order_leads_with_affects_then_care_then_stats():
+    urls = {
+        "stats": "https://example.com/daily_stats.jpg",
+        "affects": "https://example.com/daily_affects.jpg",
+        "play": "https://example.com/daily_playbook.jpg",
+    }
+
+    assert meta_poster.carousel_image_urls(urls) == [
+        "https://example.com/daily_affects.jpg",
+        "https://example.com/daily_playbook.jpg",
+        "https://example.com/daily_stats.jpg",
+    ]
+
+
+def test_derive_caption_adds_app_cta_before_hashtags():
+    caption, tags = meta_poster.derive_caption_and_hashtags(
+        {"caption": "Focus may come in shorter windows.", "hashtags": "#GaiaEyes"}
+    )
+
+    assert "Track your own sleep, HRV, pain, and Earth signal patterns in Gaia Eyes." in caption
+    assert caption.endswith("#GaiaEyes")
+    assert tags == "#GaiaEyes"
+
+
 def test_ig_post_reel_recreates_after_terminal_error(monkeypatch):
     monkeypatch.setattr(meta_poster, "FB_PAGE_ID", "123")
     monkeypatch.setattr(meta_poster, "FB_ACCESS_TOKEN", "token")

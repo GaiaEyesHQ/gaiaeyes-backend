@@ -147,8 +147,9 @@ E) Seismic
 	•	High: multiple converging signals (e.g., Kp≥5 + Bz south sustained + pressure spike).
 	•	Medium: single strong driver (e.g., Bz south 3h).
 	•	Low: speculative (Schumann‑only spike without geo drivers; distant quake).
-	•	Phrase with “may/likely/could” scaled to confidence.
-	•	Never imply diagnosis; avoid deterministic claims.
+		•	Phrase with “may/likely/could” scaled to confidence.
+		•	Never imply diagnosis, treatment, guaranteed outcomes, or one-signal-explains-everything claims.
+		•	Use confidence-scaled language for studied, reported, and app-observed effects instead of defaulting to vague uncertainty.
 
 ⸻
 

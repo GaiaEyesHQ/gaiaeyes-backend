@@ -55,7 +55,8 @@ This phase adds a lightweight backend-only ULF context layer derived from USGS 6
 
 - `ulf_band_proxy` is a minute-resolution proxy.
 - It is not labeled or surfaced as true Pc5 spectral power.
-- The signal is observational Earth-context only and is not a medical or symptom-causality claim.
+- The signal is Earth-context, not diagnosis, treatment advice, or a guaranteed symptom claim.
+- When studies, reported effects, or app-observed patterns support it, copy may describe this as an evidence-informed contributor or context signal.
 
 ## API
 

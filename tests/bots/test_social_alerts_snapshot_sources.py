@@ -61,7 +61,9 @@ def test_build_existing_signal_snapshot_normalizes_db_rows() -> None:
 
     payload = build_shadow_payload(snapshot)
     categories = {draft["category"] for draft in payload["drafts"]}
-    assert {"geomagnetic", "solar_flare", "schumann", "earthquake", "global_hazard"} <= categories
+    assert {"geomagnetic", "solar_flare", "schumann"} <= categories
+    assert "earthquake" not in categories
+    assert "global_hazard" not in categories
     assert "air_quality" not in categories
     assert "pollen" not in categories
 

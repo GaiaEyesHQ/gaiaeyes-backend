@@ -275,13 +275,13 @@ Why:
 
 - HRV is noisier and more trust-sensitive than many symptom outcomes
 - Schumann is already a specialized logic area and can overfit easily if the thresholds are loose
-- observational framing is still appropriate, but the evidence bar should be higher
+- confidence-scaled framing is still appropriate, and the evidence bar should be higher
 
 Recommended handling:
 
 - require more history than ordinary symptom patterns
 - prefer stronger lift / sample thresholds than the default engine
-- keep wording observational and avoid certainty language
+- use evidence-scaled wording and avoid certainty, diagnosis, or guaranteed-outcome language
 
 Recommended first-pass thresholds:
 
@@ -307,10 +307,11 @@ Recommended `Strong` thresholds:
 
 Recommended wording style:
 
-- use observational lines like:
-  - `Schumann variability has coincided with more HRV dip days in your history.`
-- avoid direct causal wording like:
-  - `Schumann affects your HRV.`
+- use confidence-scaled lines like:
+  - `Schumann variability has repeatedly lined up with HRV dip days in your history.`
+  - `Schumann activity may be contributing to lower HRV days for you.`
+- avoid unqualified universal claims like:
+  - `Schumann always affects your HRV.`
 
 Priority: `launch-critical`
 

@@ -91,8 +91,12 @@ The batch job documents the concrete thresholds inline in `bots/patterns/pattern
 
 ## Language + Privacy
 
-- Wording stays observational:
+- Wording stays evidence-scaled:
   - "appears"
   - "tends to"
   - "more often"
+  - "may contribute to"
+  - "has been associated with"
+  - "has been reported alongside"
 - The feature is non-diagnostic and relies on self-reported context plus recent sensor history.
+- Do not flatten strong app-observed patterns into vague uncertainty; scale the claim to confidence while avoiding diagnosis, treatment promises, or guaranteed outcomes.

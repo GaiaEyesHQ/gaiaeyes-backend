@@ -2,7 +2,7 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-05-15T18:05:00Z",
+  "generated_at": "2026-06-08T04:57:20Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 3,
   "drafts": [
@@ -13,10 +13,10 @@
       "review_status": "needs_human_review",
       "category": "schumann",
       "severity": "high",
-      "asof": "2026-05-15T18:00:00Z",
-      "title": "Feeling mentally noisy today?",
-      "subtitle": "Schumann activity is running above its recent baseline.",
-      "caption": "Feeling mentally noisy today? Schumann activity is running above its recent baseline. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "asof": "2026-06-08T12:00:00Z",
+      "title": "Wired but tired?",
+      "subtitle": "Earth's Schumann signal is up. Worth comparing with sleep, HRV, headaches, and wired/tired days.",
+      "caption": "Wired but tired?\n\nThe Schumann signal is elevated compared with its recent baseline. Some people like to watch these windows alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.\n\nGaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
       "metrics": {
         "zscore_30d": 3.2,
         "value_hz": 7.91
@@ -45,15 +45,20 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
-          "label": "SIGNAL WATCH",
-          "title": "Feeling mentally noisy today?",
-          "subtitle": "Schumann activity is running above its recent baseline.",
+          "label": "HEALTH WATCH",
+          "title": "Wired but tired?",
+          "subtitle": "Earth's Schumann signal is up. Worth comparing with sleep, HRV, headaches, and wired/tired days.",
           "context_chips": [
-            "Restless",
-            "Wired",
-            "Harder to settle"
+            "Sleep issues",
+            "Low HRV",
+            "Scattered",
+            "Brain fog",
+            "Wired/tired",
+            "Nerve pain",
+            "Headache",
+            "Sinus pressure"
           ],
           "metric_chips": [
             {
@@ -65,7 +70,7 @@
               "value": "7.9 Hz"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "schumann",
             "resonance",
@@ -101,15 +106,20 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
-          "label": "SIGNAL WATCH",
-          "title": "Feeling mentally noisy today?",
-          "subtitle": "Schumann activity is running above its recent baseline.",
+          "label": "HEALTH WATCH",
+          "title": "Wired but tired?",
+          "subtitle": "Earth's Schumann signal is up. Worth comparing with sleep, HRV, headaches, and wired/tired days.",
           "context_chips": [
-            "Restless",
-            "Wired",
-            "Harder to settle"
+            "Sleep issues",
+            "Low HRV",
+            "Scattered",
+            "Brain fog",
+            "Wired/tired",
+            "Nerve pain",
+            "Headache",
+            "Sinus pressure"
           ],
           "metric_chips": [
             {
@@ -121,7 +131,7 @@
               "value": "7.9 Hz"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "schumann",
             "resonance",
@@ -157,20 +167,25 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
           "frames": [
             {
               "role": "hook",
-              "text": "Feeling mentally noisy today?"
+              "text": "Wired but tired?"
             },
             {
               "role": "signal",
-              "text": "Schumann activity is running above its recent baseline.",
+              "text": "Earth's Schumann signal is up. Worth comparing with sleep, HRV, headaches, and wired/tired days.",
               "context_chips": [
-                "Restless",
-                "Wired",
-                "Harder to settle"
+                "Sleep issues",
+                "Low HRV",
+                "Scattered",
+                "Brain fog",
+                "Wired/tired",
+                "Nerve pain",
+                "Headache",
+                "Sinus pressure"
               ],
               "metric_chips": [
                 {
@@ -188,13 +203,18 @@
               "text": "Open Gaia Eyes for the full signal read."
             }
           ],
-          "label": "SIGNAL WATCH",
-          "title": "Feeling mentally noisy today?",
-          "subtitle": "Schumann activity is running above its recent baseline.",
+          "label": "HEALTH WATCH",
+          "title": "Wired but tired?",
+          "subtitle": "Earth's Schumann signal is up. Worth comparing with sleep, HRV, headaches, and wired/tired days.",
           "context_chips": [
-            "Restless",
-            "Wired",
-            "Harder to settle"
+            "Sleep issues",
+            "Low HRV",
+            "Scattered",
+            "Brain fog",
+            "Wired/tired",
+            "Nerve pain",
+            "Headache",
+            "Sinus pressure"
           ],
           "metric_chips": [
             {
@@ -206,7 +226,7 @@
               "value": "7.9 Hz"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "schumann",
             "resonance",
@@ -249,7 +269,7 @@
       "review_status": "needs_human_review",
       "category": "solar_flare",
       "severity": "high",
-      "asof": "2026-05-15T18:00:00Z",
+      "asof": "2026-06-08T12:00:00Z",
       "title": "X-class solar flare watch",
       "subtitle": "The flare signal is notable; review the live solar context before posting.",
       "caption": "X-class solar flare watch. The flare signal is notable; review the live solar context before posting. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
@@ -280,9 +300,9 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
-          "label": "SIGNAL WATCH",
+          "label": "HEALTH WATCH",
           "title": "X-class solar flare watch",
           "subtitle": "The flare signal is notable; review the live solar context before posting.",
           "context_chips": [],
@@ -292,7 +312,7 @@
               "value": "X1.2"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "solar_flare",
             "solar",
@@ -330,9 +350,9 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
-          "label": "SIGNAL WATCH",
+          "label": "HEALTH WATCH",
           "title": "X-class solar flare watch",
           "subtitle": "The flare signal is notable; review the live solar context before posting.",
           "context_chips": [],
@@ -342,7 +362,7 @@
               "value": "X1.2"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "solar_flare",
             "solar",
@@ -380,7 +400,7 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
           "frames": [
             {
@@ -403,7 +423,7 @@
               "text": "Open Gaia Eyes for the full signal read."
             }
           ],
-          "label": "SIGNAL WATCH",
+          "label": "HEALTH WATCH",
           "title": "X-class solar flare watch",
           "subtitle": "The flare signal is notable; review the live solar context before posting.",
           "context_chips": [],
@@ -413,7 +433,7 @@
               "value": "X1.2"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "solar_flare",
             "solar",
@@ -461,7 +481,7 @@
       "review_status": "needs_human_review",
       "category": "cme",
       "severity": "watch",
-      "asof": "2026-05-15T18:00:00Z",
+      "asof": "2026-06-08T12:00:00Z",
       "title": "CME activity is on the board",
       "subtitle": "Review coronagraph and ENLIL context before sharing.",
       "caption": "CME activity is on the board. Review coronagraph and ENLIL context before sharing. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
@@ -493,9 +513,9 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
-          "label": "SIGNAL WATCH",
+          "label": "HEALTH WATCH",
           "title": "CME activity is on the board",
           "subtitle": "Review coronagraph and ENLIL context before sharing.",
           "context_chips": [],
@@ -509,7 +529,7 @@
               "value": "720 km/s"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "cme",
             "solar",
@@ -546,9 +566,9 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
-          "label": "SIGNAL WATCH",
+          "label": "HEALTH WATCH",
           "title": "CME activity is on the board",
           "subtitle": "Review coronagraph and ENLIL context before sharing.",
           "context_chips": [],
@@ -562,7 +582,7 @@
               "value": "720 km/s"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "cme",
             "solar",
@@ -599,7 +619,7 @@
           },
           "visual_style": {
             "layout": "trust_first_alert_card",
-            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics."
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
           "frames": [
             {
@@ -626,7 +646,7 @@
               "text": "Open Gaia Eyes for the full signal read."
             }
           ],
-          "label": "SIGNAL WATCH",
+          "label": "HEALTH WATCH",
           "title": "CME activity is on the board",
           "subtitle": "Review coronagraph and ENLIL context before sharing.",
           "context_chips": [],
@@ -640,7 +660,7 @@
               "value": "720 km/s"
             }
           ],
-          "footer": "Facts, not fear.",
+          "footer": "Body - Space - Earth - Connected",
           "theme_keys": [
             "cme",
             "solar",

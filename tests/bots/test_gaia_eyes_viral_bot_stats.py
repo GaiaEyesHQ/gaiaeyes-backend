@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bots.earthscope_post.gaia_eyes_viral_bot import build_stats_rows, StatRow
+from bots.earthscope_post.gaia_eyes_viral_bot import _earthscope_hook_title, build_stats_rows, StatRow
 
 
 def _row_for_label(rows: list[StatRow], label: str) -> StatRow:
@@ -70,3 +70,13 @@ def test_bz_missing_uses_placeholder(feats):
     bz_row = _row_for_label(rows, "Bz (current)")
     assert bz_row.display == "—"
     assert bz_row.raw_value is None
+
+
+def test_earthscope_hook_title_leads_with_symptom_pattern():
+    title = _earthscope_hook_title(
+        "Focus and attention may come in shorter windows. Sleep wind-down can be more sensitive.",
+        tone="unsettled",
+        energy="Elevated",
+    )
+
+    assert title == "Focus feeling scattered?"

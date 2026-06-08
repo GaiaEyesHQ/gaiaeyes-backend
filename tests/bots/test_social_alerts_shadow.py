@@ -10,6 +10,8 @@ if str(ROOT) not in sys.path:
 
 import bots.social_alerts.shadow_drafts as shadow_drafts
 from bots.social_alerts.shadow_drafts import (
+    SCHUMANN_HOOKS,
+    SCHUMANN_SYMPTOM_CHIPS,
     build_review_markdown,
     build_shadow_payload,
     write_shadow_payload,
@@ -44,10 +46,12 @@ def test_build_shadow_payload_generates_reviewable_drafts_without_publish() -> N
     assert payload["schema_version"] == "social_alerts_shadow_v1"
     assert payload["mode"] == "shadow"
     assert payload["auto_publish"] is False
-    assert payload["draft_count"] >= 5
-    assert {"geomagnetic", "solar_flare", "cme", "schumann", "earthquake"} <= _categories(payload)
+    assert payload["draft_count"] >= 4
+    assert {"geomagnetic", "solar_flare", "cme", "schumann"} <= _categories(payload)
     assert "air_quality" not in _categories(payload)
     assert "pollen" not in _categories(payload)
+    assert "earthquake" not in _categories(payload)
+    assert "global_hazard" not in _categories(payload)
 
     for draft in payload["drafts"]:
         assert draft["mode"] == "shadow"
@@ -153,13 +157,16 @@ def test_schumann_alert_uses_human_first_trust_copy() -> None:
     draft = next(draft for draft in payload["drafts"] if draft["category"] == "schumann")
     square = draft["overlay_spec"]["square_image"]
 
-    assert draft["title"] == "Feeling mentally noisy today?"
-    assert draft["subtitle"] == "Schumann activity is running above its recent baseline."
-    assert square["label"] == "SIGNAL WATCH"
-    assert square["context_chips"] == ["Restless", "Wired", "Harder to settle"]
-    assert len(square["context_chips"]) <= 3
+    assert draft["title"] in SCHUMANN_HOOKS
+    assert "compare" in draft["subtitle"].lower() or "worth comparing" in draft["subtitle"].lower()
+    assert "Schumann resonance is one of Earth's background electromagnetic signals." in draft["caption"]
+    assert square["label"] == "HEALTH WATCH"
+    assert square["context_chips"] == SCHUMANN_SYMPTOM_CHIPS
+    assert square["footer"] == "Body - Space - Earth - Connected"
+    assert len(square["context_chips"]) <= 8
     assert len(square["metric_chips"]) <= 2
     joined = json.dumps(draft).lower()
+    assert "causing" not in joined
     assert "spike detected" not in joined
     assert "danger" not in joined
     assert "warning" not in joined
@@ -189,6 +196,7 @@ def test_review_markdown_is_human_scannable(tmp_path: Path) -> None:
     assert "# Social Alerts Shadow Review" in markdown
     assert "Auto publish: `False`" in markdown
     assert "Geomagnetic storm watch" in markdown
+    assert "Post caption copy:" in markdown
     assert "```text" in markdown
     assert "Context only" not in markdown
     assert "not medical advice" not in markdown

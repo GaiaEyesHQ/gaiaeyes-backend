@@ -39,7 +39,7 @@
 	•	Empty responses no longer overwrite existing charts.
 
 3. Lunar Pattern Detection
-	•	Observational only. No causal or medical claims.
+	•	Non-diagnostic and evidence-scaled. Copy may describe supported associations or likely contributors, but must avoid treatment promises, guaranteed outcomes, or one-signal explanations.
 	•	Uses the existing daily mart plus symptom-day aggregation to compare HRV, sleep efficiency, and symptom activity inside full/new moon windows versus baseline days.
 	•	Data sources:
 	•	/v1/lunar/current → current UTC-day lunar context

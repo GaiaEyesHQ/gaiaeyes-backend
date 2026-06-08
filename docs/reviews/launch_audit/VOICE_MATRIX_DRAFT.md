@@ -125,7 +125,7 @@ These are the recommended target profiles.
 
 - Use plain labels
 - Prefer short sentences
-- Prefer direct observational verbs
+- Prefer direct, evidence-scaled verbs
 - Minimal metaphor
 - Minimal persona expression
 
@@ -133,6 +133,7 @@ Example style:
 
 - "Pressure swing is one of the louder drivers today."
 - "You may notice more tension or headache sensitivity."
+- "Schumann activity may be contributing to the wired, scattered pattern."
 
 ### App Scientific Balanced
 
@@ -209,9 +210,11 @@ Use these verbs by evidence level, regardless of voice.
 
 | Confidence / evidence | Allowed language | Avoid |
 | --- | --- | --- |
-| Low | may line up with, may notice, worth watching | is causing, means, confirms |
-| Moderate | often lines up with, can be noticeable, has shown up before | clearly causes, strongly proves |
-| High | has repeatedly lined up with, is one of the stronger signals today | guarantees, explains everything |
+| Low | may line up with, may notice, worth watching, has been reported alongside | guarantees, diagnoses, confirms for everyone |
+| Moderate | often lines up with, can be noticeable, may contribute to, has shown up before | clearly proves, explains everything, replaces medical care |
+| High | has repeatedly lined up with, is one of the stronger signals today, is a likely contributor in this context | guarantees, diagnoses, single-cause claims |
+
+Do not ban causal language outright. Scale it to the evidence behind the signal, keep the copy non-diagnostic, and avoid claims that one driver explains every symptom or outcome.
 
 This should be enforced before voice rendering, not after.
 

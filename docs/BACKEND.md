@@ -113,7 +113,7 @@
 - New: `/v1/local/check` aggregates NWS hourly grid, AirNow AQI, and moon phase; supports ZIP or lat/lon; cached snapshots power 24h deltas.
 - New: `/v1/local/check` now also carries normalized current allergen context when Google Pollen is configured.
 - New: `marts.daily_features` now stores canonical lunar context (`moon_phase_fraction`, `moon_illumination_pct`, `moon_phase_label`, `days_from_full_moon`, `days_from_new_moon`) keyed by UTC day, and `app.user_experience_profiles` now supports `lunar_sensitivity_declared` for presentation-only preference handling.
-- New: `/v1/lunar/current`, `/v1/insights/lunar`, and `/v1/series/lunar-overlay` expose investigational lunar context and observational per-user comparisons without making causal or medical claims.
+- New: `/v1/lunar/current`, `/v1/insights/lunar`, and `/v1/series/lunar-overlay` expose investigational lunar context and per-user comparisons. Copy should stay non-diagnostic and avoid treatment promises or guaranteed outcomes, while allowing evidence-scaled association/causal wording when supported.
 - New: `/v1/users/me/outlook` builds a user-scoped 24h/72h/7d outlook from normalized local forecast inputs plus parsed SWPC 3-day, weekly, and advisory bulletin rows.
 - Updated: `/v1/local/check` now also returns the next 7 daily local forecast rows from `marts.local_forecast_daily`, including allergen forecast buckets/indexes when available.
 - Updated: `/v1/space/forecast/outlook` now includes real‑time `kp/bz/solar_wind` “now” fields from `marts.space_weather_daily`, returns `bulletins`/SWPC text when available, and carries `forecast_daily` rows from `marts.space_forecast_daily_latest`.

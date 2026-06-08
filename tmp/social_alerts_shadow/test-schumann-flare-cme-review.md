@@ -2,22 +2,26 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-05-15T18:05:00Z`
+- Generated at: `2026-06-08T04:57:20Z`
 - Draft count: `3`
 
-## 1. Feeling mentally noisy today?
+## 1. Wired but tired?
 
 - Category: `schumann`
 - Severity: `high`
 - Review status: `needs_human_review`
-- As of: `2026-05-15T18:00:00Z`
+- As of: `2026-06-08T12:00:00Z`
 
-Caption:
+Post caption copy:
 
 ```text
-Feeling mentally noisy today? Schumann activity is running above its recent baseline. Open Gaia Eyes for the full signal read.
+Wired but tired?
 
-#GaiaEyes #SpaceWeather #EarthSignals
+The Schumann signal is elevated compared with its recent baseline. Some people like to watch these windows alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.
+
+Gaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.
+
+#GaiaEyes #SchumannResonance #BodyPatterns #HRV
 ```
 
 Metrics:
@@ -43,7 +47,7 @@ Reel video candidates:
 
 Visual style:
 - Layout: `trust_first_alert_card`
-- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics.
+- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics.
 
 Sources:
 - Tomsk/Cumiana Schumann: `schumann`
@@ -54,9 +58,9 @@ Sources:
 - Category: `solar_flare`
 - Severity: `high`
 - Review status: `needs_human_review`
-- As of: `2026-05-15T18:00:00Z`
+- As of: `2026-06-08T12:00:00Z`
 
-Caption:
+Post caption copy:
 
 ```text
 X-class solar flare watch. The flare signal is notable; review the live solar context before posting. Open Gaia Eyes for the full signal read.
@@ -88,7 +92,7 @@ Reel video candidates:
 
 Visual style:
 - Layout: `trust_first_alert_card`
-- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics.
+- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics.
 
 Sources:
 - GOES X-ray: `space_weather.xray_max_class`
@@ -99,9 +103,9 @@ Sources:
 - Category: `cme`
 - Severity: `watch`
 - Review status: `needs_human_review`
-- As of: `2026-05-15T18:00:00Z`
+- As of: `2026-06-08T12:00:00Z`
 
-Caption:
+Post caption copy:
 
 ```text
 CME activity is on the board. Review coronagraph and ENLIL context before sharing. Open Gaia Eyes for the full signal read.
@@ -134,7 +138,7 @@ Reel video candidates:
 
 Visual style:
 - Layout: `trust_first_alert_card`
-- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics.
+- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics.
 
 Sources:
 - CCOR-1: `nasa/ccor1/latest.mp4`

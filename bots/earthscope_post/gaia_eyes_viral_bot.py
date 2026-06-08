@@ -1287,17 +1287,34 @@ def render_stats_card_from_features(
     # “Did you know” footer
     y += 40
     did_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf"], 36)
-    facts = [
-        "Did you know? Solar storms can affect human heart-rate variability.",
-        "Did you know? Schumann resonance aligns with brainwave bands.",
-        "Did you know? Geomagnetic activity may influence sleep quality.",
-    ]
-    fact = random.choice(facts)
-    y = _draw_wrapped_multilines(draw, fact, did_font, x_label, y, W - x_label - 120, line_gap=56)
+    cta = "Track your sleep, HRV, pain, and Earth signal patterns in Gaia Eyes."
+    y = _draw_wrapped_multilines(draw, cta, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
 
-    _overlay_logo_and_tagline(im, "Decode the unseen.")
+    _overlay_logo_and_tagline(im, "Open Gaia Eyes for your pattern read.")
     return im.convert("RGB")
+
+
+def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] = None) -> str:
+    body = (text or "").lower()
+    tone_l = (tone or "").lower()
+    energy_l = (energy or "").lower()
+    candidates = [
+        (("focus", "attention", "clarity", "cognitive", "scattered"), "Focus feeling scattered?"),
+        (("sleep", "wind-down", "bedtime", "fragmented"), "Sleep feeling fragile?"),
+        (("hrv", "heart-rate variability", "autonomic", "baseline"), "HRV running jumpy?"),
+        (("pain", "nerve", "flare", "reactivity", "sensitive"), "Body feeling reactive?"),
+    ]
+    matches: list[tuple[int, str]] = []
+    for tokens, title in candidates:
+        positions = [body.find(token) for token in tokens if token in body]
+        if positions:
+            matches.append((min(positions), title))
+    if matches:
+        return sorted(matches, key=lambda item: item[0])[0][1]
+    if tone_l in ("stormy", "unsettled") or energy_l in ("high", "elevated"):
+        return "Wired and scattered?"
+    return "Need a steadier window?"
 
 def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: str = "square") -> Image.Image:
     if kind == "tall":
@@ -1337,7 +1354,7 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
 
     # Daily headers for affects/care cards
     title_norm = (title or "").strip().lower()
-    if title_norm in ("how this affects you", "how it may feel"):
+    if title_norm in ("how this affects you", "how it may feel") or title_norm.endswith("?"):
         header = f"Daily EarthScope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
         _shadowed_text(draw, (x0, y), header, font=font_h1, fill=fg)
         y += 70
@@ -1819,7 +1836,8 @@ def main(args: Optional[argparse.Namespace] = None):
     playbook_txt = strip_hashtags_and_emojis(_safe_text(playbook_txt))
 
     caption_im = render_card(energy, caption_text, sch, kp, kind="square")
-    affects_im = render_text_card("How it may feel", affects_txt, energy, kind="tall")
+    affects_title = _earthscope_hook_title(affects_txt, tone=str(tone_val or ""), energy=energy)
+    affects_im = render_text_card(affects_title, affects_txt, energy, kind="tall")
     play_im    = render_text_card("Care notes", playbook_txt, energy, kind="tall")
 
     if args.mode == "stats":

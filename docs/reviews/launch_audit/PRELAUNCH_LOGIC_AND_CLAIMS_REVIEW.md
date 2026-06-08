@@ -68,7 +68,8 @@ What to verify manually:
 Claim-risk notes:
 
 - `gauge_logic_base_v1.json` explicitly says scores represent estimated stress/risk load, not outcomes
-- review whether the UI still preserves that nuance or if state labels feel more deterministic than the definition intends
+- review whether the UI still preserves that nuance or if state labels promise certainty, diagnosis, treatment, or one-signal explanations
+- claim risk is overstatement, not causal language itself; public and social copy may sound more confident when grounded in studies, reported effects, or app-observed patterns
 
 Tags: `logic-threshold` `logic-weighting` `claim-risk` `launch-critical`
 

@@ -1012,6 +1012,23 @@ def default_image_urls() -> Dict[str, str]:
   }
 
 
+def carousel_image_urls(urls: Dict[str, str]) -> List[str]:
+  return [urls["affects"], urls["play"], urls["stats"]]
+
+
+APP_CTA = "Track your own sleep, HRV, pain, and Earth signal patterns in Gaia Eyes."
+
+
+def _append_app_cta(caption: str) -> str:
+  text = (caption or "").strip()
+  if not text:
+    return APP_CTA
+  lower = text.lower()
+  if "track your own" in lower or "download gaia eyes" in lower or "open gaia eyes" in lower:
+    return text
+  return f"{text}\n\n{APP_CTA}"
+
+
 def derive_caption_and_hashtags(post: dict) -> tuple[str, str]:
   """Return (caption, hashtags) preferring plain caption, with JSON/sections fallback when needed."""
   cap = post.get("caption") or ""
@@ -1058,7 +1075,7 @@ def derive_caption_and_hashtags(post: dict) -> tuple[str, str]:
       if parsed:
         cap = parsed
 
-  cap = cap.strip()
+  cap = _append_app_cta(cap.strip())
   if tags:
     return cap + "\n\n" + tags, tags
   return cap, tags
@@ -1128,7 +1145,7 @@ def main() -> None:
   if args.cmd == "post-carousel":
     caption = caption_override or derive_caption_and_hashtags(post)[0]
     logging.info("Derived caption (len=%d): %s", len(caption), _clip(caption, 180))
-    image_urls = [urls["stats"], urls["affects"], urls["play"]]
+    image_urls = carousel_image_urls(urls)
     platform = (args.platform or "").lower()
     if platform in ("fb", "facebook"):
       result = fb_post_multi_image(image_urls, caption, dry_run=args.dry_run)
@@ -1141,7 +1158,7 @@ def main() -> None:
   if args.cmd == "post-carousel-fb":
     caption = caption_override or derive_caption_and_hashtags(post)[0]
     logging.info("Derived caption (len=%d): %s", len(caption), _clip(caption, 180))
-    result = fb_post_multi_image([urls["stats"], urls["affects"], urls["play"]], caption, dry_run=args.dry_run)
+    result = fb_post_multi_image(carousel_image_urls(urls), caption, dry_run=args.dry_run)
     logging.info("FB result: %s", _json_preview(result))
     sys.exit(_result_exit_code(result))
 

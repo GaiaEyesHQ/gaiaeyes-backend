@@ -14,17 +14,16 @@ CTA = "Open Gaia Eyes for the full signal read."
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
 SOCIAL_BACKGROUND_PREFIX = "social/share/backgrounds"
+MAX_CONTEXT_CHIPS = 8
 VISUAL_STYLE = {
     "layout": "trust_first_alert_card",
-    "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to three context chips, and no more than two metrics.",
+    "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics.",
 }
 BACKGROUND_KEYWORDS = {
     "geomagnetic": ["space_weather", "kp", "bz", "solar_wind"],
     "solar_flare": ["solar_flare", "space_weather"],
     "cme": ["cme", "space_weather", "solar_wind"],
     "schumann": ["schumann", "earthscope"],
-    "earthquake": ["earthquake", "hazards"],
-    "global_hazard": ["hazards", "earthscope"],
 }
 MEDIA_ASSETS = {
     "solar_flare": {
@@ -40,6 +39,36 @@ MEDIA_ASSETS = {
         "stills": ["schumann/latest/tomsk_share_latest.jpg", "social/earthscope/latest/tomsk_share_latest.jpg"],
     },
 }
+SCHUMANN_HOOKS = [
+    "Feeling mentally noisy?",
+    "Issues sleeping lately?",
+    "HRV lower than normal?",
+    "Feeling scattered?",
+    "Nerve pain flaring?",
+    "Headache or sinus pressure?",
+    "Wired but tired?",
+    "Hard to settle?",
+]
+SCHUMANN_SYMPTOM_CHIPS = [
+    "Sleep issues",
+    "Low HRV",
+    "Scattered",
+    "Brain fog",
+    "Wired/tired",
+    "Nerve pain",
+    "Headache",
+    "Sinus pressure",
+]
+SCHUMANN_SUBTITLES = [
+    "Earth's resonance signal is above baseline. Compare it with sleep, HRV, focus, and pain patterns.",
+    "Earth's Schumann signal is up. Worth comparing with sleep, HRV, headaches, and wired/tired days.",
+    "Earth's resonance is moving. Gaia Eyes helps compare it with body patterns over time.",
+]
+SCHUMANN_CAPTION_TEMPLATES = [
+    "{hook}\n\nSchumann resonance is one of Earth's background electromagnetic signals. The current reading is running above its recent baseline.\n\nThat does not make it a diagnosis or a symptom prediction. But if sleep, HRV, focus, headaches, sinus pressure, or wired/tired energy feel off, this is the kind of signal Gaia Eyes helps you compare over time.\n\nBody - Space - Earth - Connected\n\n#GaiaEyes #SchumannResonance #HRV #SleepPatterns",
+    "{hook}\n\nThe Schumann signal is elevated compared with its recent baseline. Some people like to watch these windows alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.\n\nGaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
+    "{hook}\n\nCurrent Schumann activity is running higher than its recent baseline. One signal by itself does not explain a body day, but repeated overlaps can be worth noticing.\n\nGaia Eyes helps you compare this kind of Earth signal with sleep, HRV, focus, pain, and symptom logs so patterns can get clearer over time.\n\n#GaiaEyes #EarthSignals #SleepPatterns #HRV",
+]
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -116,6 +145,13 @@ def _event_id(category: str, severity: str, metrics: Mapping[str, Any]) -> str:
     return f"social_alert.{category}.{severity}.{digest}"
 
 
+def _variant_index(seed: str, count: int) -> int:
+    if count <= 1:
+        return 0
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % count
+
+
 def _source_ref(label: str, path: str) -> Dict[str, str]:
     return {"label": label, "path": path}
 
@@ -185,12 +221,12 @@ def _base_overlay(
             "canvas": {"width": 1080, "height": 1080},
             "safe_area": {"left": 96, "right": 96, "top": 104, "bottom": 132},
             "visual_style": VISUAL_STYLE,
-            "label": "SIGNAL WATCH",
+            "label": "HEALTH WATCH",
             "title": title,
             "subtitle": subtitle,
-            "context_chips": list(context_chips or [])[:3],
+            "context_chips": list(context_chips or [])[:MAX_CONTEXT_CHIPS],
             "metric_chips": chips[:2],
-            "footer": "Facts, not fear.",
+            "footer": "Body - Space - Earth - Connected",
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
@@ -201,12 +237,12 @@ def _base_overlay(
             "canvas": {"width": 1080, "height": 1350},
             "safe_area": {"left": 86, "right": 86, "top": 132, "bottom": 142},
             "visual_style": VISUAL_STYLE,
-            "label": "SIGNAL WATCH",
+            "label": "HEALTH WATCH",
             "title": title,
             "subtitle": subtitle,
-            "context_chips": list(context_chips or [])[:3],
+            "context_chips": list(context_chips or [])[:MAX_CONTEXT_CHIPS],
             "metric_chips": chips[:2],
-            "footer": "Facts, not fear.",
+            "footer": "Body - Space - Earth - Connected",
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
@@ -219,15 +255,15 @@ def _base_overlay(
             "visual_style": VISUAL_STYLE,
             "frames": [
                 {"role": "hook", "text": title},
-                {"role": "signal", "text": subtitle, "context_chips": list(context_chips or [])[:3], "metric_chips": chips[:2]},
+                {"role": "signal", "text": subtitle, "context_chips": list(context_chips or [])[:MAX_CONTEXT_CHIPS], "metric_chips": chips[:2]},
                 {"role": "cta", "text": CTA},
             ],
-            "label": "SIGNAL WATCH",
+            "label": "HEALTH WATCH",
             "title": title,
             "subtitle": subtitle,
-            "context_chips": list(context_chips or [])[:3],
+            "context_chips": list(context_chips or [])[:MAX_CONTEXT_CHIPS],
             "metric_chips": chips[:2],
-            "footer": "Facts, not fear.",
+            "footer": "Body - Space - Earth - Connected",
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
@@ -264,6 +300,7 @@ def _draft(
     context_chips: Optional[List[str]] = None,
     background_keywords: Optional[List[str]] = None,
     media_assets: Optional[Mapping[str, Sequence[str]]] = None,
+    caption: Optional[str] = None,
 ) -> Dict[str, Any]:
     event_id = _event_id(category, severity, metrics)
     resolved_background_keywords = background_keywords or BACKGROUND_KEYWORDS.get(category, [])
@@ -277,7 +314,7 @@ def _draft(
         "asof": asof,
         "title": title,
         "subtitle": subtitle,
-        "caption": _caption(title, subtitle),
+        "caption": _clean_text(caption) or _caption(title, subtitle),
         "metrics": metrics,
         "source_refs": source_refs,
         "overlay_spec": _base_overlay(
@@ -548,17 +585,33 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
             ("schumann", "fundamental_hz"),
         ],
     )
+    variant_seed = json.dumps(
+        {
+            "category": "schumann",
+            "severity": severity,
+            "asof": asof,
+            "zscore": zscore,
+            "value": value,
+        },
+        sort_keys=True,
+        default=str,
+    )
+    hook = SCHUMANN_HOOKS[_variant_index(f"{variant_seed}:hook", len(SCHUMANN_HOOKS))]
+    subtitle = SCHUMANN_SUBTITLES[_variant_index(f"{variant_seed}:subtitle", len(SCHUMANN_SUBTITLES))]
+    caption_template = SCHUMANN_CAPTION_TEMPLATES[
+        _variant_index(f"{variant_seed}:caption", len(SCHUMANN_CAPTION_TEMPLATES))
+    ]
     return _draft(
         category="schumann",
         severity=severity,
-        title="Feeling mentally noisy today?",
-        subtitle="Schumann activity is running above its recent baseline.",
+        title=hook,
+        subtitle=subtitle,
         metrics={"zscore_30d": zscore, "value_hz": value},
         chips=[
             {"label": "Z-score", "value": _fmt_number(zscore)},
             {"label": "F1", "value": _fmt_number(value, suffix=" Hz")},
         ],
-        context_chips=["Restless", "Wired", "Harder to settle"],
+        context_chips=SCHUMANN_SYMPTOM_CHIPS,
         theme_keys=["schumann", "resonance", "earthscope"],
         background_candidates=_social_background_candidates(
             BACKGROUND_KEYWORDS["schumann"],
@@ -574,6 +627,7 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
         ],
         asof=asof,
         media_assets=MEDIA_ASSETS["schumann"],
+        caption=caption_template.format(hook=hook),
     )
 
 
@@ -684,12 +738,6 @@ def build_shadow_payload(
     schumann = _schumann_draft(snapshot, asof)
     if schumann:
         drafts.append(schumann)
-    quake = _quake_draft(snapshot, asof)
-    if quake:
-        drafts.append(quake)
-    hazard = _hazard_draft(snapshot, asof)
-    if hazard:
-        drafts.append(hazard)
 
     drafts.sort(key=lambda item: (SEVERITY_RANK.get(item.get("severity"), 9), item.get("category") or ""))
     if max_drafts > 0:
@@ -756,7 +804,7 @@ def build_review_markdown(payload: Mapping[str, Any]) -> str:
                 f"- Review status: `{draft.get('review_status') or '--'}`",
                 f"- As of: `{draft.get('asof') or '--'}`",
                 "",
-                "Caption:",
+                "Post caption copy:",
                 "",
                 "```text",
                 str(draft.get("caption") or "").strip(),

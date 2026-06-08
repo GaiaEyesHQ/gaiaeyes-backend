@@ -31,12 +31,10 @@ ACCENTS = {
     "violet": (198, 130, 255),
 }
 DEFAULT_CONTEXT_CHIPS = {
-    "schumann": ["Restless", "Wired", "Harder to settle"],
+    "schumann": ["Sleep issues", "Low HRV", "Scattered", "Brain fog", "Wired/tired", "Nerve pain", "Headache", "Sinus pressure"],
     "solar_flare": ["Solar activity", "Bright signal", "Worth watching"],
     "cme": ["Solar motion", "Review first", "In the mix"],
     "geomagnetic": ["Kp/Bz active", "Solar wind", "Worth watching"],
-    "earthquake": ["Official feeds", "Location context", "Review first"],
-    "global_hazard": ["Verified feeds", "Location context", "Review first"],
 }
 
 
@@ -370,8 +368,8 @@ def _context_chips(spec: Mapping[str, Any], category: str) -> List[str]:
     if isinstance(values, list):
         chips = [_safe_text(item) for item in values if _safe_text(item)]
         if chips:
-            return chips[:3]
-    return DEFAULT_CONTEXT_CHIPS.get(category, ["Worth watching"])[:3]
+            return chips[:8]
+    return DEFAULT_CONTEXT_CHIPS.get(category, ["Worth watching"])[:8]
 
 
 def _draw_context_chips(
@@ -388,7 +386,7 @@ def _draw_context_chips(
     gap = 14
     row_height = 56
     accents = [ACCENTS["cyan"], ACCENTS["green"], ACCENTS["amber"], ACCENTS["violet"]]
-    for index, chip in enumerate(chips[:3]):
+    for index, chip in enumerate(chips[:8]):
         label = _safe_text(chip)
         if not label:
             continue
@@ -399,8 +397,8 @@ def _draw_context_chips(
             cur_y += row_height + gap
         accent = accents[index % len(accents)]
         box = (cur_x, cur_y, cur_x + pill_width, cur_y + row_height)
-        draw.rounded_rectangle(box, radius=28, fill=(*accent, 24), outline=(*accent, 128), width=1)
-        draw.text((cur_x + 21, cur_y + (row_height - text_height) // 2 - 1), label, font=font, fill=(235, 245, 250, 236))
+        draw.rounded_rectangle(box, radius=28, fill=(2, 10, 20, 214), outline=(*accent, 176), width=2)
+        draw.text((cur_x + 21, cur_y + (row_height - text_height) // 2 - 1), label, font=font, fill=(250, 255, 255, 255))
         cur_x += pill_width + gap
     return cur_y + row_height
 
@@ -408,9 +406,9 @@ def _draw_context_chips(
 def _draw_label(draw: ImageDraw.ImageDraw, box: Tuple[int, int, int, int], text: str, accent: Tuple[int, int, int]) -> None:
     font = _font(24, bold=True)
     x1, y1, x2, y2 = box
-    draw.rounded_rectangle(box, radius=(y2 - y1) // 2, fill=(*accent, 20), outline=(*accent, 125), width=1)
+    draw.rounded_rectangle(box, radius=(y2 - y1) // 2, fill=(2, 12, 24, 232), outline=(*accent, 190), width=2)
     width, height = _text_size(draw, text, font)
-    draw.text((x1 + (x2 - x1 - width) // 2, y1 + (y2 - y1 - height) // 2 - 1), text, font=font, fill=(222, 252, 255, 235))
+    draw.text((x1 + (x2 - x1 - width) // 2, y1 + (y2 - y1 - height) // 2 - 1), text, font=font, fill=(250, 255, 255, 255))
 
 
 def _chip_palette(index: int) -> Tuple[Tuple[int, int, int, int], Tuple[int, int, int, int], Tuple[int, int, int, int]]:
@@ -522,8 +520,9 @@ def _render_alert_card(
     inner_x = x1 + 58
     inner_w = x2 - x1 - 116
     y = y1 + 54
-    label = _safe_text(spec.get("label")) or "SIGNAL WATCH"
-    _draw_label(draw, (inner_x, y, inner_x + 218, y + 48), label.upper(), ACCENTS["cyan"])
+    label = _safe_text(spec.get("label")) or "HEALTH WATCH"
+    label_width = max(_text_size(draw, label.upper(), _font(24, bold=True))[0] + 48, 218)
+    _draw_label(draw, (inner_x, y, inner_x + label_width, y + 48), label.upper(), ACCENTS["cyan"])
     y += 82
 
     title = _safe_text(draft.get("title") or spec.get("title"))
@@ -536,7 +535,7 @@ def _render_alert_card(
     y = _draw_wrapped_text(draw, (inner_x, y), subtitle, subtitle_font, inner_w, fill=(226, 235, 244, 232), line_gap=10)
     y += body_gap + 4
 
-    context_font = _font(28 if height <= 1100 else 31, bold=True)
+    context_font = _font(23 if height <= 1100 else 26, bold=True)
     y = _draw_context_chips(draw, _context_chips(spec, category), x=inner_x, y=y, max_width=inner_w, font=context_font)
     y += body_gap + 6
 
@@ -550,7 +549,7 @@ def _render_alert_card(
         draw.text((inner_x, y), metric_text, font=metric_font, fill=(255, 220, 148, 245))
         y += _text_size(draw, metric_text, metric_font)[1] + body_gap
 
-    cta_title = _safe_text(spec.get("footer")) or "Facts, not fear."
+    cta_title = _safe_text(spec.get("footer")) or "Body - Space - Earth - Connected"
     cta_font = _font(34 if height <= 1100 else 38, bold=True)
     cta_body_font = _font(29 if height <= 1100 else 32)
     cta_y = min(max(y, y2 - 168), y2 - 134)
