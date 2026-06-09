@@ -43,6 +43,8 @@ from typing import Optional, Tuple, List, Dict, Union, NamedTuple
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter
 
+from bots.earthscope_post.cta import select_earthscope_cta
+
 HERE = Path(__file__).resolve().parent
 FONTS_DIR = HERE / "fonts"
 
@@ -1287,7 +1289,7 @@ def render_stats_card_from_features(
     # “Did you know” footer
     y += 40
     did_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf"], 36)
-    cta = "Track your sleep, HRV, pain, and Earth signal patterns in Gaia Eyes."
+    cta = select_earthscope_cta(day.isoformat()).get("card", "").strip()
     y = _draw_wrapped_multilines(draw, cta, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
 

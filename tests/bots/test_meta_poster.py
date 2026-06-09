@@ -180,12 +180,13 @@ def test_carousel_order_leads_with_affects_then_care_then_stats():
     ]
 
 
-def test_derive_caption_adds_app_cta_before_hashtags():
+def test_derive_caption_adds_rotating_app_cta_before_hashtags():
     caption, tags = meta_poster.derive_caption_and_hashtags(
-        {"caption": "Focus may come in shorter windows.", "hashtags": "#GaiaEyes"}
+        {"day": "2026-06-09", "platform": "default", "caption": "Focus may come in shorter windows.", "hashtags": "#GaiaEyes"}
     )
 
-    assert "Track your own sleep, HRV, pain, and Earth signal patterns in Gaia Eyes." in caption
+    assert "Gaia Eyes" in caption
+    assert "Focus may come in shorter windows." in caption
     assert caption.endswith("#GaiaEyes")
     assert tags == "#GaiaEyes"
 

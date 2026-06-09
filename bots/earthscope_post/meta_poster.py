@@ -33,6 +33,8 @@ import requests
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter, Retry
 
+from bots.earthscope_post.cta import append_caption_cta
+
 HERE = Path(__file__).resolve().parent
 load_dotenv(HERE / ".env")
 load_dotenv(HERE.parent / ".env")
@@ -1016,19 +1018,6 @@ def carousel_image_urls(urls: Dict[str, str]) -> List[str]:
   return [urls["affects"], urls["play"], urls["stats"]]
 
 
-APP_CTA = "Track your own sleep, HRV, pain, and Earth signal patterns in Gaia Eyes."
-
-
-def _append_app_cta(caption: str) -> str:
-  text = (caption or "").strip()
-  if not text:
-    return APP_CTA
-  lower = text.lower()
-  if "track your own" in lower or "download gaia eyes" in lower or "open gaia eyes" in lower:
-    return text
-  return f"{text}\n\n{APP_CTA}"
-
-
 def derive_caption_and_hashtags(post: dict) -> tuple[str, str]:
   """Return (caption, hashtags) preferring plain caption, with JSON/sections fallback when needed."""
   cap = post.get("caption") or ""
@@ -1075,7 +1064,8 @@ def derive_caption_and_hashtags(post: dict) -> tuple[str, str]:
       if parsed:
         cap = parsed
 
-  cap = _append_app_cta(cap.strip())
+  seed = f"{post.get('day') or ''}|{post.get('platform') or ''}|{cap[:80]}"
+  cap = append_caption_cta(cap.strip(), seed=seed)
   if tags:
     return cap + "\n\n" + tags, tags
   return cap, tags

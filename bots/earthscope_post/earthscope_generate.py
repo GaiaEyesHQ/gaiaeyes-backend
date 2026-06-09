@@ -13,6 +13,8 @@ Notes:
 - If OpenAI key is missing, falls back to deterministic copy using numbers.
 """
 
+from __future__ import annotations
+
 import os, json, argparse, re
 import math
 from datetime import date, datetime, timezone, timedelta
@@ -1024,7 +1026,10 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
     severe = str((facts or {}).get("severe_summary") or "").strip()
     kp = to_float((facts or {}).get("kp_max_24h"))
 
-    if cmes <= 0 and re.search(r"\b(cme|cmes|coronal mass ejection)\b", combined):
+    if cmes <= 0 and _has_unsupported_event_mention(
+        combined,
+        r"\b(cme|cmes|coronal mass ejection)\b",
+    ):
         _dbg("validate: cme mention without supporting context")
         return None
     if flares <= 0 and re.search(r"\b(x-class|m-class)\b", combined):
@@ -1035,6 +1040,30 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
         _dbg("validate: severe storm mention without supporting context")
         return None
     return obj
+
+
+def _has_unsupported_event_mention(text: str, event_pattern: str) -> bool:
+    sentences = [part.strip() for part in re.split(r"(?<=[\.!?;])\s+", text or "") if part.strip()]
+    if not sentences:
+        sentences = [(text or "").strip()]
+    event_re = re.compile(event_pattern, re.I)
+    absence_before_re = re.compile(
+        r"\b(no|none|without|absent|not|no major|no recent|didn(?:'|’)t|doesn(?:'|’)t|isn(?:'|’)t|wasn(?:'|’)t|weren(?:'|’)t)\b.{0,80}"
+        + event_pattern,
+        re.I,
+    )
+    absence_after_re = re.compile(
+        event_pattern
+        + r".{0,80}\b(absent|none|not present|not reported|not active|quiet|missing|zero)\b",
+        re.I,
+    )
+    for sentence in sentences:
+        if not event_re.search(sentence):
+            continue
+        if absence_before_re.search(sentence) or absence_after_re.search(sentence):
+            continue
+        return True
+    return False
 
 
 def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str], facts: Dict[str, Any], temperature: float = 0.8, template_id: Optional[int] = None) -> Optional[Dict[str, str]]:
