@@ -19,10 +19,6 @@ on:
         description: "Generate a public EarthScope shadow-review artifact"
         required: false
         default: "false"
-      public_candidate_mode:
-        description: "Shadow candidate strategy (public_draft_restored, legacy_caption_rewrite, or minimal_caption_rewrite)"
-        required: false
-        default: "public_draft_restored"
 
 concurrency:
   group: gaia-eyes-daily-${{ github.ref }}
@@ -56,7 +52,7 @@ jobs:
       EARTHSCOPE_HYBRID_REWRITE: "true"
       EARTHSCOPE_FORCE_RULES: "false"
       EARTHSCOPE_PUBLIC_SHADOW: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.public_shadow || 'false') || 'false' }}
-      EARTHSCOPE_PUBLIC_CANDIDATE_MODE: ${{ github.event.inputs.public_candidate_mode || 'public_draft_restored' }}
+      EARTHSCOPE_PUBLIC_CANDIDATE_MODE: public_draft_restored
       EARTHSCOPE_PUBLIC_SHADOW_OUTPUT: ${{ github.workspace }}/artifacts/public-earthscope-shadow.json
       AURORA_REGION: "mid"
     steps:
@@ -231,6 +227,7 @@ jobs:
       contents: write
       issues: write
     env:
+      PYTHONPATH: ${{ github.workspace }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
@@ -387,6 +384,7 @@ jobs:
       contents: read
       issues: write
     env:
+      PYTHONPATH: ${{ github.workspace }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
