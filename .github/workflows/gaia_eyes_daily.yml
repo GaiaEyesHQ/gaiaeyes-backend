@@ -56,9 +56,9 @@ jobs:
       EARTHSCOPE_PUBLIC_SHADOW_OUTPUT: ${{ github.workspace }}/artifacts/public-earthscope-shadow.json
       AURORA_REGION: "mid"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install deps
@@ -108,7 +108,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_MEDIA_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Clone media repo
         run: |
           set -euo pipefail
@@ -136,7 +136,7 @@ jobs:
           git -C "${MEDIA_REPO_PATH}" config user.name  "github-actions[bot]"
           git -C "${MEDIA_REPO_PATH}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install deps
@@ -248,11 +248,11 @@ jobs:
       IG_CAROUSEL_SINGLE_IMAGE_FALLBACK: "true"
       ALLOW_PARTIAL_META_FAILURE: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Wait for CDN propagation
         run: sleep 60
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install deps
@@ -403,7 +403,7 @@ jobs:
       IG_REEL_CREATE_CYCLES: "2"
       ALLOW_PARTIAL_META_FAILURE: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install FFmpeg
         run: |
@@ -419,7 +419,7 @@ jobs:
           sudo apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends ffmpeg jq
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
