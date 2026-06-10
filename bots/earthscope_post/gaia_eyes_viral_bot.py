@@ -39,7 +39,7 @@ import re
 import subprocess
 import datetime as dt
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Union, NamedTuple
+from typing import Any, Mapping, Optional, Tuple, List, Dict, Union, NamedTuple
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter
 
@@ -638,7 +638,7 @@ def generate_daily_forecast(sch: float, kp_current: float) -> Tuple[str, str, st
         tip  = "Move gently, breathe deeper, drink water."
     else:
         mood = "The ideal energy day! Balanced energy—great for clarity and steady focus."
-        tip  = "Plan, create, and enjoy steady vibes."
+        tip  = "Use the calmer window for one focused task, then reset before switching gears."
     return energy, mood, tip
 
 def get_daily_affirmation() -> str:
@@ -1191,6 +1191,21 @@ def build_stats_rows(
 # ---------------------------------------
 # Stats card renderer
 # ---------------------------------------
+def _cta_context_from_stats(feats: Mapping[str, Any], pulse: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    return {
+        "kp_max": feats.get("kp_max") or feats.get("kp_current"),
+        "kp_current": feats.get("kp_current"),
+        "cmes_count": feats.get("cmes_count") or feats.get("cmes_24h"),
+        "flares_count": feats.get("flares_count") or feats.get("flares_24h"),
+        "sch_any_fundamental_avg_hz": (
+            feats.get("sch_any_fundamental_avg_hz")
+            or feats.get("sch_fundamental_avg_hz")
+            or feats.get("sch_cumiana_fundamental_avg_hz")
+        ),
+        "aurora_headline": (pulse or {}).get("aurora_headline") if isinstance(pulse, Mapping) else None,
+    }
+
+
 def render_stats_card_from_features(
     day: dt.date,
     feats: dict,
@@ -1293,7 +1308,7 @@ def render_stats_card_from_features(
     # “Did you know” footer
     y += 40
     did_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf"], 36)
-    cta = select_earthscope_cta(day.isoformat()).get("card", "").strip()
+    cta = select_earthscope_cta(day.isoformat(), context=_cta_context_from_stats(feats, pulse)).get("card", "").strip()
     y = _draw_wrapped_multilines(draw, cta, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
 
@@ -1305,8 +1320,9 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
     body = (text or "").lower()
     tone_l = (tone or "").lower()
     energy_l = (energy or "").lower()
+    calm_context = tone_l in {"calm", "neutral"} or energy_l == "calm"
     candidates = [
-        (("focus", "attention", "clarity", "cognitive", "scattered"), "Focus feeling scattered?"),
+        (("focus", "attention", "clarity", "cognitive", "scattered"), "Need a steadier focus window?" if calm_context else "Focus feeling scattered?"),
         (("sleep", "wind-down", "bedtime", "fragmented"), "Sleep feeling fragile?"),
         (("hrv", "heart-rate variability", "autonomic", "baseline"), "HRV running jumpy?"),
         (("pain", "nerve", "flare", "reactivity", "sensitive"), "Body feeling reactive?"),
@@ -1321,6 +1337,48 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
     if tone_l in ("stormy", "unsettled") or energy_l in ("high", "elevated"):
         return "Wired and scattered?"
     return "Need a steadier window?"
+
+
+def _public_card_text(text: str) -> str:
+    cleaned = _safe_text(text)
+    replacements = [
+        (r"\bClinicians often see\b", "Gaia Eyes often sees"),
+        (r"\bClinicians and sensitive individuals should\b", "If you are sensitive,"),
+        (r"\bClinicians\b", "Gaia Eyes"),
+        (r"\bclinicians\b", "Gaia Eyes"),
+        (r"\bClinician note:\s*", "Pattern note: "),
+        (r"\bclinician note:\s*", "Pattern note: "),
+        (r"\bsteady vibes\b", "a steadier rhythm"),
+        (r"\bvibes\b", "signals"),
+    ]
+    for pattern, repl in replacements:
+        cleaned = re.sub(pattern, repl, cleaned)
+    return cleaned
+
+
+def _format_public_playbook(text: str) -> str:
+    cleaned = _public_card_text(text).replace("\r", "").strip()
+    if not cleaned:
+        return ""
+    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+    if len(lines) <= 1:
+        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        lines = [item.strip() for item in sentences if item.strip()]
+    out: List[str] = []
+    for line in lines:
+        line = re.sub(r"^(?:[-•]\s*|\d+\.\s*)", "", line).strip()
+        if not line:
+            continue
+        if not line.endswith((".", "!", "?")):
+            line += "."
+        out.append(f"- {line}")
+    return "\n".join(out[:4])
+
+
+def _trim_public_affects(text: str, max_sentences: int = 3) -> str:
+    cleaned = _public_card_text(text)
+    parts = [item.strip() for item in re.split(r"(?<=[.!?])\s+", cleaned) if item.strip()]
+    return " ".join(parts[:max_sentences]).strip() if parts else cleaned
 
 def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: str = "square") -> Image.Image:
     if kind == "tall":
@@ -1343,20 +1401,12 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
         parts = body.split("QUICK TIP:", 1)
         body = parts[0].rstrip()
         tip_head, tip_body = "QUICK TIP:", parts[1].strip()
-    if "DAILY COSMIC AFFIRMATION:" in body:
-        parts = body.split("DAILY COSMIC AFFIRMATION:", 1)
-        body = parts[0].rstrip()
-        aff_head, aff_body = "DAILY COSMIC AFFIRMATION:", parts[1].strip()
     # If both were present originally (due to ordering), ensure we didn't drop one
     # by checking original text again
     if tip_head is None and "QUICK TIP:" in (aff_body or ""):
         sub = aff_body.split("QUICK TIP:", 1)
         aff_body = sub[0].rstrip()
         tip_head, tip_body = "QUICK TIP:", sub[1].strip()
-    if aff_head is None and "DAILY COSMIC AFFIRMATION:" in (tip_body or ""):
-        sub = tip_body.split("DAILY COSMIC AFFIRMATION:", 1)
-        tip_body = sub[0].rstrip()
-        aff_head, aff_body = "DAILY COSMIC AFFIRMATION:", sub[1].strip()
 
     # Daily headers for affects/care cards
     title_norm = (title or "").strip().lower()
@@ -1419,11 +1469,6 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
         y += 24
         _shadowed_text(draw, (x0, y), tip_head, font=font_h1, fill=fg); y += 60
         y = _draw_wrapped_to_bottom(draw, tip_body, font_body, x0, y, W - x0 - 120, bottom=safe_bottom, line_gap=54)
-    if aff_head and aff_body:
-        y += 24
-        _shadowed_text(draw, (x0, y), aff_head, font=font_h1, fill=fg); y += 60
-        y = _draw_wrapped_to_bottom(draw, aff_body, font_body, x0, y, W - x0 - 120, bottom=safe_bottom, line_gap=54)
-
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 
@@ -1778,19 +1823,15 @@ def main(args: Optional[argparse.Namespace] = None):
         fa, fp = generate_daily_forecast(sch, kp)[1], " - " + generate_daily_forecast(sch, kp)[2]
         affects_txt = affects_txt or fa
         playbook_txt = playbook_txt or fp
+    affects_txt = _trim_public_affects(affects_txt)
+    playbook_txt = _format_public_playbook(playbook_txt)
+
     # Quick Tip placement
     if tip:
         if affects_txt:
             affects_txt = affects_txt.strip() + "\n\nQUICK TIP:\n" + tip.strip()
         else:
             affects_txt = "QUICK TIP:\n" + tip.strip()
-    aff_line = get_daily_affirmation()
-    # Affirmation placement
-    if aff_line:
-        if playbook_txt:
-            playbook_txt = playbook_txt.strip() + "\n\nDAILY COSMIC AFFIRMATION:\n" + aff_line
-        else:
-            playbook_txt = "DAILY COSMIC AFFIRMATION:\n" + aff_line
 
     caption_text = strip_hashtags_and_emojis(_safe_text(caption_text))
     body_md = _safe_text(body_md)

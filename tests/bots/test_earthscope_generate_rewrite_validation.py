@@ -13,7 +13,7 @@ sys.modules.setdefault("supabase", supabase_stub)
 os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 
-from bots.earthscope_post.earthscope_generate import _validate_rewrite
+from bots.earthscope_post.earthscope_generate import _polish_public_caption, _validate_rewrite
 
 
 def _rewrite_with(text: str) -> dict[str, str]:
@@ -42,3 +42,13 @@ def test_validate_rewrite_rejects_unsupported_positive_cme_language():
     )
 
     assert result is None
+
+
+def test_polish_public_caption_replaces_repetitive_day_feels_opener():
+    caption = _polish_public_caption(
+        "The day feels steady and cooperative. Use focused work blocks.",
+        {"kp_max_24h": 2.0},
+    )
+
+    assert caption.startswith("Use the steadier window while it is here.")
+    assert "The day feels" not in caption

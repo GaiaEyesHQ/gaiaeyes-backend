@@ -375,7 +375,7 @@ def render_public_earthscope_post(
             "- Focus/energy: Expect more variability and shorter clean focus windows.",
             "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
             "- Sleep: Protect the wind-down window and keep late stimulation lighter.",
-            f"- {'Clinician' if first_person else 'Sensitivity'} note: If you run sensitive, pace flares instead of forcing through them.",
+            "- Pattern note: If you run sensitive, pace flares instead of forcing through them.",
         ]
     else:
         affects_lines = [
@@ -384,7 +384,7 @@ def render_public_earthscope_post(
             "- Sleep: Keep evening light warm and low so the calmer window carries through.",
         ]
         if first_person:
-            affects_lines.append("- Clinician note: I usually see steadier recovery patterns on days like this.")
+            affects_lines.append("- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.")
     affects = "\n".join(affects_lines)
 
     action_rows = payload.actions.get("primary") if isinstance(payload.actions, Mapping) else []

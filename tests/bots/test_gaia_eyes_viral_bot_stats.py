@@ -7,7 +7,14 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bots.earthscope_post.gaia_eyes_viral_bot import _earthscope_hook_title, build_stats_rows, StatRow
+from bots.earthscope_post.gaia_eyes_viral_bot import (
+    _earthscope_hook_title,
+    _format_public_playbook,
+    _public_card_text,
+    _trim_public_affects,
+    build_stats_rows,
+    StatRow,
+)
 
 
 def _row_for_label(rows: list[StatRow], label: str) -> StatRow:
@@ -80,3 +87,33 @@ def test_earthscope_hook_title_leads_with_symptom_pattern():
     )
 
     assert title == "Focus feeling scattered?"
+
+
+def test_earthscope_hook_title_uses_calm_focus_language():
+    title = _earthscope_hook_title(
+        "Focus windows can be slightly extended as the field is mostly cooperative.",
+        tone="neutral",
+        energy="Calm",
+    )
+
+    assert title == "Need a steadier focus window?"
+
+
+def test_public_card_text_removes_clinician_and_vibes_language():
+    text = _public_card_text("Clinicians often see recovery patterns. Enjoy steady vibes.")
+
+    assert "Clinicians" not in text
+    assert "vibes" not in text
+    assert "Gaia Eyes often sees" in text
+
+
+def test_format_public_playbook_outputs_clean_bullets():
+    text = _format_public_playbook("Use steady blocks\nKeep movement light")
+
+    assert text == "- Use steady blocks.\n- Keep movement light."
+
+
+def test_trim_public_affects_keeps_first_three_sentences():
+    text = _trim_public_affects("One. Two. Three. Four.")
+
+    assert text == "One. Two. Three."

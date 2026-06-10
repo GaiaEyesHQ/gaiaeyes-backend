@@ -1068,8 +1068,14 @@ def derive_caption_and_hashtags(post: dict) -> tuple[str, str]:
       if parsed:
         cap = parsed
 
+  metrics = post.get("metrics_json")
+  if isinstance(metrics, str):
+    try:
+      metrics = json.loads(metrics)
+    except Exception:
+      metrics = None
   seed = f"{post.get('day') or ''}|{post.get('platform') or ''}|{cap[:80]}"
-  cap = append_caption_cta(cap.strip(), seed=seed)
+  cap = append_caption_cta(cap.strip(), seed=seed, context=metrics if isinstance(metrics, dict) else None)
   if tags:
     return cap + "\n\n" + tags, tags
   return cap, tags

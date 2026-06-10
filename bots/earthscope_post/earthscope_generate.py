@@ -438,13 +438,13 @@ HOOKS = {
         "Today might pack a punch.",
         "Strong coupling window—guard your spoons today.",
         "Prickly atmosphere—don't let it make you one.",
-        "The vibes are jivin;—proceed like your walking on eggshells.",
+        "Big signal day; keep your load honest.",
         "Amplified everything—rest and reset.",
         "Volatile day—work steady, not in sprints.",
     ],
     "neutral": [
         "Neutral energy. You set the pace",
-        "Bland vibes—nothing too exciting.",
+        "Low-drama field; use the steadier window.",
         "Little influence—enjoy a clear day.",
         "Ordinary—enjoy a normal day.",
         "Middle‑of‑the‑road day—consistency wins.",
@@ -729,6 +729,37 @@ def _sanitize_caption(txt: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
+
+def _caption_starts_repetitive(caption: str) -> bool:
+    head = (caption or "").strip().lower()
+    return bool(re.match(r"^(today|the day)\s+(feels|has|is)\b", head))
+
+
+def _caption_context_lead(ctx: Dict[str, Any]) -> str:
+    tone = _tone_from_ctx(ctx)
+    if tone == "stormy":
+        return "Keep today in shorter, steadier bursts."
+    if tone == "unsettled":
+        return "Build in a little more nervous-system slack today."
+    if tone in {"calm", "neutral"}:
+        return "Use the steadier window while it is here."
+    return "Let the signal shape the plan, not the whole day."
+
+
+def _polish_public_caption(caption: str, ctx: Dict[str, Any]) -> str:
+    cap = _sanitize_caption(caption)
+    if _caption_starts_repetitive(cap):
+        parts = re.split(r"(?<=\.)\s+", cap, maxsplit=1)
+        rest = parts[1].strip() if len(parts) > 1 else cap
+        cap = f"{_caption_context_lead(ctx)} {rest}".strip()
+    cap = re.sub(r"\bClinicians often see\b", "Gaia Eyes often sees", cap)
+    cap = re.sub(r"\bclinicians often see\b", "Gaia Eyes often sees", cap)
+    cap = re.sub(r"\bClinicians\b", "Gaia Eyes", cap)
+    cap = re.sub(r"\bclinicians\b", "Gaia Eyes", cap)
+    cap = re.sub(r"\bsteady vibes\b", "a steadier rhythm", cap, flags=re.I)
+    cap = re.sub(r"\bvibes\b", "signals", cap, flags=re.I)
+    return cap.strip()
+
 def _needs_rehook(s: str) -> bool:
     if not s: return True
     head = s.strip().lower()
@@ -800,17 +831,14 @@ def _legacy_public_rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
         feel.append(f"- Focus/energy: {_pick_variant('feel_unsettled') or 'Expect ebbs/spikes; keep tasks short.'}")
         feel.append("- Autonomic/HRV: Southward Bz or higher Kp can nudge HRV down in some; paced breathing helps.")
         feel.append(f"- Sleep: {_pick_variant('sleep_guard')}")
-        if EARTHSCOPE_FIRST_PERSON:
-            feel.append(f"- Clinician note: {_pick_variant('nerve_note', seed_extra=1)}")
-        else:
-            feel.append(f"- Sensitivity note: {_pick_variant('nerve_note', seed_extra=1)}")
+        feel.append(f"- Pattern note: {_pick_variant('nerve_note', seed_extra=1)}")
         feel.append("- Comms/GPS: Tech may be glitchy today. Satellite based services, especially. Nervous System sensitivities may increase.")
     else:
         feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good window to get things done.'}")
         feel.append("- Autonomic/HRV: Great for recovery and healing practices.")
         feel.append("- Sleep: Keep evening light warm and low.")
         if EARTHSCOPE_FIRST_PERSON:
-            feel.append("- Clinician note: I see steadier HRV and less reactivity for many on days like this.")
+            feel.append("- Pattern note: Gaia Eyes often sees steadier recovery and less reactivity on days like this.")
     affects = "\n".join(feel)
 
     care_lines = []
@@ -1939,7 +1967,7 @@ def generate_short_caption(
     if EARTHSCOPE_FORCE_RULES or not client:
         _trace_mark("caption_path", "rule_copy")
         rc = _rule_copy(ctx)
-        return rc["caption"].strip(), rc["hashtags"]
+        return _polish_public_caption(rc["caption"], ctx), rc["hashtags"]
 
     # Hybrid: generate rule copy and ask LLM to tighten it (no change of facts)
     rc = _rule_copy(ctx)
@@ -1955,7 +1983,7 @@ def generate_short_caption(
             )
             if rewritten and rewritten.get("caption"):
                 _trace_mark("caption_path", "minimal_caption_rewrite_live")
-                caption = _sanitize_caption(str(rewritten.get("caption") or ""))
+                caption = _polish_public_caption(str(rewritten.get("caption") or ""), ctx)
                 hashtags = str(rewritten.get("hashtags") or rc.get("hashtags") or legacy_draft["hashtags"]).strip()
                 return caption.strip(), hashtags
         # New: interpretive, number-free JSON rewrite (cached single-call reuse)
@@ -1969,7 +1997,7 @@ def generate_short_caption(
                 cap += "."
 
             # Sanitize and avoid sterile bulletin-style openers
-            cap = _sanitize_caption(cap)
+            cap = _polish_public_caption(cap, ctx)
             first_line = _first_nonempty_line(cap).lower()
             if any(first_line.startswith(p) for p in BAN_CAPTION_OPENERS):
                 _trace_mark("hook_rescue_triggered", True)
@@ -2006,7 +2034,7 @@ def generate_short_caption(
     if not model:
         _trace_mark("caption_path", "rule_copy")
         rc = _rule_copy(ctx)
-        return rc["caption"].strip(), rc.get("hashtags", "#GaiaEyes #SpaceWeather")
+        return _polish_public_caption(rc["caption"], ctx), rc.get("hashtags", "#GaiaEyes #SpaceWeather")
     try:
         _trace_mark("caption_path", "legacy_caption_llm")
         resp = _chat_create_compat(
@@ -2040,7 +2068,7 @@ def generate_short_caption(
         if not hashtags:
             hashtags = "#GaiaEyes #SpaceWeather #Schumann #Frequency #ChronicPain"
         # Post‑process: sanitize and fix repetitive/question intros
-        caption = _sanitize_caption(caption)
+        caption = _polish_public_caption(caption, ctx)
         # Prevent sterile bulletin-style openers (check first non-empty line only)
         first_line = _first_nonempty_line(caption).lower()
         if any(first_line.startswith(p) for p in BAN_CAPTION_OPENERS):
@@ -2075,12 +2103,12 @@ def generate_short_caption(
         # ensure hashtags exist
         if not hashtags:
             hashtags = "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #Health #localtriggers"
-        caption = _scrub_banned_phrases(caption)
+        caption = _scrub_banned_phrases(_polish_public_caption(caption, ctx))
         return caption.strip(), hashtags
     except Exception:
         _trace_mark("caption_path", "rule_copy")
         rc = _rule_copy(ctx)
-        return rc["caption"].strip(), rc["hashtags"]
+        return _polish_public_caption(rc["caption"], ctx), rc["hashtags"]
 
 
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
