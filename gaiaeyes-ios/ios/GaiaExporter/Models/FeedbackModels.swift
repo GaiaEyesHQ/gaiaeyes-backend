@@ -355,6 +355,8 @@ extension DailyCheckInEntry {
             return "Temporary illness"
         case let value where Self.illnessDetailLabels[value] != nil:
             return Self.illnessDetailLabels[value]
+        case let value where ExposureOption.label(for: value) != value.replacingOccurrences(of: "_", with: " ").capitalized:
+            return ExposureOption.label(for: value)
         case "":
             return nil
         default:

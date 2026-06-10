@@ -1222,8 +1222,8 @@ def render_stats_card_from_features(
     _add_top_gradient(im, height=260, alpha_top=190)
 
     draw = ImageDraw.Draw(im)
-    font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 72)
-    font_h2   = _load_font(["Oswald-Bold.ttf", "AbrilFatface-Regular.ttf"], 40)
+    font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "Oswald-Bold.ttf"], 62)
+    font_h2   = _load_font(["Oswald-Bold.ttf", "Poppins-Bold.ttf"], 38)
     font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 36)
     fg = (235,245,255,255); dim=(190,205,230,255)
 
@@ -1247,11 +1247,11 @@ def render_stats_card_from_features(
     # Energy pill
     el = (energy or "").lower()
     col = (59,201,168,200) if el=="calm" else ((243,193,75,200) if el=="elevated" else ((239,106,106,200) if el=="high" else (104,162,224,200)))
-    _draw_badge(im, draw, f"Energy: {energy}", (x0, y-6), fill=col, font=font_h2, pad=(18,10))
-    y += 66
+    _draw_badge(im, draw, f"Energy: {energy}", (x0, y+4), fill=col, font=font_h2, pad=(18,10))
+    y += 82
 
     # Panel
-    panel_top = max(180, y + 8)
+    panel_top = max(220, y + 8)
     panel_box = (80, panel_top, W - 80, H - 140)
     _blur_panel(im, panel_box, blur_radius=6, panel_alpha=70)
 
@@ -1261,7 +1261,7 @@ def render_stats_card_from_features(
         else ("Tomsk" if feats.get("sch_fundamental_avg_hz") is not None else "Cumiana"),
         pulse=pulse
     )
-    font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 48)
+    font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 44)
     chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
 
     def _chip(draw: ImageDraw.ImageDraw, x:int, y:int, color:tuple, txt:str):
@@ -1312,7 +1312,7 @@ def render_stats_card_from_features(
     y = _draw_wrapped_multilines(draw, cta, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
 
-    _overlay_logo_and_tagline(im, "Open Gaia Eyes for your pattern read.")
+    _overlay_logo_and_tagline(im, "Download Gaia Eyes for your personalized outlook, patterns, and triggers.")
     return im.convert("RGB")
 
 
@@ -1342,6 +1342,11 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
 def _public_card_text(text: str) -> str:
     cleaned = _safe_text(text)
     replacements = [
+        (r"\bFocus and sustained tasks are easier to run\b", "Focus and sustained tasks may feel easier to keep on track"),
+        (r"\bwithout unexpected interruptions\b", "with fewer unexpected interruptions"),
+        (r"\bautonomic markers\b", "heart-rate and recovery trends"),
+        (r"\bSleep and winding-down can benefit from keeping evening light and stimulation modest\b", "Sleep may come easier if evening light and stimulation stay modest"),
+        (r"\bwinding-down\b", "wind-down"),
         (r"\bClinicians often see\b", "Gaia Eyes often sees"),
         (r"\bClinicians and sensitive individuals should\b", "If you are sensitive,"),
         (r"\bClinicians\b", "Gaia Eyes"),

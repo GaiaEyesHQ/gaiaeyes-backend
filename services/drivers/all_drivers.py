@@ -19,6 +19,7 @@ from services.patterns.personal_relevance import (
     fetch_recent_outcome_summary,
     resolve_current_drivers,
 )
+from services.exposures.catalog import EVERYDAY_EXPOSURE_KEYS, exposure_label
 from services.voice.drivers import build_driver_reason_semantic, render_driver_reason
 from services.signal_bar import build_signal_bar
 
@@ -41,6 +42,7 @@ _DRIVER_CATEGORY = {
     "overexertion": "body_context",
     "allergen_exposure": "body_context",
     "temporary_illness": "body_context",
+    **{key: "body_context" for key in EVERYDAY_EXPOSURE_KEYS},
     "kp": "space",
     "bz": "space",
     "sw": "space",
@@ -71,6 +73,7 @@ _BASE_DRIVER_ORDER = {
     "overexertion": 200,
     "allergen_exposure": 201,
     "temporary_illness": 202,
+    **{key: 220 + index for index, key in enumerate(EVERYDAY_EXPOSURE_KEYS)},
 }
 
 _SEVERITY_RANK = {
@@ -106,6 +109,7 @@ _KEY_ALIASES = {
     "overexertion": ["overexertion", "heavy_activity"],
     "allergen_exposure": ["allergen_exposure", "allergen exposure"],
     "temporary_illness": ["temporary_illness", "illness", "cold_flu"],
+    **{key: [key, exposure_label(key).lower()] for key in EVERYDAY_EXPOSURE_KEYS},
 }
 
 _WHAT_IT_IS = {
@@ -126,6 +130,7 @@ _WHAT_IT_IS = {
     "overexertion": "Recent heavy activity or overexertion you logged for today.",
     "allergen_exposure": "Recent allergen exposure you logged for today.",
     "temporary_illness": "A temporary illness context you logged for today.",
+    **{key: f"Recent {exposure_label(key).lower()} context you logged." for key in EVERYDAY_EXPOSURE_KEYS},
 }
 
 _SCIENCE_NOTES = {
@@ -146,6 +151,10 @@ _SCIENCE_NOTES = {
     "overexertion": "Logged exposures are body-context inputs that help explain recovery load alongside environmental drivers.",
     "allergen_exposure": "Logged allergen exposure is body context from your own report, not a measured ambient pollen level.",
     "temporary_illness": "Temporary illness is treated as a context flag so pattern learning is less likely to over-credit outside signals.",
+    **{
+        key: "Logged exposure diary entries are personal context, not a diagnosis, dose estimate, or confirmed cause."
+        for key in EVERYDAY_EXPOSURE_KEYS
+    },
 }
 
 _BODY_CONTEXT_NOTE = (
@@ -157,6 +166,7 @@ _EXPOSURE_DRIVER_WINDOWS_HOURS = {
     "overexertion": 18.0,
     "allergen_exposure": 24.0,
     "temporary_illness": 36.0,
+    **{key: 24.0 for key in EVERYDAY_EXPOSURE_KEYS},
 }
 
 _EXPOSURE_DRIVER_META = {
@@ -174,6 +184,14 @@ _EXPOSURE_DRIVER_META = {
         "label": "Temporary Illness",
         "short_reason": "A short-term illness may be adding load today.",
         "active_now_text": "Temporary illness context is still in the mix for today.",
+    },
+    **{
+        key: {
+            "label": exposure_label(key),
+            "short_reason": f"Recent {exposure_label(key).lower()} may be useful context for today.",
+            "active_now_text": f"{exposure_label(key)} is in your recent exposure diary.",
+        }
+        for key in EVERYDAY_EXPOSURE_KEYS
     },
 }
 

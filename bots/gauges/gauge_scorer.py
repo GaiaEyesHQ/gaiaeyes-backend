@@ -23,6 +23,7 @@ from services.personalization.health_context import (
     gauge_personalization_multiplier,
     health_status_contextual_adjustment,
 )
+from services.exposures.catalog import EVERYDAY_EXPOSURE_KEYS
 
 
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
@@ -145,6 +146,10 @@ _EXPOSURE_GAUGE_EFFECTS: Dict[str, Dict[str, float]] = {
     "OVEREXERTION": {"stamina": 1.0, "energy": 0.75, "pain": 0.35, "sleep": 0.2, "heart": 0.15},
     "TEMPORARY_ILLNESS": {"energy": 0.8, "pain": 0.45, "focus": 0.4, "sleep": 0.35, "heart": 0.25, "mood": 0.15},
 }
+_EXPOSURE_GAUGE_EFFECTS.update({
+    key.upper(): {"health_status": 0.24, "energy": 0.18, "focus": 0.14, "pain": 0.12, "sleep": 0.08}
+    for key in EVERYDAY_EXPOSURE_KEYS
+})
 
 _EXPOSURE_GAUGE_CAPS: Dict[str, float] = {
     "pain": 10.0,
@@ -154,6 +159,7 @@ _EXPOSURE_GAUGE_CAPS: Dict[str, float] = {
     "energy": 10.0,
     "sleep": 8.0,
     "mood": 5.0,
+    "health_status": 6.0,
 }
 
 
@@ -510,6 +516,14 @@ def _exposure_recency_multiplier(
         if age_hours <= 72.0:
             return 0.35
         return 0.0
+    if exposure_key.lower() in EVERYDAY_EXPOSURE_KEYS:
+        if age_hours <= 24.0:
+            return 1.0
+        if age_hours <= 48.0:
+            return 0.55
+        if age_hours <= 72.0:
+            return 0.25
+        return 0.0
     return 0.0
 
 
@@ -529,6 +543,8 @@ def _is_recent_exposure(
         return age_hours <= 24.0
     if exposure_key == "TEMPORARY_ILLNESS":
         return age_hours <= 36.0
+    if exposure_key.lower() in EVERYDAY_EXPOSURE_KEYS:
+        return age_hours <= 24.0
     return False
 
 

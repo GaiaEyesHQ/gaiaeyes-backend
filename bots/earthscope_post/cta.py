@@ -53,7 +53,7 @@ CTA_VARIANTS = [
     {
         "key": "frequency-sensitive",
         "themes": ("schumann", "ulf", "frequency"),
-        "card": "Sensitive to Schumann or ULF signals? Gaia Eyes helps you find out.",
+        "card": "Sensitive to Schumann or ULF signals? Gaia Eyes helps find your environmental triggers and patterns.",
         "caption": (
             "Sensitive to Schumann or ULF signals? Gaia Eyes compares them with sleep, HRV, "
             "mood, and symptoms."

@@ -16,6 +16,7 @@ from services.personalization.health_context import (
     PersonalizationProfile,
     build_personalization_profile,
 )
+from services.exposures.catalog import EVERYDAY_EXPOSURE_KEYS, exposure_label
 from services.voice.profiles import VoiceProfile
 from services.voice.semantic import SemanticAction, SemanticGuardrails, SemanticPayload, SemanticRenderHints
 
@@ -760,29 +761,32 @@ _EXPOSURE_DISPLAY_LABELS = {
     "allergen_exposure": "allergen exposure",
     "overexertion": "heavy activity",
     "temporary_illness": "temporary illness",
+    **{key: exposure_label(key).lower() for key in EVERYDAY_EXPOSURE_KEYS},
 }
 
 _EXPOSURE_CODES_BY_GAUGE = {
-    "pain": {"allergen_exposure", "overexertion", "temporary_illness"},
-    "focus": {"allergen_exposure", "temporary_illness"},
+    "pain": {"allergen_exposure", "overexertion", "temporary_illness", *EVERYDAY_EXPOSURE_KEYS},
+    "focus": {"allergen_exposure", "temporary_illness", *EVERYDAY_EXPOSURE_KEYS},
     "heart": {"allergen_exposure", "overexertion", "temporary_illness"},
     "stamina": {"overexertion", "temporary_illness"},
-    "energy": {"allergen_exposure", "overexertion", "temporary_illness"},
-    "sleep": {"allergen_exposure", "overexertion", "temporary_illness"},
+    "energy": {"allergen_exposure", "overexertion", "temporary_illness", *EVERYDAY_EXPOSURE_KEYS},
+    "sleep": {"allergen_exposure", "overexertion", "temporary_illness", *EVERYDAY_EXPOSURE_KEYS},
     "mood": set(),
-    "health_status": {"allergen_exposure", "overexertion", "temporary_illness"},
+    "health_status": {"allergen_exposure", "overexertion", "temporary_illness", *EVERYDAY_EXPOSURE_KEYS},
 }
 
 _EXPOSURE_EFFECT_BUCKETS = {
     "allergen_exposure": {"sinus_irritation", "head_pressure", "fatigue_fog", "focus_drag", "sleep_fragility"},
     "overexertion": {"fatigue_fog", "pain_flare", "sleep_fragility", "heart_reactivity"},
     "temporary_illness": {"fatigue_fog", "head_pressure", "focus_drag", "sleep_fragility", "heart_reactivity"},
+    **{key: {"fatigue_fog", "focus_drag", "sleep_fragility"} for key in EVERYDAY_EXPOSURE_KEYS},
 }
 
 _EXPOSURE_HELP_BUCKETS = {
     "allergen_exposure": {"allergy_support", "cleaner_air"},
     "overexertion": {"steadier_effort", "hydration_pacing", "sleep_routine"},
     "temporary_illness": {"steadier_effort", "hydration_pacing", "sleep_routine"},
+    **{key: {"steadier_effort", "hydration_pacing"} for key in EVERYDAY_EXPOSURE_KEYS},
 }
 
 _GAUGE_MODAL_STATE_LABELS = {
@@ -1298,6 +1302,12 @@ def _build_exposure_cause_candidates(
         },
     }
     line = ((templates.get(gauge_key) or {}).get(exposure_key) or "").strip()
+    if not line and exposure_key in EVERYDAY_EXPOSURE_KEYS:
+        label = _EXPOSURE_DISPLAY_LABELS.get(exposure_key) or exposure_label(exposure_key).lower()
+        line = (
+            f"You logged {label} recently, so Gaia Eyes is treating it as possible "
+            "body-context while your pattern history builds."
+        )
     return [{"line": line, "priority": 85, "source": "recent_exposure"}] if line else []
 
 

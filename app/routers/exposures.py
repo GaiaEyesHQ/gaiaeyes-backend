@@ -11,6 +11,7 @@ from psycopg.rows import dict_row
 
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
+from services.exposures.catalog import ALL_EXPOSURE_KEYS
 
 
 router = APIRouter(prefix="/v1/exposures", tags=["exposures"])
@@ -21,15 +22,7 @@ try:
 except Exception:
     LOCAL_TZ = ZoneInfo("America/Chicago")
 
-_ALLOWED_EXPOSURE_KEYS = {
-    "allergen_exposure",
-    "overexertion",
-    "temporary_illness",
-    "illness_respiratory",
-    "illness_gastrointestinal",
-    "illness_fever",
-    "illness_other",
-}
+_ALLOWED_EXPOSURE_KEYS = ALL_EXPOSURE_KEYS
 _ALLOWED_SOURCES = {"daily_check_in", "guide", "manual", "symptom_log", "system"}
 
 

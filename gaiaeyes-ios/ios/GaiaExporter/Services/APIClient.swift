@@ -105,6 +105,20 @@ private struct AnalyticsEventsPayload: Encodable {
     let events: [AppAnalyticsEvent]
 }
 
+private struct ExposureEventPayload: Encodable {
+    let exposureKey: String
+    let intensity: Int
+    let source: String
+    let noteText: String?
+
+    enum CodingKeys: String, CodingKey {
+        case exposureKey = "exposure_key"
+        case intensity
+        case source
+        case noteText = "note_text"
+    }
+}
+
 struct AnalyticsUploadResponse: Decodable {
     let ok: Bool?
     let received: Int?
@@ -699,6 +713,25 @@ final class APIClient {
 
     func fetchCurrentSymptoms(windowHours: Int = 12) async throws -> Envelope<CurrentSymptomsSnapshot> {
         try await getJSON("v1/symptoms/current?window_hours=\(windowHours)", as: Envelope<CurrentSymptomsSnapshot>.self)
+    }
+
+    func postExposureEvent(
+        exposureKey: String,
+        intensity: Int = 1,
+        source: String = "manual",
+        noteText: String? = nil
+    ) async throws -> Envelope<ExposureEventOut> {
+        let payload = ExposureEventPayload(
+            exposureKey: exposureKey,
+            intensity: max(1, min(3, intensity)),
+            source: source,
+            noteText: noteText
+        )
+        return try await postJSON(
+            "v1/exposures",
+            body: payload,
+            as: Envelope<ExposureEventOut>.self
+        )
     }
 
     func postAnalyticsEvents(_ events: [AppAnalyticsEvent]) async throws -> AnalyticsUploadResponse {

@@ -3604,6 +3604,8 @@ struct ContentView: View {
     @State private var currentSymptomsError: String? = nil
     @State private var showSymptomSheet: Bool = false
     @State private var showInsightsSymptomSheet: Bool = false
+    @State private var showExposureSheet: Bool = false
+    @State private var showInsightsExposureSheet: Bool = false
     @State private var showCurrentSymptomsSheet: Bool = false
     @State private var dailyCheckInStatus: DailyCheckInStatus? = nil
     @State private var dailyCheckInLoading: Bool = false
@@ -17678,6 +17680,7 @@ struct ContentView: View {
         let onOpenDailyCheckIn: () -> Void
         let onEditTrackedStats: () -> Void
         @Binding var showSymptomSheet: Bool
+        let onLogExposure: () -> Void
         let onOpenQuickCheck: () -> Void
         let onLoadLunarInsights: () async -> Void
 
@@ -17822,15 +17825,24 @@ struct ContentView: View {
 
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        Button {
-                            showSymptomSheet = true
-                        } label: {
-                            Label("Log symptom", systemImage: "plus.circle.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
+                        HStack(spacing: 10) {
+                            Button {
+                                showSymptomSheet = true
+                            } label: {
+                                Label("Log symptom", systemImage: "plus.circle.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(GaugePalette.low)
+
+                            Button(action: onLogExposure) {
+                                Label("Log exposure", systemImage: "leaf.circle")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(GaugePalette.low)
                         .controlSize(.large)
 
                         NavigationLink(value: InsightsRoute.currentSymptoms) {
@@ -19197,6 +19209,7 @@ struct ContentView: View {
                 },
                 onEditTrackedStats: { showSettingsSheet() },
                 showSymptomSheet: $showSymptomSheet,
+                onLogExposure: { showExposureSheet = true },
                 onOpenQuickCheck: { showCameraHealthCheckSheet = true },
                 onLoadLunarInsights: {
                     await fetchLunarInsights()
@@ -19470,6 +19483,7 @@ struct ContentView: View {
                 },
                 onEditTrackedStats: { showSettingsSheet() },
                 showSymptomSheet: $showSymptomSheet,
+                onLogExposure: { showExposureSheet = true },
                 onOpenQuickCheck: { showCameraHealthCheckSheet = true },
                 onLoadLunarInsights: {
                     await fetchLunarInsights()
@@ -20914,6 +20928,7 @@ struct ContentView: View {
                             onOpenDailyCheckIn: { missionInsightsPath = [.dailyCheckIn] },
                             onEditTrackedStats: { showSettingsSheet() },
                             showSymptomSheet: $showInsightsSymptomSheet,
+                            onLogExposure: { showInsightsExposureSheet = true },
                             onOpenQuickCheck: { showCameraHealthCheckSheet = true },
                             onLoadLunarInsights: {
                                 await fetchLunarInsights()
@@ -20982,6 +20997,16 @@ struct ContentView: View {
                     symptomSheetPrefill = nil
                 }) {
                     symptomLogSheet(isPresented: $showInsightsSymptomSheet)
+                }
+                .sheet(isPresented: $showInsightsExposureSheet) {
+                    NavigationStack {
+                        ExposureLogView(api: state.apiWithAuth(), source: "manual") {
+                            Task {
+                                await fetchDashboard()
+                                await fetchDailyCheckInStatus(api: state.apiWithAuth())
+                            }
+                        }
+                    }
                 }
             }
             .safeAreaInset(edge: .top) {
@@ -21083,6 +21108,16 @@ struct ContentView: View {
             symptomSheetPrefill = nil
         }) {
             symptomLogSheet(isPresented: $showSymptomSheet)
+        }
+        .sheet(isPresented: $showExposureSheet) {
+            NavigationStack {
+                ExposureLogView(api: state.apiWithAuth(), source: "manual") {
+                    Task {
+                        await fetchDashboard()
+                        await fetchDailyCheckInStatus(api: state.apiWithAuth())
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showReauthenticationSheet) {
             NavigationStack {

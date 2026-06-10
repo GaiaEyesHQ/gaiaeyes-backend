@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 
 from psycopg.rows import dict_row
 
+from services.exposures.catalog import ALL_EXPOSURE_KEYS, ILLNESS_EXPOSURE_KEYS
+
 
 UTC = timezone.utc
 FOLLOW_UP_RESPONSE_STATES = {"ongoing", "improving", "worse", "resolved"}
@@ -59,14 +61,8 @@ DEFAULT_PAIN_OPTIONS = [
 DEFAULT_ENERGY_OPTIONS = ["tired", "drained", "heavy_body", "brain_fog", "crashed_later"]
 DEFAULT_MOOD_OPTIONS = ["anxious", "wired", "irritable", "low_mood", "emotionally_sensitive"]
 DEFAULT_SLEEP_OPTIONS = ["yes_strongly", "yes_somewhat", "not_much", "unsure"]
-ILLNESS_EXPOSURE_OPTIONS = [
-    "temporary_illness",
-    "illness_respiratory",
-    "illness_gastrointestinal",
-    "illness_fever",
-    "illness_other",
-]
-DEFAULT_EXPOSURE_OPTIONS = ["overexertion", "allergen_exposure", *ILLNESS_EXPOSURE_OPTIONS]
+ILLNESS_EXPOSURE_OPTIONS = list(ILLNESS_EXPOSURE_KEYS)
+DEFAULT_EXPOSURE_OPTIONS = sorted(ALL_EXPOSURE_KEYS)
 
 
 def _normalize_ts(value: Optional[datetime]) -> Optional[datetime]:
@@ -1316,17 +1312,9 @@ async def save_daily_check_in(
                    and source = 'daily_check_in'
                    and event_ts_utc >= %s
                    and event_ts_utc < %s
-                   and exposure_key in (
-                       'overexertion',
-                       'allergen_exposure',
-                       'temporary_illness',
-                       'illness_respiratory',
-                       'illness_gastrointestinal',
-                       'illness_fever',
-                       'illness_other'
-                   )
+                   and exposure_key = any(%s)
                 """,
-                (user_id, start_utc, end_utc),
+                (user_id, start_utc, end_utc, DEFAULT_EXPOSURE_OPTIONS),
                 prepare=False,
             )
             for exposure_key in normalized_exposures:

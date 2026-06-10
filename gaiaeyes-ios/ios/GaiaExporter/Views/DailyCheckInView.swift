@@ -164,6 +164,7 @@ struct DailyCheckInView: View {
     @State private var noteText: String = ""
     @State private var exposures: Set<String> = []
     @State private var illnessDetails: Set<String> = []
+    @State private var showExposureChoices: Bool = false
 
     init(
         api: APIClient,
@@ -349,11 +350,7 @@ struct DailyCheckInView: View {
     }
 
     private var exposureChoices: [DailyCheckInChoice] {
-        [
-            DailyCheckInChoice(id: "overexertion", label: "Heavy activity / overdid it"),
-            DailyCheckInChoice(id: "allergen_exposure", label: "Allergen exposure"),
-            DailyCheckInChoice(id: "temporary_illness", label: "Cold / flu / temporary illness"),
-        ]
+        ExposureOption.checkIn.map { DailyCheckInChoice(id: $0.id, label: $0.label) }
     }
 
     private var illnessDetailChoices: [DailyCheckInChoice] {
@@ -438,20 +435,45 @@ struct DailyCheckInView: View {
                     choices: systemLoadChoices
                 )
 
-                DailyCheckInMultiChoiceGrid(
-                    title: "Anything likely affected today?",
-                    subtitle: "Optional. These keep current gauges honest while helping pattern learning ignore short-term confounders.",
-                    selection: $exposures,
-                    choices: exposureChoices
-                )
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Anything notable today?")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Text(exposures.isEmpty ? "Optional. Add exposure context only if something stands out." : "\(exposures.count) exposure\(exposures.count == 1 ? "" : "s") selected.")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.68))
+                    }
+                    Spacer(minLength: 8)
+                    Button(showExposureChoices ? "Hide" : "Add exposures") {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showExposureChoices.toggle()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DailyCheckInStyle.cardFill)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                if exposures.contains("temporary_illness") {
+                if showExposureChoices {
                     DailyCheckInMultiChoiceGrid(
-                        title: "What kind of illness?",
-                        subtitle: "Optional. This helps Gaia avoid building patterns from temporary sick days.",
-                        selection: $illnessDetails,
-                        choices: illnessDetailChoices
+                        title: "Possible exposure context",
+                        subtitle: "Choose quick categories. Gaia Eyes uses these as possible trigger context, not diagnosis.",
+                        selection: $exposures,
+                        choices: exposureChoices
                     )
+
+                    if exposures.contains("temporary_illness") {
+                        DailyCheckInMultiChoiceGrid(
+                            title: "What kind of illness?",
+                            subtitle: "Optional. This helps Gaia avoid building patterns from temporary sick days.",
+                            selection: $illnessDetails,
+                            choices: illnessDetailChoices
+                        )
+                    }
                 }
 
                 DailyCheckInChoiceGrid(

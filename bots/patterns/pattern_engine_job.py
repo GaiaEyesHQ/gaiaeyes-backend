@@ -27,6 +27,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from services.personalization.health_context import canonicalize_tag_key
+from services.exposures.catalog import ALL_EXPOSURE_KEYS, EVERYDAY_EXPOSURE_KEYS, ILLNESS_EXPOSURE_KEYS
 from services.time.moon import moon_context_for_day
 
 
@@ -123,14 +124,6 @@ OUTCOME_KIND = {
     "hrv_dip_day": "biometric",
     "high_hr_day": "biometric",
     "short_sleep_day": "biometric",
-}
-
-ILLNESS_EXPOSURE_KEYS = {
-    "temporary_illness",
-    "illness_respiratory",
-    "illness_gastrointestinal",
-    "illness_fever",
-    "illness_other",
 }
 
 OUTCOME_CONFOUNDER_FLAGS = {
@@ -844,11 +837,12 @@ def _fetch_daily_exposure_context(
     params: list[Any] = [
         since_day - timedelta(days=2),
         as_of_day + timedelta(days=2),
+        sorted(ALL_EXPOSURE_KEYS),
     ]
     where = [
         "event_ts_utc >= %s",
         "event_ts_utc < %s",
-        "exposure_key in ('overexertion', 'allergen_exposure', 'temporary_illness', 'illness_respiratory', 'illness_gastrointestinal', 'illness_fever', 'illness_other')",
+        "exposure_key = any(%s)",
     ]
     if user_id:
         where.append("user_id = %s")
@@ -871,19 +865,21 @@ def _fetch_daily_exposure_context(
             day,
             bool_or(exposure_key = 'overexertion') as overexertion_reported,
             bool_or(exposure_key = 'allergen_exposure') as allergen_exposure_reported,
-            bool_or(exposure_key in ('temporary_illness', 'illness_respiratory', 'illness_gastrointestinal', 'illness_fever', 'illness_other')) as temporary_illness_reported
+            bool_or(exposure_key = any(%s)) as temporary_illness_reported,
+            bool_or(exposure_key = any(%s)) as everyday_exposure_reported
           from normalized
          where day >= %s
            and day <= %s
          group by user_id, day
     """
-    params.extend([since_day, as_of_day])
+    params.extend([list(ILLNESS_EXPOSURE_KEYS), list(EVERYDAY_EXPOSURE_KEYS), since_day, as_of_day])
     rows = _fetch_rows(conn, sql, params)
     return {
         (str(row["user_id"]), row["day"]): {
             "overexertion_reported": bool(row.get("overexertion_reported")),
             "allergen_exposure_reported": bool(row.get("allergen_exposure_reported")),
             "temporary_illness_reported": bool(row.get("temporary_illness_reported")),
+            "everyday_exposure_reported": bool(row.get("everyday_exposure_reported")),
         }
         for row in rows
         if row.get("user_id") and isinstance(row.get("day"), date)
@@ -1457,6 +1453,7 @@ def build_user_daily_features(
             "overexertion_reported": bool(exposure_row.get("overexertion_reported", False)),
             "allergen_exposure_reported": bool(exposure_row.get("allergen_exposure_reported", False)),
             "temporary_illness_reported": bool(exposure_row.get("temporary_illness_reported", False)),
+            "everyday_exposure_reported": bool(exposure_row.get("everyday_exposure_reported", False)),
             "updated_at": updated_at,
         }
 
