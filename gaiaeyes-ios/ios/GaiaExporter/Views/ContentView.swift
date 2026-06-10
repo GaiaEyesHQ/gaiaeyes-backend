@@ -3606,6 +3606,8 @@ struct ContentView: View {
     @State private var showInsightsSymptomSheet: Bool = false
     @State private var showExposureSheet: Bool = false
     @State private var showInsightsExposureSheet: Bool = false
+    @State private var showMigraineExposurePrompt: Bool = false
+    @State private var showMigraineExposureSheet: Bool = false
     @State private var showCurrentSymptomsSheet: Bool = false
     @State private var dailyCheckInStatus: DailyCheckInStatus? = nil
     @State private var dailyCheckInLoading: Bool = false
@@ -9959,10 +9961,18 @@ struct ContentView: View {
         dismissSheet: @escaping () -> Void
     ) {
         guard !events.isEmpty else { return }
+        let shouldPromptForMigraineExposures = events.contains {
+            normalize($0.symptomCode) == "MIGRAINE"
+        }
         dismissSheet()
 
         Task {
-            _ = await logSymptomEvents(events)
+            let didLog = await logSymptomEvents(events)
+            if didLog && shouldPromptForMigraineExposures {
+                await MainActor.run {
+                    showMigraineExposurePrompt = true
+                }
+            }
         }
     }
 
@@ -12261,11 +12271,11 @@ struct ContentView: View {
             let key = normalizedDriverKey(driver.key)
             switch key {
             case "allergens", "aqi":
-                return ["Head / sinus pressure", "Headache", "Irritation"]
+                return ["Head / sinus pressure", "Migraine", "Headache", "Irritation"]
             case "humidity":
-                return ["Sinus pressure", "Fatigue"]
+                return ["Sinus pressure", "Migraine", "Fatigue"]
             case "pressure":
-                return ["Headache", "Energy dip", "Body aches"]
+                return ["Migraine", "Headache", "Energy dip", "Body aches"]
             case "temp":
                 return ["Energy dip", "Poor sleep"]
             case "schumann", "ulf":
@@ -12283,7 +12293,7 @@ struct ContentView: View {
             guard gaugeShowsAffordance(zoneKey: gauge.zoneKey, zoneLabel: gauge.zoneLabel) else { return [] }
             switch gauge.key {
             case "pain":
-                return ["Pain flare", "Headache"]
+                return ["Pain flare", "Migraine", "Headache"]
             case "focus":
                 return ["Brain fog", "Focus shifts"]
             case "energy", "stamina":
@@ -12293,7 +12303,32 @@ struct ContentView: View {
             case "mood":
                 return ["Irritation"]
             case "heart", "health_status":
-                return ["Body strain"]
+                return ["HRV dips", "Body strain"]
+            default:
+                return []
+            }
+        }
+
+        private func bodySignalLabels(for ref: DashboardPatternRef) -> [String] {
+            switch normalize(ref.outcomeKey ?? "") {
+            case "HEADACHE_DAY":
+                return ["Migraine", "Head / sinus pressure", "Headache"]
+            case "PAIN_FLARE_DAY":
+                return ["Pain flare", "Body aches"]
+            case "FATIGUE_DAY":
+                return ["Fatigue", "Energy dip"]
+            case "ANXIETY_DAY", "RESTLESSNESS_DAY":
+                return ["Restlessness", "Wired"]
+            case "POOR_SLEEP_DAY":
+                return ["Poor sleep", "Restless sleep"]
+            case "FOCUS_FOG_DAY":
+                return ["Brain fog", "Focus shifts"]
+            case "HRV_DIP_DAY":
+                return ["HRV dips", "Recovery strain"]
+            case "HIGH_HR_DAY":
+                return ["Heart rate shifts", "Body strain"]
+            case "SHORT_SLEEP_DAY":
+                return ["Short sleep", "Sleep debt"]
             default:
                 return []
             }
@@ -12314,6 +12349,13 @@ struct ContentView: View {
             if let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 {
                 for label in snapshot.semanticActiveLabelPreview {
                     append(label, tint: GaugePalette.rose)
+                }
+            }
+
+            for ref in activePatternRefs {
+                let tint = GaugePalette.contextAccent(ref.signal ?? ref.driverKey ?? ref.signalKey ?? ref.outcomeKey ?? "pattern")
+                for label in bodySignalLabels(for: ref) {
+                    append(label, tint: tint)
                 }
             }
 
@@ -19073,6 +19115,18 @@ struct ContentView: View {
     ) -> [String] {
         var phrases: [String] = []
 
+        for ref in dashboard?.activePatternRefs ?? [] {
+            for phrase in guidePossibleSymptomPhrases(forOutcomeKey: ref.outcomeKey) where !phrases.contains(phrase) {
+                phrases.append(phrase)
+                if phrases.count >= 5 {
+                    break
+                }
+            }
+            if phrases.count >= 5 {
+                break
+            }
+        }
+
         for driver in Array((dashboard?.drivers ?? []).prefix(4)) {
             for phrase in guidePossibleSymptomPhrases(for: driver) where !phrases.contains(phrase) {
                 phrases.append(phrase)
@@ -19099,20 +19153,45 @@ struct ContentView: View {
         return phrases
     }
 
+    private func guidePossibleSymptomPhrases(forOutcomeKey outcomeKey: String?) -> [String] {
+        switch normalize(outcomeKey ?? "") {
+        case "HEADACHE_DAY":
+            return ["Migraine", "Head / sinus pressure", "Light sensitivity"]
+        case "PAIN_FLARE_DAY":
+            return ["Elevated pain", "Body stiffness"]
+        case "FATIGUE_DAY":
+            return ["Fatigue", "Energy variance"]
+        case "ANXIETY_DAY", "RESTLESSNESS_DAY":
+            return ["Restlessness", "Heightened sensitivity"]
+        case "POOR_SLEEP_DAY":
+            return ["Poor sleep", "Restless sleep"]
+        case "FOCUS_FOG_DAY":
+            return ["Brain fog", "Focus drift"]
+        case "HRV_DIP_DAY":
+            return ["HRV dips", "Recovery strain"]
+        case "HIGH_HR_DAY":
+            return ["Heart rate shifts", "Body strain"]
+        case "SHORT_SLEEP_DAY":
+            return ["Shortened sleep", "Sleep debt"]
+        default:
+            return []
+        }
+    }
+
     private func guidePossibleSymptomPhrases(for driver: DashboardDriverItem) -> [String] {
         let tokens = "\(driver.key) \(driver.label ?? "")".lowercased()
 
         if ["aqi", "air quality"].contains(where: { tokens.contains($0) }) {
-            return ["Sinus pressure", "Headache", "Brain fog", "Shorter breath"]
+            return ["Sinus pressure", "Migraine", "Headache", "Brain fog", "Shorter breath"]
         }
         if ["pressure"].contains(where: { tokens.contains($0) }) {
-            return ["Sinus pressure", "Headache", "Elevated pain", "Light sensitivity"]
+            return ["Sinus pressure", "Migraine", "Headache", "Elevated pain", "Light sensitivity"]
         }
         if ["humidity"].contains(where: { tokens.contains($0) }) {
-            return ["Headache", "Elevated pain", "Fatigue", "Sinus pressure"]
+            return ["Migraine", "Headache", "Elevated pain", "Fatigue", "Sinus pressure"]
         }
         if ["allergen", "pollen", "grass", "tree", "weed", "mold"].contains(where: { tokens.contains($0) }) {
-            return ["Sinus pressure", "Headache", "Fatigue", "Irritation"]
+            return ["Sinus pressure", "Migraine", "Headache", "Fatigue", "Irritation"]
         }
         if ["schumann", "ulf", "kp", "bz", "sw", "geomag", "solar", "magnetosphere"].contains(where: { tokens.contains($0) }) {
             return ["Energy variance", "Heightened sensitivity", "Sleep shifts", "Focus drift"]
@@ -21118,6 +21197,24 @@ struct ContentView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showMigraineExposureSheet) {
+            NavigationStack {
+                ExposureLogView(api: state.apiWithAuth(), source: "symptom_log", focus: .migraine) {
+                    Task {
+                        await fetchDashboard()
+                        await fetchDailyCheckInStatus(api: state.apiWithAuth())
+                    }
+                }
+            }
+        }
+        .alert("Log possible migraine triggers?", isPresented: $showMigraineExposurePrompt) {
+            Button("Add exposures") {
+                showMigraineExposureSheet = true
+            }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("Gaia Eyes can watch whether fragrance, air quality, food, alcohol, medication changes, or your own notes line up with migraine days over time.")
         }
         .sheet(isPresented: $showReauthenticationSheet) {
             NavigationStack {

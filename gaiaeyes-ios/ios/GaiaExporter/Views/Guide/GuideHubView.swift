@@ -240,9 +240,12 @@ struct GuideHubView: View {
         var lines: [String] = []
 
         if !codes.isDisjoint(with: ["PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS", "STOMACH_PAIN"]) {
-            lines.append("Use warmth, try grounding, or take a short walk if you can. This can help reduce muscle tension and calm nerver. Try a lighter task load you're having pain or stiffness.")
+            lines.append("Use warmth, try grounding, or take a short walk if you can. This can help reduce muscle tension and calm nerves. Try a lighter task load if you're having pain or stiffness.")
         }
-        if !codes.isDisjoint(with: ["HEADACHE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY", "RESP_IRRITATION"]) {
+        if !codes.isDisjoint(with: ["MIGRAINE"]) {
+            lines.append("Reduce light, sound, fragrance, and extra stimulation where you can, and log any exposure clues that stood out.")
+        }
+        if !codes.isDisjoint(with: ["HEADACHE", "MIGRAINE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY", "RESP_IRRITATION"]) {
             lines.append("Hydrate, filter the air, and lean on sinus support techniques that work for you.")
         }
         if !codes.isDisjoint(with: ["DRAINED", "FATIGUE", "BRAIN_FOG", "INSOMNIA", "RESTLESS_SLEEP"]) {

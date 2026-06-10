@@ -3,6 +3,7 @@ import SwiftUI
 struct ExposureLogView: View {
     let api: APIClient
     var source: String = "manual"
+    var focus: ExposureLogFocus = .general
     var showsCloseButton: Bool = true
     var onSaved: () -> Void = {}
 
@@ -16,22 +17,62 @@ struct ExposureLogView: View {
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
+    private var headerTitle: String {
+        switch focus {
+        case .general:
+            return "Log exposure"
+        case .migraine:
+            return "Log migraine triggers"
+        }
+    }
+
+    private var headerBody: String {
+        switch focus {
+        case .general:
+            return "Pick anything notable from today. Gaia Eyes watches for personal trigger patterns over time; this is not a diagnosis or certainty."
+        case .migraine:
+            return "Migraine days can have layered triggers. Pick anything that stood out, or use the note for your own context."
+        }
+    }
+
+    private var primaryOptions: [ExposureOption] {
+        focus == .migraine ? ExposureOption.migraineFocus : ExposureOption.checkIn
+    }
+
+    private var notePlaceholder: String {
+        focus == .migraine ? "Other possible trigger, timing, aura, food, cycle, weather..." : "Optional context"
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Log exposure")
+                    Text(headerTitle)
                         .font(.title2.weight(.bold))
-                    Text("Pick anything notable from today. Gaia Eyes watches for personal trigger patterns over time; this is not a diagnosis or certainty.")
+                    Text(headerBody)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(ExposureOption.checkIn) { option in
+                    ForEach(primaryOptions) { option in
                         exposureButton(option)
                     }
+                }
+
+                if focus == .migraine {
+                    DisclosureGroup("More exposure categories") {
+                        LazyVGrid(columns: columns, spacing: 10) {
+                            ForEach(ExposureOption.checkIn.filter { option in
+                                !ExposureOption.migraineFocus.contains(where: { $0.id == option.id })
+                            }) { option in
+                                exposureButton(option)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+                    .font(.subheadline.weight(.semibold))
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -48,7 +89,7 @@ struct ExposureLogView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Note")
                         .font(.headline)
-                    TextField("Optional context", text: $noteText, axis: .vertical)
+                    TextField(notePlaceholder, text: $noteText, axis: .vertical)
                         .lineLimit(2...4)
                         .textFieldStyle(.roundedBorder)
                 }

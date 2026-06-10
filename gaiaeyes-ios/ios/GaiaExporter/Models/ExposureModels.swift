@@ -26,12 +26,28 @@ struct ExposureOption: Identifiable, Hashable {
         ExposureOption(id: "temporary_illness", label: "Cold / flu / temporary illness", systemImage: "cross.case"),
     ] + everyday
 
+    static let migraineFocus: [ExposureOption] = [
+        ExposureOption(id: "fragrance_scented_products", label: "Fragrance / scented products", systemImage: "sparkles"),
+        ExposureOption(id: "cleaning_products", label: "Cleaning products", systemImage: "spray.sparkle"),
+        ExposureOption(id: "poor_air_quality", label: "Poor air quality", systemImage: "aqi.medium"),
+        ExposureOption(id: "heavy_traffic", label: "Heavy traffic", systemImage: "car.2"),
+        ExposureOption(id: "mold_damp_space", label: "Mold or damp space", systemImage: "drop.triangle"),
+        ExposureOption(id: "alcohol", label: "Alcohol", systemImage: "wineglass"),
+        ExposureOption(id: "high_histamine_foods", label: "High-histamine foods", systemImage: "leaf"),
+        ExposureOption(id: "new_supplement_medication", label: "New supplement or medication", systemImage: "pills"),
+    ]
+
     static func label(for id: String) -> String {
         if let match = (checkIn + everyday).first(where: { $0.id == id }) {
             return match.label
         }
         return id.replacingOccurrences(of: "_", with: " ").capitalized
     }
+}
+
+enum ExposureLogFocus: Hashable {
+    case general
+    case migraine
 }
 
 struct ExposureEventOut: Decodable, Hashable {

@@ -44,6 +44,7 @@ struct SymptomPreset: Identifiable, Hashable {
         case "DRAINED": return "battery.25"
         case "FATIGUE": return "battery.25"
         case "HEADACHE": return "brain.head.profile"
+        case "MIGRAINE": return "brain.head.profile"
         case "ANXIOUS": return "exclamationmark.triangle"
         case "INSOMNIA": return "moon.zzz"
         case "SINUS_PRESSURE": return "wind"
@@ -95,6 +96,7 @@ struct SymptomPreset: Identifiable, Hashable {
         SymptomPreset(code: "DRAINED", label: "Drained", systemImage: "battery.25"),
         SymptomPreset(code: "FATIGUE", label: "Fatigue", systemImage: "battery.25"),
         SymptomPreset(code: "HEADACHE", label: "Headache", systemImage: "brain.head.profile"),
+        SymptomPreset(code: "MIGRAINE", label: "Migraine", systemImage: "brain.head.profile"),
         SymptomPreset(code: "ANXIOUS", label: "Anxious", systemImage: "exclamationmark.triangle"),
         SymptomPreset(code: "INSOMNIA", label: "Insomnia", systemImage: "moon.zzz"),
         SymptomPreset(code: "SINUS_PRESSURE", label: "Sinus pressure", systemImage: "wind"),
@@ -164,6 +166,7 @@ struct SymptomSuggestionContext {
 private enum SymptomCatalog {
     private static let categoryMap: [String: SymptomCategory] = [
         "HEADACHE": .head,
+        "MIGRAINE": .head,
         "SINUS_PRESSURE": .head,
         "LIGHT_SENSITIVITY": .head,
         "BRAIN_FOG": .head,
@@ -192,9 +195,10 @@ private enum SymptomCatalog {
 
     private static let sortOrder: [String: Int] = [
         "HEADACHE": 0,
-        "SINUS_PRESSURE": 1,
-        "LIGHT_SENSITIVITY": 2,
-        "BRAIN_FOG": 3,
+        "MIGRAINE": 1,
+        "SINUS_PRESSURE": 2,
+        "LIGHT_SENSITIVITY": 3,
+        "BRAIN_FOG": 4,
         "PAIN": 10,
         "NERVE_PAIN": 11,
         "JOINT_PAIN": 12,
@@ -284,11 +288,11 @@ private enum SymptomSuggestionEngine {
         for key in driverKeys {
             switch key {
             case "PRESSURE":
-                append(["HEADACHE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY"])
+                append(["HEADACHE", "MIGRAINE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY"])
             case "AQI":
                 append(["FATIGUE", "RESP_IRRITATION", "BRAIN_FOG"])
             case "ALLERGENS":
-                append(["SINUS_PRESSURE", "HEADACHE", "BRAIN_FOG"])
+                append(["SINUS_PRESSURE", "HEADACHE", "MIGRAINE", "BRAIN_FOG"])
             case "SCHUMANN":
                 append(["ANXIOUS", "BRAIN_FOG", "RESTLESS_SLEEP"])
             case "KP", "BZ", "SW":
@@ -316,7 +320,10 @@ private enum SymptomSuggestionEngine {
 
         for outcome in context.activePatternOutcomeKeys.map(normalize) {
             if outcome.contains("PAIN") {
-                append(["PAIN", "NERVE_PAIN", "STIFFNESS"])
+                append(["PAIN", "MIGRAINE", "NERVE_PAIN", "STIFFNESS"])
+            }
+            if outcome.contains("HEADACHE") {
+                append(["HEADACHE", "MIGRAINE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY"])
             }
             if outcome.contains("SLEEP") {
                 append(["RESTLESS_SLEEP", "INSOMNIA"])
