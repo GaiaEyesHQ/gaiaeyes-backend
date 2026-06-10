@@ -27,3 +27,8 @@ def test_select_earthscope_cta_uses_schumann_context():
     cta = select_earthscope_cta("2026-06-09", context={"schumann_value_hz": 7.8})
 
     assert cta["key"] == "frequency-sensitive"
+
+
+def test_caption_ctas_stay_compact():
+    for cta in CTA_VARIANTS:
+        assert len(cta["caption"]) <= 140

@@ -154,7 +154,7 @@ jobs:
       - name: Upload rendered images to Supabase Storage (social/earthscope/latest)
         run: |
           set -euo pipefail
-          shopt -s nullglob
+          shopt -s nullglob nocaseglob
 
           IMG_DIR="${MEDIA_REPO_PATH}/images"
           if [ ! -d "$IMG_DIR" ]; then
@@ -457,8 +457,8 @@ jobs:
           fetch daily_playbook.jpg
           fetch daily_caption.jpg
 
-          shopt -s nullglob
-          files=("${OUT_DIR}"/*.jpg "${OUT_DIR}"/*.png)
+          shopt -s nullglob nocaseglob
+          files=("${OUT_DIR}"/*.jpg "${OUT_DIR}"/*.jpeg "${OUT_DIR}"/*.png)
           if [ ${#files[@]} -eq 0 ]; then
             echo "[error] No cards available under ${OUT_DIR}"
             exit 1

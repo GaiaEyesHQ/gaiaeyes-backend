@@ -96,7 +96,7 @@ def test_earthscope_hook_title_uses_calm_focus_language():
         energy="Calm",
     )
 
-    assert title == "Need a steadier focus window?"
+    assert title == "Need a catch-up day?"
 
 
 def test_public_card_text_removes_clinician_and_vibes_language():

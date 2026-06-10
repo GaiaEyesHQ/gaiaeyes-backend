@@ -1322,10 +1322,10 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
     energy_l = (energy or "").lower()
     calm_context = tone_l in {"calm", "neutral"} or energy_l == "calm"
     candidates = [
-        (("focus", "attention", "clarity", "cognitive", "scattered"), "Need a steadier focus window?" if calm_context else "Focus feeling scattered?"),
-        (("sleep", "wind-down", "bedtime", "fragmented"), "Sleep feeling fragile?"),
-        (("hrv", "heart-rate variability", "autonomic", "baseline"), "HRV running jumpy?"),
-        (("pain", "nerve", "flare", "reactivity", "sensitive"), "Body feeling reactive?"),
+        (("focus", "attention", "clarity", "cognitive", "scattered"), "Need a catch-up day?" if calm_context else "Focus feeling scattered?"),
+        (("sleep", "wind-down", "bedtime", "fragmented"), "Ready for an easier wind-down?" if calm_context else "Sleep feeling fragile?"),
+        (("hrv", "heart-rate variability", "autonomic", "baseline"), "Ready for a calmer day?" if calm_context else "HRV running jumpy?"),
+        (("pain", "nerve", "flare", "reactivity", "sensitive"), "Less pain, more gain?" if calm_context else "Body feeling reactive?"),
     ]
     matches: list[tuple[int, str]] = []
     for tokens, title in candidates:
@@ -1336,7 +1336,7 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
         return sorted(matches, key=lambda item: item[0])[0][1]
     if tone_l in ("stormy", "unsettled") or energy_l in ("high", "elevated"):
         return "Wired and scattered?"
-    return "Need a steadier window?"
+    return "Ready for a calmer day?"
 
 
 def _public_card_text(text: str) -> str:

@@ -259,14 +259,15 @@ def pick_card_images(images_dir: Path, max_count: int = 3) -> List[Path]:
         p = images_dir / name
         if p.exists():
             chosen.append(p)
-    # If fewer than needed, fill with any jpg/jpeg/png not already chosen
+    # If fewer than needed, fill with any jpg/jpeg/png not already chosen.
     if len(chosen) < max_count:
-        pool = []
-        for ext in ("*.jpg", "*.jpeg", "*.png"):
-            pool.extend(images_dir.glob(ext))
-        # Remove duplicates
-        pool = [p for p in pool if p not in chosen]
-        # Prefer stable ordering by name
+        pool = [
+            p for p in images_dir.iterdir()
+            if p.is_file()
+            and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+            and p not in chosen
+        ]
+        # Prefer stable ordering by name.
         pool.sort()
         for p in pool:
             if len(chosen) >= max_count:

@@ -11,7 +11,7 @@ CTA_VARIANTS = [
         "card": "Could solar activity affect your heart? Gaia Eyes checks your wearable patterns.",
         "caption": (
             "Want to know if solar activity affects your heart? Gaia Eyes compares wearable data "
-            "with Earth and space signals to help find your patterns."
+            "with Earth and space signals."
         ),
     },
     {
@@ -20,7 +20,7 @@ CTA_VARIANTS = [
         "card": "Mood off for no clear reason? Gaia Eyes tracks signals around your day.",
         "caption": (
             "Mood off for no obvious reason? Gaia Eyes tracks symptoms, wearable data, and "
-            "environmental signals so you can see what may be influencing your day."
+            "environmental signals together."
         ),
     },
     {
@@ -28,8 +28,8 @@ CTA_VARIANTS = [
         "themes": ("symptom", "forecast", "active"),
         "card": "Headaches or sinus pressure flaring? Gaia Eyes helps forecast your week.",
         "caption": (
-            "Headaches or sinus pressure flaring? Environmental factors can play a role. Gaia Eyes "
-            "helps compare symptoms with your surroundings and forecast the week ahead."
+            "Headaches or sinus pressure flaring? Gaia Eyes helps compare symptoms with "
+            "environmental factors and the week ahead."
         ),
     },
     {
@@ -37,8 +37,8 @@ CTA_VARIANTS = [
         "themes": ("general", "symptom"),
         "card": "Tired of being dismissed? Turn symptom patterns into stats you can share.",
         "caption": (
-            "Tired of being dismissed about your symptoms? Gaia Eyes helps turn health patterns "
-            "into concrete stats you can share with your provider."
+            "Tired of being dismissed? Gaia Eyes turns symptom patterns into stats you can "
+            "share with your provider."
         ),
     },
     {
@@ -46,8 +46,8 @@ CTA_VARIANTS = [
         "themes": ("moon",),
         "card": "Feel the moon sometimes? Gaia Eyes checks wearable and moon-cycle patterns.",
         "caption": (
-            "Feel like howling at the moon sometimes? Gaia Eyes looks for patterns between "
-            "wearable data, symptoms, and moon cycles."
+            "Feel the moon sometimes? Gaia Eyes checks for patterns between symptoms, "
+            "wearable data, and moon cycles."
         ),
     },
     {
@@ -55,8 +55,8 @@ CTA_VARIANTS = [
         "themes": ("schumann", "ulf", "frequency"),
         "card": "Sensitive to Schumann or ULF signals? Gaia Eyes helps you find out.",
         "caption": (
-            "Frequencies may affect heart and mental-health patterns. Gaia Eyes helps you find "
-            "out if you are sensitive to Schumann resonance or ULF frequencies."
+            "Sensitive to Schumann or ULF signals? Gaia Eyes compares them with sleep, HRV, "
+            "mood, and symptoms."
         ),
     },
     {
@@ -64,9 +64,8 @@ CTA_VARIANTS = [
         "themes": ("general", "calm", "forecast"),
         "card": "One place for wearables, symptoms, conditions, triggers, and forecasts.",
         "caption": (
-            "Got several health apps and none explain why you feel the way you do? Gaia Eyes "
-            "combines wearable data, symptoms, medical conditions, and environmental signals "
-            "to show your triggers, patterns, and what may be coming."
+            "Gaia Eyes brings wearables, symptoms, conditions, environmental signals, "
+            "triggers, patterns, and forecasts into one place."
         ),
     },
 ]
