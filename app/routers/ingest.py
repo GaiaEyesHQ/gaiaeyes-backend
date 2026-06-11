@@ -73,8 +73,16 @@ _ingest_active_writes = 0
 _ingest_active_lock = asyncio.Lock()
 _recent_refresh_requests: Dict[Tuple[str, date], float] = {}
 _recent_refresh_lock = asyncio.Lock()
-_DELAYED_REFRESH_DELAY_SECONDS = 0.5
+_DELAYED_REFRESH_DELAY_SECONDS = max(0.5, _env_float("GAIA_INGEST_REFRESH_DELAY_SECONDS", 5.0))
 _DELAYED_REFRESH_DEBOUNCE_SECONDS = 120.0
+_DELAYED_REFRESH_PRESSURE_RETRY_SECONDS = max(
+    5.0,
+    _env_float("GAIA_INGEST_REFRESH_PRESSURE_RETRY_SECONDS", 20.0),
+)
+_DELAYED_REFRESH_MAX_PRESSURE_RETRIES = max(
+    0,
+    _env_int("GAIA_INGEST_REFRESH_MAX_PRESSURE_RETRIES", 3),
+)
 _POOL_ACQUIRE_TIMEOUT_SECONDS = 1.0
 
 # Legacy compatibility for tests expecting direct access to the refresh registry
@@ -814,6 +822,8 @@ async def _maybe_schedule_refresh(
     day_local: date,
     inserted: int,
     tz_name: str = DEFAULT_TIMEZONE,
+    *,
+    pressure_attempt: int = 0,
 ) -> bool:
     if REFRESH_DISABLED or not user_id or inserted <= 0:
         return False
@@ -834,6 +844,8 @@ async def _maybe_schedule_refresh(
         _recent_refresh_requests[refresh_key] = now
 
     delay = _DELAYED_REFRESH_DELAY_SECONDS
+    if pressure_attempt > 0:
+        delay = _DELAYED_REFRESH_PRESSURE_RETRY_SECONDS
     if getenv("PYTEST_CURRENT_TEST"):
         delay = 0.0
 
@@ -849,6 +861,16 @@ async def _maybe_schedule_refresh(
                     day_local,
                     pressure_reason,
                 )
+                if pressure_attempt < _DELAYED_REFRESH_MAX_PRESSURE_RETRIES:
+                    async with _recent_refresh_lock:
+                        _recent_refresh_requests.pop(refresh_key, None)
+                    await _maybe_schedule_refresh(
+                        user_id,
+                        day_local,
+                        inserted,
+                        tz_name,
+                        pressure_attempt=pressure_attempt + 1,
+                    )
                 return
             await _execute_refresh(user_id, day_local, tz_name)
         except Exception as exc:  # pragma: no cover - defensive logging

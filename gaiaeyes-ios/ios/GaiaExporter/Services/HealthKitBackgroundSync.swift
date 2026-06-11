@@ -165,22 +165,31 @@ private final class HealthKitSampleQueryBox: @unchecked Sendable {
 private actor FeaturesRefreshDebouncer {
     private var isRunning = false
     private var pending = false
+    private var pendingRows = 0
+    private var pendingSources: Set<String> = []
+    private let debounceNanoseconds: UInt64 = 15_000_000_000
 
-    func schedule(fetch: @escaping () async -> Void) async {
+    func schedule(rows: Int, source: String, fetch: @escaping (_ reason: String) async -> Void) async {
         pending = true
+        pendingRows += max(0, rows)
+        pendingSources.insert(source)
         guard !isRunning else { return }
         isRunning = true
         Task { await run(fetch: fetch) }
     }
 
-    private func run(fetch: @escaping () async -> Void) async {
+    private func run(fetch: @escaping (_ reason: String) async -> Void) async {
         while true {
             pending = false
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            await MainActor.run {
-                NotificationCenter.default.post(name: .featuresShouldRefresh, object: nil)
-            }
-            await fetch()
+            try? await Task.sleep(nanoseconds: debounceNanoseconds)
+            let rows = pendingRows
+            let sources = pendingSources.sorted()
+            pendingRows = 0
+            pendingSources.removeAll()
+            let reason = sources.isEmpty
+                ? "hk:upload_batch"
+                : "\(sources.prefix(3).joined(separator: "+")) rows=\(rows)"
+            await fetch(reason)
             if !pending { break }
         }
         isRunning = false
@@ -1053,14 +1062,16 @@ final class HealthKitBackgroundSync {
         let backendAvailable = refreshState.0
         let suspendRefresh = refreshState.1
         if !backendAvailable {
-            appLog("[BG] upload-triggered features refresh continuing despite backend DB=false")
+            appLog("[BG] upload-triggered features refresh deferred; backend DB=false")
+            return
         }
         if suspendRefresh {
-            appLog("[BG] upload-triggered features refresh allowed while nonessential refresh is suspended")
+            appLog("[BG] upload-triggered features refresh deferred; nonessential refresh is suspended")
+            return
         }
-        await featuresRefresher.schedule { [weak self] in
+        await featuresRefresher.schedule(rows: rows, source: source) { [weak self] reason in
             guard let self else { return }
-            await self.fetchFeaturesSnapshot(reason: source)
+            await self.fetchFeaturesSnapshot(reason: reason)
         }
     }
 
