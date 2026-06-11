@@ -1377,6 +1377,19 @@ def _format_public_playbook(text: str) -> str:
         if not line.endswith((".", "!", "?")):
             line += "."
         out.append(f"- {line}")
+    default_notes = [
+        "Keep effort in shorter blocks and stop before you feel overloaded.",
+        "Hydrate steadily and keep movement gentle.",
+        "Protect tonight's wind-down with dimmer light and lower stimulation.",
+    ]
+    seen = " ".join(item.lower() for item in out)
+    for note in default_notes:
+        if len(out) >= 3:
+            break
+        marker = note.lower().split(" and ", 1)[0]
+        if marker not in seen:
+            out.append(f"- {note}")
+            seen += " " + note.lower()
     return "\n".join(out[:4])
 
 
