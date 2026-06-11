@@ -928,6 +928,7 @@ final class APIClient {
         let inserted: Int?
         let skipped: Int?
         let buffered: Int?
+        let queued: Bool?
         let errors: [BatchError]?
         let error: String?
     }
@@ -1034,12 +1035,17 @@ final class APIClient {
                 if (200...299).contains(code) {
                     logger?("↩︎ \(code) \(body)")
                     if let batch = try? APIClient.tolerantJSONDecoder().decode(SamplesBatchResponse.self, from: data) {
+                        let accepted = (batch.inserted ?? 0) + (batch.buffered ?? 0)
+                        if batch.ok == false, accepted > 0, batch.queued == true {
+                            let reason = batch.error ?? "queued"
+                            logger?("POST \(label) queued by backend: \(reason)")
+                            return true
+                        }
                         if batch.ok == false {
                             let reason = batch.error ?? "batch rejected"
                             logger?("POST \(label) deferred: \(reason)")
                             throw APIError.server(code: batch.db == false ? 429 : code, body: reason)
                         }
-                        let accepted = (batch.inserted ?? 0) + (batch.buffered ?? 0)
                         return accepted > 0 || batch.ok == true
                     }
                     return !chunk.isEmpty
