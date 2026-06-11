@@ -1222,9 +1222,9 @@ def render_stats_card_from_features(
     _add_top_gradient(im, height=260, alpha_top=190)
 
     draw = ImageDraw.Draw(im)
-    font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "Oswald-Bold.ttf"], 62)
-    font_h2   = _load_font(["Oswald-Bold.ttf", "Poppins-Bold.ttf"], 38)
-    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 36)
+    font_h1   = _load_font(["BebasNeue.ttf", "ChangaOne-Regular.ttf", "Oswald-VariableFont_wght.ttf"], 62)
+    font_h2   = _load_font(["ChangaOne-Regular.ttf", "Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf"], 38)
+    font_body = _load_font(["Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf"], 36)
     fg = (235,245,255,255); dim=(190,205,230,255)
 
     # Header + date
@@ -1233,9 +1233,9 @@ def render_stats_card_from_features(
     date_txt   = _format_date_title(day)
 
     header_w = draw.textlength(header_txt, font=font_h1)
-    date_w   = draw.textlength(date_txt,   font=font_h1)
+    date_w   = draw.textlength(f" —  {date_txt}", font=font_h1)
     gap = 40; max_w = W - 2*x0
-    if header_w + gap + date_w <= max_w:
+    if kind == "tall" and header_w + gap + date_w <= max_w:
         _shadowed_text(draw, (x0, y0), header_txt, font=font_h1, fill=fg)
         _shadowed_text(draw, (x0 + int(header_w + gap), y0), f" —  {date_txt}", font=font_h1, fill=fg)
         y = y0 + 96
@@ -1261,8 +1261,8 @@ def render_stats_card_from_features(
         else ("Tomsk" if feats.get("sch_fundamental_avg_hz") is not None else "Cumiana"),
         pulse=pulse
     )
-    font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 44)
-    chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
+    font_val = _load_font(["Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 44)
+    chip_font = _load_font(["ChangaOne-Regular.ttf", "Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf"], 26)
 
     def _chip(draw: ImageDraw.ImageDraw, x:int, y:int, color:tuple, txt:str):
         r = 18
@@ -1297,7 +1297,7 @@ def render_stats_card_from_features(
         use_font = font_val
         val_str = str(val)
         if lab.lower().startswith("aurora"):
-            use_font = _load_font(["Oswald-Regular.ttf","Poppins-Regular.ttf","Arial.ttf"], 40)
+            use_font = _load_font(["Oswald-VariableFont_wght.ttf","Poppins-Regular.ttf"], 40)
         val_str = _ellipsize(draw, val_str, use_font, max_val_w)
         draw.text((x_val+2, y+2), val_str, fill=(0,0,0,160), font=use_font)
         draw.text((x_val,   y),   val_str, fill=fg, font=use_font)
@@ -1307,12 +1307,12 @@ def render_stats_card_from_features(
 
     # “Did you know” footer
     y += 40
-    did_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf"], 36)
+    did_font = _load_font(["Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf"], 36)
     cta = select_earthscope_cta(day.isoformat(), context=_cta_context_from_stats(feats, pulse)).get("card", "").strip()
     y = _draw_wrapped_multilines(draw, cta, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
 
-    _overlay_logo_and_tagline(im, "Download Gaia Eyes for your personalized outlook, patterns, and triggers.")
+    _overlay_logo_and_tagline(im, "Open Gaia Eyes for your pattern read.")
     return im.convert("RGB")
 
 
