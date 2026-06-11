@@ -1112,7 +1112,7 @@ def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str
     )
     if resting_hr_points:
         penalties["resting_hr_baseline_delta"] = {
-            "label": "Resting HR above usual",
+            "label": "Resting HR recovery signal",
             "value": resting_hr_delta or 0.0,
             "points": round(resting_hr_points, 2),
         }
@@ -1403,7 +1403,10 @@ def _build_physiology_signals(
     if resting_hr_delta is not None and resting_hr_delta >= 4:
         add_signal(
             "resting_hr_baseline_delta",
-            cause_line="Resting heart rate is above your usual baseline, so recovery strain is higher.",
+            cause_line=(
+                "Resting heart rate is above your usual baseline. That often means your body is asking "
+                "for more recovery or working through extra autonomic load."
+            ),
             gauge_keys=["heart", "energy", "stamina", "health_status"],
             priority=75,
         )

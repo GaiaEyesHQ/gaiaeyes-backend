@@ -130,7 +130,7 @@ async def test_user_drivers_endpoint_returns_snapshot(monkeypatch, client: Async
                     "pattern_lag_hours": 12,
                     "pattern_refs": [],
                     "outlook_relevance": "24h",
-                    "outlook_summary": "Still worth watching over the next 24 hours.",
+                    "outlook_summary": "Worth watching over the next 24 hours.",
                     "updated_at": "2026-03-26T11:55:00Z",
                     "asof": "2026-03-26T11:55:00Z",
                     "what_it_is": "The speed and pressure of charged particles flowing from the Sun.",

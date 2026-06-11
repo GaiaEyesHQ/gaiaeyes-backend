@@ -672,11 +672,20 @@ private struct DashboardHealthStatusContextItem: Codable, Hashable {
     let display: String?
 }
 
+private struct DashboardPhysiologySignal: Codable, Hashable {
+    let key: String?
+    let label: String?
+    let causeLine: String?
+    let gaugeKeys: [String]?
+    let priority: Int?
+}
+
 private struct DashboardHealthStatusExplainer: Codable, Hashable {
     let healthStatus: Double?
     let summary: String?
     let drivers: [DashboardHealthStatusDriver]?
     let context: [DashboardHealthStatusContextItem]?
+    let physiologySignals: [DashboardPhysiologySignal]?
     let calibrating: Bool?
     let baselineDays: Int?
 }
@@ -10498,6 +10507,11 @@ struct ContentView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(cardAccent.opacity(0.96))
                         Spacer(minLength: 4)
+                        if onTap != nil {
+                            Image(systemName: "info.circle")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.45))
+                        }
                         if row.showAffordance {
                             Image(systemName: "sparkles")
                                 .font(.caption2)
@@ -10598,6 +10612,7 @@ struct ContentView: View {
                     x: 0,
                     y: 0
                 )
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
             var body: some View {
@@ -10622,7 +10637,7 @@ struct ContentView: View {
                 case .leading:
                     return "Leading now"
                 case .supporting:
-                    return "Also in play"
+                    return "Supporting signal"
                 case .background:
                     return "In the background"
                 }
@@ -12025,7 +12040,7 @@ struct ContentView: View {
 
             let roleLabel = normalizedDriverKey(driver.roleLabel)
             if roleLabel == "leading now" { return .leading }
-            if roleLabel == "also in play" { return .supporting }
+            if roleLabel == "also in play" || roleLabel == "supporting signal" { return .supporting }
             if roleLabel == "in the background" { return .background }
 
             let driverKey = normalizedDriverKey(driver.key)
@@ -12273,7 +12288,7 @@ struct ContentView: View {
             case "allergens", "aqi":
                 return ["Head / sinus pressure", "Migraine", "Headache", "Irritation"]
             case "humidity":
-                return ["Sinus pressure", "Migraine", "Fatigue"]
+                return ["Sinus pressure", "Headache", "Migraine", "Fatigue"]
             case "pressure":
                 return ["Migraine", "Headache", "Energy dip", "Body aches"]
             case "temp":
@@ -12341,7 +12356,7 @@ struct ContentView: View {
             func append(_ label: String, tint: Color) {
                 let clean = label.trimmingCharacters(in: .whitespacesAndNewlines)
                 let key = clean.lowercased()
-                guard !clean.isEmpty, !seen.contains(key), output.count < 4 else { return }
+                guard !clean.isEmpty, !seen.contains(key), output.count < 6 else { return }
                 seen.insert(key)
                 output.append(HomeSymptomChip(id: "symptom-\(key)", label: clean, tint: tint))
             }
@@ -12364,6 +12379,13 @@ struct ContentView: View {
                 guard let driver else { continue }
                 for label in symptomLabels(for: driver) {
                     append(label, tint: trigger.tint)
+                }
+            }
+
+            for driver in combinedWhatMattersDrivers() {
+                let tint = GaugePalette.contextAccent("\(driver.key) \(driver.label ?? "")")
+                for label in symptomLabels(for: driver) {
+                    append(label, tint: tint)
                 }
             }
 
@@ -12395,6 +12417,16 @@ struct ContentView: View {
                 return "A quick check-in gives future patterns something real to compare."
             }
             return "Start by noticing \(first.label.lowercased()); then log how the day actually feels."
+        }
+
+        private func physiologyCauseLines(for row: GaugeRow) -> [String] {
+            let gaugeKey = normalizedDriverKey(row.key)
+            guard !gaugeKey.isEmpty else { return [] }
+            return (healthStatusExplainer?.physiologySignals ?? []).compactMap { signal in
+                let keys = (signal.gaugeKeys ?? []).map(normalizedDriverKey)
+                guard keys.contains(gaugeKey) else { return nil }
+                return signal.causeLine?.nilIfTrimmedEmpty
+            }
         }
 
         private func topWhatMattersDrivers() -> [WhatMattersCardItem] {
@@ -12543,8 +12575,41 @@ struct ContentView: View {
             .buttonStyle(.plain)
         }
 
-        private func presentGaugeModal(_ key: String) {
-            guard let entry = modalModels?.gauges?[key] else { return }
+        private func fallbackGaugeModalEntry(for row: GaugeRow) -> DashboardModalEntry {
+            let state = row.zoneLabel?.nilIfTrimmedEmpty
+                ?? row.zoneKey?.replacingOccurrences(of: "_", with: " ").capitalized
+                ?? "Current"
+            let notices = symptomLabels(for: row)
+            let physiologyLines = physiologyCauseLines(for: row)
+            let whyLines = physiologyLines.isEmpty
+                ? [
+                    "Gauge details are still refreshing, so this is the local fallback view.",
+                    "Open this again after the dashboard finishes syncing for richer driver details."
+                ]
+                : physiologyLines + [
+                    "Resting HR is a recovery and autonomic-load clue, not a diagnosis. Gaia compares it with your usual baseline and the other signals in today’s mix."
+                ]
+            return DashboardModalEntry(
+                modalType: "full",
+                title: "\(row.label) — \(state)",
+                stateLine: row.value == nil ? "This gauge is still calibrating." : "\(row.label) is reading \(Int(round(row.value ?? 0))).",
+                causalCallout: "Gaia Eyes uses this gauge to summarize current body context, recent symptoms, wearable changes, and signal load.",
+                body: nil,
+                tip: nil,
+                why: whyLines,
+                whatYouMayNotice: notices.isEmpty ? ["Changes may feel subtle while this gauge is low or steady."] : notices,
+                suggestedActions: [
+                    "Log anything new you notice so Gaia can compare it with today’s signals.",
+                    "Check All Drivers if you want to see what is currently in the mix."
+                ],
+                quickLog: nil,
+                cta: DashboardModalCTA(label: "Log symptoms", action: "open_symptom_log", prefill: ["OTHER"]),
+                voiceSemantic: nil
+            )
+        }
+
+        private func presentGaugeModal(_ key: String, row: GaugeRow) {
+            let entry = modalModels?.gauges?[key] ?? fallbackGaugeModalEntry(for: row)
             selectedModal = ModalPresentation(id: "gauge:\(key)", entry: entry)
         }
 
@@ -12817,10 +12882,10 @@ struct ContentView: View {
                         .frame(width: 32, height: 32)
                         .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Possible Triggers")
+                        Text("Signals to Watch")
                             .font(.headline.weight(.semibold))
                             .foregroundColor(.white)
-                        Text("Signal strength, not diagnosis.")
+                        Text("Context clues, not diagnosis.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -12883,7 +12948,7 @@ struct ContentView: View {
                         ForEach(rows) { row in
                             ArcGaugeCard(
                                 row: row,
-                                onTap: row.tappable ? { presentGaugeModal(row.key) } : nil
+                                onTap: { presentGaugeModal(row.key, row: row) }
                             )
                         }
                     }
@@ -14848,6 +14913,61 @@ struct ContentView: View {
                 : String(format: "%.1f", value)
         }
 
+        private struct OutlookSymptomChip: Identifiable {
+            let id: String
+            let label: String
+            let tint: Color
+        }
+
+        private func outlookSymptomLabels(for driver: UserOutlookDriver) -> [String] {
+            let key = driver.key.lowercased()
+            if key.contains("humidity") {
+                return ["Sinus pressure", "Headache", "Migraine", "Fatigue"]
+            }
+            if key.contains("pressure") {
+                return ["Migraine", "Headache", "Body aches", "Energy dip"]
+            }
+            if key.contains("pollen") || key.contains("allergen") || key.contains("aqi") {
+                return ["Head / sinus", "Migraine", "Headache", "Irritation"]
+            }
+            if key.contains("temp") {
+                return ["Energy dip", "Poor sleep", "Body tension"]
+            }
+            if key.contains("solar_wind") || key == "sw" || key.contains("kp") || key.contains("bz") || key.contains("cme") || key.contains("flare") {
+                return ["Sleep shifts", "Focus shifts", "Restlessness", "Body tension"]
+            }
+            return []
+        }
+
+        private func outlookSymptomChips(
+            domains: [UserOutlookDomain],
+            drivers: [UserOutlookDriver],
+            primary: UserOutlookDriver?
+        ) -> [OutlookSymptomChip] {
+            var seen: Set<String> = []
+            var output: [OutlookSymptomChip] = []
+
+            func append(_ label: String?, tint: Color) {
+                let clean = (label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = clean.lowercased()
+                guard !clean.isEmpty, !seen.contains(key), output.count < 6 else { return }
+                seen.insert(key)
+                output.append(OutlookSymptomChip(id: "outlook-symptom-\(key)", label: clean, tint: tint))
+            }
+
+            for domain in domains {
+                append(likelyDomainValue(domain, primary: primary), tint: GaugePalette.contextAccent(domain.label ?? domain.key))
+            }
+            for driver in drivers {
+                let tint = driverSignalTint(driver)
+                for label in outlookSymptomLabels(for: driver) {
+                    append(label, tint: tint)
+                }
+            }
+
+            return output
+        }
+
         @ViewBuilder
         private func driverSignalBars(_ drivers: [UserOutlookDriver]) -> some View {
             VStack(alignment: .leading, spacing: 9) {
@@ -14870,8 +14990,9 @@ struct ContentView: View {
         }
 
         @ViewBuilder
-        private func domainPills(_ domains: [UserOutlookDomain], primary: UserOutlookDriver?) -> some View {
-            if !domains.isEmpty {
+        private func domainPills(_ domains: [UserOutlookDomain], drivers: [UserOutlookDriver], primary: UserOutlookDriver?) -> some View {
+            let chips = outlookSymptomChips(domains: domains, drivers: drivers, primary: primary)
+            if !chips.isEmpty {
                 let symptomColumns = [
                     GridItem(.adaptive(minimum: 96, maximum: 150), spacing: 6, alignment: .topLeading)
                 ]
@@ -14880,9 +15001,8 @@ struct ContentView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
                     LazyVGrid(columns: symptomColumns, alignment: .leading, spacing: 6) {
-                        ForEach(domains) { domain in
-                            let tint = GaugePalette.contextAccent(domain.label ?? domain.key)
-                            Text(likelyDomainValue(domain, primary: primary))
+                        ForEach(chips) { chip in
+                            Text(chip.label)
                                 .font(.caption.weight(.semibold))
                                 .foregroundColor(.white.opacity(0.86))
                                 .lineLimit(2)
@@ -14890,10 +15010,10 @@ struct ContentView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .background(chip.tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(tint.opacity(0.20), lineWidth: 1)
+                                        .stroke(chip.tint.opacity(0.20), lineWidth: 1)
                                 )
                         }
                     }
@@ -15101,7 +15221,7 @@ struct ContentView: View {
                     }
                 }
 
-                domainPills(domains, primary: drivers.first)
+                domainPills(domains, drivers: drivers, primary: drivers.first)
             }
             .padding(12)
             .padding(.leading, 3)
@@ -21081,7 +21201,7 @@ struct ContentView: View {
                     NavigationStack {
                         ExposureLogView(api: state.apiWithAuth(), source: "manual") {
                             Task {
-                                await fetchDashboard()
+                                await fetchDashboardPayload(force: true)
                                 await fetchDailyCheckInStatus(api: state.apiWithAuth())
                             }
                         }
@@ -21192,7 +21312,7 @@ struct ContentView: View {
             NavigationStack {
                 ExposureLogView(api: state.apiWithAuth(), source: "manual") {
                     Task {
-                        await fetchDashboard()
+                        await fetchDashboardPayload(force: true)
                         await fetchDailyCheckInStatus(api: state.apiWithAuth())
                     }
                 }
@@ -21202,7 +21322,7 @@ struct ContentView: View {
             NavigationStack {
                 ExposureLogView(api: state.apiWithAuth(), source: "symptom_log", focus: .migraine) {
                     Task {
-                        await fetchDashboard()
+                        await fetchDashboardPayload(force: true)
                         await fetchDailyCheckInStatus(api: state.apiWithAuth())
                     }
                 }

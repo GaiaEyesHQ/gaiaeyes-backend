@@ -324,7 +324,7 @@ def _role_for_index(index: int, *, state_key: str) -> tuple[str, str]:
     if index == 0 and state_key != "quiet":
         return "leading", "Leading now"
     if index < 3 and state_key != "quiet":
-        return "supporting", "Also in play"
+        return "supporting", "Supporting signal"
     return "background", "In the background"
 
 
@@ -917,6 +917,20 @@ def _seed_body_context_drivers(health_status_explainer: Mapping[str, Any] | None
         if display:
             short_reason = f"{label} is adding body context right now: {display}."
             active_now = f"{label} is showing {display.lower()} right now."
+        if source_key == "resting_hr_baseline_delta":
+            what_it_is = (
+                "Resting heart rate compared with your recent baseline. When it runs higher than usual, "
+                "it can be a recovery-load or autonomic-load clue."
+            )
+            if display:
+                short_reason = (
+                    f"Your resting heart rate is running higher than your recent baseline ({display}), "
+                    "which can mean your body needs more recovery today."
+                )
+                active_now = f"Resting HR is above your usual baseline: {display}."
+            else:
+                short_reason = "Your resting heart rate is running higher than your recent baseline."
+                active_now = "Resting HR is above your usual baseline."
         if source_key == "symptoms":
             symptom_series, symptom_count = _natural_label_series(display or "")
             short_reason = "Current symptoms are part of your body context right now."
@@ -1215,11 +1229,11 @@ def _outlook_match_for_driver(
                 continue
             detail = _clean_text(driver.get("detail"))
             if label == "24h":
-                lead = "Still worth watching over the next 24 hours."
+                lead = "Worth watching over the next 24 hours."
             elif label == "72h":
                 lead = "Forecast to remain relevant over the next 72 hours."
             else:
-                lead = "Still part of the broader 7-day outlook."
+                lead = "Part of the broader 7-day outlook."
             return label, f"{lead} {detail}".strip() if detail else lead
     return None, None
 

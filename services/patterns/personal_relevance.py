@@ -153,7 +153,7 @@ PATTERN_RECENT_VISIBILITY_DAYS = 14
 
 ROLE_LABELS = {
     0: ("primary", "Leading now"),
-    1: ("supporting", "Also in play"),
+    1: ("supporting", "Supporting signal"),
     2: ("background", "In the background"),
 }
 

@@ -2214,7 +2214,7 @@ def build_window_outlook(
         )
         support_line = _support_line(str(top_drivers[0].get("key")))
     elif top_drivers:
-        summary = f"{top_drivers[0]['detail']} No stronger personal pattern stands out yet, but this signal is still worth watching."
+        summary = f"{top_drivers[0]['detail']} No stronger personal pattern stands out yet, but this signal is worth watching."
         support_line = _support_line(str(top_drivers[0].get("key")))
     else:
         summary = "No clearer short-range forecast driver stands out from the data available right now."
