@@ -10,6 +10,9 @@ import Foundation
 import HealthKit
 import WebKit
 import Charts
+#if canImport(StoreKit)
+import StoreKit
+#endif
 #if canImport(SDWebImage)
 import SDWebImage
 #endif
@@ -484,6 +487,17 @@ private struct DashboardGaugeZone: Codable, Hashable {
         DashboardGaugeZone(min: 60, max: 79, key: "elevated"),
         DashboardGaugeZone(min: 80, max: 100, key: "high"),
     ]
+}
+
+private struct CompactGaugeHeaderItem: Identifiable, Hashable {
+    let key: String
+    let label: String
+    let value: Double?
+    let delta: Int
+    let zoneKey: String?
+    let zoneLabel: String?
+
+    var id: String { key }
 }
 
 private struct DashboardAlertItem: Codable, Hashable, Identifiable {
@@ -3196,6 +3210,8 @@ struct ContentView: View {
     @AppStorage("did_location_onboarding") private var didLocationOnboarding: Bool = false
     @AppStorage("gaia.onboarding.completed") private var onboardingCompleted: Bool = false
     @AppStorage("gaia.onboarding.step") private var onboardingStepRaw: String = OnboardingStep.welcome.rawValue
+    @AppStorage("gaia.review.positive_action_count") private var reviewPositiveActionCount: Int = 0
+    @AppStorage("gaia.review.last_prompted_at") private var reviewLastPromptedAt: Double = 0
     @State private var localHealth: LocalCheckResponse? = nil
     @State private var localHealthLoading: Bool = false
     @State private var localHealthError: String?
@@ -3270,6 +3286,7 @@ struct ContentView: View {
     @State private var liveSchumannTomskLatest: SignalBarSchumannTomskLatestEnvelope? = nil
     @State private var liveSchumannLatestEnvelope: SignalBarSchumannLatestEnvelope? = nil
     @AppStorage("gaia.signal_bar.pressure_value") private var signalBarPressureValueCache: String = ""
+    @State private var compactGaugeHeaderExpanded: Bool = false
     @State private var selectedTab: AppTab = .home
     @State private var showGuideSheet: Bool = false
     @State private var guideHubFocus: GuideHubFocus = .overview
@@ -3883,6 +3900,41 @@ struct ContentView: View {
         showMissionSettingsSheet = true
     }
 
+    @MainActor
+    private func notePositiveReviewMoment(_ reason: String) {
+        guard onboardingCompleted, !showOnboardingFlow else { return }
+        guard dashboardError?.isEmpty ?? true else { return }
+        reviewPositiveActionCount += 1
+        guard shouldRequestAppReviewNow else { return }
+        requestNativeAppReview(reason: reason)
+    }
+
+    private var shouldRequestAppReviewNow: Bool {
+        guard reviewPositiveActionCount >= 3 else { return false }
+        let lastPromptDate = Date(timeIntervalSince1970: reviewLastPromptedAt)
+        if reviewLastPromptedAt > 0, Date().timeIntervalSince(lastPromptDate) < 60 * 60 * 24 * 90 {
+            return false
+        }
+        return true
+    }
+
+    @MainActor
+    private func requestNativeAppReview(reason: String) {
+        reviewLastPromptedAt = Date().timeIntervalSince1970
+        reviewPositiveActionCount = 0
+        AppAnalytics.track("app_review_prompt_requested", properties: ["reason": reason])
+#if canImport(StoreKit)
+        if #available(iOS 14.0, *),
+           let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }) {
+            SKStoreReviewController.requestReview(in: scene)
+        } else {
+            SKStoreReviewController.requestReview()
+        }
+#endif
+    }
+
     private var currentGuideProfile: GuideProfile {
         GuideProfile(
             experienceProfile: experienceProfile,
@@ -4286,7 +4338,68 @@ struct ContentView: View {
 
     @ViewBuilder
     private func persistentSignalBar(onTap: @escaping (SignalPill) -> Void) -> some View {
-        SignalBarView(signals: persistentSignalBarItems, onTap: onTap)
+        CompactGaugeHeaderView(
+            gauges: compactGaugeHeaderItems(),
+            isExpanded: $compactGaugeHeaderExpanded,
+            onTap: handleCompactGaugeHeaderTap
+        )
+    }
+
+    private func compactGaugeHeaderItems() -> [CompactGaugeHeaderItem] {
+        let gauges = dashboardPayload?.gauges ?? lastNonNilDashboardGauges
+        let values: [(String, String, Double?)] = [
+            ("pain", "Pain", gauges?.pain),
+            ("focus", "Focus", gauges?.focus),
+            ("heart", "Heart", gauges?.heart),
+            ("stamina", "Recovery", gauges?.stamina),
+            ("energy", "Energy", gauges?.energy),
+            ("sleep", "Sleep", gauges?.sleep),
+            ("mood", "Mood", gauges?.mood),
+            ("health_status", "Health", gauges?.healthStatus),
+        ]
+        return values.map { key, fallbackLabel, value in
+            let meta = dashboardPayload?.gaugesMeta?[key]
+            let zoneKey = meta?.zone ?? compactGaugeInferredZoneKey(for: value)
+            let zoneLabel = compactGaugeEffectiveZoneLabel(key: key, meta: meta)
+            return CompactGaugeHeaderItem(
+                key: key,
+                label: dashboardPayload?.gaugeLabels?[key] ?? fallbackLabel,
+                value: value,
+                delta: dashboardPayload?.gaugesDelta?[key] ?? 0,
+                zoneKey: zoneKey,
+                zoneLabel: zoneLabel
+            )
+        }
+    }
+
+    private func compactGaugeEffectiveZoneLabel(key: String, meta: DashboardGaugeMeta?) -> String? {
+        let baseLabel = meta?.label
+        guard let boost = dashboardPayload?.gaugeRecentLogBoosts?[key], boost > 0 else { return baseLabel }
+        let zone = (meta?.zone ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedLabel = (baseLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if zone == "low" || normalizedLabel == "quiet" || normalizedLabel == "calm" || normalizedLabel == "low strain" {
+            return boost >= 9 ? "Watchful" : baseLabel
+        }
+        return baseLabel
+    }
+
+    private func compactGaugeInferredZoneKey(for value: Double?) -> String? {
+        guard let value else { return nil }
+        let zones = (dashboardPayload?.gaugeZones ?? DashboardGaugeZone.defaultZones).sorted { $0.min < $1.min }
+        for zone in zones where value >= zone.min && value <= zone.max {
+            return zone.key
+        }
+        guard let first = zones.first, let last = zones.last else { return nil }
+        return value < first.min ? first.key : last.key
+    }
+
+    private func handleCompactGaugeHeaderTap(_ gauge: CompactGaugeHeaderItem) {
+        AppAnalytics.track("compact_gauge_tapped", properties: ["gauge_key": gauge.key, "surface": selectedTab.analyticsValue])
+        selectedTab = .home
+        let urlString = "gaiaeyes://mission-control?family=gauge_header&event_key=compact_gauge_\(gauge.key)&target_type=gauge&target_key=\(gauge.key)"
+        if let url = URL(string: urlString), let route = GaiaPushRoute(url: url) {
+            pendingPushRoute = route
+        }
     }
 
     private func handleMissionControlSignalTap(_ signal: SignalPill) {
@@ -9940,6 +10053,9 @@ struct ContentView: View {
                 actionTitle: "Current Symptoms",
                 action: .openCurrentSymptoms
             )
+            await MainActor.run {
+                notePositiveReviewMoment("symptom_logged")
+            }
             return true
         }
 
@@ -10363,6 +10479,172 @@ struct ContentView: View {
                     .stroke(tint.opacity(0.20), lineWidth: 1)
             )
             .shadow(color: tint.opacity(0.18), radius: 16, x: 0, y: 8)
+        }
+    }
+
+    private struct CompactGaugeHeaderView: View {
+        let gauges: [CompactGaugeHeaderItem]
+        @Binding var isExpanded: Bool
+        let onTap: (CompactGaugeHeaderItem) -> Void
+
+        private var sourceGauges: [CompactGaugeHeaderItem] {
+            gauges.isEmpty ? Self.placeholders : gauges
+        }
+
+        private var visibleGauges: [CompactGaugeHeaderItem] {
+            Array(sourceGauges.prefix(isExpanded ? 8 : 4))
+        }
+
+        private static let placeholders: [CompactGaugeHeaderItem] = [
+            CompactGaugeHeaderItem(key: "pain", label: "Pain", value: nil, delta: 0, zoneKey: nil, zoneLabel: nil),
+            CompactGaugeHeaderItem(key: "focus", label: "Focus", value: nil, delta: 0, zoneKey: nil, zoneLabel: nil),
+            CompactGaugeHeaderItem(key: "heart", label: "Heart", value: nil, delta: 0, zoneKey: nil, zoneLabel: nil),
+            CompactGaugeHeaderItem(key: "stamina", label: "Recovery", value: nil, delta: 0, zoneKey: nil, zoneLabel: nil),
+        ]
+
+        var body: some View {
+            VStack(spacing: 6) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
+                    spacing: 8
+                ) {
+                    ForEach(visibleGauges) { item in
+                        CompactGaugeHeaderButton(item: item) {
+                            onTap(item)
+                        }
+                    }
+                }
+
+                if sourceGauges.count > 4 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isExpanded.toggle()
+                        }
+                    } label: {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(.white.opacity(0.72))
+                            .frame(width: 30, height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded ? "Collapse gauges" : "Show all gauges")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, sourceGauges.count > 4 ? 4 : 8)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(red: 0.05, green: 0.07, blue: 0.10).opacity(0.94))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.26), radius: 10, x: 0, y: 4)
+            )
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
+        }
+    }
+
+    private struct CompactGaugeHeaderButton: View {
+        let item: CompactGaugeHeaderItem
+        let onTap: () -> Void
+
+        private var accent: Color {
+            GaugePalette.contextAccent("\(item.key) \(item.label)")
+        }
+
+        private var zoneTint: Color {
+            GaugePalette.zoneColor(item.zoneKey)
+        }
+
+        private var valueText: String {
+            guard let value = item.value else { return "—" }
+            return String(Int(round(value)))
+        }
+
+        private var deltaText: String? {
+            guard item.value != nil, item.delta != 0 else { return nil }
+            return item.delta > 0 ? "+\(item.delta)" : "\(item.delta)"
+        }
+
+        private var statusText: String {
+            if let label = item.zoneLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+                return label
+            }
+            if let zone = item.zoneKey?.trimmingCharacters(in: .whitespacesAndNewlines), !zone.isEmpty {
+                return zone.replacingOccurrences(of: "_", with: " ").capitalized
+            }
+            return item.value == nil ? "Syncing" : "Current"
+        }
+
+        private var progress: CGFloat {
+            guard let value = item.value else { return 0.02 }
+            return CGFloat(min(1.0, max(0.02, value / 100.0)))
+        }
+
+        var body: some View {
+            Button(action: onTap) {
+                VStack(spacing: 4) {
+                    Text(item.label)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(accent.opacity(0.95))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+
+                    ZStack {
+                        Circle()
+                            .stroke(GaugePalette.ringBackground, lineWidth: 5)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(
+                                GaugePalette.arcGradient,
+                                style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                            )
+                            .rotationEffect(.degrees(-90))
+                        VStack(spacing: 0) {
+                            HStack(spacing: 2) {
+                                Text(valueText)
+                                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.94))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
+                                if let deltaText {
+                                    Text(deltaText)
+                                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                                        .foregroundColor(zoneTint)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Text(statusText)
+                                .font(.system(size: 8, weight: .semibold, design: .rounded))
+                                .foregroundColor(item.value == nil ? .secondary : zoneTint)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.62)
+                        }
+                        .padding(.horizontal, 3)
+                    }
+                    .frame(width: 54, height: 54)
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(accent.opacity(0.10))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(zoneTint.opacity(0.22), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(item.label) \(valueText), \(statusText)")
         }
     }
 
@@ -12403,7 +12685,7 @@ struct ContentView: View {
                 return "You have active symptoms logged. Compare them with the signals below."
             }
             if !chips.isEmpty {
-                return "These are the body signals most worth checking against today."
+                return ""
             }
             return "No strong symptom pattern is leading right now. Log anything new so Gaia can learn your baseline."
         }
@@ -12626,8 +12908,12 @@ struct ContentView: View {
                 return
             }
             let targetType = route.targetType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if targetType == "gauge", let entry = modalModels?.gauges?[targetKey] {
-                selectedModal = ModalPresentation(id: "gauge:\(targetKey)", entry: entry)
+            if targetType == "gauge" {
+                let entry = modalModels?.gauges?[targetKey]
+                    ?? gaugeRows(gauges).first(where: { $0.key == targetKey }).map { fallbackGaugeModalEntry(for: $0) }
+                if let entry {
+                    selectedModal = ModalPresentation(id: "gauge:\(targetKey)", entry: entry)
+                }
             } else if targetType == "driver" {
                 onOpenAllDrivers(targetKey)
             } else if targetType == "current_symptoms" || targetType == "symptoms" {
@@ -12818,17 +13104,20 @@ struct ContentView: View {
                         Text("Possible Symptoms")
                             .font(.headline.weight(.semibold))
                             .foregroundColor(.white)
-                        Text("Start with what you may notice.")
+                        Text("Based on current signals.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
 
-                Text(possibleSymptomsLead(chips: chips))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                let leadText = possibleSymptomsLead(chips: chips)
+                if !leadText.isEmpty {
+                    Text(leadText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if chips.isEmpty {
                     Text("Nothing obvious is leading yet.")
@@ -12844,11 +13133,6 @@ struct ContentView: View {
                         }
                     }
                 }
-
-                Text(supportNudge(for: triggers))
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.74))
-                    .fixedSize(horizontal: false, vertical: true)
 
                 currentSymptomsButton
                 dailyCheckInButton
@@ -12982,7 +13266,6 @@ struct ContentView: View {
                     }
 
                     possibleSymptomsCard(rows: rows)
-                    possibleTriggersCard()
 
                     if let healthAccessNotice {
                         HStack(alignment: .top, spacing: 10) {
@@ -13003,8 +13286,6 @@ struct ContentView: View {
                         )
                     }
 
-                    gaugeGridSection(rows: rows)
-
                     VStack(alignment: .leading, spacing: 8) {
                         let visibleDrivers = topWhatMattersDrivers()
                         let panelAccent = whatMattersPanelAccent
@@ -13014,7 +13295,7 @@ struct ContentView: View {
                                 .foregroundColor(panelAccent.opacity(0.95))
                                 .frame(width: 30, height: 30)
                                 .background(panelAccent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            Text("What Matters Now")
+                            Text("Signals to Watch")
                                 .font(.headline.weight(.semibold))
                                 .foregroundColor(.white.opacity(0.92))
                         }
@@ -13093,7 +13374,6 @@ struct ContentView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Today’s Read", systemImage: "sparkles")
-                    alertPills(limit: 3)
                 }
             }
             .sheet(item: $selectedModal) { modal in
@@ -19564,6 +19844,9 @@ struct ContentView: View {
                 initialStatus: dailyCheckInStatus,
                 onStatusChanged: { status in
                     dailyCheckInStatus = status
+                },
+                onCompleted: {
+                    notePositiveReviewMoment("daily_checkin_completed")
                 }
             )
         case .understandingGaiaEyes:
@@ -21014,6 +21297,9 @@ struct ContentView: View {
                             initialStatus: dailyCheckInStatus,
                             onStatusChanged: { status in
                                 dailyCheckInStatus = status
+                            },
+                            onCompleted: {
+                                notePositiveReviewMoment("daily_checkin_completed")
                             }
                         )
                     case .understandingGaiaEyes:
@@ -21299,6 +21585,9 @@ struct ContentView: View {
                     initialStatus: dailyCheckInStatus,
                     onStatusChanged: { status in
                         dailyCheckInStatus = status
+                    },
+                    onCompleted: {
+                        notePositiveReviewMoment("daily_checkin_completed")
                     }
                 )
             }

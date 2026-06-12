@@ -1316,27 +1316,71 @@ def render_stats_card_from_features(
     return im.convert("RGB")
 
 
+def _daily_title_variant(options: List[str], *, seed_text: str) -> str:
+    if not options:
+        return ""
+    seed = f"{dt.datetime.utcnow().date().isoformat()}|{seed_text}"
+    rng = random.Random(seed)
+    return options[rng.randrange(len(options))]
+
+
 def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] = None) -> str:
     body = (text or "").lower()
     tone_l = (tone or "").lower()
     energy_l = (energy or "").lower()
     calm_context = tone_l in {"calm", "neutral"} or energy_l == "calm"
     candidates = [
-        (("focus", "attention", "clarity", "cognitive", "scattered"), "Need a catch-up day?" if calm_context else "Focus feeling scattered?"),
-        (("sleep", "wind-down", "bedtime", "fragmented"), "Ready for an easier wind-down?" if calm_context else "Sleep feeling fragile?"),
-        (("hrv", "heart-rate variability", "autonomic", "baseline"), "Ready for a calmer day?" if calm_context else "HRV running jumpy?"),
-        (("pain", "nerve", "flare", "reactivity", "sensitive"), "Less pain, more gain?" if calm_context else "Body feeling reactive?"),
+        (
+            ("focus", "attention", "clarity", "cognitive", "scattered"),
+            ["Need a catch-up day?", "Ready to focus?", "Clear the mental tabs?"] if calm_context else [
+                "Focus feeling scattered?",
+                "Mentally all over the place?",
+                "Attention running patchy?",
+                "Brain feeling noisy?",
+            ],
+        ),
+        (
+            ("sleep", "wind-down", "bedtime", "fragmented"),
+            ["Ready for an easier wind-down?", "Protect tonight's reset?", "Sleep could come easier?"] if calm_context else [
+                "Sleep feeling fragile?",
+                "Wired at bedtime?",
+                "Wind-down feeling harder?",
+            ],
+        ),
+        (
+            ("hrv", "heart-rate variability", "autonomic", "baseline"),
+            ["Ready for a calmer day?", "A steadier body day?", "Recovery looking steadier?"] if calm_context else [
+                "HRV running jumpy?",
+                "Recovery feeling strained?",
+                "Body signals running louder?",
+            ],
+        ),
+        (
+            ("pain", "nerve", "flare", "reactivity", "sensitive"),
+            ["Less pain, more gain?", "Use the easier window?", "Body feeling steadier?"] if calm_context else [
+                "Body feeling reactive?",
+                "Pain signals louder?",
+                "Sensitivity turned up?",
+            ],
+        ),
     ]
-    matches: list[tuple[int, str]] = []
-    for tokens, title in candidates:
+    matches: list[tuple[int, List[str]]] = []
+    for tokens, titles in candidates:
         positions = [body.find(token) for token in tokens if token in body]
         if positions:
-            matches.append((min(positions), title))
+            matches.append((min(positions), titles))
     if matches:
-        return sorted(matches, key=lambda item: item[0])[0][1]
+        titles = sorted(matches, key=lambda item: item[0])[0][1]
+        return _daily_title_variant(titles, seed_text=f"{tone_l}|{energy_l}|{body[:160]}")
     if tone_l in ("stormy", "unsettled") or energy_l in ("high", "elevated"):
-        return "Wired and scattered?"
-    return "Ready for a calmer day?"
+        return _daily_title_variant(
+            ["Wired and scattered?", "Static in the system?", "Feeling extra keyed up?"],
+            seed_text=f"{tone_l}|{energy_l}|fallback",
+        )
+    return _daily_title_variant(
+        ["Ready for a calmer day?", "Need a catch-up day?", "Use the steady window?"],
+        seed_text=f"{tone_l}|{energy_l}|fallback",
+    )
 
 
 def _public_card_text(text: str) -> str:

@@ -142,6 +142,7 @@ struct DailyCheckInView: View {
     var showsCloseButton: Bool = false
     let initialStatus: DailyCheckInStatus?
     let onStatusChanged: (DailyCheckInStatus) -> Void
+    var onCompleted: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var status: DailyCheckInStatus?
@@ -172,7 +173,8 @@ struct DailyCheckInView: View {
         tone: ToneStyle = .balanced,
         showsCloseButton: Bool = false,
         initialStatus: DailyCheckInStatus? = nil,
-        onStatusChanged: @escaping (DailyCheckInStatus) -> Void
+        onStatusChanged: @escaping (DailyCheckInStatus) -> Void,
+        onCompleted: (() -> Void)? = nil
     ) {
         self.api = api
         self.mode = mode
@@ -180,6 +182,7 @@ struct DailyCheckInView: View {
         self.showsCloseButton = showsCloseButton
         self.initialStatus = initialStatus
         self.onStatusChanged = onStatusChanged
+        self.onCompleted = onCompleted
         _status = State(initialValue: initialStatus)
     }
 
@@ -839,6 +842,7 @@ struct DailyCheckInView: View {
             await MainActor.run {
                 status = nextStatus
                 onStatusChanged(nextStatus)
+                onCompleted?()
                 statusMessage = exposureConfirmationText(for: exposureIDs)
                 isSaving = false
             }
