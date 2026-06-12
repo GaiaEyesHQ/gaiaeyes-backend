@@ -1199,6 +1199,9 @@ async def profile_home_feed(
                    link_url,
                    updated_at
               from content.home_feed_items item
+              left join content.user_home_feed_seen seen
+                on seen.user_id = %s
+               and seen.item_id = item.id
              where item.active = true
                and (item.mode = 'all' or item.mode = %s)
                and (item.starts_at is null or item.starts_at <= now())
@@ -1208,11 +1211,20 @@ async def profile_home_feed(
                      from content.user_home_feed_seen seen
                     where seen.user_id = %s
                       and seen.item_id = item.id
+                      and (
+                        seen.seen_at::date = current_date
+                        or seen.dismissed_at::date = current_date
+                      )
                )
-             order by item.priority desc, item.created_at asc, item.slug asc
+             order by
+               case when seen.item_id is null then 0 else 1 end,
+               item.priority desc,
+               coalesce(seen.seen_at, '-infinity'::timestamptz) asc,
+               item.created_at asc,
+               item.slug asc
              limit 1
             """,
-            (normalized_mode, user_id),
+            (user_id, normalized_mode, user_id),
             prepare=False,
         )
         row = await cur.fetchone()

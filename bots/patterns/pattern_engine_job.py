@@ -124,6 +124,8 @@ OUTCOME_KIND = {
     "hrv_dip_day": "biometric",
     "high_hr_day": "biometric",
     "short_sleep_day": "biometric",
+    "resting_hr_elevated_day": "biometric",
+    "temperature_deviation_day": "biometric",
 }
 
 OUTCOME_CONFOUNDER_FLAGS = {
@@ -144,6 +146,8 @@ OUTCOME_CONFOUNDER_FLAGS = {
     },
     "hrv_dip_day": {"temporary_illness_reported", "overexertion_reported"},
     "high_hr_day": {"temporary_illness_reported", "overexertion_reported"},
+    "resting_hr_elevated_day": {"temporary_illness_reported", "overexertion_reported"},
+    "temperature_deviation_day": {"temporary_illness_reported"},
     "short_sleep_day": {"temporary_illness_reported", "overexertion_reported"},
 }
 
@@ -260,6 +264,12 @@ SIGNAL_DEFINITIONS = {
         "threshold": None,
         "threshold_text": "schumann_variability_proxy >= rolling station p80 (60 daily rows)",
     },
+    "ulf_exposed": {
+        "family": "ulf",
+        "operator": "context_active",
+        "threshold": None,
+        "threshold_text": "usable ULF context with Active, Elevated, or Strong field motion",
+    },
 }
 
 # Initial single-signal pairs from the task addendum.
@@ -315,6 +325,15 @@ ASSOCIATION_PAIRS = [
     ("schumann_exposed", "short_sleep_day"),
     ("solar_wind_exposed", "hrv_dip_day"),
     ("schumann_exposed", "hrv_dip_day"),
+    ("solar_wind_exposed", "resting_hr_elevated_day"),
+    ("schumann_exposed", "resting_hr_elevated_day"),
+    ("bz_south_exposed", "resting_hr_elevated_day"),
+    ("ulf_exposed", "poor_sleep_day"),
+    ("ulf_exposed", "focus_fog_day"),
+    ("ulf_exposed", "hrv_dip_day"),
+    ("ulf_exposed", "resting_hr_elevated_day"),
+    ("ulf_exposed", "short_sleep_day"),
+    ("temp_swing_exposed", "temperature_deviation_day"),
 ]
 
 PAIR_LAG_HOURS: dict[tuple[str, str], set[int]] = {
@@ -719,6 +738,20 @@ def signal_exposure(row: dict[str, Any], signal_key: str) -> tuple[bool | None, 
         if proxy is None or threshold is None:
             return None, threshold
         return proxy >= threshold, threshold
+    if signal_key == "ulf_exposed":
+        usable = row.get("ulf_is_usable")
+        if usable is None:
+            confidence = _safe_float(row.get("ulf_confidence_score"))
+            usable = confidence is not None and confidence >= 0.20
+        if not bool(usable):
+            return False, None
+        label = str(row.get("ulf_context_label") or row.get("ulf_context_class_raw") or "").strip().lower()
+        intensity = _safe_float(row.get("ulf_regional_intensity"))
+        if not label and intensity is None:
+            return None, None
+        active_label = any(token in label for token in ("active", "elevated", "strong"))
+        active_intensity = intensity is not None and intensity >= 0.60
+        return bool(active_label or active_intensity), None
     return None, None
 
 
@@ -770,6 +803,19 @@ def _fetch_base_daily_features(
         "aurora_hp_north_gw",
         "aurora_hp_south_gw",
         "drap_absorption_polar_db",
+        "ulf_context_class_raw",
+        "ulf_context_label",
+        "ulf_confidence_score",
+        "ulf_confidence_label",
+        "ulf_regional_intensity",
+        "ulf_regional_coherence",
+        "ulf_regional_persistence",
+        "ulf_is_provisional",
+        "ulf_is_usable",
+        "ulf_is_high_confidence",
+        "ulf_station_count",
+        "ulf_missing_samples",
+        "ulf_low_history",
     ]
     final_columns = [col for col in select_columns if col.split(" as ")[-1] in columns]
     final_columns.extend(
@@ -1436,6 +1482,19 @@ def build_user_daily_features(
             "aurora_hp_north_gw": base.get("aurora_hp_north_gw"),
             "aurora_hp_south_gw": base.get("aurora_hp_south_gw"),
             "drap_absorption_polar_db": base.get("drap_absorption_polar_db"),
+            "ulf_context_class_raw": base.get("ulf_context_class_raw"),
+            "ulf_context_label": base.get("ulf_context_label"),
+            "ulf_confidence_score": base.get("ulf_confidence_score"),
+            "ulf_confidence_label": base.get("ulf_confidence_label"),
+            "ulf_regional_intensity": base.get("ulf_regional_intensity"),
+            "ulf_regional_coherence": base.get("ulf_regional_coherence"),
+            "ulf_regional_persistence": base.get("ulf_regional_persistence"),
+            "ulf_is_provisional": bool(base.get("ulf_is_provisional", False)),
+            "ulf_is_usable": bool(base.get("ulf_is_usable", False)),
+            "ulf_is_high_confidence": bool(base.get("ulf_is_high_confidence", False)),
+            "ulf_station_count": base.get("ulf_station_count"),
+            "ulf_missing_samples": bool(base.get("ulf_missing_samples", False)),
+            "ulf_low_history": bool(base.get("ulf_low_history", False)),
             "camera_bpm": camera_row.get("bpm"),
             "camera_rmssd_ms": camera_row.get("rmssd_ms"),
             "camera_stress_index": camera_row.get("stress_index"),
@@ -1870,6 +1929,19 @@ def _feature_insert_columns() -> list[str]:
         "aurora_hp_north_gw",
         "aurora_hp_south_gw",
         "drap_absorption_polar_db",
+        "ulf_context_class_raw",
+        "ulf_context_label",
+        "ulf_confidence_score",
+        "ulf_confidence_label",
+        "ulf_regional_intensity",
+        "ulf_regional_coherence",
+        "ulf_regional_persistence",
+        "ulf_is_provisional",
+        "ulf_is_usable",
+        "ulf_is_high_confidence",
+        "ulf_station_count",
+        "ulf_missing_samples",
+        "ulf_low_history",
         "pain",
         "focus",
         "heart",
@@ -1914,6 +1986,7 @@ def _feature_insert_columns() -> list[str]:
         "bz_south_exposed",
         "solar_wind_exposed",
         "schumann_exposed",
+        "ulf_exposed",
         "air_quality_sensitive",
         "anxiety_sensitive",
         "geomagnetic_sensitive",

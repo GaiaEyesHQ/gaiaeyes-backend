@@ -10301,7 +10301,7 @@ struct ContentView: View {
         let onOpen: (URL) -> Void
 
         private var sectionTitle: String {
-            mode == .mystical ? "Message from Gaia" : "Fun Facts"
+            mode == .mystical ? "Message from Gaia" : "Did You Know?"
         }
 
         private var symbolName: String {
@@ -10400,7 +10400,7 @@ struct ContentView: View {
         let onOpen: (URL) -> Void
 
         private var sectionTitle: String {
-            mode == .mystical ? "Message from Gaia" : "Fun Facts"
+            mode == .mystical ? "Message from Gaia" : "Did You Know?"
         }
 
         private var symbolName: String {

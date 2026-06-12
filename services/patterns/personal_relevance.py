@@ -41,6 +41,7 @@ SIGNAL_LABELS = {
     "lunar_full_window_exposed": "Full moon window",
     "lunar_new_window_exposed": "New moon window",
     "schumann_exposed": "Schumann variability",
+    "ulf_exposed": "ULF field motion",
 }
 
 OUTCOME_LABELS = {
@@ -53,6 +54,8 @@ OUTCOME_LABELS = {
     "focus_fog_day": "Brain fog",
     "hrv_dip_day": "HRV dips",
     "high_hr_day": "Higher heart-rate days",
+    "resting_hr_elevated_day": "Resting HR above usual",
+    "temperature_deviation_day": "Wrist-temperature shifts",
     "short_sleep_day": "Short sleep",
 }
 
@@ -66,6 +69,8 @@ THEME_LABELS = {
     "focus_fog_day": "Focus watch",
     "hrv_dip_day": "Body-signal watch",
     "high_hr_day": "Heart-load watch",
+    "resting_hr_elevated_day": "Recovery watch",
+    "temperature_deviation_day": "Temperature watch",
     "short_sleep_day": "Short-sleep watch",
 }
 
@@ -79,17 +84,18 @@ DRIVER_TO_SIGNAL_KEY = {
     "bz": "bz_south_exposed",
     "sw": "solar_wind_exposed",
     "schumann": "schumann_exposed",
+    "ulf": "ulf_exposed",
 }
 
 GAUGE_OUTCOME_KEYS = {
     "pain": ("pain_flare_day", "headache_day"),
     "focus": ("focus_fog_day", "headache_day"),
-    "heart": ("high_hr_day", "anxiety_day", "hrv_dip_day"),
+    "heart": ("high_hr_day", "resting_hr_elevated_day", "anxiety_day", "hrv_dip_day"),
     "stamina": ("fatigue_day", "short_sleep_day"),
     "energy": ("fatigue_day", "anxiety_day"),
     "sleep": ("poor_sleep_day", "short_sleep_day"),
     "mood": ("anxiety_day", "restlessness_day", "poor_sleep_day"),
-    "health_status": ("fatigue_day", "short_sleep_day", "high_hr_day"),
+    "health_status": ("fatigue_day", "short_sleep_day", "high_hr_day", "resting_hr_elevated_day"),
 }
 
 GAUGE_LABELS = {
@@ -114,6 +120,8 @@ OUTCOME_KEYS = [
     "focus_fog_day",
     "hrv_dip_day",
     "high_hr_day",
+    "resting_hr_elevated_day",
+    "temperature_deviation_day",
     "short_sleep_day",
 ]
 
@@ -293,6 +301,11 @@ _PATTERN_MESSAGE_MAP = {
         "short": "Elevated solar wind has lined up with more days of higher heart rate for you.",
         "clause": "it has lined up with more days of higher heart rate for you",
     },
+    ("solar_wind_exposed", "resting_hr_elevated_day"): {
+        "full": "Elevated solar wind has lined up with more days when resting HR ran above your usual range.",
+        "short": "Elevated solar wind has lined up with more above-usual resting HR days for you.",
+        "clause": "it has lined up with more above-usual resting HR days for you",
+    },
     ("solar_wind_exposed", "short_sleep_day"): {
         "full": "Elevated solar wind has lined up with more short-sleep nights in your history.",
         "short": "Elevated solar wind has lined up with more short-sleep nights for you.",
@@ -353,6 +366,11 @@ _PATTERN_MESSAGE_MAP = {
         "short": "Strong southward Bz has lined up with more poor-sleep nights for you.",
         "clause": "it has lined up with more poor-sleep nights for you",
     },
+    ("bz_south_exposed", "resting_hr_elevated_day"): {
+        "full": "Strong southward Bz has lined up with more above-usual resting HR days in your history.",
+        "short": "Southward Bz has lined up with more above-usual resting HR days for you.",
+        "clause": "it has lined up with more above-usual resting HR days for you",
+    },
     ("schumann_exposed", "poor_sleep_day"): {
         "full": "Elevated Schumann variability has lined up with more lighter or shorter sleep nights in your history.",
         "short": "Schumann variability has lined up with more lighter-sleep nights for you.",
@@ -368,6 +386,11 @@ _PATTERN_MESSAGE_MAP = {
         "short": "Schumann variability has lined up with more HRV dip days for you.",
         "clause": "it has lined up with more HRV dip days for you",
     },
+    ("schumann_exposed", "resting_hr_elevated_day"): {
+        "full": "Higher Schumann variability has lined up with more above-usual resting HR days in your history.",
+        "short": "Schumann variability has lined up with more above-usual resting HR days for you.",
+        "clause": "it has lined up with more above-usual resting HR days for you",
+    },
     ("schumann_exposed", "focus_fog_day"): {
         "full": "Elevated Schumann variability has lined up with more focus-drift days in your history.",
         "short": "Schumann variability has lined up with more focus-drift days for you.",
@@ -377,6 +400,36 @@ _PATTERN_MESSAGE_MAP = {
         "full": "Elevated Schumann variability has lined up with more restless days in your history.",
         "short": "Schumann variability has lined up with more restless days for you.",
         "clause": "it has lined up with more restless days for you",
+    },
+    ("ulf_exposed", "poor_sleep_day"): {
+        "full": "Active ULF field motion has lined up with more poor-sleep nights in your history.",
+        "short": "ULF field motion has lined up with more poor-sleep nights for you.",
+        "clause": "it has lined up with more poor-sleep nights for you",
+    },
+    ("ulf_exposed", "short_sleep_day"): {
+        "full": "Active ULF field motion has lined up with more short-sleep nights in your history.",
+        "short": "ULF field motion has lined up with more short-sleep nights for you.",
+        "clause": "it has lined up with more short-sleep nights for you",
+    },
+    ("ulf_exposed", "focus_fog_day"): {
+        "full": "Active ULF field motion has lined up with more focus-drift days in your history.",
+        "short": "ULF field motion has lined up with more focus-drift days for you.",
+        "clause": "it has lined up with more focus-drift days for you",
+    },
+    ("ulf_exposed", "hrv_dip_day"): {
+        "full": "Active ULF field motion has lined up with more HRV dip days in your history.",
+        "short": "ULF field motion has lined up with more HRV dip days for you.",
+        "clause": "it has lined up with more HRV dip days for you",
+    },
+    ("ulf_exposed", "resting_hr_elevated_day"): {
+        "full": "Active ULF field motion has lined up with more above-usual resting HR days in your history.",
+        "short": "ULF field motion has lined up with more above-usual resting HR days for you.",
+        "clause": "it has lined up with more above-usual resting HR days for you",
+    },
+    ("temp_swing_exposed", "temperature_deviation_day"): {
+        "full": "Temperature swings have lined up with more wrist-temperature shift days in your history.",
+        "short": "Temperature swings have lined up with more wrist-temperature shifts for you.",
+        "clause": "they have lined up with more wrist-temperature shifts for you",
     },
 }
 

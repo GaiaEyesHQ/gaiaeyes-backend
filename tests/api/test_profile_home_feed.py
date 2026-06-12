@@ -50,10 +50,10 @@ class FakeCursor:
         self.conn.queries.append((self.last_query, params))
 
     async def fetchone(self):
-        if "seen_at::date = current_date" in self.last_query:
-            return self.conn.seen_today_row
         if "from content.home_feed_items" in self.last_query:
             return self.conn.item_row
+        if "seen_at::date = current_date" in self.last_query:
+            return self.conn.seen_today_row
         if "returning seen_at, dismissed_at" in self.last_query:
             return self.conn.seen_response_row
         return None
@@ -143,7 +143,9 @@ async def test_profile_home_feed_returns_unseen_mode_item(client: AsyncClient, f
     assert payload["item"]["id"] == str(item_id)
     assert payload["item"]["title"] == "Listen softly"
     item_query = next(query for query in fake_conn.queries if "from content.home_feed_items" in query[0])
-    assert item_query[1][0] == "mystical"
+    assert item_query[1][1] == "mystical"
+    assert "seen.seen_at::date = current_date" in item_query[0]
+    assert "seen.dismissed_at::date = current_date" in item_query[0]
 
 
 @pytest.mark.anyio
@@ -245,7 +247,8 @@ async def test_profile_home_feed_public_read_keeps_authenticated_user(
     seen_query = next(query for query in fake_conn.queries if "seen_at::date = current_date" in query[0])
     item_query = next(query for query in fake_conn.queries if "from content.home_feed_items" in query[0])
     assert seen_query[1][0] == str(user_id)
-    assert item_query[1][1] == str(user_id)
+    assert item_query[1][0] == str(user_id)
+    assert item_query[1][1] == "scientific"
 
 
 @pytest.mark.anyio

@@ -567,7 +567,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     private func hasHistoricalHealthReadEvidence() -> Bool {
         if !healthkitReadVerifiedAtISO.isEmpty { return true }
         let defaults = UserDefaults.standard
-        let metrics = ["heart_rate", "sleep_stage", "hrv_sdnn", "spo2", "respiratory_rate", "resting_heart_rate", "step_count"]
+        let metrics = ["heart_rate", "sleep_stage", "hrv_sdnn", "spo2", "respiratory_rate", "resting_heart_rate", "temperature_deviation", "step_count"]
         return metrics.contains { metric in
             defaults.string(forKey: "gaia.hk.last_sample.\(metric)") != nil
             || defaults.string(forKey: "gaia.hk.last_source.\(metric)") != nil

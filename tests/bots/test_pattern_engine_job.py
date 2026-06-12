@@ -23,10 +23,10 @@ class PatternEngineJobTests(unittest.TestCase):
     def test_confidence_bucket_requires_recent_strong_pattern(self) -> None:
         self.assertEqual(
             confidence_bucket(
-                exposed_n=12,
+                exposed_n=14,
                 relative_lift=2.3,
                 rate_diff=0.22,
-                observed_weeks=3,
+                observed_weeks=4,
                 last_outcome_day=date(2026, 3, 10),
                 as_of_day=date(2026, 3, 17),
             ),
@@ -69,6 +69,11 @@ class PatternEngineJobTests(unittest.TestCase):
         exposed, threshold = signal_exposure(schumann_row, "schumann_exposed")
         self.assertTrue(exposed)
         self.assertEqual(threshold, 0.30)
+
+        ulf_row = {"ulf_is_usable": True, "ulf_context_label": "Elevated"}
+        exposed, threshold = signal_exposure(ulf_row, "ulf_exposed")
+        self.assertTrue(exposed)
+        self.assertIsNone(threshold)
 
     def test_build_user_daily_features_preserves_zero_flare_and_cme_counts(self) -> None:
         rows = build_user_daily_features(
@@ -125,9 +130,38 @@ class PatternEngineJobTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["respiratory_rate_avg"], 15.1)
         self.assertEqual(rows[0]["resting_hr_baseline_delta"], 6.2)
+        self.assertFalse(rows[0]["ulf_exposed"])
         self.assertEqual(rows[0]["cycle_phase"], "menstrual")
         self.assertTrue(rows[0]["cycle_tracking_enabled"])
         self.assertTrue(rows[0]["menstrual_active"])
+
+    def test_build_user_daily_features_sets_ulf_signal(self) -> None:
+        rows = build_user_daily_features(
+            base_rows=[
+                {
+                    "user_id": "user-1",
+                    "day": date(2026, 3, 17),
+                    "ulf_context_label": "Strong",
+                    "ulf_is_usable": True,
+                    "ulf_confidence_score": 0.72,
+                    "ulf_regional_intensity": 0.68,
+                }
+            ],
+            gauges={},
+            gauge_deltas={},
+            symptom_stats={},
+            camera_rows={},
+            tag_flags={},
+            day_zip_map={},
+            current_zip_map={},
+            local_signals_daily={},
+            schumann_daily={},
+            updated_at=datetime(2026, 3, 17, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0]["ulf_exposed"])
+        self.assertEqual(rows[0]["ulf_context_label"], "Strong")
 
     def test_build_user_daily_features_sets_humidity_extreme_signal(self) -> None:
         rows = build_user_daily_features(
@@ -180,6 +214,10 @@ class PatternEngineJobTests(unittest.TestCase):
 
     def test_body_signal_pairs_include_sleep_and_heart_rate_outcomes(self) -> None:
         self.assertIn(("solar_wind_exposed", "high_hr_day"), ASSOCIATION_PAIRS)
+        self.assertIn(("solar_wind_exposed", "resting_hr_elevated_day"), ASSOCIATION_PAIRS)
+        self.assertIn(("schumann_exposed", "resting_hr_elevated_day"), ASSOCIATION_PAIRS)
+        self.assertIn(("ulf_exposed", "resting_hr_elevated_day"), ASSOCIATION_PAIRS)
+        self.assertIn(("ulf_exposed", "hrv_dip_day"), ASSOCIATION_PAIRS)
         self.assertIn(("solar_wind_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
         self.assertIn(("kp_g1_plus_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
 
