@@ -1022,17 +1022,49 @@ def carousel_image_urls(urls: Dict[str, str]) -> List[str]:
   return [urls["affects"], urls["play"], urls["stats"]]
 
 
-def derive_caption_and_hashtags(post: dict) -> tuple[str, str]:
+def _caption_variant_for_platform(metrics: Any, platform: str) -> Optional[tuple[str, str]]:
+  if not isinstance(metrics, dict):
+    return None
+  variants = metrics.get("social_variants")
+  if not isinstance(variants, dict):
+    return None
+  plat = (platform or "default").strip().lower()
+  keys = ["default"]
+  if plat in ("fb", "facebook"):
+    keys = ["fb", "facebook", "default"]
+  elif plat in ("ig", "instagram"):
+    keys = ["ig", "instagram", "default"]
+  for key in keys:
+    item = variants.get(key)
+    if not isinstance(item, dict):
+      continue
+    caption = str(item.get("caption") or "").strip()
+    if caption:
+      return caption, str(item.get("hashtags") or "").strip()
+  return None
+
+
+def derive_caption_and_hashtags(post: dict, target_platform: Optional[str] = None) -> tuple[str, str]:
   """Return (caption, hashtags) preferring plain caption, with JSON/sections fallback when needed."""
   cap = post.get("caption") or ""
   tags = (post.get("hashtags") or "").strip()
   cap_stripped = cap.strip()
   prefer_sections = (not cap_stripped) or (cap_stripped.startswith("{") and '"sections"' in cap_stripped)
 
-  try:
-    metrics = post.get("metrics_json")
-    if isinstance(metrics, str):
+  metrics = post.get("metrics_json")
+  if isinstance(metrics, str):
+    try:
       metrics = json.loads(metrics)
+    except Exception:
+      metrics = None
+  target = target_platform or post.get("platform") or "default"
+  variant = _caption_variant_for_platform(metrics, target)
+  if variant:
+    cap, variant_tags = variant
+    if variant_tags:
+      tags = variant_tags
+
+  try:
     if prefer_sections and isinstance(metrics, dict):
       sections = metrics.get("sections") or {}
       if isinstance(sections, dict):
@@ -1068,12 +1100,6 @@ def derive_caption_and_hashtags(post: dict) -> tuple[str, str]:
       if parsed:
         cap = parsed
 
-  metrics = post.get("metrics_json")
-  if isinstance(metrics, str):
-    try:
-      metrics = json.loads(metrics)
-    except Exception:
-      metrics = None
   seed = f"{post.get('day') or ''}|{post.get('platform') or ''}|{cap[:80]}"
   cap = append_caption_cta(cap.strip(), seed=seed, context=metrics if isinstance(metrics, dict) else None)
   if tags:
@@ -1132,7 +1158,7 @@ def main() -> None:
   urls = default_image_urls()
 
   if args.cmd == "post-square":
-    caption = caption_override or derive_caption_and_hashtags(post)[0]
+    caption = caption_override or derive_caption_and_hashtags(post, args.platform)[0]
     logging.info("Derived caption (len=%d): %s", len(caption), _clip(caption, 180))
     result = fb_post_photo(urls["square"], caption, dry_run=args.dry_run)
     logging.info("FB result: %s", _json_preview(result))
@@ -1143,7 +1169,7 @@ def main() -> None:
     sys.exit(_result_exit_code(result))
 
   if args.cmd == "post-carousel":
-    caption = caption_override or derive_caption_and_hashtags(post)[0]
+    caption = caption_override or derive_caption_and_hashtags(post, args.platform)[0]
     logging.info("Derived caption (len=%d): %s", len(caption), _clip(caption, 180))
     image_urls = carousel_image_urls(urls)
     platform = (args.platform or "").lower()
@@ -1156,7 +1182,7 @@ def main() -> None:
     sys.exit(_result_exit_code(result))
 
   if args.cmd == "post-carousel-fb":
-    caption = caption_override or derive_caption_and_hashtags(post)[0]
+    caption = caption_override or derive_caption_and_hashtags(post, "fb")[0]
     logging.info("Derived caption (len=%d): %s", len(caption), _clip(caption, 180))
     result = fb_post_multi_image(carousel_image_urls(urls), caption, dry_run=args.dry_run)
     logging.info("FB result: %s", _json_preview(result))
@@ -1168,7 +1194,7 @@ def main() -> None:
       if not post:
         logging.error("No content.daily_posts available for reel caption resolution")
         sys.exit(2)
-      caption = derive_caption_and_hashtags(post)[0]
+      caption = derive_caption_and_hashtags(post, args.platform)[0]
     logging.info("Derived reel caption (len=%d): %s", len(caption), _clip(caption, 180))
     video_url = args.video_url or default_reel_url()
     cover_url = args.cover_url or urls["square"]

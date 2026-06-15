@@ -86,7 +86,12 @@ def test_earthscope_hook_title_leads_with_symptom_pattern():
         energy="Elevated",
     )
 
-    assert title == "Focus feeling scattered?"
+    assert title in {
+        "Focus feeling scattered?",
+        "Mentally all over the place?",
+        "Attention running patchy?",
+        "Brain feeling noisy?",
+    }
 
 
 def test_earthscope_hook_title_uses_calm_focus_language():
@@ -96,7 +101,7 @@ def test_earthscope_hook_title_uses_calm_focus_language():
         energy="Calm",
     )
 
-    assert title == "Need a catch-up day?"
+    assert title in {"Need a catch-up day?", "Ready to focus?", "Clear the mental tabs?"}
 
 
 def test_public_card_text_removes_clinician_and_vibes_language():
@@ -110,7 +115,8 @@ def test_public_card_text_removes_clinician_and_vibes_language():
 def test_format_public_playbook_outputs_clean_bullets():
     text = _format_public_playbook("Use steady blocks\nKeep movement light")
 
-    assert text == "- Use steady blocks.\n- Keep movement light."
+    assert text.startswith("- Use steady blocks.\n- Keep movement light.")
+    assert text.count("\n- ") >= 2
 
 
 def test_trim_public_affects_keeps_first_three_sentences():

@@ -101,6 +101,7 @@ EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip(
 EARTHSCOPE_SIM_GUARD = os.getenv("EARTHSCOPE_SIM_GUARD", "1").strip().lower() in ("1","true","yes","on")
 EARTHSCOPE_SIM_THRESH = float(os.getenv("EARTHSCOPE_SIM_THRESH", "0.35"))
 EARTHSCOPE_SIM_RECENT = max(1, int(os.getenv("EARTHSCOPE_SIM_RECENT", "5")))
+EARTHSCOPE_LLM_CANDIDATES = max(1, min(8, int(os.getenv("EARTHSCOPE_LLM_CANDIDATES", "5"))))
 EARTHSCOPE_PUBLIC_SHADOW = os.getenv("EARTHSCOPE_PUBLIC_SHADOW", "false").strip().lower() in ("1","true","yes","on")
 EARTHSCOPE_PUBLIC_SHADOW_OUTPUT = (os.getenv("EARTHSCOPE_PUBLIC_SHADOW_OUTPUT") or "").strip()
 EARTHSCOPE_PUBLIC_CANDIDATE_MODE = (os.getenv("EARTHSCOPE_PUBLIC_CANDIDATE_MODE") or "public_draft_restored").strip().lower()
@@ -484,6 +485,42 @@ def _ctx_platform(ctx: Dict[str, Any]) -> str:
     return str(ctx.get("platform") or PLATFORM or "default").strip() or "default"
 
 
+def _platform_caption_profile(platform: str) -> Dict[str, Any]:
+    plat = (platform or "default").strip().lower()
+    if plat in {"fb", "facebook"}:
+        return {
+            "platform": "facebook",
+            "caption_sentences": [5, 8],
+            "caption_words": [110, 220],
+            "caption_instruction": (
+                "5-8 sentences, about 110-220 words. Write a richer Facebook-style mini post: "
+                "lead with a human hook, add one plain-language why-it-matters paragraph, give a practical pacing note, "
+                "and end with a soft Gaia Eyes bridge. It can be reflective or lightly funny, but should not feel like a report."
+            ),
+            "max_caption_chars": 1600,
+        }
+    if plat in {"ig", "instagram"}:
+        return {
+            "platform": "instagram",
+            "caption_sentences": [2, 4],
+            "caption_words": [45, 95],
+            "caption_instruction": (
+                "2-4 sentences, about 45-95 words. Keep it compact for Instagram: hook first, one useful context line, "
+                "one practical cue. Leave room for CTA and hashtags."
+            ),
+            "max_caption_chars": 700,
+        }
+    return {
+        "platform": "default",
+        "caption_sentences": [2, 4],
+        "caption_words": [60, 120],
+        "caption_instruction": (
+            "2-4 sentences, about 60-120 words. Keep it hook-first, human, and practical."
+        ),
+        "max_caption_chars": 800,
+    }
+
+
 def _public_voice_bundle(ctx: Dict[str, Any]):
     day_iso = _ctx_day_iso(ctx)
     try:
@@ -511,6 +548,24 @@ def _select_intro_line(day_iso: str, platform: str, banned_openers: Optional[Lis
         if intro.strip().lower() not in banned:
             return intro
     return INTRO_LINES[seed % len(INTRO_LINES)]
+
+
+def _stable_choice(
+    options: List[str],
+    *,
+    seed_text: str,
+    banned_openers: Optional[List[str]] = None,
+) -> str:
+    usable = [opt for opt in options if str(opt or "").strip()]
+    if not usable:
+        return ""
+    banned = {_first_sentence(x).strip().lower() for x in (banned_openers or []) if str(x or "").strip()}
+    seed = int(hashlib.sha256(seed_text.encode("utf-8")).hexdigest(), 16)
+    for offset in range(len(usable)):
+        candidate = usable[(seed + offset) % len(usable)]
+        if _first_sentence(candidate).strip().lower() not in banned:
+            return candidate
+    return usable[seed % len(usable)]
 
 
 # --- Recent opener helpers for hook variation ---
@@ -605,30 +660,30 @@ def _caption_too_similar(caption: str, recent: List[str], threshold: float) -> b
     return False
 
 
-def _recent_platform_openers(platform: str, limit: int = 3) -> List[str]:
+def _recent_platform_openers(platform: str, limit: int = 3, before_day: Optional[str] = None) -> List[str]:
     plat = (platform or "default").strip() or "default"
     try:
-        res = (
+        q = (
             SB.schema(POSTS_SCHEMA)
               .table(POSTS_TABLE)
               .select("day,lead,caption")
               .eq("platform", plat)
-              .order("day", desc=True)
-              .limit(limit)
-              .execute()
         )
+        if before_day:
+            q = q.lt("day", before_day)
+        res = q.order("day", desc=True).limit(limit).execute()
         rows = res.data or []
     except Exception:
         try:
-            res = (
+            q = (
                 SB.schema(POSTS_SCHEMA)
                   .table(POSTS_TABLE)
                   .select("day,caption")
                   .eq("platform", plat)
-                  .order("day", desc=True)
-                  .limit(limit)
-                  .execute()
             )
+            if before_day:
+                q = q.lt("day", before_day)
+            res = q.order("day", desc=True).limit(limit).execute()
             rows = res.data or []
         except Exception:
             rows = []
@@ -710,7 +765,8 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
 
 def _pick_hook(tone: str, last_used: set | None = None) -> str:
     pool = HOOKS.get(tone) or HOOKS["neutral"]
-    random.seed(_daily_seed() + hash(tone))
+    seed = int(hashlib.sha256(f"{_daily_seed()}|{tone}".encode("utf-8")).hexdigest(), 16)
+    random.seed(seed)
     candidates = pool.copy()
     random.shuffle(candidates)
     if last_used:
@@ -736,13 +792,52 @@ def _caption_starts_repetitive(caption: str) -> bool:
 
 
 def _caption_context_lead(ctx: Dict[str, Any]) -> str:
+    day_iso = _ctx_day_iso(ctx)
+    platform = _ctx_platform(ctx)
+    banned = [x for x in (ctx.get("banned_openers") or []) if isinstance(x, str)]
+    banned.extend(_first_sentence(x) for x in (ctx.get("recent_captions") or []) if isinstance(x, str))
     tone = _tone_from_ctx(ctx)
     if tone == "stormy":
-        return "Keep today in shorter, steadier bursts."
+        return _stable_choice(
+            [
+                "Keep today in shorter, steadier bursts.",
+                "Dial the day down a notch.",
+                "Make room for extra recovery today.",
+                "Let the signal set a gentler pace.",
+                "This is a protect-your-bandwidth day.",
+                "Short bursts beat big pushes today.",
+            ],
+            seed_text=f"{day_iso}|{platform}|stormy|caption-lead",
+            banned_openers=banned,
+        )
     if tone == "unsettled":
-        return "Build in a little more nervous-system slack today."
+        return _stable_choice(
+            [
+                "Build in a little more nervous-system slack today.",
+                "Keep your plan flexible today.",
+                "Give your attention a wider lane today.",
+                "Pace the day before it paces you.",
+                "Leave extra room between pushes today.",
+                "Treat today like a variable-signal day.",
+            ],
+            seed_text=f"{day_iso}|{platform}|unsettled|caption-lead",
+            banned_openers=banned,
+        )
     if tone in {"calm", "neutral"}:
-        return "Use the steadier window while it is here."
+        return _stable_choice(
+            [
+                "Use the steadier window while it is here.",
+                "Take the cleaner runway while you have it.",
+                "This is a good day to catch up gently.",
+                "Let the calmer field work in your favor.",
+                "Make the easy momentum count today.",
+                "A steadier backdrop gives you room to focus.",
+                "Use the quiet stretch for one thing that matters.",
+                "Good day for calm progress, not overreach.",
+            ],
+            seed_text=f"{day_iso}|{platform}|{tone}|caption-lead",
+            banned_openers=banned,
+        )
     return "Let the signal shape the plan, not the whole day."
 
 
@@ -914,6 +1009,7 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "metaphor_pool": ctx.get("metaphor_pool") or [],
         "recent_analogies": ctx.get("recent_analogies") or [],
         "template_id": ctx.get("template_id"),
+        "platform": _ctx_platform(ctx),
     }
 
 
@@ -1070,6 +1166,96 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
     return obj
 
 
+def _finalize_rewrite_payload(obj: Dict[str, str]) -> Dict[str, str]:
+    out = dict(obj)
+    out["caption"] = _scrub_banned_phrases(_sanitize_caption(out["caption"]))
+    out["snapshot"] = _strip_section_labels(_scrub_banned_phrases(out["snapshot"]))
+    out["affects"] = _strip_section_labels(_scrub_banned_phrases(out["affects"]))
+    out["playbook"] = _strip_section_labels(_scrub_banned_phrases(out["playbook"]))
+    return out
+
+
+def _candidate_items_from_obj(obj: Any) -> List[Dict[str, Any]]:
+    if not isinstance(obj, dict):
+        return []
+    raw_candidates = obj.get("candidates")
+    if isinstance(raw_candidates, list):
+        return [item for item in raw_candidates if isinstance(item, dict)]
+    if all(isinstance(obj.get(key), str) for key in ("caption", "snapshot", "affects", "playbook")):
+        return [obj]
+    return []
+
+
+def _caption_creativity_score(caption: str, ctx: Dict[str, Any], recent_caps: List[str]) -> float:
+    text = _sanitize_caption(caption)
+    first = _first_sentence(text).strip()
+    first_l = first.lower()
+    banned = {
+        _first_sentence(x).strip().lower()
+        for x in list(ctx.get("banned_openers") or []) + recent_caps
+        if isinstance(x, str) and str(x).strip()
+    }
+    score = 0.0
+    if first and first_l not in banned:
+        score += 5.0
+    if len(first.split()) <= 12:
+        score += 1.0
+    if re.search(r"\b(body|sleep|focus|heart|mood|pain|nervous system|energy|wired|foggy|calm|scattered|catch-up|reset)\b", first_l):
+        score += 2.0
+    if "?" in first:
+        score += 1.0
+    if re.search(r"\b(today|the day)\s+(feels|has|is)\b", first_l):
+        score -= 6.0
+    if re.search(r"\b(geomagnetic conditions|space weather|magnetic backdrop|steady magnetic backdrop|standard energy field)\b", first_l):
+        score -= 3.0
+    if _caption_too_similar(text, recent_caps, EARTHSCOPE_SIM_THRESH):
+        score -= 8.0
+    return score
+
+
+def _select_best_rewrite_candidate(
+    obj: Any,
+    facts: Dict[str, Any],
+    ctx: Dict[str, Any],
+) -> Optional[Dict[str, str]]:
+    candidates = _candidate_items_from_obj(obj)
+    if not candidates:
+        return None
+
+    recent_caps = [x for x in (ctx.get("recent_captions") or []) if isinstance(x, str)]
+    ranked: List[tuple[float, Dict[str, str]]] = []
+    for index, candidate in enumerate(candidates):
+        item = dict(candidate)
+        if "hashtags" not in item or not isinstance(item.get("hashtags"), str) or not item.get("hashtags", "").strip():
+            item["hashtags"] = "#GaiaEyes #SpaceWeather #ChronicPain #Schumann #HRV #Frequency #Wellness"
+        item = _normalize_rewrite_payload(item)
+        valid = _validate_rewrite(item, facts)
+        if not valid:
+            _dbg(f"candidate: rejected index={index}")
+            continue
+        caption = str(valid.get("caption") or "")
+        first = _first_sentence(caption).strip().lower()
+        recent_openers = {
+            _first_sentence(x).strip().lower()
+            for x in list(ctx.get("banned_openers") or []) + recent_caps
+            if isinstance(x, str) and str(x).strip()
+        }
+        if first and first in recent_openers:
+            _dbg(f"candidate: rejected repeated opener index={index}")
+            continue
+        if EARTHSCOPE_SIM_GUARD and _caption_too_similar(caption, recent_caps, EARTHSCOPE_SIM_THRESH):
+            _dbg(f"candidate: rejected similar caption index={index}")
+            continue
+        finalized = _finalize_rewrite_payload(valid)
+        ranked.append((_caption_creativity_score(finalized["caption"], ctx, recent_caps), finalized))
+
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    _dbg(f"candidate: selected score={ranked[0][0]:.2f} valid={len(ranked)}")
+    return ranked[0][1]
+
+
 def _has_unsupported_event_mention(text: str, event_pattern: str) -> bool:
     sentences = [part.strip() for part in re.split(r"(?<=[\.!?;])\s+", text or "") if part.strip()]
     if not sentences:
@@ -1098,6 +1284,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
     """Call the LLM to rewrite into interpretive, number-free JSON. Returns dict or None."""
     if not client:
         return None
+    caption_profile = _platform_caption_profile(str(facts.get("platform") or "default"))
 
     system_msg = (
         "You are Gaia Eyes’ daily weather desk: viral, practical, and lightly funny. "
@@ -1116,7 +1303,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
-        "Aim for: caption 3–5 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
+        f"Aim for: caption {caption_profile['caption_instruction']} Snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
         "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. Respect style.template_id and style.template_map to decide sentence order for caption only; rearrange the same facts without adding new claims. "
     )
 
@@ -1131,7 +1318,9 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             "ban_phrases": BAN_PHRASES,
             "bullet_style": "short",
             "tone": facts.get("tone"),
-            "length_targets": {"caption": [3,5], "snapshot": [3,5], "affects": [3,4], "playbook": [3,5]},
+            "length_targets": {"caption": caption_profile["caption_sentences"], "snapshot": [3,5], "affects": [3,4], "playbook": [3,5]},
+            "caption_words": caption_profile["caption_words"],
+            "target_platform": caption_profile["platform"],
             "extra_ban_phrases": [
                 "structured approach to tasks",
                 "personal recovery efforts",
@@ -1149,7 +1338,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             "omit_numbers": True,
             "no_questions": True,
             "no_emojis": True,
-            "max_caption_chars": 600
+            "max_caption_chars": caption_profile["max_caption_chars"],
         }
     }
 
@@ -1275,6 +1464,95 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         return None
 
 
+def _rewrite_json_candidates(
+    client: Optional["OpenAI"],
+    draft: Dict[str, str],
+    facts: Dict[str, Any],
+    ctx: Dict[str, Any],
+    *,
+    count: int = EARTHSCOPE_LLM_CANDIDATES,
+) -> Optional[Dict[str, str]]:
+    if not client:
+        return None
+    model = _writer_model()
+    if not model:
+        _dbg("candidate: no model configured")
+        return None
+    caption_profile = _platform_caption_profile(_ctx_platform(ctx))
+
+    recent_caps = [x for x in (ctx.get("recent_captions") or []) if isinstance(x, str)]
+    recent_openers = [
+        _first_sentence(x)
+        for x in list(ctx.get("banned_openers") or []) + recent_caps
+        if isinstance(x, str) and str(x).strip()
+    ][:12]
+    system_msg = (
+        "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
+        "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
+        "You may use a question as the opening hook if it feels natural. Humor is welcome when warm and grounded. "
+        "Avoid report-like openings, labels, and repeated phrasing. Do not reuse recent_openers. "
+        "Use evidence-scaled language: may, can, for some, tends to. No diagnosis, certainty, detox, cure, or treatment claims. "
+        "Return only JSON with a candidates array. Each candidate must include caption, snapshot, affects, playbook, and hashtags."
+    )
+    payload = {
+        "task": f"Write {count} distinct Gaia Eyes daily social post candidates.",
+        "facts": facts,
+        "context_summary": _summarize_context(facts),
+        "recent_openers": recent_openers,
+        "recent_caption_excerpts": [cap[:220] for cap in recent_caps[:8]],
+        "draft_reference": draft,
+        "voice": {
+            "audience": "people tracking pain, sleep, mood, HRV, wearable patterns, and nervous-system sensitivity",
+            "style": "human, emotionally relatable, curious, practical, sometimes funny",
+            "target_platform": caption_profile["platform"],
+            "avoid": [
+                "weather report voice",
+                "generic wellness slogans",
+                "same opener structure",
+                "clinician/professional framing",
+                "overexplaining the metrics",
+            ],
+        },
+        "candidate_requirements": {
+            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook and must differ across candidates.",
+            "snapshot": "2-4 plain-language sentences with no numeric space-weather measurements.",
+            "affects": "2-4 sentences about possible felt patterns without certainty.",
+            "playbook": "3-5 short bullets.",
+            "hashtags": "6-10 hashtags as one string.",
+        },
+    }
+    try:
+        _dbg(f"candidate: request -> OpenAI count={count}")
+        resp = _chat_create_compat(
+            client,
+            model=model,
+            temperature=0.95,
+            top_p=0.95,
+            presence_penalty=0.7,
+            frequency_penalty=0.5,
+            reasoning_effort="low",
+            max_completion_tokens=3200,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+            ],
+        )
+        text = _chat_text(resp).strip()
+        _dbg(f"candidate: response text_len={len(text)}")
+        raw = _extract_first_json_object(text)
+        if not raw:
+            _dbg("candidate: no JSON object found")
+            return None
+        obj = json.loads(raw)
+        selected = _select_best_rewrite_candidate(obj, facts, ctx)
+        _dbg("candidate: selected") if selected else _dbg("candidate: no valid candidate")
+        return selected
+    except Exception as e:
+        _dbg(f"candidate: OpenAI call failed: {e}")
+        return None
+
+
 # --- LLM rewrite from rules ---
 def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: str, affects: str, playbook: str, ctx: Dict[str, Any]) -> Dict[str, str]:
     """Number-free interpretive rewrite. Falls back to rule copy if JSON invalid or client missing."""
@@ -1298,6 +1576,12 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
         "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #Frequency #Focus",
     }
     facts = _build_facts(ctx)
+
+    # Prefer a small creative batch so OpenAI can vary hooks before validation
+    out = _rewrite_json_candidates(client, draft, facts, ctx)
+    _dbg("rewrite: candidate batch succeeded") if out else _dbg("rewrite: candidate batch failed; trying single rewrite")
+    if out:
+        return out
 
     # Try once
     template_id = facts.get("template_id") if isinstance(facts.get("template_id"), int) else None
@@ -2111,6 +2395,56 @@ def generate_short_caption(
         return _polish_public_caption(rc["caption"], ctx), rc["hashtags"]
 
 
+def _platform_variant_context(ctx: Dict[str, Any], platform: str) -> Dict[str, Any]:
+    day_iso = _ctx_day_iso(ctx)
+    variant_ctx = dict(ctx)
+    variant_ctx["platform"] = platform
+    variant_ctx["banned_openers"] = _recent_platform_openers(platform, limit=3, before_day=day_iso)
+    recent_captions = _recent_platform_captions(platform, limit=EARTHSCOPE_SIM_RECENT, before_day=day_iso)
+    variant_ctx["recent_captions"] = recent_captions
+    variant_ctx["intro_hint"] = _select_intro_line(day_iso, platform, variant_ctx.get("banned_openers"))
+    variant_ctx["metaphor_hint"] = _select_metaphor_hint(day_iso, platform)
+    variant_ctx["metaphor_pool"] = _select_metaphor_pool(day_iso, platform, size=8)
+    variant_ctx["recent_analogies"] = _extract_recent_analogies(recent_captions)
+    variant_ctx["template_id"] = _select_caption_template_id(day_iso, platform)
+    return variant_ctx
+
+
+def _build_social_caption_variants(
+    ctx: Dict[str, Any],
+    *,
+    default_caption: str,
+    default_hashtags: str,
+) -> Dict[str, Dict[str, str]]:
+    variants: Dict[str, Dict[str, str]] = {
+        "default": {
+            "caption": default_caption,
+            "hashtags": default_hashtags,
+        },
+        "ig": {
+            "caption": default_caption,
+            "hashtags": default_hashtags,
+        },
+    }
+    if _ctx_platform(ctx).lower() not in {"default", "ig", "instagram"}:
+        return variants
+
+    client = openai_client()
+    if EARTHSCOPE_FORCE_RULES or not client or not _hybrid_rewrite_enabled():
+        return variants
+
+    fb_ctx = _platform_variant_context(ctx, "fb")
+    fb_out = _get_cached_rewrite(client, fb_ctx)
+    if fb_out and fb_out.get("caption"):
+        fb_caption = _scrub_banned_phrases(_polish_public_caption(str(fb_out["caption"]), fb_ctx))
+        if fb_caption:
+            variants["fb"] = {
+                "caption": fb_caption,
+                "hashtags": str(fb_out.get("hashtags") or default_hashtags or "").strip(),
+            }
+    return variants
+
+
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     client = openai_client()
     if EARTHSCOPE_FORCE_RULES or not client:
@@ -2620,7 +2954,7 @@ def main():
         "platform": args.platform,
         "first_person": EARTHSCOPE_FIRST_PERSON,
     }
-    ctx["banned_openers"] = _recent_platform_openers(args.platform, limit=3)
+    ctx["banned_openers"] = _recent_platform_openers(args.platform, limit=3, before_day=day)
     recent_captions = _recent_platform_captions(args.platform, limit=EARTHSCOPE_SIM_RECENT, before_day=day)
     ctx["recent_captions"] = recent_captions
     ctx["intro_hint"] = _select_intro_line(day, args.platform, ctx.get("banned_openers"))
@@ -2693,6 +3027,11 @@ def main():
         },
         hashtags_seed=long_tags,
     )
+    social_variants = _build_social_caption_variants(
+        ctx,
+        default_caption=short_caption,
+        default_hashtags=(long_tags or short_tags),
+    )
     _, dbg_key_short = _rewrite_cache_key(ctx)
     opener = _first_nonempty_line(short_caption)
     _dbg(f"opener={opener[:120]} day={day} platform={args.platform} cache_key={dbg_key_short}")
@@ -2744,6 +3083,7 @@ def main():
         "tone": tone,
         "bands": bands,
         "sections": sections_struct,
+        "social_variants": social_variants,
         "voice_semantic": public_voice_payload.to_dict(),
     }
     sources_json = {

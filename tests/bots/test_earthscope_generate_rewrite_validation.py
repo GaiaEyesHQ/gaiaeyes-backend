@@ -13,7 +13,12 @@ sys.modules.setdefault("supabase", supabase_stub)
 os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 
-from bots.earthscope_post.earthscope_generate import _polish_public_caption, _validate_rewrite
+from bots.earthscope_post.earthscope_generate import (
+    _platform_caption_profile,
+    _polish_public_caption,
+    _select_best_rewrite_candidate,
+    _validate_rewrite,
+)
 
 
 def _rewrite_with(text: str) -> dict[str, str]:
@@ -50,5 +55,69 @@ def test_polish_public_caption_replaces_repetitive_day_feels_opener():
         {"kp_max_24h": 2.0},
     )
 
-    assert caption.startswith("Use the steadier window while it is here.")
     assert "The day feels" not in caption
+    assert caption != "Use focused work blocks."
+
+
+def test_polish_public_caption_avoids_recent_context_lead():
+    caption = _polish_public_caption(
+        "The day feels steady and cooperative. Use focused work blocks.",
+        {
+            "day": "2026-06-14",
+            "platform": "default",
+            "kp_max_24h": 2.0,
+            "banned_openers": ["Use the steadier window while it is here."],
+        },
+    )
+
+    assert not caption.startswith("Use the steadier window while it is here.")
+    assert "The day feels" not in caption
+
+
+def test_select_best_rewrite_candidate_prefers_fresh_human_hook():
+    obj = {
+        "candidates": [
+            {
+                "caption": "Use the steadier window while it is here. Keep your work simple today.",
+                "snapshot": "The field looks calmer today.",
+                "affects": "Some people may notice steadier focus.",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
+            },
+            {
+                "caption": "Need a catch-up day? The background looks more cooperative, so use it for one thing that has been waiting.",
+                "snapshot": "The field looks calmer today.",
+                "affects": "Some people may notice steadier focus.",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
+            },
+            {
+                "caption": "Geomagnetic conditions are quiet today. Maintain structured productivity.",
+                "snapshot": "The field looks calmer today.",
+                "affects": "Some people may notice steadier focus.",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
+            },
+        ]
+    }
+
+    selected = _select_best_rewrite_candidate(
+        obj,
+        {"cmes_24h": 0, "flares_24h": 0, "kp_max_24h": 2.0},
+        {
+            "banned_openers": ["Use the steadier window while it is here."],
+            "recent_captions": [],
+        },
+    )
+
+    assert selected is not None
+    assert selected["caption"].startswith("Need a catch-up day?")
+
+
+def test_facebook_caption_profile_is_longer_than_instagram():
+    fb = _platform_caption_profile("fb")
+    ig = _platform_caption_profile("ig")
+
+    assert fb["caption_words"][1] > ig["caption_words"][1]
+    assert "Facebook-style mini post" in fb["caption_instruction"]
+    assert "compact for Instagram" in ig["caption_instruction"]

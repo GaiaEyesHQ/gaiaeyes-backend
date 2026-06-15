@@ -191,6 +191,35 @@ def test_derive_caption_adds_rotating_app_cta_before_hashtags():
     assert tags == "#GaiaEyes"
 
 
+def test_derive_caption_uses_facebook_social_variant():
+    caption, tags = meta_poster.derive_caption_and_hashtags(
+        {
+            "day": "2026-06-09",
+            "platform": "default",
+            "caption": "Short IG caption.",
+            "hashtags": "#GaiaEyes",
+            "metrics_json": {
+                "social_variants": {
+                    "fb": {
+                        "caption": "Longer Facebook caption with a warmer story arc.",
+                        "hashtags": "#GaiaEyes #HealthPatterns",
+                    },
+                    "ig": {
+                        "caption": "Short Instagram caption.",
+                        "hashtags": "#GaiaEyes",
+                    },
+                }
+            },
+        },
+        "fb",
+    )
+
+    assert "Longer Facebook caption with a warmer story arc." in caption
+    assert "Short IG caption." not in caption
+    assert caption.endswith("#GaiaEyes #HealthPatterns")
+    assert tags == "#GaiaEyes #HealthPatterns"
+
+
 def test_ig_post_reel_recreates_after_terminal_error(monkeypatch):
     monkeypatch.setattr(meta_poster, "FB_PAGE_ID", "123")
     monkeypatch.setattr(meta_poster, "FB_ACCESS_TOKEN", "token")
