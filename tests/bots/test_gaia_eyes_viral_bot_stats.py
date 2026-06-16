@@ -101,7 +101,22 @@ def test_earthscope_hook_title_uses_calm_focus_language():
         energy="Calm",
     )
 
-    assert title in {"Need a catch-up day?", "Ready to focus?", "Clear the mental tabs?"}
+    assert title in {"Need a catch-up day?", "Ready to focus?", "Clear the mental tabs"}
+
+
+def test_earthscope_hook_title_does_not_question_imperative_calm_hook(monkeypatch):
+    monkeypatch.setattr(
+        "bots.earthscope_post.gaia_eyes_viral_bot._daily_title_variant",
+        lambda options, seed_text="": "Clear the mental tabs",
+    )
+
+    title = _earthscope_hook_title(
+        "Focus windows can be slightly extended as the field is mostly cooperative.",
+        tone="neutral",
+        energy="Calm",
+    )
+
+    assert title == "Clear the mental tabs"
 
 
 def test_public_card_text_removes_clinician_and_vibes_language():

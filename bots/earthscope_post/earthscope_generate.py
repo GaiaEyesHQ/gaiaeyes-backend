@@ -970,6 +970,9 @@ def _scrub_banned_phrases(text: str) -> str:
     s = re.sub(r"(?i)\bthink of it (like|as)\b[:\s]*", "", s)
     s = re.sub(r"inward-pointing field component", "southward field orientation", s, flags=re.I)
     s = re.sub(r"interplanetary field", "field orientation", s, flags=re.I)
+    s = re.sub(r"\bfeel(?:s)? a bit more stable conditions\b", "feel a bit steadier", s, flags=re.I)
+    s = re.sub(r"\bmake signals feel a bit more stable conditions\b", "make signals feel a bit steadier", s, flags=re.I)
+    s = re.sub(r"\bmore stable conditions without being\b", "steadier without being", s, flags=re.I)
     # light n-gram de-dupe: collapse repeated bigrams
     s = re.sub(r"\b(\w+\s+\w+)\s+\1\b", r"\1", s, flags=re.I)
     s2 = s.strip()

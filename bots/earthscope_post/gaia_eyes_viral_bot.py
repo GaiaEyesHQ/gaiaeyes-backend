@@ -1332,7 +1332,7 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
     candidates = [
         (
             ("focus", "attention", "clarity", "cognitive", "scattered"),
-            ["Need a catch-up day?", "Ready to focus?", "Clear the mental tabs?"] if calm_context else [
+            ["Need a catch-up day?", "Ready to focus?", "Clear the mental tabs"] if calm_context else [
                 "Focus feeling scattered?",
                 "Mentally all over the place?",
                 "Attention running patchy?",
@@ -1341,7 +1341,7 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
         ),
         (
             ("sleep", "wind-down", "bedtime", "fragmented"),
-            ["Ready for an easier wind-down?", "Protect tonight's reset?", "Sleep could come easier?"] if calm_context else [
+            ["Ready for an easier wind-down?", "Protect tonight's reset", "Sleep could come easier"] if calm_context else [
                 "Sleep feeling fragile?",
                 "Wired at bedtime?",
                 "Wind-down feeling harder?",
@@ -1349,7 +1349,7 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
         ),
         (
             ("hrv", "heart-rate variability", "autonomic", "baseline"),
-            ["Ready for a calmer day?", "A steadier body day?", "Recovery looking steadier?"] if calm_context else [
+            ["Ready for a calmer day?", "A steadier body day", "Recovery looking steadier"] if calm_context else [
                 "HRV running jumpy?",
                 "Recovery feeling strained?",
                 "Body signals running louder?",
@@ -1357,7 +1357,7 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
         ),
         (
             ("pain", "nerve", "flare", "reactivity", "sensitive"),
-            ["Less pain, more gain?", "Use the easier window?", "Body feeling steadier?"] if calm_context else [
+            ["Less pain, more gain", "Use the easier window", "Body feeling steadier"] if calm_context else [
                 "Body feeling reactive?",
                 "Pain signals louder?",
                 "Sensitivity turned up?",
@@ -1374,11 +1374,11 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
         return _daily_title_variant(titles, seed_text=f"{tone_l}|{energy_l}|{body[:160]}")
     if tone_l in ("stormy", "unsettled") or energy_l in ("high", "elevated"):
         return _daily_title_variant(
-            ["Wired and scattered?", "Static in the system?", "Feeling extra keyed up?"],
+            ["Wired and scattered?", "Static in the system", "Feeling extra keyed up?"],
             seed_text=f"{tone_l}|{energy_l}|fallback",
         )
     return _daily_title_variant(
-        ["Ready for a calmer day?", "Need a catch-up day?", "Use the steady window?"],
+        ["Ready for a calmer day?", "Need a catch-up day?", "Use the steady window"],
         seed_text=f"{tone_l}|{energy_l}|fallback",
     )
 

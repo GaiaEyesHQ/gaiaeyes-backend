@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import random
+import re
 import sys
 import time
 from dataclasses import asdict, dataclass, field
@@ -1044,6 +1045,46 @@ def _caption_variant_for_platform(metrics: Any, platform: str) -> Optional[tuple
   return None
 
 
+def _cleanup_social_caption_body(caption: str) -> str:
+  text = " ".join(str(caption or "").split())
+  replacements = [
+    (r"\bmake signals feel a bit more stable conditions\b", "make signals feel a bit steadier"),
+    (r"\bfeel(?:s)? a bit more stable conditions\b", "feel a bit steadier"),
+    (r"\bmore stable conditions without being\b", "steadier without being"),
+    (r"\bstable conditions without being overwhelming\b", "steadier without being overwhelming"),
+  ]
+  for pattern, replacement in replacements:
+    text = re.sub(pattern, replacement, text, flags=re.I)
+  text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+  return text.strip()
+
+
+def _split_caption_sentences(caption: str) -> List[str]:
+  return [
+    part.strip()
+    for part in re.split(r"(?<=[.!?])\s+", caption.strip())
+    if part.strip()
+  ]
+
+
+def _format_caption_body_for_platform(caption: str, platform: str) -> str:
+  text = _cleanup_social_caption_body(caption)
+  plat = (platform or "default").strip().lower()
+  if plat not in ("fb", "facebook"):
+    return text
+  if "\n\n" in text:
+    return text
+  sentences = _split_caption_sentences(text)
+  if len(sentences) < 4:
+    return text
+  split_at = 2 if len(sentences) == 4 else 3
+  first = " ".join(sentences[:split_at]).strip()
+  second = " ".join(sentences[split_at:]).strip()
+  if not first or not second:
+    return text
+  return f"{first}\n\n{second}"
+
+
 def derive_caption_and_hashtags(post: dict, target_platform: Optional[str] = None) -> tuple[str, str]:
   """Return (caption, hashtags) preferring plain caption, with JSON/sections fallback when needed."""
   cap = post.get("caption") or ""
@@ -1100,6 +1141,7 @@ def derive_caption_and_hashtags(post: dict, target_platform: Optional[str] = Non
       if parsed:
         cap = parsed
 
+  cap = _format_caption_body_for_platform(cap, str(target))
   seed = f"{post.get('day') or ''}|{post.get('platform') or ''}|{cap[:80]}"
   cap = append_caption_cta(cap.strip(), seed=seed, context=metrics if isinstance(metrics, dict) else None)
   if tags:

@@ -220,6 +220,66 @@ def test_derive_caption_uses_facebook_social_variant():
     assert tags == "#GaiaEyes #HealthPatterns"
 
 
+def test_derive_caption_formats_facebook_variant_into_two_paragraphs():
+    caption, _ = meta_poster.derive_caption_and_hashtags(
+        {
+            "day": "2026-06-16",
+            "platform": "default",
+            "caption": "Short IG caption.",
+            "hashtags": "",
+            "metrics_json": {
+                "social_variants": {
+                    "fb": {
+                        "caption": (
+                            "Does your nervous system feel like a radio slightly off-station today? "
+                            "Conditions are quiet enough to work with. "
+                            "For some people, that can mean calmer focus. "
+                            "A practical move is to use short breaks. "
+                            "Gentle movement and hydration tend to be easy wins. "
+                            "Gaia Eyes keeps watching the pattern."
+                        ),
+                        "hashtags": "",
+                    }
+                }
+            },
+        },
+        "fb",
+    )
+
+    main_body = caption.split("\n\n")[0:2]
+    assert len(main_body) == 2
+    assert main_body[0].startswith("Does your nervous system")
+    assert main_body[1].startswith("A practical move")
+
+
+def test_derive_caption_repairs_stable_conditions_phrase():
+    caption, _ = meta_poster.derive_caption_and_hashtags(
+        {
+            "day": "2026-06-16",
+            "platform": "default",
+            "caption": "Short IG caption.",
+            "hashtags": "",
+            "metrics_json": {
+                "social_variants": {
+                    "fb": {
+                        "caption": (
+                            "Conditions can make signals feel a bit more stable conditions without being overwhelming. "
+                            "Use short breaks today. "
+                            "Keep wind-down predictable. "
+                            "Gaia Eyes keeps watching."
+                        ),
+                        "hashtags": "",
+                    }
+                }
+            },
+        },
+        "fb",
+    )
+
+    assert "stable conditions without being" not in caption
+    assert "feel a bit steadier" in caption
+
+
 def test_ig_post_reel_recreates_after_terminal_error(monkeypatch):
     monkeypatch.setattr(meta_poster, "FB_PAGE_ID", "123")
     monkeypatch.setattr(meta_poster, "FB_ACCESS_TOKEN", "token")
