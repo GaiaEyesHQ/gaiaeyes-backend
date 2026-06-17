@@ -1047,14 +1047,6 @@ def _caption_variant_for_platform(metrics: Any, platform: str) -> Optional[tuple
 
 def _cleanup_social_caption_body(caption: str) -> str:
   text = " ".join(str(caption or "").split())
-  replacements = [
-    (r"\bmake signals feel a bit more stable conditions\b", "make signals feel a bit steadier"),
-    (r"\bfeel(?:s)? a bit more stable conditions\b", "feel a bit steadier"),
-    (r"\bmore stable conditions without being\b", "steadier without being"),
-    (r"\bstable conditions without being overwhelming\b", "steadier without being overwhelming"),
-  ]
-  for pattern, replacement in replacements:
-    text = re.sub(pattern, replacement, text, flags=re.I)
   text = re.sub(r"\s+([,.;:!?])", r"\1", text)
   return text.strip()
 

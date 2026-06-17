@@ -252,7 +252,7 @@ def test_derive_caption_formats_facebook_variant_into_two_paragraphs():
     assert main_body[1].startswith("A practical move")
 
 
-def test_derive_caption_repairs_stable_conditions_phrase():
+def test_derive_caption_does_not_rewrite_writer_phrasing():
     caption, _ = meta_poster.derive_caption_and_hashtags(
         {
             "day": "2026-06-16",
@@ -276,8 +276,8 @@ def test_derive_caption_repairs_stable_conditions_phrase():
         "fb",
     )
 
-    assert "stable conditions without being" not in caption
-    assert "feel a bit steadier" in caption
+    assert "stable conditions without being" in caption
+    assert "feel a bit steadier" not in caption
 
 
 def test_ig_post_reel_recreates_after_terminal_error(monkeypatch):

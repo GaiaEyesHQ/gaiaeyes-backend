@@ -49,6 +49,24 @@ def test_validate_rewrite_rejects_unsupported_positive_cme_language():
     assert result is None
 
 
+def test_validate_rewrite_rejects_directional_cme_language_without_arrival_context():
+    result = _validate_rewrite(
+        _rewrite_with("The sun has sent a few CME blobs our way today."),
+        {"cmes_24h": 3, "flares_24h": 0},
+    )
+
+    assert result is None
+
+
+def test_validate_rewrite_allows_directional_cme_language_with_arrival_context():
+    result = _validate_rewrite(
+        _rewrite_with("A CME arrival is possible in the next window."),
+        {"cmes_24h": 3, "flares_24h": 0, "earth_directed_cme_count_72h": 1},
+    )
+
+    assert result is not None
+
+
 def test_polish_public_caption_replaces_repetitive_day_feels_opener():
     caption = _polish_public_caption(
         "The day feels steady and cooperative. Use focused work blocks.",

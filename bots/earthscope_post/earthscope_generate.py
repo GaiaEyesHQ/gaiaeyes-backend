@@ -960,19 +960,11 @@ def _legacy_public_rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
 
 def _scrub_banned_phrases(text: str) -> str:
     s = text or ""
-    low = s.lower()
-    for bp in BAN_PHRASES:
-        if bp in low:
-            # Replace banned phrase with neutral wording
-            s = re.sub(re.escape(bp), "stable conditions", s, flags=re.I)
-            low = s.lower()
-    # Remove forced lead-ins and soften overly technical phrasing
+    # Remove forced lead-ins and soften overly technical phrasing.
+    # Keep BAN_PHRASES as writer guidance instead of swapping words mechanically.
     s = re.sub(r"(?i)\bthink of it (like|as)\b[:\s]*", "", s)
     s = re.sub(r"inward-pointing field component", "southward field orientation", s, flags=re.I)
     s = re.sub(r"interplanetary field", "field orientation", s, flags=re.I)
-    s = re.sub(r"\bfeel(?:s)? a bit more stable conditions\b", "feel a bit steadier", s, flags=re.I)
-    s = re.sub(r"\bmake signals feel a bit more stable conditions\b", "make signals feel a bit steadier", s, flags=re.I)
-    s = re.sub(r"\bmore stable conditions without being\b", "steadier without being", s, flags=re.I)
     # light n-gram de-dupe: collapse repeated bigrams
     s = re.sub(r"\b(\w+\s+\w+)\s+\1\b", r"\1", s, flags=re.I)
     s2 = s.strip()
@@ -1159,6 +1151,9 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
     ):
         _dbg("validate: cme mention without supporting context")
         return None
+    if _has_unsupported_cme_direction_mention(combined, facts or {}):
+        _dbg("validate: directional cme mention without supporting context")
+        return None
     if flares <= 0 and re.search(r"\b(x-class|m-class)\b", combined):
         _dbg("validate: flare-class mention without supporting context")
         return None
@@ -1167,6 +1162,41 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
         _dbg("validate: severe storm mention without supporting context")
         return None
     return obj
+
+
+def _has_explicit_earth_directed_cme_context(facts: Dict[str, Any]) -> bool:
+    for key in (
+        "earth_directed_cme_count_24h",
+        "earth_directed_cme_count_72h",
+        "cme_arrivals_count",
+        "earth_cme_arrivals_count",
+    ):
+        value = to_float(facts.get(key))
+        if value is not None and value > 0:
+            return True
+    for key in ("cme_earth_directed", "earth_directed_cme", "cme_arrival_expected"):
+        if facts.get(key) is True:
+            return True
+    for key in ("cme_arrival_window", "cme_eta", "earth_directed_cme_eta"):
+        if str(facts.get(key) or "").strip():
+            return True
+    return False
+
+
+def _has_unsupported_cme_direction_mention(text: str, facts: Dict[str, Any]) -> bool:
+    if _has_explicit_earth_directed_cme_context(facts):
+        return False
+    if not re.search(r"\b(cme|cmes|coronal mass ejection|solar plasma|solar material|ejecta|blob|blobs)\b", text or "", re.I):
+        return False
+    direction_re = re.compile(
+        r"\b("
+        r"our way|toward earth|towards earth|earth[- ]directed|earthbound|earth-bound|incoming|inbound|"
+        r"headed (?:here|this way|our way|toward|towards)|"
+        r"on (?:its|their) way|sent .* our way|arriv(?:e|es|ing|al)|impact(?:ing|s|ed)? earth|glancing blow"
+        r")\b",
+        re.I,
+    )
+    return bool(direction_re.search(text or ""))
 
 
 def _finalize_rewrite_payload(obj: Dict[str, str]) -> Dict[str, str]:
@@ -1295,6 +1325,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin or press release). Avoid sterile or overly technical phrasing (e.g., 'inward-pointing field component'). Prefer plain equivalents like 'southward field orientation' or 'field leaning south'. "
+        "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
         "Humor is optional. If you use an analogy, keep it to one sentence max and do not use the phrase 'Think of it like'. Vary phrasing. Never start a sentence with 'Think of it like'. You may use metaphor_pool as guidance or invent a fresh analogy. Do not reuse any recent_analogies. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
@@ -1492,8 +1523,10 @@ def _rewrite_json_candidates(
     system_msg = (
         "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
+        "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
         "You may use a question as the opening hook if it feels natural. Humor is welcome when warm and grounded. "
         "Avoid report-like openings, labels, and repeated phrasing. Do not reuse recent_openers. "
+        "Avoid the ban_phrases exactly; choose natural wording instead of trying to synonym-swap them. "
         "Use evidence-scaled language: may, can, for some, tends to. No diagnosis, certainty, detox, cure, or treatment claims. "
         "Return only JSON with a candidates array. Each candidate must include caption, snapshot, affects, playbook, and hashtags."
     )
@@ -1523,6 +1556,7 @@ def _rewrite_json_candidates(
             "playbook": "3-5 short bullets.",
             "hashtags": "6-10 hashtags as one string.",
         },
+        "ban_phrases": BAN_PHRASES,
     }
     try:
         _dbg(f"candidate: request -> OpenAI count={count}")
