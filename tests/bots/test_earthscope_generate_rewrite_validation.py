@@ -67,6 +67,21 @@ def test_validate_rewrite_allows_directional_cme_language_with_arrival_context()
     assert result is not None
 
 
+def test_validate_rewrite_rejects_typo_and_report_phrasing():
+    result = _validate_rewrite(
+        {
+            "caption": "Neutral energy. You set the pace. The near-Earth field is quiet today.",
+            "snapshot": "The field looks quieter today.",
+            "affects": "Attention may come in usable blocs with small dips.",
+            "playbook": "- Keep the day simple\n- Protect wind-down",
+            "hashtags": "#GaiaEyes #SpaceWeather",
+        },
+        {"cmes_24h": 0, "flares_24h": 0},
+    )
+
+    assert result is None
+
+
 def test_polish_public_caption_replaces_repetitive_day_feels_opener():
     caption = _polish_public_caption(
         "The day feels steady and cooperative. Use focused work blocks.",

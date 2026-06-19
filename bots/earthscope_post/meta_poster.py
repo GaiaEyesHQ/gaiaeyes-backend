@@ -27,7 +27,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from zoneinfo import ZoneInfo
 
 import requests
@@ -1019,6 +1019,21 @@ def default_image_urls() -> Dict[str, str]:
   }
 
 
+def cache_bust_image_urls(urls: Dict[str, str], token: Optional[str]) -> Dict[str, str]:
+  if not token:
+    return dict(urls)
+  out: Dict[str, str] = {}
+  for key, url in urls.items():
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+      out[key] = url
+      continue
+    query = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k != "v"]
+    query.append(("v", token))
+    out[key] = urlunparse(parsed._replace(query=urlencode(query)))
+  return out
+
+
 def carousel_image_urls(urls: Dict[str, str]) -> List[str]:
   return [urls["affects"], urls["play"], urls["stats"]]
 
@@ -1189,7 +1204,7 @@ def main() -> None:
     day = effective_day
     logging.info("Post day=%s platform=%s caption[0:80]=%s", day, effective_platform, (post.get("caption") or "")[:80])
 
-  urls = default_image_urls()
+  urls = cache_bust_image_urls(default_image_urls(), day.isoformat())
 
   if args.cmd == "post-square":
     caption = caption_override or derive_caption_and_hashtags(post, args.platform)[0]

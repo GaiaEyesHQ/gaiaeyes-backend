@@ -180,6 +180,22 @@ def test_carousel_order_leads_with_affects_then_care_then_stats():
     ]
 
 
+def test_cache_bust_image_urls_adds_daily_token_without_changing_order():
+    urls = {
+        "stats": "https://example.com/daily_stats.jpg?old=1",
+        "affects": "https://example.com/daily_affects.jpg",
+        "play": "https://example.com/daily_playbook.jpg?v=old",
+    }
+
+    busted = meta_poster.cache_bust_image_urls(urls, "2026-06-18")
+
+    assert meta_poster.carousel_image_urls(busted) == [
+        "https://example.com/daily_affects.jpg?v=2026-06-18",
+        "https://example.com/daily_playbook.jpg?v=2026-06-18",
+        "https://example.com/daily_stats.jpg?old=1&v=2026-06-18",
+    ]
+
+
 def test_derive_caption_adds_rotating_app_cta_before_hashtags():
     caption, tags = meta_poster.derive_caption_and_hashtags(
         {"day": "2026-06-09", "platform": "default", "caption": "Focus may come in shorter windows.", "hashtags": "#GaiaEyes"}

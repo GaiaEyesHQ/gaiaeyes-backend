@@ -40,6 +40,12 @@ BAN_PHRASES = [
     "small metaphor",
     "satellite-dependent",
     "gnss",
+    "neutral energy",
+    "near-earth field",
+    "background space conditions",
+    "gaia eyes suggests",
+    "usable blocs",
+    "reinforce rhythm rather than chase change",
 ]
 
 import requests
@@ -494,8 +500,11 @@ def _platform_caption_profile(platform: str) -> Dict[str, Any]:
             "caption_words": [110, 220],
             "caption_instruction": (
                 "5-8 sentences, about 110-220 words. Write a richer Facebook-style mini post: "
-                "lead with a human hook, add one plain-language why-it-matters paragraph, give a practical pacing note, "
-                "and end with a soft Gaia Eyes bridge. It can be reflective or lightly funny, but should not feel like a report."
+                "lead with a human body/mood/sleep/focus hook instead of a space-weather label, add one plain-language "
+                "why-it-matters paragraph, give a practical pacing note, and end with a soft Gaia Eyes bridge. "
+                "Do not open with 'Neutral energy', 'near-Earth field', or metric-report language. "
+                "For calm or neutral days, keep CME counts on the stats card unless explicit Earth-directed/arrival context exists. "
+                "It can be reflective or lightly funny, but should not feel like a report."
             ),
             "max_caption_chars": 1600,
         }
@@ -1140,6 +1149,18 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
             _dbg(f"validate: digits found in {k}")
             return None
     combined = " ".join(obj.get(k, "") for k in ["caption", "snapshot", "affects", "playbook"]).lower()
+    blocked_copy_patterns = [
+        (r"\bblocs\b", "typo blocs"),
+        (r"\bgaia eyes suggests\b", "awkward third-person bridge"),
+        (r"^\s*neutral energy[.!?]?\s+you set the pace\b", "report-like neutral opener"),
+        (r"\bnear-earth field\b", "technical report phrasing"),
+        (r"\bbackground space conditions\b", "technical report phrasing"),
+        (r"\breinforce rhythm rather than chase change\b", "vague closing phrase"),
+    ]
+    for pattern, reason in blocked_copy_patterns:
+        if re.search(pattern, combined):
+            _dbg(f"validate: {reason}")
+            return None
     cmes = to_float((facts or {}).get("cmes_24h")) or 0
     flares = to_float((facts or {}).get("flares_24h")) or 0
     severe = str((facts or {}).get("severe_summary") or "").strip()
