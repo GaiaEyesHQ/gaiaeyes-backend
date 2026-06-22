@@ -6,7 +6,7 @@ permissions:
 
 on:
   schedule:
-    - cron: "*/05 * * * *"   # every 15 minutes (GitHub runners use UTC)
+    - cron: "*/15 * * * *"   # every 15 minutes (GitHub runners use UTC)
   workflow_dispatch: {}       # lets you run it manually from the Actions tab
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       # optional, but nice to have
       HTTP_USER_AGENT: "(gaiaeyes.com, gaiaeyes7.83@gmail.com)"
-      SINCE_HOURS: "72"
+      SINCE_HOURS: "24"
       # leave these unset to use script defaults (recommended)
       # KP_URL: "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
       # SW_URL: "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json"

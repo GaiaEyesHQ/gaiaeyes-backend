@@ -5,7 +5,7 @@ permissions:
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 minutes
+    - cron: "17 * * * *"   # hourly; app endpoints can still refresh user-level marts on demand
   workflow_dispatch: {}
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      DAYS_BACK: "14"      # recompute last 14 days each run
+      DAYS_BACK: "3"      # recompute a short rolling window each run
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

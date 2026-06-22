@@ -3,7 +3,7 @@ permissions:
   contents: read
 on:
   schedule:
-    - cron: "*/15 * * * *" # 14:15 UTC
+    - cron: "20 11 * * *" # daily morning refresh; manual dispatch remains available
   workflow_dispatch:
 
 jobs:

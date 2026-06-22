@@ -5,7 +5,7 @@ permissions:
 
 on:
   schedule:
-    - cron: "15 * * * *"   # run hourly at :15
+    - cron: "25 */3 * * *"   # run every 3 hours; user-level refreshes still happen on demand
   workflow_dispatch: {}     # allow manual run from Actions tab
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}   # Pooler DSN (host ...pooler.supabase.com:6543, sslmode=require)
-      DAYS_BACK: "7"                                    # recompute last 7 days
+      DAYS_BACK: "3"                                    # recompute a short rolling window
       USER_TZ: "America/Chicago"                        # bucket days in your local TZ
     steps:
       - name: Checkout repo
