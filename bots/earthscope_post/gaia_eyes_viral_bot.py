@@ -1383,6 +1383,29 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
     )
 
 
+def _public_card_title(title: Any, *, fallback: str) -> str:
+    cleaned = strip_hashtags_and_emojis(_safe_text(title))
+    cleaned = cleaned.strip().strip("\"'“”‘’").strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    if not cleaned:
+        return fallback
+    lowered = cleaned.lower()
+    generic_titles = {
+        "earthscope",
+        "daily earthscope",
+        "your earthscope",
+        "today's earthscope",
+        "todays earthscope",
+    }
+    if lowered in generic_titles or lowered.startswith("daily earthscope"):
+        return fallback
+    if re.search(r"\b(jan|feb|mar|apr|may|jun|june|jul|aug|sep|oct|nov|dec)\b|\d{4}|#", lowered):
+        return fallback
+    if len(cleaned) > 46:
+        return fallback
+    return cleaned
+
+
 def _public_card_text(text: str) -> str:
     cleaned = _safe_text(text)
     replacements = [
@@ -1945,7 +1968,9 @@ def main(args: Optional[argparse.Namespace] = None):
     playbook_txt = strip_hashtags_and_emojis(_safe_text(playbook_txt))
 
     caption_im = render_card(energy, caption_text, sch, kp, kind="square")
-    affects_title = _earthscope_hook_title(affects_txt, tone=str(tone_val or ""), energy=energy)
+    fallback_title = _earthscope_hook_title(affects_txt, tone=str(tone_val or ""), energy=energy)
+    post_title = post.get("title") if isinstance(post, dict) else ""
+    affects_title = _public_card_title(post_title, fallback=fallback_title)
     affects_im = render_text_card(affects_title, affects_txt, energy, kind="tall")
     play_im    = render_text_card("Care notes", playbook_txt, energy, kind="tall")
 

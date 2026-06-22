@@ -44,7 +44,10 @@ BAN_PHRASES = [
     "near-earth field",
     "background space conditions",
     "gaia eyes suggests",
+    "gaia eyes: treat today",
     "usable blocs",
+    "coronal expulsions",
+    "nudged a single small flare through",
     "reinforce rhythm rather than chase change",
 ]
 
@@ -1155,6 +1158,10 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
         (r"^\s*neutral energy[.!?]?\s+you set the pace\b", "report-like neutral opener"),
         (r"\bnear-earth field\b", "technical report phrasing"),
         (r"\bbackground space conditions\b", "technical report phrasing"),
+        (r"\bcoronal expulsions?\b", "awkward CME synonym"),
+        (r"\bnudged a single small flare through\b", "unsupported flare causality phrasing"),
+        (r"\bthrough the last day\b", "awkward event timing phrase"),
+        (r"\bgaia eyes:\s*treat today\b", "awkward branded signoff"),
         (r"\breinforce rhythm rather than chase change\b", "vague closing phrase"),
     ]
     for pattern, reason in blocked_copy_patterns:

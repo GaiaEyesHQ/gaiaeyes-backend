@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 from bots.earthscope_post.gaia_eyes_viral_bot import (
     _earthscope_hook_title,
     _format_public_playbook,
+    _public_card_title,
     _public_card_text,
     _trim_public_affects,
     build_stats_rows,
@@ -117,6 +118,17 @@ def test_earthscope_hook_title_does_not_question_imperative_calm_hook(monkeypatc
     )
 
     assert title == "Clear the mental tabs"
+
+
+def test_public_card_title_prefers_stored_llm_title():
+    title = _public_card_title("A good day to catch up", fallback="Ready to focus?")
+
+    assert title == "A good day to catch up"
+
+
+def test_public_card_title_uses_fallback_for_generic_or_dated_titles():
+    assert _public_card_title("Daily EarthScope", fallback="Ready to focus?") == "Ready to focus?"
+    assert _public_card_title("Daily EarthScope - Jun 21, 2026", fallback="Ready to focus?") == "Ready to focus?"
 
 
 def test_public_card_text_removes_clinician_and_vibes_language():

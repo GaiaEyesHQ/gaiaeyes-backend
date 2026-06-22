@@ -82,6 +82,21 @@ def test_validate_rewrite_rejects_typo_and_report_phrasing():
     assert result is None
 
 
+def test_validate_rewrite_rejects_awkward_event_synonyms_and_brand_signoff():
+    result = _validate_rewrite(
+        {
+            "caption": "You may notice steadier attention and fewer abrupt shifts today.",
+            "snapshot": "A slight southward tilt nudged a single small flare through the last day. No recent coronal expulsions have been reported.",
+            "affects": "Focus may feel steady for some sensitive systems.",
+            "playbook": "- Keep the day simple\n- Gaia Eyes: treat today like a steady gear.",
+            "hashtags": "#GaiaEyes #SpaceWeather",
+        },
+        {"cmes_24h": 0, "flares_24h": 1},
+    )
+
+    assert result is None
+
+
 def test_polish_public_caption_replaces_repetitive_day_feels_opener():
     caption = _polish_public_caption(
         "The day feels steady and cooperative. Use focused work blocks.",
