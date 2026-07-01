@@ -14,6 +14,7 @@ os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 
 from bots.earthscope_post.earthscope_generate import (
+    _clean_llm_title,
     _platform_caption_profile,
     _polish_public_caption,
     _select_best_rewrite_candidate,
@@ -97,6 +98,18 @@ def test_validate_rewrite_rejects_awkward_event_synonyms_and_brand_signoff():
     assert result is None
 
 
+def test_clean_llm_title_accepts_fresh_human_hook():
+    title = _clean_llm_title("Brain Tabs Closing", {"quiet skies", "clear runway"})
+
+    assert title == "Brain Tabs Closing"
+
+
+def test_clean_llm_title_rejects_generic_or_recent_fallback_labels():
+    assert _clean_llm_title("Clear Runway", set()) is None
+    assert _clean_llm_title("Quiet Skies", set()) is None
+    assert _clean_llm_title("Brain Tabs Closing", {"brain tabs closing"}) is None
+
+
 def test_polish_public_caption_replaces_repetitive_day_feels_opener():
     caption = _polish_public_caption(
         "The day feels steady and cooperative. Use focused work blocks.",
@@ -160,6 +173,36 @@ def test_select_best_rewrite_candidate_prefers_fresh_human_hook():
 
     assert selected is not None
     assert selected["caption"].startswith("Need a catch-up day?")
+
+
+def test_select_best_rewrite_candidate_prefers_body_hook_over_productivity_hook():
+    obj = {
+        "candidates": [
+            {
+                "caption": "Good day for focused work blocks. Keep your plan simple and take breaks.",
+                "snapshot": "The field looks calmer today.",
+                "affects": "Some people may notice steadier focus.",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
+            },
+            {
+                "caption": "Head feel a little clearer today? The quieter signal window may support steadier pacing without pushing.",
+                "snapshot": "The field looks calmer today.",
+                "affects": "Some people may notice steadier focus.",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
+            },
+        ]
+    }
+
+    selected = _select_best_rewrite_candidate(
+        obj,
+        {"cmes_24h": 0, "flares_24h": 0, "kp_max_24h": 2.0},
+        {"banned_openers": [], "recent_captions": []},
+    )
+
+    assert selected is not None
+    assert selected["caption"].startswith("Head feel a little clearer today?")
 
 
 def test_facebook_caption_profile_is_longer_than_instagram():

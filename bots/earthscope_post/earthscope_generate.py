@@ -723,15 +723,61 @@ def _recent_titles(days_back: int = 14) -> set:
         return { (r.get("title") or "").strip().lower() for r in rows if r and r.get("title") }
     except Exception:
         return set()
+
+
+def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optional[str]:
+    cleaned = re.sub(r'^["\']|["\']$', "", str(title or "")).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    if not cleaned:
+        _dbg("title: rejected empty")
+        return None
+    lowered = cleaned.lower()
+    recent_lower = {str(item or "").strip().lower() for item in (recent_titles or set()) if str(item or "").strip()}
+    generic = {
+        "active geomagnetics",
+        "clear runway",
+        "daily earthscope",
+        "earthscope",
+        "magnetic calm",
+        "quiet skies",
+        "space weather update",
+        "steady field",
+        "today's earthscope",
+        "your earthscope",
+    }
+    if lowered in generic:
+        _dbg(f"title: rejected generic='{cleaned}'")
+        return None
+    if lowered in recent_lower:
+        _dbg(f"title: rejected recent='{cleaned}'")
+        return None
+    if re.search(r"\d|#|[\U00010000-\U0010ffff]", cleaned):
+        _dbg(f"title: rejected forbidden token='{cleaned}'")
+        return None
+    if re.search(r"\b(jan|feb|mar|apr|may|jun|june|jul|aug|sep|oct|nov|dec)\b", lowered):
+        _dbg(f"title: rejected date word='{cleaned}'")
+        return None
+    words = cleaned.split()
+    if not (2 <= len(words) <= 7):
+        _dbg(f"title: rejected word_count={len(words)} title='{cleaned}'")
+        return None
+    if len(cleaned) > 56:
+        _dbg(f"title: rejected length={len(cleaned)} title='{cleaned}'")
+        return None
+    return cleaned
+
+
 # --- LLM-based title generator using cached rewrite ---
 def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rewrite: Optional[Dict[str,str]]) -> Optional[str]:
-    """Ask the LLM for a short 2–4 word title based on tone + pulse + sections. No numbers, no emojis.
+    """Ask the LLM for a short social hook title based on tone + pulse + sections. No numbers, no emojis.
     Returns a plain string or None on failure.
     """
     if not client:
+        _dbg("title: no OpenAI client")
         return None
     tone = _tone_from_ctx(ctx)
-    recent = sorted(list(_recent_titles(21)))
+    recent_set = _recent_titles(21)
+    recent = sorted(list(recent_set))
     # Compose compact context
     facts = {
         "tone": tone,
@@ -744,35 +790,40 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
     }
     sections = rewrite or {}
     sys = (
-        "You title Gaia Eyes daily cards. Write a **concise and sometimes comical 2–4 word title** that fits the day’s tone and context. "
-        "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases. Keep it evocative but calm. "
+        "You write Gaia Eyes daily social hook titles for people tracking sleep, HRV, pain, mood, headaches, and nervous-system sensitivity. "
+        "Write one fresh, human, emotionally relatable 2–7 word title that matches the day’s actual caption. "
+        "It should feel like the top line of a social post, not a report label. "
+        "Vary the doorway: sometimes sleep, sometimes focus, sometimes mood, pain, HRV/recovery, headaches, restlessness, or pacing. "
+        "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
+        "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Space Weather Update. "
+        "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
     )
     usr = {
         "facts": facts,
-        "samples": {"recent_titles": recent[:12]},
-        "sections_excerpt": {k: (v[:160] if isinstance(v,str) else v) for k,v in sections.items() if k in ("caption","snapshot")}
+        "recent_titles": recent[:20],
+        "sections_excerpt": {k: (v[:220] if isinstance(v,str) else v) for k,v in sections.items() if k in ("caption","snapshot","affects")}
     }
     try:
         model = _writer_model()
         if not model:
+            _dbg("title: no model configured")
             return None
+        _dbg("title: request -> OpenAI")
         resp = _chat_create_compat(
             client,
             model=model,
-            temperature=0.65,
-            top_p=0.9,
-            presence_penalty=0.2,
-            max_completion_tokens=16,
+            temperature=0.9,
+            top_p=0.95,
+            presence_penalty=0.7,
+            frequency_penalty=0.4,
+            max_completion_tokens=24,
             messages=[{"role":"system","content":sys},{"role":"user","content":json.dumps(usr, ensure_ascii=False)}],
         )
-        title = (resp.choices[0].message.content or "").strip()
-        # Guardrails: strip quotes and trim length
-        title = re.sub(r'^["\']|["\']$', "", title).strip()
-        if 0 < len(title) <= 40:
-            return title
-        return None
-    except Exception:
+        title = _chat_text(resp).strip()
+        return _clean_llm_title(title, recent_set)
+    except Exception as e:
+        _dbg(f"title: OpenAI call failed: {e}")
         return None
 
 def _pick_hook(tone: str, last_used: set | None = None) -> str:
@@ -1261,10 +1312,12 @@ def _caption_creativity_score(caption: str, ctx: Dict[str, Any], recent_caps: Li
         score += 5.0
     if len(first.split()) <= 12:
         score += 1.0
-    if re.search(r"\b(body|sleep|focus|heart|mood|pain|nervous system|energy|wired|foggy|calm|scattered|catch-up|reset)\b", first_l):
+    if re.search(r"\b(body|sleep|hrv|heart|mood|pain|migraine|headache|sinus|pressure|nervous system|energy|wired|foggy|calm|scattered|catch-up|reset|restless|recovery)\b", first_l):
         score += 2.0
     if "?" in first:
         score += 1.0
+    if re.search(r"\b(focused? work blocks?|work blocks?|deep-work|tasks?|productiv(e|ity)|catch up)\b", first_l):
+        score -= 1.5
     if re.search(r"\b(today|the day)\s+(feels|has|is)\b", first_l):
         score -= 6.0
     if re.search(r"\b(geomagnetic conditions|space weather|magnetic backdrop|steady magnetic backdrop|standard energy field)\b", first_l):
@@ -1552,8 +1605,10 @@ def _rewrite_json_candidates(
         "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
+        "Lead with a felt human hook before explaining the signal context. Rotate the doorway across sleep, HRV/recovery, mood, pain sensitivity, headache/sinus pressure, restlessness, and focus; do not make focus/productivity the default. "
         "You may use a question as the opening hook if it feels natural. Humor is welcome when warm and grounded. "
         "Avoid report-like openings, labels, and repeated phrasing. Do not reuse recent_openers. "
+        "Avoid overusing work-block advice. If you mention focus, make it feel like body-pattern guidance, not productivity coaching. "
         "Avoid the ban_phrases exactly; choose natural wording instead of trying to synonym-swap them. "
         "Use evidence-scaled language: may, can, for some, tends to. No diagnosis, certainty, detox, cure, or treatment claims. "
         "Return only JSON with a candidates array. Each candidate must include caption, snapshot, affects, playbook, and hashtags."
@@ -1569,12 +1624,21 @@ def _rewrite_json_candidates(
             "audience": "people tracking pain, sleep, mood, HRV, wearable patterns, and nervous-system sensitivity",
             "style": "human, emotionally relatable, curious, practical, sometimes funny",
             "target_platform": caption_profile["platform"],
+            "hook_doorways_to_rotate": [
+                "sleep or wind-down",
+                "HRV or recovery",
+                "mood or restlessness",
+                "headache or sinus pressure",
+                "pain or sensitivity",
+                "focus or mental noise",
+            ],
             "avoid": [
                 "weather report voice",
                 "generic wellness slogans",
                 "same opener structure",
                 "clinician/professional framing",
                 "overexplaining the metrics",
+                "defaulting to focused work blocks",
             ],
         },
         "candidate_requirements": {
