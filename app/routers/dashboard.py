@@ -140,6 +140,61 @@ async def _set_cached_dashboard(user_id: str, day: date, payload: Dict[str, Any]
         _dashboard_cache[key] = (time.monotonic(), copy.deepcopy(payload))
 
 
+def _dashboard_freshness(
+    *,
+    day: date,
+    source: str,
+    cache_hit: bool,
+    cache_age_seconds: float,
+    stale: bool,
+    refresh_scheduled: bool,
+) -> Dict[str, Any]:
+    return {
+        "kind": "dashboard",
+        "day": day.isoformat(),
+        "source": source,
+        "status": "stale" if stale else "fresh",
+        "cache_hit": cache_hit,
+        "cache_age_seconds": round(max(0.0, cache_age_seconds), 1),
+        "stale": stale,
+        "refresh_scheduled": refresh_scheduled,
+        "ttl_seconds": _DASHBOARD_CACHE_TTL_SECONDS,
+        "stale_ttl_seconds": _DASHBOARD_STALE_TTL_SECONDS,
+        "served_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _attach_dashboard_freshness(
+    payload: Dict[str, Any],
+    *,
+    day: date,
+    source: str,
+    cache_hit: bool,
+    cache_age_seconds: float,
+    stale: bool,
+    refresh_scheduled: bool,
+) -> Dict[str, Any]:
+    out = copy.deepcopy(payload)
+    freshness = _dashboard_freshness(
+        day=day,
+        source=source,
+        cache_hit=cache_hit,
+        cache_age_seconds=cache_age_seconds,
+        stale=stale,
+        refresh_scheduled=refresh_scheduled,
+    )
+    all_freshness = out.get("freshness")
+    if not isinstance(all_freshness, dict):
+        all_freshness = {}
+    all_freshness["dashboard"] = freshness
+    out["freshness"] = all_freshness
+    out["cache_hit"] = cache_hit
+    out["cache_age_seconds"] = freshness["cache_age_seconds"]
+    out["stale"] = stale
+    out["refresh_scheduled"] = refresh_scheduled
+    return out
+
+
 async def _get_dashboard_build_lock(user_id: str, day: date) -> asyncio.Lock:
     key = (user_id, day.isoformat())
     async with _dashboard_build_locks_lock:
@@ -1104,32 +1159,45 @@ async def dashboard(
                 is_stale,
                 refresh_scheduled,
             )
-            cached_payload["cache_hit"] = True
-            cached_payload["cache_age_seconds"] = round(cache_age, 1)
-            cached_payload["stale"] = is_stale
-            cached_payload["refresh_scheduled"] = refresh_scheduled
-            return cached_payload
+            return _attach_dashboard_freshness(
+                cached_payload,
+                day=day,
+                source="stale_cache" if is_stale else "cache",
+                cache_hit=True,
+                cache_age_seconds=cache_age,
+                stale=is_stale,
+                refresh_scheduled=refresh_scheduled,
+            )
 
     lock = await _get_dashboard_build_lock(user_id, day)
     async with lock:
         if not debug and not force:
             cached_payload, cache_age, _ = await _get_cached_dashboard(user_id, day)
             if cached_payload is not None:
-                cached_payload["cache_hit"] = True
-                cached_payload["cache_age_seconds"] = round(cache_age, 1)
-                cached_payload["stale"] = False
-                cached_payload["refresh_scheduled"] = False
-                return cached_payload
+                return _attach_dashboard_freshness(
+                    cached_payload,
+                    day=day,
+                    source="cache",
+                    cache_hit=True,
+                    cache_age_seconds=cache_age,
+                    stale=False,
+                    refresh_scheduled=False,
+                )
 
         async with _acquire_dashboard_conn() as conn:
             out, timings_ms = await _build_dashboard_payload(conn, user_id, day, debug=debug)
 
         if not debug:
             await _set_cached_dashboard(user_id, day, out)
-            out["cache_hit"] = False
-            out["cache_age_seconds"] = 0.0
-            out["stale"] = False
-            out["refresh_scheduled"] = False
+            out = _attach_dashboard_freshness(
+                out,
+                day=day,
+                source="rebuilt" if force else "live",
+                cache_hit=False,
+                cache_age_seconds=0.0,
+                stale=False,
+                refresh_scheduled=False,
+            )
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
     logger.info(
@@ -1196,6 +1264,15 @@ async def dashboard_gauges(
         if isinstance(gauges, dict):
             out["gauges_meta"] = _decorate_gauges(gauges, definition)
     out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
+    out = _attach_dashboard_freshness(
+        out,
+        day=day,
+        source="gauge_fallback",
+        cache_hit=False,
+        cache_age_seconds=0.0,
+        stale=False,
+        refresh_scheduled=False,
+    )
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
     logger.info(

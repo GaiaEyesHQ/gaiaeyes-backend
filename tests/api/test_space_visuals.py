@@ -114,8 +114,10 @@ async def test_space_visuals_happy_path(monkeypatch, client: AsyncClient):
     resp = await client.get("/v1/space/visuals", headers=_auth_headers())
     body = resp.json()
     assert body["ok"] is True
-    assert len(body["images"]) == 1
+    assert len(body["images"]) == 5
     assert body["images"][0]["url"] == "https://media.test/images/space/aia.jpg"
+    fallback = next(item for item in body["images"] if item["key"] == "earthscope_caption")
+    assert fallback["captured_at"] is None
     assert body["series"][0]["key"] == "goes_xray"
     assert body["feature_flags"].get("flare_markers") is True
 

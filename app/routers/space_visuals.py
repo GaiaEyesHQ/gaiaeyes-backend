@@ -253,7 +253,9 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
         images.append(
             {
                 "key": key,
-                "captured_at": latest_ts,
+                # These fallback assets are static URLs outside ext.space_visuals, so do not
+                # imply they were refreshed with the latest unrelated visuals ingest.
+                "captured_at": None,
                 "url": url,
                 "image_path": rel_path,
                 "instrument": None,

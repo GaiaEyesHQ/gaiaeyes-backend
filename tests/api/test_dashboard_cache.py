@@ -74,3 +74,50 @@ async def test_dashboard_cache_can_return_stale_payload(monkeypatch):
     assert cached == payload
     assert age >= 120
     assert stale is True
+
+
+def test_attach_dashboard_freshness_preserves_payload_and_adds_contract():
+    target_day = date(2026, 4, 26)
+    payload = {"day": target_day.isoformat(), "gauges": {"sleep": 39}}
+
+    out = dashboard_router._attach_dashboard_freshness(
+        payload,
+        day=target_day,
+        source="stale_cache",
+        cache_hit=True,
+        cache_age_seconds=366.44,
+        stale=True,
+        refresh_scheduled=True,
+    )
+
+    assert payload == {"day": target_day.isoformat(), "gauges": {"sleep": 39}}
+    assert out["gauges"] == {"sleep": 39}
+    assert out["cache_hit"] is True
+    assert out["cache_age_seconds"] == 366.4
+    assert out["stale"] is True
+    assert out["refresh_scheduled"] is True
+    assert out["freshness"]["dashboard"]["kind"] == "dashboard"
+    assert out["freshness"]["dashboard"]["source"] == "stale_cache"
+    assert out["freshness"]["dashboard"]["status"] == "stale"
+    assert out["freshness"]["dashboard"]["served_at"].endswith("Z")
+
+
+def test_attach_dashboard_freshness_keeps_existing_freshness_keys():
+    target_day = date(2026, 4, 26)
+    payload = {
+        "day": target_day.isoformat(),
+        "freshness": {"earthscope": {"status": "fresh"}},
+    }
+
+    out = dashboard_router._attach_dashboard_freshness(
+        payload,
+        day=target_day,
+        source="live",
+        cache_hit=False,
+        cache_age_seconds=0,
+        stale=False,
+        refresh_scheduled=False,
+    )
+
+    assert out["freshness"]["earthscope"] == {"status": "fresh"}
+    assert out["freshness"]["dashboard"]["status"] == "fresh"

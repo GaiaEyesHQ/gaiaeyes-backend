@@ -794,6 +794,34 @@ private struct DashboardGuideStateEnvelope: Codable {
     }
 }
 
+private struct DashboardFreshnessItem: Codable {
+    let kind: String?
+    let day: String?
+    let source: String?
+    let status: String?
+    let cacheHit: Bool?
+    let cacheAgeSeconds: Double?
+    let stale: Bool?
+    let refreshScheduled: Bool?
+    let ttlSeconds: Int?
+    let staleTtlSeconds: Int?
+    let servedAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, day, source, status, stale
+        case cacheHit = "cache_hit"
+        case cacheAgeSeconds = "cache_age_seconds"
+        case refreshScheduled = "refresh_scheduled"
+        case ttlSeconds = "ttl_seconds"
+        case staleTtlSeconds = "stale_ttl_seconds"
+        case servedAt = "served_at"
+    }
+}
+
+private struct DashboardFreshnessEnvelope: Codable {
+    let dashboard: DashboardFreshnessItem?
+}
+
 private struct DashboardPayload: Codable {
     let day: String?
     let gauges: DashboardGaugeSet?
@@ -822,12 +850,21 @@ private struct DashboardPayload: Codable {
     let memberPost: DashboardEarthscopePost?
     let publicPost: DashboardEarthscopePost?
     let personalPost: DashboardEarthscopePost?
+    var freshness: DashboardFreshnessEnvelope? = nil
+    var cacheHit: Bool? = nil
+    var cacheAgeSeconds: Double? = nil
+    var stale: Bool? = nil
+    var refreshScheduled: Bool? = nil
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, signalBar, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, supportItems, guideState, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, signalBar, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, supportItems, guideState, alerts, entitled, freshness
         case memberPost
         case publicPost
         case personalPost
+        case cacheHit = "cache_hit"
+        case cacheAgeSeconds = "cache_age_seconds"
+        case stale
+        case refreshScheduled = "refresh_scheduled"
     }
 }
 
@@ -2509,7 +2546,12 @@ private func mergedDashboardPayload(
         entitled: preferred.entitled ?? fallback.entitled,
         memberPost: preferred.memberPost ?? fallback.memberPost,
         publicPost: preferred.publicPost ?? fallback.publicPost,
-        personalPost: preferred.personalPost ?? fallback.personalPost
+        personalPost: preferred.personalPost ?? fallback.personalPost,
+        freshness: preferred.freshness ?? fallback.freshness,
+        cacheHit: preferred.cacheHit ?? fallback.cacheHit,
+        cacheAgeSeconds: preferred.cacheAgeSeconds ?? fallback.cacheAgeSeconds,
+        stale: preferred.stale ?? fallback.stale,
+        refreshScheduled: preferred.refreshScheduled ?? fallback.refreshScheduled
     )
 }
 
@@ -3282,6 +3324,7 @@ struct ContentView: View {
     @State private var dashboardFetchInFlight: Bool = false
     @State private var dashboardLastFetchAt: Date = .distantPast
     @State private var dashboardLastUpdatedText: String? = nil
+    @State private var dashboardStaleFollowUpTask: Task<Void, Never>? = nil
     @State private var liveSchumannSignalBarItem: SignalPill? = nil
     @State private var liveSchumannTomskLatest: SignalBarSchumannTomskLatestEnvelope? = nil
     @State private var liveSchumannLatestEnvelope: SignalBarSchumannLatestEnvelope? = nil
@@ -4560,7 +4603,12 @@ struct ContentView: View {
                             entitled: payload.entitled,
                             memberPost: payload.memberPost,
                             publicPost: payload.publicPost,
-                            personalPost: payload.personalPost
+                            personalPost: payload.personalPost,
+                            freshness: payload.freshness,
+                            cacheHit: payload.cacheHit,
+                            cacheAgeSeconds: payload.cacheAgeSeconds,
+                            stale: payload.stale,
+                            refreshScheduled: payload.refreshScheduled
                         )
                     }
                 } catch {
@@ -5024,6 +5072,20 @@ struct ContentView: View {
             return true
         }
         return now.timeIntervalSince(referenceDate) >= 5 * 60
+    }
+
+    @MainActor
+    private func scheduleDashboardStaleFollowUpRefresh() {
+        guard dashboardStaleFollowUpTask == nil else { return }
+        dashboardStaleFollowUpTask = Task {
+            try? await Task.sleep(nanoseconds: 12_000_000_000)
+            await MainActor.run {
+                dashboardStaleFollowUpTask = nil
+            }
+            if !Task.isCancelled {
+                await fetchDashboardPayload(force: true)
+            }
+        }
     }
 
     private func debugFormattedDate(_ date: Date?) -> String {
@@ -5521,6 +5583,21 @@ struct ContentView: View {
         let dashboardSnapshotDate = dashboardLastFetchAt == .distantPast
             ? dashboardSnapshotReferenceDate(from: dashboardPayload ?? decodeDashboardPayload(from: dashboardPayloadCacheJSON))
             : dashboardLastFetchAt
+        let dashboardFreshness = dashboardPayload?.freshness?.dashboard
+        let dashboardSourceKind = dashboardFreshness?.source
+            ?? (dashboardLastUpdatedText == "cached" ? "cache" : "api")
+        let dashboardFreshnessDetail: String? = {
+            if dashboardPayload?.stale == true || dashboardFreshness?.stale == true {
+                if dashboardPayload?.refreshScheduled == true || dashboardFreshness?.refreshScheduled == true {
+                    return "Backend served a stale dashboard snapshot and scheduled a refresh."
+                }
+                return "Backend served a stale dashboard snapshot."
+            }
+            if dashboardLastUpdatedText == "cached" {
+                return "Using cached dashboard payload."
+            }
+            return nil
+        }()
 
         return [
             makeFreshnessItem(
@@ -5529,8 +5606,8 @@ struct ContentView: View {
                 date: dashboardSnapshotDate,
                 staleAfter: 30 * 60,
                 endpoint: "v1/dashboard?day=\(chicagoTodayString())",
-                sourceKind: dashboardLastUpdatedText == "cached" ? "cache" : "api",
-                detail: dashboardLastUpdatedText == "cached" ? "Using cached dashboard payload." : nil
+                sourceKind: dashboardSourceKind,
+                detail: dashboardFreshnessDetail
             ),
             makeFreshnessItem(
                 id: "earthscope",
@@ -7308,7 +7385,12 @@ struct ContentView: View {
                             entitled: resolvedPayload.entitled,
                             memberPost: currentMemberPost ?? currentPersonalPost ?? normalizedMember,
                             publicPost: currentPublicPost,
-                            personalPost: currentPersonalPost
+                            personalPost: currentPersonalPost,
+                            freshness: resolvedPayload.freshness,
+                            cacheHit: resolvedPayload.cacheHit,
+                            cacheAgeSeconds: resolvedPayload.cacheAgeSeconds,
+                            stale: resolvedPayload.stale,
+                            refreshScheduled: resolvedPayload.refreshScheduled
                         )
                     }
                 }
@@ -7362,7 +7444,12 @@ struct ContentView: View {
                             entitled: resolvedPayload.entitled ?? older.entitled,
                             memberPost: resolvedPayload.memberPost ?? resolvedPayload.personalPost ?? older.memberPost ?? older.personalPost,
                             publicPost: resolvedPayload.publicPost ?? older.publicPost,
-                            personalPost: resolvedPayload.personalPost ?? older.personalPost
+                            personalPost: resolvedPayload.personalPost ?? older.personalPost,
+                            freshness: resolvedPayload.freshness ?? older.freshness,
+                            cacheHit: resolvedPayload.cacheHit ?? older.cacheHit,
+                            cacheAgeSeconds: resolvedPayload.cacheAgeSeconds ?? older.cacheAgeSeconds,
+                            stale: resolvedPayload.stale ?? older.stale,
+                            refreshScheduled: resolvedPayload.refreshScheduled ?? older.refreshScheduled
                         )
                         fallbackUsed = true
                         fallbackSourceDay = fallbackDay
@@ -7420,7 +7507,12 @@ struct ContentView: View {
                             entitled: resolvedPayload.entitled,
                             memberPost: preferredMemberPost,
                             publicPost: preferredEarthscopePost(fallbackPublic, requestedDay: dashboardDay),
-                            personalPost: preferredPersonalPost
+                            personalPost: preferredPersonalPost,
+                            freshness: resolvedPayload.freshness,
+                            cacheHit: resolvedPayload.cacheHit,
+                            cacheAgeSeconds: resolvedPayload.cacheAgeSeconds,
+                            stale: resolvedPayload.stale,
+                            refreshScheduled: resolvedPayload.refreshScheduled
                         )
                     }
                 }
@@ -7467,7 +7559,12 @@ struct ContentView: View {
                         entitled: resolvedPayload.entitled,
                         memberPost: preferredEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay),
                         publicPost: preferredEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay),
-                        personalPost: preferredEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
+                        personalPost: preferredEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay),
+                        freshness: resolvedPayload.freshness,
+                        cacheHit: resolvedPayload.cacheHit,
+                        cacheAgeSeconds: resolvedPayload.cacheAgeSeconds,
+                        stale: resolvedPayload.stale,
+                        refreshScheduled: resolvedPayload.refreshScheduled
                     )
                     dashboardPayload = effectivePayload
                     if let liveSchumannSignalBarItem {
@@ -7484,8 +7581,21 @@ struct ContentView: View {
                     out.timeStyle = .short
                     dashboardLastUpdatedText = out.string(from: dashboardLastFetchAt)
                 }
+                let shouldFollowUpStaleDashboard =
+                    !force &&
+                    (
+                        resolvedPayload.stale == true ||
+                        resolvedPayload.refreshScheduled == true ||
+                        resolvedPayload.freshness?.dashboard?.stale == true ||
+                        resolvedPayload.freshness?.dashboard?.refreshScheduled == true
+                    )
+                if shouldFollowUpStaleDashboard {
+                    await MainActor.run {
+                        scheduleDashboardStaleFollowUpRefresh()
+                    }
+                }
                 appLog(
-                    "[UI] dashboard ok: day=\(dashboardDay) ms=\(durationMs) gauges=\(resolvedPayload.gauges != nil) alerts=\(resolvedPayload.alerts?.count ?? 0) member_current=\(resolvedCurrentMemberPost != nil || resolvedCurrentPersonalPost != nil) member_available=\(preferredMemberPost != nil || preferredPersonalPost != nil) public_available=\(preferredPublicPost != nil) entitled=\(String(describing: resolvedPayload.entitled)) fallback=\(fallbackUsed) fallback_day=\(fallbackSourceDay ?? "-")"
+                    "[UI] dashboard ok: day=\(dashboardDay) ms=\(durationMs) gauges=\(resolvedPayload.gauges != nil) alerts=\(resolvedPayload.alerts?.count ?? 0) member_current=\(resolvedCurrentMemberPost != nil || resolvedCurrentPersonalPost != nil) member_available=\(preferredMemberPost != nil || preferredPersonalPost != nil) public_available=\(preferredPublicPost != nil) entitled=\(String(describing: resolvedPayload.entitled)) fallback=\(fallbackUsed) fallback_day=\(fallbackSourceDay ?? "-") stale=\(resolvedPayload.stale == true || resolvedPayload.freshness?.dashboard?.stale == true)"
                 )
                 return
             } catch {
