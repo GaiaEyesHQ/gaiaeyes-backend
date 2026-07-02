@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -13,6 +14,8 @@ from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+
+from bots.social_alerts.asset_bootstrap_pack import BOOTSTRAP_PREFIX, bootstrap_palette
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -164,6 +167,64 @@ def _fallback_background(category: str, size: Tuple[int, int]) -> Image.Image:
     return image
 
 
+def _bootstrap_background(candidate: str, category: str, size: Tuple[int, int]) -> Optional[Image.Image]:
+    if not candidate.startswith(f"{BOOTSTRAP_PREFIX}/"):
+        return None
+
+    width, height = size
+    colors = bootstrap_palette(candidate) or FALLBACK_GRADIENTS.get(
+        category,
+        ((5, 12, 25), (73, 131, 236), (125, 213, 154)),
+    )
+    image = _fallback_background(category, size)
+    draw = ImageDraw.Draw(image, "RGBA")
+    seed = int(hashlib.sha256(candidate.encode("utf-8")).hexdigest()[:12], 16)
+
+    for y in range(height):
+        t = y / max(height - 1, 1)
+        start = colors[0]
+        mid = colors[1]
+        end = colors[2]
+        if t < 0.58:
+            local = t / 0.58
+            rgb = tuple(int(start[i] + (mid[i] - start[i]) * local) for i in range(3))
+        else:
+            local = (t - 0.58) / 0.42
+            rgb = tuple(int(mid[i] + (end[i] - mid[i]) * local) for i in range(3))
+        draw.line((0, y, width, y), fill=(*rgb, 255))
+
+    # Soft abstract fields: deterministic, but varied enough to keep previews from feeling identical.
+    for index in range(9):
+        x = int(((seed >> (index % 6)) * (index + 37)) % max(width, 1))
+        y = int(((seed >> (index % 8)) * (index + 19)) % max(height, 1))
+        radius = int(min(width, height) * (0.16 + 0.035 * (index % 5)))
+        color = colors[(index + 1) % len(colors)]
+        alpha = 20 + (index % 4) * 8
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(*color, alpha))
+
+    wave = Image.new("RGBA", size, (0, 0, 0, 0))
+    wave_draw = ImageDraw.Draw(wave)
+    for index in range(7):
+        offset = (seed % 180) + index * 90
+        color = colors[(index + 1) % len(colors)]
+        points = []
+        for x in range(-40, width + 41, 36):
+            phase = (x + offset) / 90.0
+            y = int(height * (0.24 + 0.08 * index) + 34 * ((phase % 6) - 3) / 3)
+            points.append((x, y))
+        wave_draw.line(points, fill=(*color, 34), width=4)
+    wave = wave.filter(ImageFilter.GaussianBlur(radius=6))
+    image = Image.alpha_composite(image.convert("RGBA"), wave).convert("RGB")
+
+    vignette = Image.new("L", size, 0)
+    vignette_draw = ImageDraw.Draw(vignette)
+    inset = int(min(width, height) * 0.04)
+    vignette_draw.ellipse((inset, inset, width - inset, height - inset), fill=210)
+    vignette = vignette.filter(ImageFilter.GaussianBlur(radius=int(min(width, height) * 0.18)))
+    dark = Image.new("RGB", size, (0, 0, 0))
+    return Image.composite(image, dark, vignette)
+
+
 def resolve_background_image(
     candidates: Sequence[str],
     *,
@@ -177,6 +238,18 @@ def resolve_background_image(
     warnings: List[str] = []
     base_url = media_base_url or _media_base_url()
     overrides = dict(local_asset_overrides or {})
+    before_bootstrap: List[str] = []
+    bootstrap_candidates: List[str] = []
+    after_bootstrap: List[str] = []
+    seen_bootstrap = False
+    for candidate in candidates:
+        if candidate.startswith(f"{BOOTSTRAP_PREFIX}/"):
+            seen_bootstrap = True
+            bootstrap_candidates.append(candidate)
+        elif seen_bootstrap:
+            after_bootstrap.append(candidate)
+        else:
+            before_bootstrap.append(candidate)
 
     for candidate in candidates:
         if candidate in overrides:
@@ -185,7 +258,7 @@ def resolve_background_image(
             except Exception as exc:
                 warnings.append(f"{candidate}: local override failed: {exc}")
 
-    for candidate in candidates:
+    for candidate in before_bootstrap:
         url = _remote_url(candidate, base_url)
         if url:
             try:
@@ -193,7 +266,27 @@ def resolve_background_image(
             except Exception as exc:
                 warnings.append(f"{candidate}: remote image failed at {url}: {exc}")
 
-    for candidate in candidates:
+    for candidate in before_bootstrap:
+        for path in _local_candidates(candidate):
+            try:
+                return _open_local_image(path), str(path), warnings
+            except Exception as exc:
+                warnings.append(f"{candidate}: local image failed at {path}: {exc}")
+
+    for candidate in bootstrap_candidates:
+        generated = _bootstrap_background(candidate, category, size)
+        if generated is not None:
+            return generated, candidate, warnings
+
+    for candidate in after_bootstrap:
+        url = _remote_url(candidate, base_url)
+        if url:
+            try:
+                return _open_remote_image(url, timeout=timeout), url, warnings
+            except Exception as exc:
+                warnings.append(f"{candidate}: remote image failed at {url}: {exc}")
+
+    for candidate in after_bootstrap:
         for path in _local_candidates(candidate):
             try:
                 return _open_local_image(path), str(path), warnings

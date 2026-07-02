@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
+from bots.social_alerts.asset_bootstrap_pack import bootstrap_background_candidates, bootstrap_background_prompts
+
 
 CTA = "Open Gaia Eyes for the full signal read."
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
@@ -190,6 +192,9 @@ def _social_background_candidates(keywords: Sequence[str], fallbacks: Sequence[s
     for candidate in _background_paths_for_keywords(keywords):
         if candidate not in candidates:
             candidates.append(candidate)
+    for candidate in bootstrap_background_candidates("", keywords):
+        if candidate not in candidates:
+            candidates.append(candidate)
     for kind in ("square", "tall"):
         candidate = _viral_background_candidate(kind)
         if candidate and candidate not in candidates:
@@ -216,6 +221,11 @@ def _base_overlay(
     assets = media_assets or {}
     videos = list(assets.get("videos") or [])
     stills = list(assets.get("stills") or [])
+    background_prompts = bootstrap_background_prompts(category, background_keywords)
+    background_source = (
+        "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; "
+        "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py"
+    )
     return {
         "square_image": {
             "canvas": {"width": 1080, "height": 1080},
@@ -230,7 +240,8 @@ def _base_overlay(
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
-            "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+            "background_source": background_source,
+            "background_prompts": background_prompts,
             "still_candidates": stills,
         },
         "feed_card": {
@@ -246,7 +257,8 @@ def _base_overlay(
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
-            "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+            "background_source": background_source,
+            "background_prompts": background_prompts,
             "still_candidates": stills,
         },
         "story_reel": {
@@ -267,7 +279,8 @@ def _base_overlay(
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
-            "background_source": "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+            "background_source": background_source,
+            "background_prompts": background_prompts,
             "video_candidates": videos,
             "still_candidates": stills,
             "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled.",

@@ -91,3 +91,16 @@ def test_resolve_background_generates_fallback_when_candidates_fail() -> None:
     assert image.size == (1080, 1080)
     assert source == "generated:fallback_gradient"
     assert warnings
+
+
+def test_resolve_background_uses_bootstrap_candidate_without_remote_fetch() -> None:
+    image, source, warnings = resolve_background_image(
+        ["bootstrap:social_alerts/resonance_field"],
+        category="schumann",
+        size=(1080, 1350),
+        media_base_url="https://example.invalid/space-visuals",
+    )
+
+    assert image.size == (1080, 1350)
+    assert source == "bootstrap:social_alerts/resonance_field"
+    assert warnings == []

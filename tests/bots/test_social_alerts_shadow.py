@@ -109,6 +109,7 @@ def test_background_candidates_reuse_viral_bot_picker(monkeypatch) -> None:
     ]
     assert "media_repo:backgrounds/square/picked.jpg" in draft["overlay_spec"]["square_image"]["background_candidates"]
     assert "media_repo:backgrounds/tall/picked.jpg" in draft["overlay_spec"]["square_image"]["background_candidates"]
+    assert "bootstrap:social_alerts/solar_aurora" in draft["overlay_spec"]["square_image"]["background_candidates"]
     assert draft["overlay_spec"]["square_image"]["background_keywords"] == [
         "space_weather",
         "kp",
@@ -116,9 +117,8 @@ def test_background_candidates_reuse_viral_bot_picker(monkeypatch) -> None:
         "solar_wind",
     ]
     assert draft["overlay_spec"]["square_image"]["visual_style"]["layout"] == "trust_first_alert_card"
-    assert draft["overlay_spec"]["square_image"]["background_source"] == (
-        "gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py"
-    )
+    assert "bootstrap:social_alerts generated pack" in draft["overlay_spec"]["square_image"]["background_source"]
+    assert draft["overlay_spec"]["square_image"]["background_prompts"]
 
 
 def test_known_media_assets_are_attached_to_reel_specs() -> None:
@@ -146,6 +146,7 @@ def test_known_media_assets_are_attached_to_reel_specs() -> None:
         "social/share/backgrounds/schumann.jpg",
         "social/share/backgrounds/earthscope.jpg",
     ]
+    assert "bootstrap:social_alerts/resonance_field" in schumann_square["background_candidates"]
 
 
 def test_schumann_alert_uses_human_first_trust_copy() -> None:
