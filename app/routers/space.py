@@ -170,6 +170,48 @@ def _r_from_flare_class(cls: Optional[str]) -> Optional[str]:
     return None
 
 
+def _float_or_none(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _append_series_point(series: List[List[Any]], ts: Optional[str], value: Any) -> None:
+    numeric = _float_or_none(value)
+    if ts and numeric is not None:
+        series.append([ts, numeric])
+
+
+def _cme_arrival_stats(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    unique_arrivals: set[str] = set()
+    earth_arrivals: set[str] = set()
+    max_speed: Optional[float] = None
+
+    for row in rows or []:
+        loc = str(row.get("location") or "").strip().lower()
+        at = row.get("arrival_time")
+        arrival_time = at.astimezone(timezone.utc).isoformat() if isinstance(at, datetime) else str(at or "")
+        simulation_id = str(row.get("simulation_id") or "").strip()
+        key = simulation_id or f"{arrival_time}:{loc}"
+        if key:
+            unique_arrivals.add(key)
+        if key and loc in ("earth", "l1", "soho", "dscovr"):
+            earth_arrivals.add(key)
+
+        spd = _float_or_none(row.get("cme_speed_kms"))
+        if spd is not None:
+            max_speed = spd if max_speed is None else max(max_speed, spd)
+
+    return {
+        "total_72h": len(unique_arrivals),
+        "earth_directed_count": len(earth_arrivals),
+        "max_speed_kms": max_speed,
+    }
+
+
 def _fetch_json(url: str, ua: str = "GaiaEyes/space-alerts", timeout: int = 15) -> Optional[Any]:
     try:
         req = Request(url, headers={"User-Agent": ua})
@@ -362,6 +404,7 @@ async def space_history(conn = Depends(get_db), hours: int = 24):
     window_start = now - timedelta(hours=hours)
 
     rows: List[Dict[str, Any]] = []
+    pulse_rows: List[Dict[str, Any]] = []
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute("set statement_timeout = 60000")
@@ -375,6 +418,20 @@ async def space_history(conn = Depends(get_db), hours: int = 24):
                 (window_start,),
             )
             rows = await cur.fetchall() or []
+
+            try:
+                await cur.execute(
+                    """
+                    select ts, v_kms, bz_nt, kp_latest
+                    from ext.magnetosphere_pulse
+                    where ts >= %s
+                    order by ts asc
+                    """,
+                    (window_start,),
+                )
+                pulse_rows = await cur.fetchall() or []
+            except Exception:
+                pulse_rows = []
     except Exception as exc:
         return {"ok": False, "data": None, "error": f"space_history query failed: {exc}"}
 
@@ -389,12 +446,29 @@ async def space_history(conn = Depends(get_db), hours: int = 24):
         kp = row.get("kp_index")
         bz = row.get("bz_nt")
         sw = row.get("sw_speed_kms")
-        if kp is not None:
-            kp_series.append([ts, float(kp)])
-        if sw is not None:
-            sw_series.append([ts, float(sw)])
-        if bz is not None:
-            bz_series.append([ts, float(bz)])
+        _append_series_point(kp_series, ts, kp)
+        _append_series_point(sw_series, ts, sw)
+        _append_series_point(bz_series, ts, bz)
+
+    # ext.space_weather currently carries KP reliably, but solar wind/Bz can
+    # lag. The magnetosphere pulse table is the fresher in-house source for
+    # those values and keeps the public dashboard from showing empty charts.
+    if pulse_rows:
+        pulse_kp: List[List[Any]] = []
+        pulse_sw: List[List[Any]] = []
+        pulse_bz: List[List[Any]] = []
+        for row in pulse_rows:
+            ts = _iso(row.get("ts"))
+            _append_series_point(pulse_kp, ts, row.get("kp_latest"))
+            _append_series_point(pulse_sw, ts, row.get("v_kms"))
+            _append_series_point(pulse_bz, ts, row.get("bz_nt"))
+
+        if not kp_series:
+            kp_series = pulse_kp
+        if not sw_series:
+            sw_series = pulse_sw
+        if not bz_series:
+            bz_series = pulse_bz
 
 
     return {
@@ -740,6 +814,7 @@ async def space_forecast_outlook(days: int = Query(7, ge=1, le=7), conn = Depend
 
     daily: Dict[str, Any] = {}
     kp_now_ts: Optional[str] = None
+    pulse_latest: Optional[Dict[str, Any]] = None
 
     # Pull today's daily snapshot (plus some "now" fallbacks)
     try:
@@ -785,6 +860,25 @@ async def space_forecast_outlook(days: int = Query(7, ge=1, le=7), conn = Depend
                         daily["kp_now"] = float(row_kp["kp_index"])
                 except Exception:
                     kp_now_ts = None
+
+            await cur.execute(
+                """
+                select ts, v_kms, bz_nt, kp_latest
+                from ext.magnetosphere_pulse
+                order by ts desc
+                limit 1
+                """
+            )
+            pulse_latest = await cur.fetchone()
+            if pulse_latest:
+                if daily.get("kp_now") is None and pulse_latest.get("kp_latest") is not None:
+                    daily["kp_now"] = float(pulse_latest["kp_latest"])
+                    ts = pulse_latest.get("ts")
+                    kp_now_ts = ts.astimezone(timezone.utc).isoformat() if isinstance(ts, datetime) else kp_now_ts
+                if daily.get("sw_speed_now_kms") is None and pulse_latest.get("v_kms") is not None:
+                    daily["sw_speed_now_kms"] = float(pulse_latest["v_kms"])
+                if daily.get("bz_now") is None and pulse_latest.get("bz_nt") is not None:
+                    daily["bz_now"] = float(pulse_latest["bz_nt"])
 
             # Short-range CME arrivals (next 72h) from marts.cme_arrivals if present
             await cur.execute(
@@ -940,22 +1034,9 @@ async def space_forecast_outlook(days: int = Query(7, ge=1, le=7), conn = Depend
     }
 
     # CME short stats
-    total_72h = 0
-    earth_directed = 0
-    max_speed = None
+    cme_stats = _cme_arrival_stats(cme_rows or [])
     arrivals_fmt: List[Dict[str, Any]] = []
     for r in (cme_rows or []):
-        total_72h += 1
-        loc = (r.get("location") or "").lower()
-        if loc in ("earth", "l1", "soho", "dscovr"):
-            earth_directed += 1
-        spd = r.get("cme_speed_kms")
-        try:
-            if spd is not None:
-                spd = float(spd)
-                max_speed = spd if (max_speed is None or spd > max_speed) else max_speed
-        except Exception:
-            pass
         at = r.get("arrival_time")
         at_str = at.astimezone(timezone.utc).isoformat() if isinstance(at, datetime) else str(at)
         arrivals_fmt.append({
@@ -970,9 +1051,9 @@ async def space_forecast_outlook(days: int = Query(7, ge=1, le=7), conn = Depend
     cmes_block = {
         "headline": "CME arrivals tracked",
         "stats": {
-            "total_72h": total_72h,
-            "earth_directed_count": earth_directed,
-            "max_speed_kms": max_speed
+            "total_72h": cme_stats["total_72h"],
+            "earth_directed_count": cme_stats["earth_directed_count"],
+            "max_speed_kms": cme_stats["max_speed_kms"]
         }
     }
 

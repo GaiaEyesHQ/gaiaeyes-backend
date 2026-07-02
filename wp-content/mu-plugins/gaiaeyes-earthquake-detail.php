@@ -214,9 +214,6 @@ function gaiaeyes_quakes_detail_shortcode($atts){
           </div>
         <?php endforeach; ?>
       </div>
-      <div class="ge-cta">
-        <a class="gaia-link btn-compare" href="/compare/?a=m5p_daily&b=m5p_daily&range=90">Compare with Space Weather →</a>
-      </div>
     </article>
 
     <div class="ge-grid">
@@ -1112,8 +1109,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         <p>Magnitude (M) is a logarithmic scale; each full step represents ~32× energy release. While most quakes are small, regional clustering and larger magnitudes can affect infrastructure and, indirectly, stress levels and daily routines. This page reflects a distilled feed of recent events to provide situational awareness alongside solar and Schumann metrics.</p>
       </article>
       <div class="ge-cta" style="margin-top:10px;">
-        <a class="gaia-link btn-compare" href="/compare/?a=m5p_daily&b=kp_daily_max&range=90">Compare with Space Weather →</a>
-        <span style="margin-left:10px;"><a class="gaia-link" href="/space-dashboard/#kp">Space Dashboard →</a></span>
+        <a class="gaia-link" href="/space-dashboard/#kp">Space Dashboard →</a>
       </div>
       <?php
         if (function_exists('gaiaeyes_public_member_cta')) {

@@ -15,6 +15,48 @@ def _iso_day(day: date | None) -> str | None:
     return day.isoformat() if isinstance(day, date) else None
 
 
+def _quake_month_item(row: dict) -> dict:
+    return {
+        "month": _iso_day(row.get("day") or row.get("month")),
+        "all_quakes": row.get("all_quakes"),
+        "m4p": row.get("m4p"),
+        "m5p": row.get("m5p"),
+        "m6p": row.get("m6p"),
+        "m7p": row.get("m7p"),
+    }
+
+
+def _quake_month_has_counts(item: dict) -> bool:
+    for key in ("all_quakes", "m4p", "m5p", "m6p", "m7p"):
+        try:
+            if int(item.get(key) or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _merge_monthly_with_daily_rollups(monthly_rows: list[dict], daily_rollup_rows: list[dict]) -> list[dict]:
+    items_by_month: dict[str, dict] = {}
+
+    for row in monthly_rows:
+        item = _quake_month_item(row)
+        month = item.get("month")
+        if month:
+            items_by_month[month] = item
+
+    for row in daily_rollup_rows:
+        item = _quake_month_item(row)
+        month = item.get("month")
+        if not month:
+            continue
+        existing = items_by_month.get(month)
+        if existing is None or (not _quake_month_has_counts(existing) and _quake_month_has_counts(item)):
+            items_by_month[month] = item
+
+    return sorted(items_by_month.values(), key=lambda item: item.get("month") or "", reverse=True)
+
+
 async def _fetch_rows(conn, sql: str, params: tuple | None = None) -> list[dict]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, params or (), prepare=False)
@@ -181,20 +223,26 @@ async def quakes_monthly(conn=Depends(get_db)):
                 prepare=False,
             )
             rows = await cur.fetchall()
+            await cur.execute(
+                """
+                select date_trunc('month', day)::date as month,
+                       sum(all_quakes)::int as all_quakes,
+                       sum(m4p)::int as m4p,
+                       sum(m5p)::int as m5p,
+                       sum(m6p)::int as m6p,
+                       sum(m7p)::int as m7p
+                from marts.quakes_daily
+                group by 1
+                order by 1 desc
+                limit 120
+                """,
+                prepare=False,
+            )
+            daily_rollups = await cur.fetchall()
     except Exception as exc:  # pragma: no cover - defensive envelope
         return {"ok": False, "error": f"quakes_monthly failed: {exc}"}
 
-    items = [
-        {
-            "month": _iso_day(row.get("day") or row.get("month")),
-            "all_quakes": row.get("all_quakes"),
-            "m4p": row.get("m4p"),
-            "m5p": row.get("m5p"),
-            "m6p": row.get("m6p"),
-            "m7p": row.get("m7p"),
-        }
-        for row in rows
-    ]
+    items = _merge_monthly_with_daily_rollups(rows, daily_rollups)[:120]
 
     return {"ok": True, "items": items}
 
@@ -213,19 +261,24 @@ async def quakes_history(conn=Depends(get_db)):
                 prepare=False,
             )
             rows = await cur.fetchall()
+            await cur.execute(
+                """
+                select date_trunc('month', day)::date as month,
+                       sum(all_quakes)::int as all_quakes,
+                       sum(m4p)::int as m4p,
+                       sum(m5p)::int as m5p,
+                       sum(m6p)::int as m6p,
+                       sum(m7p)::int as m7p
+                from marts.quakes_daily
+                group by 1
+                order by 1 desc
+                """,
+                prepare=False,
+            )
+            daily_rollups = await cur.fetchall()
     except Exception as exc:  # pragma: no cover - defensive envelope
         return {"ok": False, "error": f"quakes_history failed: {exc}"}
 
-    items = [
-        {
-            "month": _iso_day(row.get("day") or row.get("month")),
-            "all_quakes": row.get("all_quakes"),
-            "m4p": row.get("m4p"),
-            "m5p": row.get("m5p"),
-            "m6p": row.get("m6p"),
-            "m7p": row.get("m7p"),
-        }
-        for row in rows
-    ]
+    items = _merge_monthly_with_daily_rollups(rows, daily_rollups)
 
     return {"ok": True, "items": items}
