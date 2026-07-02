@@ -2,19 +2,19 @@
   "schema_version": "social_alerts_preview_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-02T15:51:15Z",
-  "source_payload_generated_at": "2026-07-02T15:51:10Z",
+  "generated_at": "2026-07-02T19:58:55Z",
+  "source_payload_generated_at": "2026-07-02T19:58:50Z",
   "rendered_count": 2,
   "rendered": [
     {
-      "draft_id": "social_alert.cme.high.6823a0b4ca61",
+      "draft_id": "social_alert.cme.watch.daa0ce5407eb",
       "category": "cme",
-      "severity": "high",
-      "title": "CME activity is elevated",
+      "severity": "watch",
+      "title": "Solar motion watch",
       "outputs": [
         {
           "format": "square_image",
-          "path": "tmp/social_alerts_shadow/previews/cme-high-6823a0b4ca61-square.png",
+          "path": "tmp/social_alerts_shadow/previews/cme-watch-daa0ce5407eb-square.png",
           "canvas": {
             "width": 1080,
             "height": 1080
@@ -25,7 +25,7 @@
         },
         {
           "format": "feed_card",
-          "path": "tmp/social_alerts_shadow/previews/cme-high-6823a0b4ca61-feed.png",
+          "path": "tmp/social_alerts_shadow/previews/cme-watch-daa0ce5407eb-feed.png",
           "canvas": {
             "width": 1080,
             "height": 1350
@@ -36,7 +36,7 @@
         },
         {
           "format": "story_reel_frame",
-          "path": "tmp/social_alerts_shadow/previews/cme-high-6823a0b4ca61-story.png",
+          "path": "tmp/social_alerts_shadow/previews/cme-watch-daa0ce5407eb-story.png",
           "canvas": {
             "width": 1080,
             "height": 1920
@@ -51,14 +51,14 @@
       ]
     },
     {
-      "draft_id": "social_alert.geomagnetic.watch.1701cd8a283b",
+      "draft_id": "social_alert.geomagnetic.watch.7edd13579f34",
       "category": "geomagnetic",
       "severity": "watch",
-      "title": "Geomagnetic conditions are active",
+      "title": "Geomagnetic pattern watch",
       "outputs": [
         {
           "format": "square_image",
-          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-1701cd8a283b-square.png",
+          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-7edd13579f34-square.png",
           "canvas": {
             "width": 1080,
             "height": 1080
@@ -74,7 +74,7 @@
         },
         {
           "format": "feed_card",
-          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-1701cd8a283b-feed.png",
+          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-7edd13579f34-feed.png",
           "canvas": {
             "width": 1080,
             "height": 1350
@@ -90,7 +90,7 @@
         },
         {
           "format": "story_reel_frame",
-          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-1701cd8a283b-story.png",
+          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-7edd13579f34-story.png",
           "canvas": {
             "width": 1080,
             "height": 1920

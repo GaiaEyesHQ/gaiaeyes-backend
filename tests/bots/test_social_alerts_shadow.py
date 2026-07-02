@@ -81,6 +81,25 @@ def test_shadow_copy_stays_conservative_and_contextual() -> None:
     assert "guarantee" not in joined
 
 
+def test_space_alerts_keep_health_pattern_context() -> None:
+    payload = build_shadow_payload(
+        {
+            "space_weather": {
+                "now": {"kp": 4.2, "bz_nt": -4.0, "solar_wind_kms": 455},
+                "cmes_count": 1,
+            },
+        }
+    )
+
+    drafts = {draft["category"]: draft for draft in payload["drafts"]}
+    for category in ("geomagnetic", "cme"):
+        draft = drafts[category]
+        square = draft["overlay_spec"]["square_image"]
+        assert "Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes." in draft["caption"]
+        assert "full signal read" not in draft["caption"]
+        assert {"Sleep", "HRV", "Focus", "Pain"} <= set(square["context_chips"])
+
+
 def test_geomagnetic_kp_thresholds_use_watch_at_3_5_and_high_at_5() -> None:
     watch_payload = build_shadow_payload({"space_weather": {"now": {"kp": 3.5}}})
     high_payload = build_shadow_payload({"space_weather": {"now": {"kp": 5.0}}})

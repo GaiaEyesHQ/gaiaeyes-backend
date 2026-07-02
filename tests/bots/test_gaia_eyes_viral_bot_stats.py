@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 from bots.earthscope_post.gaia_eyes_viral_bot import (
     _earthscope_hook_title,
     _format_public_playbook,
+    _merge_post_metrics_into_features,
     _public_card_title,
     _public_card_text,
     _trim_public_affects,
@@ -57,6 +58,37 @@ def test_bz_falls_back_to_current_with_label():
     assert bz_row.display == "-3.4 nT"
     assert bz_row.raw_value == pytest.approx(-3.4)
     assert bz_row.color == (100, 160, 220, 220)
+
+
+def test_post_metrics_merge_uses_nested_space_json_for_current_bz_and_wind():
+    feats = _merge_post_metrics_into_features(
+        {},
+        {
+            "kp_max_24h": 2,
+            "solar_wind_kms": None,
+            "schumann_value_hz": 7.78,
+            "space_json": {"bz_now": -4.2, "sw_now": 388},
+        },
+    )
+
+    assert feats["kp_max"] == pytest.approx(2.0)
+    assert feats["bz_current"] == pytest.approx(-4.2)
+    assert feats["sw_speed_current"] == pytest.approx(388.0)
+    assert feats["sch_any_fundamental_avg_hz"] == pytest.approx(7.78)
+
+
+def test_post_metrics_merge_prefers_top_level_daily_values():
+    feats = _merge_post_metrics_into_features(
+        {"bz_current": -1.2, "sw_speed_current": 401},
+        {
+            "bz_min": -6.8,
+            "solar_wind_kms": 415,
+            "space_json": {"bz_now": -4.2, "sw_now": 388},
+        },
+    )
+
+    assert feats["bz_min"] == pytest.approx(-6.8)
+    assert feats["sw_speed_avg"] == pytest.approx(415.0)
 
 
 @pytest.mark.parametrize(

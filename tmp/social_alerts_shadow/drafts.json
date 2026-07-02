@@ -2,23 +2,23 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-02T15:51:10Z",
+  "generated_at": "2026-07-02T19:58:50Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 2,
   "drafts": [
     {
-      "id": "social_alert.cme.high.6823a0b4ca61",
+      "id": "social_alert.cme.watch.daa0ce5407eb",
       "mode": "shadow",
       "auto_publish": false,
       "review_status": "needs_human_review",
       "category": "cme",
-      "severity": "high",
-      "asof": "2026-07-02T05:16:59Z",
-      "title": "CME activity is elevated",
-      "subtitle": "Review coronagraph and ENLIL context before sharing.",
-      "caption": "CME activity is elevated. Review coronagraph and ENLIL context before sharing. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "severity": "watch",
+      "asof": "2026-07-01 15:09:32.083131+00:00",
+      "title": "Solar motion watch",
+      "subtitle": "CME activity is present; review coronagraph context and compare body-pattern notes before posting.",
+      "caption": "Solar motion watch. CME activity is present; review coronagraph context and compare body-pattern notes before posting. Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
       "metrics": {
-        "cmes_count": 5.0,
+        "cmes_count": 1.0,
         "cmes_max_speed_kms": null
       },
       "source_refs": [
@@ -48,13 +48,22 @@
             "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
           "label": "HEALTH WATCH",
-          "title": "CME activity is elevated",
-          "subtitle": "Review coronagraph and ENLIL context before sharing.",
-          "context_chips": [],
+          "title": "Solar motion watch",
+          "subtitle": "CME activity is present; review coronagraph context and compare body-pattern notes before posting.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Focus",
+            "Pain",
+            "Migraine",
+            "Wired/tired",
+            "Recovery",
+            "Exposures"
+          ],
           "metric_chips": [
             {
               "label": "CMEs",
-              "value": "5"
+              "value": "1"
             },
             {
               "label": "Max speed",
@@ -109,13 +118,22 @@
             "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
           "label": "HEALTH WATCH",
-          "title": "CME activity is elevated",
-          "subtitle": "Review coronagraph and ENLIL context before sharing.",
-          "context_chips": [],
+          "title": "Solar motion watch",
+          "subtitle": "CME activity is present; review coronagraph context and compare body-pattern notes before posting.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Focus",
+            "Pain",
+            "Migraine",
+            "Wired/tired",
+            "Recovery",
+            "Exposures"
+          ],
           "metric_chips": [
             {
               "label": "CMEs",
-              "value": "5"
+              "value": "1"
             },
             {
               "label": "Max speed",
@@ -172,16 +190,25 @@
           "frames": [
             {
               "role": "hook",
-              "text": "CME activity is elevated"
+              "text": "Solar motion watch"
             },
             {
               "role": "signal",
-              "text": "Review coronagraph and ENLIL context before sharing.",
-              "context_chips": [],
+              "text": "CME activity is present; review coronagraph context and compare body-pattern notes before posting.",
+              "context_chips": [
+                "Sleep",
+                "HRV",
+                "Focus",
+                "Pain",
+                "Migraine",
+                "Wired/tired",
+                "Recovery",
+                "Exposures"
+              ],
               "metric_chips": [
                 {
                   "label": "CMEs",
-                  "value": "5"
+                  "value": "1"
                 },
                 {
                   "label": "Max speed",
@@ -191,17 +218,26 @@
             },
             {
               "role": "cta",
-              "text": "Open Gaia Eyes for the full signal read."
+              "text": "Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes."
             }
           ],
           "label": "HEALTH WATCH",
-          "title": "CME activity is elevated",
-          "subtitle": "Review coronagraph and ENLIL context before sharing.",
-          "context_chips": [],
+          "title": "Solar motion watch",
+          "subtitle": "CME activity is present; review coronagraph context and compare body-pattern notes before posting.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Focus",
+            "Pain",
+            "Migraine",
+            "Wired/tired",
+            "Recovery",
+            "Exposures"
+          ],
           "metric_chips": [
             {
               "label": "CMEs",
-              "value": "5"
+              "value": "1"
             },
             {
               "label": "Max speed",
@@ -247,31 +283,31 @@
         },
         "rendering_status": "spec_only",
         "category": "cme",
-        "severity": "high"
+        "severity": "watch"
       },
       "guardrails": {
         "claim_strength": "context_only",
         "medical_causality": "avoid",
         "requires_review_before_publish": true
       },
-      "dedupe_key": "social_alert.cme.high"
+      "dedupe_key": "social_alert.cme.watch"
     },
     {
-      "id": "social_alert.geomagnetic.watch.1701cd8a283b",
+      "id": "social_alert.geomagnetic.watch.7edd13579f34",
       "mode": "shadow",
       "auto_publish": false,
       "review_status": "needs_human_review",
       "category": "geomagnetic",
       "severity": "watch",
-      "asof": "2026-07-02T05:16:59Z",
-      "title": "Geomagnetic conditions are active",
-      "subtitle": "Kp/Bz and solar wind are worth a closer look right now.",
-      "caption": "Geomagnetic conditions are active. Kp/Bz and solar wind are worth a closer look right now. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "asof": "2026-07-01 15:09:32.083131+00:00",
+      "title": "Geomagnetic pattern watch",
+      "subtitle": "Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting.",
+      "caption": "Geomagnetic pattern watch. Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting. Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
       "metrics": {
         "kp": 2.0,
         "kp_max_24h": 4.67,
-        "bz_nt": null,
-        "solar_wind_kms": null
+        "bz_nt": 3.9,
+        "solar_wind_kms": 430.0
       },
       "source_refs": [
         {
@@ -300,9 +336,18 @@
             "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
           "label": "HEALTH WATCH",
-          "title": "Geomagnetic conditions are active",
-          "subtitle": "Kp/Bz and solar wind are worth a closer look right now.",
-          "context_chips": [],
+          "title": "Geomagnetic pattern watch",
+          "subtitle": "Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Focus",
+            "Pain",
+            "Migraine",
+            "Wired/tired",
+            "Recovery",
+            "Exposures"
+          ],
           "metric_chips": [
             {
               "label": "Kp",
@@ -310,7 +355,7 @@
             },
             {
               "label": "Bz",
-              "value": "--"
+              "value": "3.9 nT"
             }
           ],
           "footer": "Body - Space - Earth - Connected",
@@ -361,9 +406,18 @@
             "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
           },
           "label": "HEALTH WATCH",
-          "title": "Geomagnetic conditions are active",
-          "subtitle": "Kp/Bz and solar wind are worth a closer look right now.",
-          "context_chips": [],
+          "title": "Geomagnetic pattern watch",
+          "subtitle": "Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Focus",
+            "Pain",
+            "Migraine",
+            "Wired/tired",
+            "Recovery",
+            "Exposures"
+          ],
           "metric_chips": [
             {
               "label": "Kp",
@@ -371,7 +425,7 @@
             },
             {
               "label": "Bz",
-              "value": "--"
+              "value": "3.9 nT"
             }
           ],
           "footer": "Body - Space - Earth - Connected",
@@ -424,12 +478,21 @@
           "frames": [
             {
               "role": "hook",
-              "text": "Geomagnetic conditions are active"
+              "text": "Geomagnetic pattern watch"
             },
             {
               "role": "signal",
-              "text": "Kp/Bz and solar wind are worth a closer look right now.",
-              "context_chips": [],
+              "text": "Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting.",
+              "context_chips": [
+                "Sleep",
+                "HRV",
+                "Focus",
+                "Pain",
+                "Migraine",
+                "Wired/tired",
+                "Recovery",
+                "Exposures"
+              ],
               "metric_chips": [
                 {
                   "label": "Kp",
@@ -437,19 +500,28 @@
                 },
                 {
                   "label": "Bz",
-                  "value": "--"
+                  "value": "3.9 nT"
                 }
               ]
             },
             {
               "role": "cta",
-              "text": "Open Gaia Eyes for the full signal read."
+              "text": "Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes."
             }
           ],
           "label": "HEALTH WATCH",
-          "title": "Geomagnetic conditions are active",
-          "subtitle": "Kp/Bz and solar wind are worth a closer look right now.",
-          "context_chips": [],
+          "title": "Geomagnetic pattern watch",
+          "subtitle": "Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Focus",
+            "Pain",
+            "Migraine",
+            "Wired/tired",
+            "Recovery",
+            "Exposures"
+          ],
           "metric_chips": [
             {
               "label": "Kp",
@@ -457,7 +529,7 @@
             },
             {
               "label": "Bz",
-              "value": "--"
+              "value": "3.9 nT"
             }
           ],
           "footer": "Body - Space - Earth - Connected",

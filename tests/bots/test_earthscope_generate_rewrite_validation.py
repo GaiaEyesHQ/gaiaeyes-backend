@@ -16,6 +16,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 from bots.earthscope_post.earthscope_generate import (
     _clean_llm_title,
     _fallback_social_title,
+    _normalize_rewrite_payload,
     _platform_caption_profile,
     _polish_public_caption,
     _select_best_rewrite_candidate,
@@ -82,6 +83,21 @@ def test_validate_rewrite_rejects_typo_and_report_phrasing():
     )
 
     assert result is None
+
+
+def test_normalize_rewrite_payload_accepts_list_playbook():
+    normalized = _normalize_rewrite_payload(
+        {
+            "caption": "Quiet backdrop today.",
+            "snapshot": "The field looks calmer today.",
+            "affects": "Focus may feel steady for some sensitive systems.",
+            "playbook": ["Pick one task", "Keep caffeine earlier", "Protect wind-down"],
+            "hashtags": "#GaiaEyes #SpaceWeather",
+        }
+    )
+
+    assert normalized["playbook"] == "Pick one task\nKeep caffeine earlier\nProtect wind-down"
+    assert _validate_rewrite(normalized, {"cmes_24h": 0, "flares_24h": 0}) is not None
 
 
 def test_validate_rewrite_rejects_awkward_event_synonyms_and_brand_signoff():

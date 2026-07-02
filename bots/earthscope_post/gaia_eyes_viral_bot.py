@@ -601,6 +601,48 @@ def resolve_space_weather_metrics(
 
     return metrics, sources
 
+
+def _merge_post_metrics_into_features(feats: Optional[dict], metrics: Optional[dict]) -> dict:
+    """Map EarthScope post metrics into the feature shape used by card rendering."""
+
+    merged = dict(feats or {})
+    if not isinstance(metrics, dict):
+        return merged
+
+    space_json = metrics.get("space_json")
+    if not isinstance(space_json, dict):
+        space_json = {}
+
+    def set_float(target: str, value: object) -> None:
+        if value is None:
+            return
+        try:
+            merged[target] = float(value)
+        except Exception:
+            pass
+
+    def set_int(target: str, value: object) -> None:
+        if value is None:
+            return
+        try:
+            merged[target] = int(value)
+        except Exception:
+            pass
+
+    set_float("kp_max", metrics.get("kp_max_24h"))
+    set_float("bz_min", metrics.get("bz_min"))
+    if merged.get("bz_min") is None:
+        set_float("bz_current", space_json.get("bz_now"))
+    set_float("sw_speed_avg", metrics.get("solar_wind_kms"))
+    if merged.get("sw_speed_avg") is None:
+        set_float("sw_speed_current", space_json.get("sw_now"))
+    set_int("flares_count", metrics.get("flares_24h"))
+    set_int("cmes_count", metrics.get("cmes_24h"))
+    set_float("sch_any_fundamental_avg_hz", metrics.get("schumann_value_hz"))
+
+    return merged
+
+
 def fetch_post_for(day: dt.date, platform: str="default") -> Optional[dict]:
     if not SUPABASE_REST_URL:
         return None
@@ -1770,36 +1812,7 @@ def main(args: Optional[argparse.Namespace] = None):
         except Exception as e:
             logging.warning(f"metrics_json parse failed: {e}")
     if metrics:
-        # Map Earthscope metrics_json → feats dict used by stats renderer
-        m = metrics
-        feats = feats or {}
-        # Kp (max 24h)
-        if m.get("kp_max_24h") is not None:
-            try: feats["kp_max"] = float(m["kp_max_24h"]) 
-            except Exception: pass
-        # Bz min (optional)
-        if m.get("bz_min") is not None:
-            try: feats["bz_min"] = float(m["bz_min"]) 
-            except Exception: pass
-        # Solar wind km/s
-        if m.get("solar_wind_kms") is not None:
-            try: feats["sw_speed_avg"] = float(m["solar_wind_kms"]) 
-            except Exception: pass
-        # Flares / CMEs (counts)
-        if m.get("flares_24h") is not None:
-            try: feats["flares_count"] = int(m["flares_24h"]) 
-            except Exception: pass
-        if m.get("cmes_24h") is not None:
-            try: feats["cmes_count"] = int(m["cmes_24h"]) 
-            except Exception: pass
-        # Schumann f0
-        if m.get("schumann_value_hz") is not None:
-            try:
-                f0 = float(m["schumann_value_hz"]) 
-                feats["sch_any_fundamental_avg_hz"] = f0
-            except Exception: pass
-        # Optional harmonics structure (not drawn currently)
-        # metrics.get("harmonics") can be kept if needed later
+        feats = _merge_post_metrics_into_features(feats, metrics)
 
     # If metrics/sections are still empty, use media_card for TEXT sections only.
     if (not metrics or not isinstance(metrics, dict) or not metrics.get("sections")) and use_media_card:

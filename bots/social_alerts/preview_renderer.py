@@ -647,7 +647,15 @@ def _render_alert_card(
     cta_body_font = _font(29 if height <= 1100 else 32)
     cta_y = min(max(y, y2 - 168), y2 - 134)
     draw.text((inner_x, cta_y), cta_title, font=cta_font, fill=(215, 255, 232, 250))
-    draw.text((inner_x, cta_y + 52), "Open Gaia Eyes for the full signal read.", font=cta_body_font, fill=(232, 239, 248, 226))
+    _draw_wrapped_text(
+        draw,
+        (inner_x, cta_y + 52),
+        "Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes.",
+        cta_body_font,
+        inner_w,
+        fill=(232, 239, 248, 226),
+        line_gap=6,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image.convert("RGB").save(output_path, "PNG")

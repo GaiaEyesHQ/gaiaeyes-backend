@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from bots.social_alerts.asset_bootstrap_pack import bootstrap_background_candidates, bootstrap_background_prompts
 
 
-CTA = "Open Gaia Eyes for the full signal read."
+CTA = "Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes."
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
 SOCIAL_BACKGROUND_PREFIX = "social/share/backgrounds"
@@ -60,6 +60,16 @@ SCHUMANN_SYMPTOM_CHIPS = [
     "Nerve pain",
     "Headache",
     "Sinus pressure",
+]
+SPACE_HEALTH_CHIPS = [
+    "Sleep",
+    "HRV",
+    "Focus",
+    "Pain",
+    "Migraine",
+    "Wired/tired",
+    "Recovery",
+    "Exposures",
 ]
 SCHUMANN_SUBTITLES = [
     "Earth's resonance signal is above baseline. Compare it with sleep, HRV, focus, and pain patterns.",
@@ -458,8 +468,8 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
             geomagnetic_severity = geomagnetic_severity or "watch"
 
     if geomagnetic_severity:
-        title = "Geomagnetic conditions are active" if geomagnetic_severity == "watch" else "Geomagnetic storm watch"
-        subtitle = "Kp/Bz and solar wind are worth a closer look right now."
+        title = "Geomagnetic pattern watch" if geomagnetic_severity == "watch" else "Geomagnetic storm watch"
+        subtitle = "Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting."
         metrics = {"kp": kp, "kp_max_24h": kp_max, "bz_nt": bz, "solar_wind_kms": solar_wind}
         drafts.append(
             _draft(
@@ -473,6 +483,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                     {"label": "Bz", "value": _fmt_number(bz, suffix=" nT")},
                     {"label": "SW", "value": _fmt_number(solar_wind, digits=0, suffix=" km/s")},
                 ],
+                context_chips=SPACE_HEALTH_CHIPS,
                 theme_keys=["geomagnetic", "solar", "space_weather"],
                 background_candidates=_social_background_candidates(
                     BACKGROUND_KEYWORDS["geomagnetic"],
@@ -538,8 +549,8 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
         elif cmes_max_speed >= 600:
             cme_severity = cme_severity or "watch"
     if cme_severity:
-        title = "CME activity is on the board" if cme_severity == "watch" else "CME activity is elevated"
-        subtitle = "Review coronagraph and ENLIL context before sharing."
+        title = "Solar motion watch" if cme_severity == "watch" else "CME activity is elevated"
+        subtitle = "CME activity is present; review coronagraph context and compare body-pattern notes before posting."
         drafts.append(
             _draft(
                 category="cme",
@@ -551,6 +562,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                     {"label": "CMEs", "value": _fmt_number(cmes_count, digits=0)},
                     {"label": "Max speed", "value": _fmt_number(cmes_max_speed, digits=0, suffix=" km/s")},
                 ],
+                context_chips=SPACE_HEALTH_CHIPS,
                 theme_keys=["cme", "solar", "space_weather"],
                 background_candidates=_social_background_candidates(
                     BACKGROUND_KEYWORDS["cme"],

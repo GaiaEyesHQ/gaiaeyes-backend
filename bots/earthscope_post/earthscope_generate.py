@@ -1180,6 +1180,13 @@ def _normalize_rewrite_payload(obj: Any) -> Any:
     if not isinstance(obj, dict):
         return obj
     cleaned = dict(obj)
+    for key in ("caption", "snapshot", "affects", "playbook"):
+        raw = cleaned.get(key)
+        if isinstance(raw, list):
+            parts = [str(item).strip() for item in raw if str(item).strip()]
+            if parts:
+                sep = "\n" if key == "playbook" else " "
+                cleaned[key] = sep.join(parts)
     for key in ("caption", "snapshot"):
         raw = cleaned.get(key)
         if not isinstance(raw, str) or not raw.strip() or not _contains_digits(raw):
@@ -3238,6 +3245,7 @@ def main():
     # 3) Prepare payloads
     metrics_json = {
         "kp_max_24h": ctx.get("kp_max_24h"),
+        "bz_min": ctx.get("bz_min"),
         "solar_wind_kms": ctx.get("solar_wind_kms"),
         "flares_24h": ctx.get("flares_24h"),
         "cmes_24h": ctx.get("cmes_24h"),

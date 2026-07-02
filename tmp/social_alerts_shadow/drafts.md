@@ -2,26 +2,26 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-02T15:51:10Z`
+- Generated at: `2026-07-02T19:58:50Z`
 - Draft count: `2`
 
-## 1. CME activity is elevated
+## 1. Solar motion watch
 
 - Category: `cme`
-- Severity: `high`
+- Severity: `watch`
 - Review status: `needs_human_review`
-- As of: `2026-07-02T05:16:59Z`
+- As of: `2026-07-01 15:09:32.083131+00:00`
 
 Post caption copy:
 
 ```text
-CME activity is elevated. Review coronagraph and ENLIL context before sharing. Open Gaia Eyes for the full signal read.
+Solar motion watch. CME activity is present; review coronagraph context and compare body-pattern notes before posting. Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```
 
 Metrics:
-- `cmes_count`: `5.0`
+- `cmes_count`: `1.0`
 - `cmes_max_speed_kms`: `None`
 
 Background candidates:
@@ -55,17 +55,17 @@ Sources:
 - CCOR-1: `nasa/ccor1/latest.mp4`
 - ENLIL: `nasa/enlil/latest.mp4`
 
-## 2. Geomagnetic conditions are active
+## 2. Geomagnetic pattern watch
 
 - Category: `geomagnetic`
 - Severity: `watch`
 - Review status: `needs_human_review`
-- As of: `2026-07-02T05:16:59Z`
+- As of: `2026-07-01 15:09:32.083131+00:00`
 
 Post caption copy:
 
 ```text
-Geomagnetic conditions are active. Kp/Bz and solar wind are worth a closer look right now. Open Gaia Eyes for the full signal read.
+Geomagnetic pattern watch. Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting. Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```
@@ -73,8 +73,8 @@ Geomagnetic conditions are active. Kp/Bz and solar wind are worth a closer look 
 Metrics:
 - `kp`: `2.0`
 - `kp_max_24h`: `4.67`
-- `bz_nt`: `None`
-- `solar_wind_kms`: `None`
+- `bz_nt`: `3.9`
+- `solar_wind_kms`: `430.0`
 
 Background candidates:
 - `social/share/backgrounds/space_weather.jpg`
