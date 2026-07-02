@@ -1,0 +1,110 @@
+{
+  "schema_version": "social_alerts_preview_v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "generated_at": "2026-07-02T15:51:15Z",
+  "source_payload_generated_at": "2026-07-02T15:51:10Z",
+  "rendered_count": 2,
+  "rendered": [
+    {
+      "draft_id": "social_alert.cme.high.6823a0b4ca61",
+      "category": "cme",
+      "severity": "high",
+      "title": "CME activity is elevated",
+      "outputs": [
+        {
+          "format": "square_image",
+          "path": "tmp/social_alerts_shadow/previews/cme-high-6823a0b4ca61-square.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/nasa/ccor1/latest.jpg",
+          "video_candidates": [],
+          "warnings": []
+        },
+        {
+          "format": "feed_card",
+          "path": "tmp/social_alerts_shadow/previews/cme-high-6823a0b4ca61-feed.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/nasa/ccor1/latest.jpg",
+          "video_candidates": [],
+          "warnings": []
+        },
+        {
+          "format": "story_reel_frame",
+          "path": "tmp/social_alerts_shadow/previews/cme-high-6823a0b4ca61-story.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "asset_source": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/nasa/ccor1/latest.jpg",
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "warnings": []
+        }
+      ]
+    },
+    {
+      "draft_id": "social_alert.geomagnetic.watch.1701cd8a283b",
+      "category": "geomagnetic",
+      "severity": "watch",
+      "title": "Geomagnetic conditions are active",
+      "outputs": [
+        {
+          "format": "square_image",
+          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-1701cd8a283b-square.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "asset_source": "bootstrap:social_alerts/solar_aurora",
+          "video_candidates": [],
+          "warnings": [
+            "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/kp.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/kp.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/bz.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/bz.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/solar_wind.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_wind.jpg: HTTP Error 400: Bad Request"
+          ]
+        },
+        {
+          "format": "feed_card",
+          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-1701cd8a283b-feed.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "asset_source": "bootstrap:social_alerts/solar_aurora",
+          "video_candidates": [],
+          "warnings": [
+            "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/kp.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/kp.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/bz.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/bz.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/solar_wind.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_wind.jpg: HTTP Error 400: Bad Request"
+          ]
+        },
+        {
+          "format": "story_reel_frame",
+          "path": "tmp/social_alerts_shadow/previews/geomagnetic-watch-1701cd8a283b-story.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "asset_source": "bootstrap:social_alerts/solar_aurora",
+          "video_candidates": [],
+          "warnings": [
+            "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/kp.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/kp.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/bz.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/bz.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/solar_wind.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_wind.jpg: HTTP Error 400: Bad Request"
+          ]
+        }
+      ]
+    }
+  ]
+}

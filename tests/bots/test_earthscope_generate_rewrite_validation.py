@@ -15,6 +15,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 
 from bots.earthscope_post.earthscope_generate import (
     _clean_llm_title,
+    _fallback_social_title,
     _platform_caption_profile,
     _polish_public_caption,
     _select_best_rewrite_candidate,
@@ -107,7 +108,19 @@ def test_clean_llm_title_accepts_fresh_human_hook():
 def test_clean_llm_title_rejects_generic_or_recent_fallback_labels():
     assert _clean_llm_title("Clear Runway", set()) is None
     assert _clean_llm_title("Quiet Skies", set()) is None
+    assert _clean_llm_title("Magnetic Calm", set()) is None
     assert _clean_llm_title("Brain Tabs Closing", {"brain tabs closing"}) is None
+
+
+def test_fallback_social_title_replaces_generic_report_label():
+    title = _fallback_social_title(
+        {"day": "2026-07-02", "platform": "default", "kp_max_24h": 2.0},
+        "Magnetic Calm",
+        {"clear runway", "magnetic calm", "quiet skies"},
+    )
+
+    assert title not in {"Clear Runway", "Magnetic Calm", "Quiet Skies"}
+    assert _clean_llm_title(title, {"clear runway", "magnetic calm", "quiet skies"}) == title
 
 
 def test_polish_public_caption_replaces_repetitive_day_feels_opener():

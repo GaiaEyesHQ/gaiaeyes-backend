@@ -1391,8 +1391,14 @@ def _public_card_title(title: Any, *, fallback: str) -> str:
         return fallback
     lowered = cleaned.lower()
     generic_titles = {
+        "active geomagnetics",
+        "clear runway",
         "earthscope",
         "daily earthscope",
+        "magnetic calm",
+        "quiet skies",
+        "space weather update",
+        "steady field",
         "your earthscope",
         "today's earthscope",
         "todays earthscope",

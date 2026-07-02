@@ -206,5 +206,6 @@ def test_review_markdown_is_human_scannable(tmp_path: Path) -> None:
     assert out_path.exists()
     written = out_path.read_text(encoding="utf-8")
     assert "Background candidates:" in written
+    assert "bootstrap:social_alerts/solar_aurora" in written
     assert "Background keywords:" in written
     assert "Visual style:" in written

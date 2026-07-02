@@ -833,8 +833,10 @@ def build_review_markdown(payload: Mapping[str, Any]) -> str:
             lines.append("- `none`: `--`")
         lines.extend(["", "Background candidates:"])
         if backgrounds:
-            for candidate in backgrounds[:4]:
+            for candidate in backgrounds[:8]:
                 lines.append(f"- `{candidate}`")
+            if len(backgrounds) > 8:
+                lines.append(f"- `+{len(backgrounds) - 8} more in overlay_spec`")
         else:
             lines.append("- `none`: `--`")
         lines.extend(["", "Background keywords:"])

@@ -43,7 +43,7 @@ Generate shadow drafts from an existing snapshot:
 
 ```bash
 python -m bots.social_alerts.shadow_drafts \
-  --input tmp/social_alerts_snapshot.json \
+  --input tmp/social_alerts_shadow/latest-snapshot.json \
   --output tmp/social_alerts_shadow/drafts.json \
   --review-output auto
 ```

@@ -1,0 +1,514 @@
+{
+  "schema_version": "social_alerts_shadow_v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "generated_at": "2026-07-02T15:51:10Z",
+  "source_mode": "existing_signal_snapshot",
+  "draft_count": 2,
+  "drafts": [
+    {
+      "id": "social_alert.cme.high.6823a0b4ca61",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "cme",
+      "severity": "high",
+      "asof": "2026-07-02T05:16:59Z",
+      "title": "CME activity is elevated",
+      "subtitle": "Review coronagraph and ENLIL context before sharing.",
+      "caption": "CME activity is elevated. Review coronagraph and ENLIL context before sharing. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "cmes_count": 5.0,
+        "cmes_max_speed_kms": null
+      },
+      "source_refs": [
+        {
+          "label": "CCOR-1",
+          "path": "nasa/ccor1/latest.mp4"
+        },
+        {
+          "label": "ENLIL",
+          "path": "nasa/enlil/latest.mp4"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
+          },
+          "label": "HEALTH WATCH",
+          "title": "CME activity is elevated",
+          "subtitle": "Review coronagraph and ENLIL context before sharing.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "CMEs",
+              "value": "5"
+            },
+            {
+              "label": "Max speed",
+              "value": "--"
+            }
+          ],
+          "footer": "Body - Space - Earth - Connected",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ]
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
+          },
+          "label": "HEALTH WATCH",
+          "title": "CME activity is elevated",
+          "subtitle": "Review coronagraph and ENLIL context before sharing.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "CMEs",
+              "value": "5"
+            },
+            {
+              "label": "Max speed",
+              "value": "--"
+            }
+          ],
+          "footer": "Body - Space - Earth - Connected",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ]
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "CME activity is elevated"
+            },
+            {
+              "role": "signal",
+              "text": "Review coronagraph and ENLIL context before sharing.",
+              "context_chips": [],
+              "metric_chips": [
+                {
+                  "label": "CMEs",
+                  "value": "5"
+                },
+                {
+                  "label": "Max speed",
+                  "value": "--"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Open Gaia Eyes for the full signal read."
+            }
+          ],
+          "label": "HEALTH WATCH",
+          "title": "CME activity is elevated",
+          "subtitle": "Review coronagraph and ENLIL context before sharing.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "CMEs",
+              "value": "5"
+            },
+            {
+              "label": "Max speed",
+              "value": "--"
+            }
+          ],
+          "footer": "Body - Space - Earth - Connected",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "cme",
+        "severity": "high"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.cme.high"
+    },
+    {
+      "id": "social_alert.geomagnetic.watch.1701cd8a283b",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "geomagnetic",
+      "severity": "watch",
+      "asof": "2026-07-02T05:16:59Z",
+      "title": "Geomagnetic conditions are active",
+      "subtitle": "Kp/Bz and solar wind are worth a closer look right now.",
+      "caption": "Geomagnetic conditions are active. Kp/Bz and solar wind are worth a closer look right now. Open Gaia Eyes for the full signal read.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "kp": 2.0,
+        "kp_max_24h": 4.67,
+        "bz_nt": null,
+        "solar_wind_kms": null
+      },
+      "source_refs": [
+        {
+          "label": "SWPC space weather",
+          "path": "space_weather.now"
+        },
+        {
+          "label": "Space daily mart",
+          "path": "marts.space_weather_daily"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
+          },
+          "label": "HEALTH WATCH",
+          "title": "Geomagnetic conditions are active",
+          "subtitle": "Kp/Bz and solar wind are worth a closer look right now.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "Kp",
+              "value": "4.7"
+            },
+            {
+              "label": "Bz",
+              "value": "--"
+            }
+          ],
+          "footer": "Body - Space - Earth - Connected",
+          "theme_keys": [
+            "geomagnetic",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "space_weather",
+            "kp",
+            "bz",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/kp.jpg",
+            "social/share/backgrounds/bz.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/geospace_3h/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "aurora/viewline/tonight-north.png"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": []
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
+          },
+          "label": "HEALTH WATCH",
+          "title": "Geomagnetic conditions are active",
+          "subtitle": "Kp/Bz and solar wind are worth a closer look right now.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "Kp",
+              "value": "4.7"
+            },
+            {
+              "label": "Bz",
+              "value": "--"
+            }
+          ],
+          "footer": "Body - Space - Earth - Connected",
+          "theme_keys": [
+            "geomagnetic",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "space_weather",
+            "kp",
+            "bz",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/kp.jpg",
+            "social/share/backgrounds/bz.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/geospace_3h/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "aurora/viewline/tonight-north.png"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": []
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "Geomagnetic conditions are active"
+            },
+            {
+              "role": "signal",
+              "text": "Kp/Bz and solar wind are worth a closer look right now.",
+              "context_chips": [],
+              "metric_chips": [
+                {
+                  "label": "Kp",
+                  "value": "4.7"
+                },
+                {
+                  "label": "Bz",
+                  "value": "--"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Open Gaia Eyes for the full signal read."
+            }
+          ],
+          "label": "HEALTH WATCH",
+          "title": "Geomagnetic conditions are active",
+          "subtitle": "Kp/Bz and solar wind are worth a closer look right now.",
+          "context_chips": [],
+          "metric_chips": [
+            {
+              "label": "Kp",
+              "value": "4.7"
+            },
+            {
+              "label": "Bz",
+              "value": "--"
+            }
+          ],
+          "footer": "Body - Space - Earth - Connected",
+          "theme_keys": [
+            "geomagnetic",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "space_weather",
+            "kp",
+            "bz",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/kp.jpg",
+            "social/share/backgrounds/bz.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/geospace_3h/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "aurora/viewline/tonight-north.png"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "video_candidates": [],
+          "still_candidates": [],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "geomagnetic",
+        "severity": "watch"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.geomagnetic.watch"
+    }
+  ],
+  "review_notes": [
+    "Human review is required before any social publish.",
+    "Payload is text, metadata, and overlay specs only; no media rendering or platform posting is performed.",
+    "Copy intentionally avoids medical causality and symptom prediction."
+  ]
+}

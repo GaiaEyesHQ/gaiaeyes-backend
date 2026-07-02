@@ -767,6 +767,48 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
     return cleaned
 
 
+def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_titles: Optional[set] = None) -> str:
+    if _clean_llm_title(default_title, recent_titles):
+        return default_title
+
+    tone = _tone_from_ctx(ctx)
+    pools = {
+        "calm": [
+            "Steadier Body Window",
+            "A Cleaner Focus Day",
+            "Recovery Has More Room",
+            "Nervous System Breathing Room",
+        ],
+        "unsettled": [
+            "Pace Before The Spike",
+            "Brain Bandwidth Watch",
+            "Sensitive Systems Take Note",
+            "A Choppier Body Day",
+        ],
+        "stormy": [
+            "Keep The Load Lighter",
+            "Body Signals May Run Loud",
+            "Protect The Recovery Window",
+            "Stormy Skies Softer Pace",
+        ],
+        "neutral": [
+            "Check The Body Pattern",
+            "Small Signals Worth Watching",
+            "Pacing Beats Guessing",
+            "Track The Overlap",
+        ],
+    }
+    options = pools.get(tone, pools["neutral"])
+    seed_text = f"{ctx.get('day') or ''}|{ctx.get('platform') or PLATFORM}|{tone}|fallback-title"
+    seed = int(hashlib.sha256(seed_text.encode("utf-8")).hexdigest(), 16)
+    recent_lower = {str(item or "").strip().lower() for item in (recent_titles or set()) if str(item or "").strip()}
+    for offset in range(len(options)):
+        candidate = options[(seed + offset) % len(options)]
+        if _clean_llm_title(candidate, recent_lower):
+            return candidate
+    return "Track The Body Pattern"
+
+
 # --- LLM-based title generator using cached rewrite ---
 def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rewrite: Optional[Dict[str,str]]) -> Optional[str]:
     """Ask the LLM for a short social hook title based on tone + pulse + sections. No numbers, no emojis.
@@ -3191,7 +3233,7 @@ def main():
     if llm_title:
         title = llm_title
     else:
-        title = public_voice_render["title"]
+        title = _fallback_social_title(ctx, public_voice_render["title"], _recent_titles(21))
 
     # 3) Prepare payloads
     metrics_json = {
