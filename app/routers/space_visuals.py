@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 from os import getenv
 from typing import Any, Dict, List
 
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/v1")
 
 # Legacy default (GitHub) remains as last resort
 _DEFAULT_MEDIA_BASE = ""
+_CUMIANA_VISUAL_MAX_AGE = timedelta(days=3)
 
 
 def _visuals_env_snapshot() -> dict:
@@ -46,6 +47,16 @@ def _iso(ts):
     if ts is None:
         return None
     return ts.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _should_skip_stale_visual(row: Dict[str, Any], ts: Any) -> bool:
+    key = str(row.get("key") or "").lower()
+    if not key.startswith("cumiana_") or ts is None:
+        return False
+    if getattr(ts, "tzinfo", None) is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - ts.astimezone(timezone.utc)
+    return age > _CUMIANA_VISUAL_MAX_AGE
 
 
 def _ensure_json(value: Any) -> Dict[str, Any]:
@@ -180,6 +191,8 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
     for row in rows or []:
         asset_type = row.get("asset_type") or "image"
         ts = row.get("ts")
+        if _should_skip_stale_visual(row, ts):
+            continue
         iso_ts = _iso(ts)
         if iso_ts and (latest_ts is None or iso_ts > latest_ts):
             latest_ts = iso_ts

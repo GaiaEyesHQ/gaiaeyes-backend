@@ -42,6 +42,7 @@ _SIGNAL_FAMILIES = {"geomagnetic", "solar_wind", "flare_cme_sep", "schumann"}
 _LOCAL_FAMILIES = {"pressure", "aqi", "temp"}
 _GAUGE_FAMILIES = {"pain", "energy", "sleep", "heart", "health_status"}
 _PROMPT_FAMILIES = {"symptom_followups", "daily_checkins"}
+_SYMPTOM_FOLLOWUP_PUSH_MAX_AGE = timedelta(days=7)
 
 _PRESSURE_SIGNAL_KEYS = {
     "earthweather.pressure_swing_12h",
@@ -888,8 +889,14 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
 
 
 def _feedback_prompt_rows(user_id: str, prompt_type: str) -> List[Dict[str, Any]]:
-    return pg.fetch(
+    extra_filters = ""
+    if prompt_type == "symptom_follow_up":
+        extra_filters = """
+           and delivered_at is null
+           and coalesce(snoozed_until, scheduled_for) >= now() - interval '7 days'
         """
+    return pg.fetch(
+        f"""
         select id,
                episode_id,
                symptom_code,
@@ -905,6 +912,7 @@ def _feedback_prompt_rows(user_id: str, prompt_type: str) -> List[Dict[str, Any]
            and prompt_type = %s
            and status in ('pending', 'snoozed')
            and push_delivery_enabled = true
+           {extra_filters}
            and coalesce(snoozed_until, scheduled_for) <= now()
          order by coalesce(snoozed_until, scheduled_for) asc, created_at asc
          limit 4
@@ -921,10 +929,28 @@ def _feedback_payload_value(row: Dict[str, Any], key: str, fallback: Any = None)
     return fallback
 
 
+def _coerce_utc_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc)
+    return None
+
+
+def _symptom_followup_push_candidate_is_fresh(row: Dict[str, Any], now_utc: datetime) -> bool:
+    if row.get("delivered_at") is not None:
+        return False
+    scheduled_for = _coerce_utc_datetime(row.get("snoozed_until")) or _coerce_utc_datetime(row.get("scheduled_for"))
+    if scheduled_for is None:
+        return False
+    return scheduled_for >= now_utc - _SYMPTOM_FOLLOWUP_PUSH_MAX_AGE
+
+
 def _build_prompt_candidates(user_id: str) -> List[NotificationCandidate]:
     candidates: List[NotificationCandidate] = []
+    now_utc = utc_now()
 
     for row in _feedback_prompt_rows(user_id, "symptom_follow_up"):
+        if not _symptom_followup_push_candidate_is_fresh(row, now_utc):
+            continue
         prompt_id = str(row.get("id") or "")
         episode_id = str(row.get("episode_id") or "")
         symptom_code = str(row.get("symptom_code") or "").strip().lower()

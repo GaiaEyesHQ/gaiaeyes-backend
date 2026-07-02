@@ -2406,7 +2406,20 @@ private func userOutlookWindowHasContent(_ window: UserOutlookWindow?) -> Bool {
 
 private func userOutlookNeedsRefresh(_ payload: UserForecastOutlook?) -> Bool {
     guard let payload else { return true }
-    if payload.dailyOutlook?.isEmpty == false {
+    if let generatedAt = payload.generatedAt {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        if let generatedDate = fractional.date(from: generatedAt) ?? plain.date(from: generatedAt),
+           Date().timeIntervalSince(generatedDate) > 2 * 60 * 60 {
+            return true
+        }
+    }
+    if let dailyCount = payload.dailyOutlook?.count, dailyCount > 0 {
+        if dailyCount < 5 {
+            return true
+        }
         return false
     }
     return !userOutlookWindowHasContent(payload.next24h)

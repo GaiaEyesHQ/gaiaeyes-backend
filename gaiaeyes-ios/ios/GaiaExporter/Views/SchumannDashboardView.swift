@@ -1004,9 +1004,6 @@ private final class SchumannDashboardViewModel: ObservableObject {
     }
 
     func loadTomskLatestIfNeeded(using state: AppState, force: Bool = false) async {
-        if !force, tomskLatest != nil {
-            return
-        }
         isTomskLatestLoading = true
         tomskErrorMessage = nil
 
@@ -1027,9 +1024,6 @@ private final class SchumannDashboardViewModel: ObservableObject {
     }
 
     func loadTomskSeriesIfNeeded(using state: AppState, force: Bool = false) async {
-        if !force, !tomskSeries.isEmpty {
-            return
-        }
         isTomskSeriesLoading = true
         tomskErrorMessage = nil
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, List
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -133,3 +133,45 @@ async def test_space_visuals_handles_db_error(monkeypatch, client: AsyncClient):
     body = resp.json()
     assert body["ok"] is False
     assert "failed" in (body["error"] or "")
+
+
+@pytest.mark.anyio
+async def test_space_visuals_skips_stale_cumiana_visuals(monkeypatch, client: AsyncClient):
+    now = datetime.now(timezone.utc)
+    rows = [
+        {
+            "ts": now - timedelta(days=10),
+            "key": "cumiana_plotted",
+            "asset_type": "image",
+            "image_path": "images/cumiana/plotted.jpg",
+            "meta": {},
+            "series": None,
+            "feature_flags": {},
+            "instrument": "Cumiana",
+            "credit": "VLF.it",
+        },
+        {
+            "ts": now,
+            "key": "aia_primary",
+            "asset_type": "image",
+            "image_path": "images/space/aia.jpg",
+            "meta": {},
+            "series": None,
+            "feature_flags": {},
+            "instrument": "SDO",
+            "credit": "NASA",
+        },
+    ]
+
+    async def _fake_get_db():
+        yield _FakeConn(rows)
+
+    app.dependency_overrides[get_db] = _fake_get_db
+    monkeypatch.setenv("MEDIA_BASE_URL", "https://media.test")
+
+    resp = await client.get("/v1/space/visuals", headers=_auth_headers())
+    body = resp.json()
+
+    keys = {item["key"] for item in body["images"]}
+    assert "cumiana_plotted" not in keys
+    assert "aia_primary" in keys
