@@ -525,6 +525,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         'quakes_detail'   => '/earthquakes/',
         'cache'           => 5,
         'mode'            => 'mystical',
+        'client_refresh'  => 'true',
       ],
       $atts,
       'gaia_earthscope_banner'
@@ -557,6 +558,11 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     }
     $allow_legacy_fallback = in_array(
       strtolower(trim((string) $atts['allow_legacy_fallback'])),
+      ['1', 'true', 'yes', 'on'],
+      true
+    );
+    $client_refresh = in_array(
+      strtolower(trim((string) $atts['client_refresh'])),
       ['1', 'true', 'yes', 'on'],
       true
     );
@@ -826,7 +832,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     if (!isset($aurora_chip)) $aurora_chip = '';
 
     ob_start(); ?>
-    <section class="gaia-es">
+    <section class="gaia-es" data-gaia-earthscope-live="1">
       <div class="gaia-es__head">
         <div class="gaia-es__head-left">
           <h3 class="gaia-es__title">EarthScope</h3>
@@ -880,10 +886,60 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         .gaia-link:hover{border-bottom-color:rgba(255,255,255,.6)}
       </style>
     </section>
+    <?php if ( $client_refresh ) : ?>
+      <script>
+        (function(){
+          var section = document.currentScript && document.currentScript.previousElementSibling;
+          if (!section || !section.matches || !section.matches('[data-gaia-earthscope-live]')) {
+            section = document.querySelector('[data-gaia-earthscope-live]');
+          }
+          if (!section || section.dataset.gaiaEarthscopeRefreshStarted === '1') return;
+          section.dataset.gaiaEarthscopeRefreshStarted = '1';
+          var endpoint = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gaia/v1/public/earthscope' ) ) ); ?>;
+          if (!endpoint || !window.fetch) return;
+          fetch(endpoint + '?v=' + Date.now(), {
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+          })
+            .then(function(resp){ return resp && resp.ok ? resp.json() : null; })
+            .then(function(payload){
+              if (!payload || !payload.ok || !payload.html) return;
+              var template = document.createElement('template');
+              template.innerHTML = String(payload.html).trim();
+              var fresh = template.content && template.content.querySelector('[data-gaia-earthscope-live]');
+              if (fresh) section.replaceWith(fresh);
+            })
+            .catch(function(){});
+        })();
+      </script>
+    <?php endif; ?>
     <?php
     return ob_get_clean();
   }
   add_shortcode('gaia_earthscope_banner','gaia_earthscope_banner');
+
+  add_action('rest_api_init', function () {
+    register_rest_route('gaia/v1', '/public/earthscope', [
+      'methods' => 'GET',
+      'permission_callback' => '__return_true',
+      'callback' => function () {
+        $html = gaia_earthscope_banner([
+          'client_refresh' => 'false',
+          'allow_legacy_fallback' => 'true',
+        ]);
+        $response = new WP_REST_Response([
+          'ok' => true,
+          'html' => $html,
+          'generated_at' => gmdate('c'),
+        ]);
+        $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->header('Pragma', 'no-cache');
+        $response->header('Expires', 'Wed, 11 Jan 1984 05:00:00 GMT');
+        return $response;
+      },
+    ]);
+  });
 }
 
 // [gaia_pulse url="https://gaiaeyeshq.github.io/gaiaeyes-media/data/pulse.json" cache="5"]

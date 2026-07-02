@@ -916,12 +916,19 @@ function gaia_dashboard_proxy_json(
 
     $resp = wp_remote_request($url, $args);
 
+    $no_store = function (WP_REST_Response $response) {
+        $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->header('Pragma', 'no-cache');
+        $response->header('Expires', 'Wed, 11 Jan 1984 05:00:00 GMT');
+        return $response;
+    };
+
     if (is_wp_error($resp)) {
-        return new WP_REST_Response([
+        return $no_store(new WP_REST_Response([
             'ok' => false,
             'error' => 'member hub proxy fetch failed',
             'detail' => $resp->get_error_message(),
-        ], 502);
+        ], 502));
     }
 
     $status = (int) wp_remote_retrieve_response_code($resp);
@@ -929,14 +936,14 @@ function gaia_dashboard_proxy_json(
     $decoded = json_decode($body, true);
 
     if (!is_array($decoded)) {
-        return new WP_REST_Response([
+        return $no_store(new WP_REST_Response([
             'ok' => false,
             'error' => 'member hub proxy invalid JSON',
             'status' => $status,
-        ], 502);
+        ], 502));
     }
 
-    return new WP_REST_Response($decoded, $status > 0 ? $status : 200);
+    return $no_store(new WP_REST_Response($decoded, $status > 0 ? $status : 200));
 }
 }
 
