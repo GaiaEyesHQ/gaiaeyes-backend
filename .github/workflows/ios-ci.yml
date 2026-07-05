@@ -47,7 +47,7 @@ jobs:
         shell: bash
     env:
       XCODE_PROJECT: gaiaeyes-ios/ios/GaiaExporter.xcodeproj
-      XCODE_SCHEME: GaiaExporter
+      XCODE_SCHEME: GaiaEyes
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -104,12 +104,12 @@ FLARE_HOOKS = {
 SIGNAL_SUBTITLES = {
     "geomagnetic": "Geomagnetic activity is up. Gaia Eyes watches windows like this alongside sleep, HRV, headaches, focus, and restless energy.",
     "solar_flare": "Solar flare activity is elevated. Some people track windows like this with energy, focus, headaches, and sleep.",
-    "cme": "Recovery conditions look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy alongside the CME signal.",
+    "cme": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
 }
 SIGNAL_CAPTIONS = {
     "geomagnetic": "{title}\n\nGeomagnetic activity is up, including Kp/Bz and solar-wind movement. If sleep, HRV, headaches, focus, or restless energy feel different today, this is a useful window to log.\n\nGaia Eyes helps compare body data with environmental signals over time.\n\n{hashtags}",
     "solar_flare": "{title}\n\nSolar flare activity is elevated. Some people like to track windows like this with energy, focus, headaches, sleep, and recovery markers.\n\nGaia Eyes helps you see whether these signals line up with your own patterns.\n\n{hashtags}",
-    "cme": "{title}\n\nRecovery conditions look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it alongside the CME signal and let the pattern build.\n\n{cta}\n\n{hashtags}",
+    "cme": "{title}\n\nBody signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this solar-motion window and let the pattern build.\n\n{cta}\n\n{hashtags}",
 }
 SIGNAL_LABELS = {
     "geomagnetic": "PATTERN WATCH",

@@ -110,8 +110,9 @@ def test_space_alerts_keep_health_pattern_context() -> None:
 
     cme_caption = drafts["cme"]["caption"]
     assert drafts["cme"]["title"] in {hook for hooks in CME_HOOKS.values() for hook in hooks}
-    assert "Recovery conditions look noisier today." in cme_caption
-    assert "alongside the CME signal" in cme_caption
+    assert "Body signals look noisier today." in cme_caption
+    assert "during this solar-motion window" in cme_caption
+    assert "alongside the CME signal" not in cme_caption
     assert CTA in cme_caption
     assert "Gaia Eyes compares symptoms, wearables, exposures, and environmental signals over time." not in cme_caption
     assert "CME activity is elevated" not in cme_caption

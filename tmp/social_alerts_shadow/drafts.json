@@ -2,7 +2,7 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-05T05:05:32Z",
+  "generated_at": "2026-07-05T14:40:36Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 1,
   "drafts": [
@@ -15,8 +15,8 @@
       "severity": "high",
       "asof": "2026-07-03T03:04:16Z",
       "title": "Recovery feeling off?",
-      "subtitle": "Recovery conditions look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy alongside the CME signal.",
-      "caption": "Recovery feeling off?\n\nRecovery conditions look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it alongside the CME signal and let the pattern build.\n\nSee if this lines up with your body in Gaia Eyes.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
+      "caption": "Recovery feeling off?\n\nBody signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this solar-motion window and let the pattern build.\n\nSee if this lines up with your body in Gaia Eyes.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
       "metrics": {
         "cmes_count": 3.0,
         "cmes_max_speed_kms": null
@@ -49,7 +49,7 @@
           },
           "label": "RECOVERY WATCH",
           "title": "Recovery feeling off?",
-          "subtitle": "Recovery conditions look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy alongside the CME signal.",
+          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -116,7 +116,7 @@
           },
           "label": "RECOVERY WATCH",
           "title": "Recovery feeling off?",
-          "subtitle": "Recovery conditions look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy alongside the CME signal.",
+          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -188,7 +188,7 @@
             },
             {
               "role": "signal",
-              "text": "Recovery conditions look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy alongside the CME signal.",
+              "text": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
               "context_chips": [
                 "Sleep",
                 "HRV",
@@ -214,7 +214,7 @@
           ],
           "label": "RECOVERY WATCH",
           "title": "Recovery feeling off?",
-          "subtitle": "Recovery conditions look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy alongside the CME signal.",
+          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
           "context_chips": [
             "Sleep",
             "HRV",
