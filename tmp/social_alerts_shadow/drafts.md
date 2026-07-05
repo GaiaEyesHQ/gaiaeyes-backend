@@ -2,26 +2,30 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-02T19:58:50Z`
-- Draft count: `2`
+- Generated at: `2026-07-05T05:05:32Z`
+- Draft count: `1`
 
-## 1. Solar motion watch
+## 1. Recovery feeling off?
 
 - Category: `cme`
-- Severity: `watch`
+- Severity: `high`
 - Review status: `needs_human_review`
-- As of: `2026-07-01 15:09:32.083131+00:00`
+- As of: `2026-07-03T03:04:16Z`
 
 Post caption copy:
 
 ```text
-Solar motion watch. CME activity is present; review coronagraph context and compare body-pattern notes before posting. Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes.
+Recovery feeling off?
+
+Recovery conditions look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it alongside the CME signal and let the pattern build.
+
+See if this lines up with your body in Gaia Eyes.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```
 
 Metrics:
-- `cmes_count`: `1.0`
+- `cmes_count`: `3.0`
 - `cmes_max_speed_kms`: `None`
 
 Background candidates:
@@ -49,60 +53,8 @@ Reel video candidates:
 
 Visual style:
 - Layout: `trust_first_alert_card`
-- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics.
+- Notes: Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line.
 
 Sources:
 - CCOR-1: `nasa/ccor1/latest.mp4`
 - ENLIL: `nasa/enlil/latest.mp4`
-
-## 2. Geomagnetic pattern watch
-
-- Category: `geomagnetic`
-- Severity: `watch`
-- Review status: `needs_human_review`
-- As of: `2026-07-01 15:09:32.083131+00:00`
-
-Post caption copy:
-
-```text
-Geomagnetic pattern watch. Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting. Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes.
-
-#GaiaEyes #SpaceWeather #EarthSignals
-```
-
-Metrics:
-- `kp`: `2.0`
-- `kp_max_24h`: `4.67`
-- `bz_nt`: `3.9`
-- `solar_wind_kms`: `430.0`
-
-Background candidates:
-- `social/share/backgrounds/space_weather.jpg`
-- `social/share/backgrounds/kp.jpg`
-- `social/share/backgrounds/bz.jpg`
-- `social/share/backgrounds/solar_wind.jpg`
-- `bootstrap:social_alerts/solar_aurora`
-- `bootstrap:social_alerts/cme_wave`
-- `bootstrap:social_alerts/earthscope_cosmic`
-- `nasa/geospace_3h/latest.jpg`
-- `+2 more in overlay_spec`
-
-Background keywords:
-- `space_weather`
-- `kp`
-- `bz`
-- `solar_wind`
-
-Still candidates:
-- `none`: `--`
-
-Reel video candidates:
-- `none`: `--`
-
-Visual style:
-- Layout: `trust_first_alert_card`
-- Notes: Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics.
-
-Sources:
-- SWPC space weather: `space_weather.now`
-- Space daily mart: `marts.space_weather_daily`

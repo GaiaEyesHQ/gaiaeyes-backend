@@ -41,7 +41,7 @@ SIGNAL_LABELS = {
     "lunar_full_window_exposed": "Full moon window",
     "lunar_new_window_exposed": "New moon window",
     "schumann_exposed": "Schumann variability",
-    "ulf_exposed": "ULF field motion",
+    "ulf_exposed": "ULF activity",
 }
 
 OUTCOME_LABELS = {
@@ -161,8 +161,8 @@ PATTERN_RECENT_VISIBILITY_DAYS = 14
 
 ROLE_LABELS = {
     0: ("primary", "Leading now"),
-    1: ("supporting", "Supporting signal"),
-    2: ("background", "In the background"),
+    1: ("supporting", "Also active"),
+    2: ("background", "Worth watching"),
 }
 
 _PATTERN_MESSAGE_MAP = {
@@ -402,28 +402,28 @@ _PATTERN_MESSAGE_MAP = {
         "clause": "it has lined up with more restless days for you",
     },
     ("ulf_exposed", "poor_sleep_day"): {
-        "full": "Active ULF field motion has lined up with more poor-sleep nights in your history.",
-        "short": "ULF field motion has lined up with more poor-sleep nights for you.",
+        "full": "ULF activity has lined up with more poor-sleep nights in your history.",
+        "short": "ULF activity has lined up with more poor-sleep nights for you.",
         "clause": "it has lined up with more poor-sleep nights for you",
     },
     ("ulf_exposed", "short_sleep_day"): {
-        "full": "Active ULF field motion has lined up with more short-sleep nights in your history.",
-        "short": "ULF field motion has lined up with more short-sleep nights for you.",
+        "full": "ULF activity has lined up with more short-sleep nights in your history.",
+        "short": "ULF activity has lined up with more short-sleep nights for you.",
         "clause": "it has lined up with more short-sleep nights for you",
     },
     ("ulf_exposed", "focus_fog_day"): {
-        "full": "Active ULF field motion has lined up with more focus-drift days in your history.",
-        "short": "ULF field motion has lined up with more focus-drift days for you.",
+        "full": "ULF activity has lined up with more focus-drift days in your history.",
+        "short": "ULF activity has lined up with more focus-drift days for you.",
         "clause": "it has lined up with more focus-drift days for you",
     },
     ("ulf_exposed", "hrv_dip_day"): {
-        "full": "Active ULF field motion has lined up with more HRV dip days in your history.",
-        "short": "ULF field motion has lined up with more HRV dip days for you.",
-        "clause": "it has lined up with more HRV dip days for you",
+        "full": "ULF activity has lined up with more HRV dip days in your history.",
+        "short": "ULF activity has lined up with more HRV dips for you.",
+        "clause": "it has lined up with more HRV dips for you",
     },
     ("ulf_exposed", "resting_hr_elevated_day"): {
-        "full": "Active ULF field motion has lined up with more above-usual resting HR days in your history.",
-        "short": "ULF field motion has lined up with more above-usual resting HR days for you.",
+        "full": "ULF activity has lined up with more above-usual resting HR days in your history.",
+        "short": "ULF activity has lined up with more above-usual resting HR days for you.",
         "clause": "it has lined up with more above-usual resting HR days for you",
     },
     ("temp_swing_exposed", "temperature_deviation_day"): {
@@ -444,6 +444,17 @@ def signal_label(signal_key: str) -> str:
 
 def outcome_label(outcome_key: str) -> str:
     return OUTCOME_LABELS.get(outcome_key, outcome_key.replace("_", " ").title())
+
+
+def _sentence_case_outcome_label(outcome_key: str) -> str:
+    return outcome_label(outcome_key).lower().replace("hrv", "HRV").replace("resting hr", "resting HR")
+
+
+def _signal_has_verb(signal_key: str) -> str:
+    label = signal_label(signal_key).lower()
+    if label.endswith("s") and label not in {"air quality"}:
+        return "have"
+    return "has"
 
 
 def confidence_rank(value: str | None) -> int:
@@ -599,11 +610,13 @@ def pattern_anchor_statement(row: Mapping[str, Any], *, variant: str = "full") -
     entry = _PATTERN_MESSAGE_MAP.get((signal_key, outcome_key)) or {}
     if entry.get(variant):
         return str(entry[variant])
+    verb = _signal_has_verb(signal_key)
     if variant == "short":
-        return f"{signal_label(signal_key)} have lined up with more {outcome_label(outcome_key).lower()} for you."
+        return f"{signal_label(signal_key)} {verb} lined up with more {_sentence_case_outcome_label(outcome_key)} for you."
     if variant == "clause":
-        return f"they have lined up with more {outcome_label(outcome_key).lower()} for you"
-    return f"{signal_label(signal_key)} have lined up with {outcome_label(outcome_key).lower()} in your history."
+        pronoun = "they" if verb == "have" else "it"
+        return f"{pronoun} {verb} lined up with more {_sentence_case_outcome_label(outcome_key)} for you"
+    return f"{signal_label(signal_key)} {verb} lined up with {_sentence_case_outcome_label(outcome_key)} in your history."
 
 
 def _role_for_index(index: int) -> tuple[str | None, str | None]:
@@ -623,10 +636,10 @@ def _driver_reason(
     if _driver_sensitivity_boost(key, profile) > 0:
         label = str(driver.get("label") or key.replace("_", " ").title())
         if variant == "clause":
-            return "it lines up with your sensitivity profile"
+            return "it matches what you asked Gaia Eyes to watch"
         if variant == "short":
-            return f"{label} lines up with your sensitivity profile."
-        return f"{label} matters a bit more for you because it matches your sensitivity profile."
+            return f"{label} matches what you asked Gaia Eyes to watch."
+        return f"{label} is worth watching because it matches what you asked Gaia Eyes to track."
     label = str(driver.get("label") or key.replace("_", " ").title())
     if variant == "clause":
         return "it is active right now"

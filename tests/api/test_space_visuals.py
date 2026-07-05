@@ -175,3 +175,45 @@ async def test_space_visuals_skips_stale_cumiana_visuals(monkeypatch, client: As
     keys = {item["key"] for item in body["images"]}
     assert "cumiana_plotted" not in keys
     assert "aia_primary" in keys
+
+
+@pytest.mark.anyio
+async def test_space_visuals_hides_tomsk_visuals(monkeypatch, client: AsyncClient):
+    now = datetime.now(timezone.utc)
+    rows = [
+        {
+            "ts": now,
+            "key": "tomsk_shm_spectrogram",
+            "asset_type": "image",
+            "image_path": "images/tomsk/latest.png",
+            "meta": {},
+            "series": None,
+            "feature_flags": {},
+            "instrument": "Tomsk",
+            "credit": "SOS70.ru",
+        },
+        {
+            "ts": now,
+            "key": "aia_primary",
+            "asset_type": "image",
+            "image_path": "images/space/aia.jpg",
+            "meta": {},
+            "series": None,
+            "feature_flags": {},
+            "instrument": "SDO",
+            "credit": "NASA",
+        },
+    ]
+
+    async def _fake_get_db():
+        yield _FakeConn(rows)
+
+    app.dependency_overrides[get_db] = _fake_get_db
+    monkeypatch.setenv("MEDIA_BASE_URL", "https://media.test")
+
+    resp = await client.get("/v1/space/visuals/public")
+    body = resp.json()
+
+    keys = {item["key"] for item in body["images"]}
+    assert "tomsk_shm_spectrogram" not in keys
+    assert "aia_primary" in keys

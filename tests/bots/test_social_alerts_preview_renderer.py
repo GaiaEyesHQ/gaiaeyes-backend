@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bots.social_alerts.preview_renderer import render_shadow_previews, resolve_background_image
-from bots.social_alerts.shadow_drafts import build_shadow_payload
+from bots.social_alerts.preview_renderer import DEFAULT_CTA, _context_chips, _cta_text, render_shadow_previews, resolve_background_image
+from bots.social_alerts.shadow_drafts import CTA, build_shadow_payload
 
 
 def _write_image(path: Path, color: tuple[int, int, int]) -> Path:
@@ -104,3 +104,15 @@ def test_resolve_background_uses_bootstrap_candidate_without_remote_fetch() -> N
     assert image.size == (1080, 1350)
     assert source == "bootstrap:social_alerts/resonance_field"
     assert warnings == []
+
+
+def test_renderer_uses_draft_cta_and_public_fallback_chips() -> None:
+    payload = build_shadow_payload({"space_weather": {"cmes_count": 1}})
+    draft = next(item for item in payload["drafts"] if item["category"] == "cme")
+    assert _cta_text(draft) == CTA
+    assert DEFAULT_CTA == CTA
+
+    chips = _context_chips({}, "cme")
+    joined = " ".join(chips).lower()
+    assert "review" not in joined
+    assert "before posting" not in joined

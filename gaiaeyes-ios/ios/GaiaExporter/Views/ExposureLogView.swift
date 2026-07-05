@@ -29,7 +29,7 @@ struct ExposureLogView: View {
     private var headerBody: String {
         switch focus {
         case .general:
-            return "Pick anything notable from today. Gaia Eyes watches for personal trigger patterns over time; this is not a diagnosis or certainty."
+            return "Pick anything notable from today. Gaia Eyes will compare it with symptoms, wearables, and daily signals over time."
         case .migraine:
             return "Migraine days can have layered triggers. Pick anything that stood out, or use the note for your own context."
         }

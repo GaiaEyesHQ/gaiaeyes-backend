@@ -11042,9 +11042,9 @@ struct ContentView: View {
                 case .leading:
                     return "Leading now"
                 case .supporting:
-                    return "Supporting signal"
+                    return "Also active"
                 case .background:
-                    return "In the background"
+                    return "Worth watching"
                 }
             }
 
@@ -11053,9 +11053,9 @@ struct ContentView: View {
                 case .leading:
                     return "The clearest signal in your mix right now."
                 case .supporting:
-                    return "Still active, but not leading."
+                    return "Active, but not the main signal today."
                 case .background:
-                    return "Present, but in the background."
+                    return "Worth watching without making it the main focus."
                 }
             }
 
@@ -14279,7 +14279,7 @@ struct ContentView: View {
                 return "\(label) geomagnetic conditions right now. Ground context is still building."
             }
             if let raw = context?.classRaw, raw.localizedCaseInsensitiveContains("coherent") {
-                return "\(label) geomagnetic conditions right now. Coherent ground variability is showing up."
+                return "\(label) geomagnetic conditions right now. Ground magnetic activity is part of today’s read."
             }
             if let confidence = context?.confidenceLabel, !confidence.isEmpty {
                 return "\(label) geomagnetic conditions right now. \(confidence) confidence."
@@ -15972,6 +15972,8 @@ struct ContentView: View {
                 return "Mold Counts"
             case "humidity_extreme_exposed", "extreme_humidity_exposed":
                 return "High Humidity"
+            case "ulf_exposed":
+                return "ULF activity"
             default:
                 return experienceMode.copyVocabulary.driverLabel(for: card.signalKey, fallback: card.signal)
             }
@@ -15994,6 +15996,12 @@ struct ContentView: View {
                 ("pollen mold exposed", "mold counts"),
                 ("extreme humidity exposed", "high humidity"),
                 ("Extreme humidity exposed", "high humidity"),
+                ("Ulf Exposed", "ULF activity"),
+                ("ulf exposed", "ULF activity"),
+                ("Resting Hr Elevated Day", "resting HR elevated"),
+                ("resting hr elevated day", "resting HR elevated"),
+                ("Hrv Dips", "HRV dips"),
+                ("hrv dips", "HRV dips"),
             ]
             for (needle, replacement) in replacements {
                 text = text.replacingOccurrences(of: needle, with: replacement)
@@ -16454,6 +16462,27 @@ struct ContentView: View {
                 GaugePalette.contextAccent("\(card.signalKey) \(card.signal) \(card.outcome)")
             }
 
+            private var outcomeTitle: String {
+                switch card.outcomeKey.lowercased() {
+                case "resting_hr_elevated_day":
+                    return "Resting HR elevated"
+                case "hrv_dip_day":
+                    return "HRV dips"
+                case "high_hr_day":
+                    return "Higher heart-rate days"
+                default:
+                    let replacements: [(String, String)] = [
+                        ("Resting Hr Elevated Day", "Resting HR elevated"),
+                        ("Hrv Dips", "HRV dips"),
+                    ]
+                    var title = card.outcome
+                    for (needle, replacement) in replacements {
+                        title = title.replacingOccurrences(of: needle, with: replacement)
+                    }
+                    return title
+                }
+            }
+
             var body: some View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .top, spacing: 12) {
@@ -16467,7 +16496,7 @@ struct ContentView: View {
                         .frame(width: 44, height: 44)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(card.outcome)
+                            Text(outcomeTitle)
                                 .font(.headline.weight(.semibold))
                                 .foregroundColor(.white.opacity(0.95))
                             Text(signalLabel)
@@ -16978,7 +17007,7 @@ struct ContentView: View {
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         } else if let raw = geomagneticContext?.classRaw, raw.localizedCaseInsensitiveContains("coherent") {
-                                            Text("Coherent ground variability detected")
+                                            Text("Ground magnetic activity in view")
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }

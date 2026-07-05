@@ -138,7 +138,7 @@ struct GuideHubView: View {
 
     private var earthscopeBody: String {
         if !influenceSections.isEmpty {
-            return "These are the strongest earth, space, and body influences right now."
+            return "These are the signals most worth watching for your body right now."
         }
         if let summary = earthscopeSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
             return summary

@@ -21,6 +21,7 @@ from bots.social_alerts.asset_bootstrap_pack import BOOTSTRAP_PREFIX, bootstrap_
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MEDIA_BASE_URL = "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals"
 DEFAULT_PREVIEW_DIR = Path("tmp") / "social_alerts_shadow" / "previews"
+DEFAULT_CTA = "See if this lines up with your body in Gaia Eyes."
 FALLBACK_GRADIENTS = {
     "solar_flare": ((36, 10, 5), (236, 138, 42), (5, 20, 34)),
     "cme": ((7, 18, 32), (68, 148, 214), (240, 144, 54)),
@@ -34,11 +35,12 @@ ACCENTS = {
     "violet": (198, 130, 255),
 }
 DEFAULT_CONTEXT_CHIPS = {
-    "schumann": ["Sleep issues", "Low HRV", "Scattered", "Brain fog", "Wired/tired", "Nerve pain", "Headache", "Sinus pressure"],
+    "schumann": ["Sleep issues", "Low HRV", "Scattered", "Brain fog", "Headache"],
     "solar_flare": ["Solar activity", "Bright signal", "Worth watching"],
-    "cme": ["Solar motion", "Review first", "In the mix"],
+    "cme": ["Solar motion", "Recovery", "In the mix"],
     "geomagnetic": ["Kp/Bz active", "Solar wind", "Worth watching"],
 }
+MAX_RENDERED_CONTEXT_CHIPS = 5
 
 
 def _safe_text(value: Any) -> str:
@@ -456,13 +458,40 @@ def _metrics_line(chips: Sequence[Mapping[str, Any]]) -> str:
     return " | ".join(parts)
 
 
+def _category_accent(category: str) -> Tuple[int, int, int]:
+    if category in {"cme", "solar_flare"}:
+        return ACCENTS["amber"]
+    if category == "schumann":
+        return ACCENTS["green"]
+    if category == "geomagnetic":
+        return ACCENTS["cyan"]
+    return ACCENTS["cyan"]
+
+
 def _context_chips(spec: Mapping[str, Any], category: str) -> List[str]:
     values = spec.get("context_chips")
     if isinstance(values, list):
         chips = [_safe_text(item) for item in values if _safe_text(item)]
         if chips:
-            return chips[:8]
-    return DEFAULT_CONTEXT_CHIPS.get(category, ["Worth watching"])[:8]
+            return chips[:MAX_RENDERED_CONTEXT_CHIPS]
+    return DEFAULT_CONTEXT_CHIPS.get(category, ["Worth watching"])[:MAX_RENDERED_CONTEXT_CHIPS]
+
+
+def _cta_text(draft: Mapping[str, Any]) -> str:
+    overlay = draft.get("overlay_spec")
+    if isinstance(overlay, Mapping):
+        story = overlay.get("story_reel")
+        if isinstance(story, Mapping):
+            frames = story.get("frames")
+            if isinstance(frames, list):
+                for frame in frames:
+                    if not isinstance(frame, Mapping):
+                        continue
+                    if _safe_text(frame.get("role")).lower() == "cta":
+                        text = _safe_text(frame.get("text"))
+                        if text:
+                            return text
+    return DEFAULT_CTA
 
 
 def _draw_context_chips(
@@ -584,23 +613,23 @@ def _render_alert_card(
     draw = ImageDraw.Draw(image)
 
     width, height = size
-    accent = ACCENTS["green"] if category == "schumann" else ACCENTS["cyan"]
+    accent = _category_accent(category)
     margin = 74 if height <= 1100 else 86
     if height <= 1100:
-        panel = (margin, 150, width - margin, height - 112)
-        title_max = 70
-        subtitle_size = 33
-        body_gap = 22
+        panel = (margin, 156, width - margin, height - 300)
+        title_max = 68
+        subtitle_size = 31
+        body_gap = 20
     elif height <= 1500:
-        panel = (margin, 230, width - margin, height - 170)
-        title_max = 80
-        subtitle_size = 36
-        body_gap = 26
+        panel = (margin, 250, width - margin, height - 310)
+        title_max = 76
+        subtitle_size = 34
+        body_gap = 24
     else:
-        panel = (margin, 420, width - margin, height - 310)
-        title_max = 92
-        subtitle_size = 42
-        body_gap = 34
+        panel = (margin, 500, width - margin, height - 640)
+        title_max = 84
+        subtitle_size = 36
+        body_gap = 28
 
     _draw_glass_panel(draw, panel, radius=44, accent=accent)
 
@@ -615,8 +644,8 @@ def _render_alert_card(
     y = y1 + 54
     label = _safe_text(spec.get("label")) or "HEALTH WATCH"
     label_width = max(_text_size(draw, label.upper(), _font(24, bold=True))[0] + 48, 218)
-    _draw_label(draw, (inner_x, y, inner_x + label_width, y + 48), label.upper(), ACCENTS["cyan"])
-    y += 82
+    _draw_label(draw, (inner_x, y, inner_x + label_width, y + 48), label.upper(), accent)
+    y += 72
 
     title = _safe_text(draft.get("title") or spec.get("title"))
     subtitle = _safe_text(draft.get("subtitle") or spec.get("subtitle"))
@@ -628,7 +657,7 @@ def _render_alert_card(
     y = _draw_wrapped_text(draw, (inner_x, y), subtitle, subtitle_font, inner_w, fill=(226, 235, 244, 232), line_gap=10)
     y += body_gap + 4
 
-    context_font = _font(23 if height <= 1100 else 26, bold=True)
+    context_font = _font(22 if height <= 1100 else 24, bold=True)
     y = _draw_context_chips(draw, _context_chips(spec, category), x=inner_x, y=y, max_width=inner_w, font=context_font)
     y += body_gap + 6
 
@@ -638,22 +667,19 @@ def _render_alert_card(
     metrics = spec.get("metric_chips") if isinstance(spec.get("metric_chips"), list) else []
     metric_text = _metrics_line(metrics)
     if metric_text:
-        metric_font = _font(30 if height <= 1100 else 34, bold=True)
+        metric_font = _font(26 if height <= 1100 else 30, bold=True)
         draw.text((inner_x, y), metric_text, font=metric_font, fill=(255, 220, 148, 245))
         y += _text_size(draw, metric_text, metric_font)[1] + body_gap
 
-    cta_title = _safe_text(spec.get("footer")) or "Body - Space - Earth - Connected"
-    cta_font = _font(34 if height <= 1100 else 38, bold=True)
-    cta_body_font = _font(29 if height <= 1100 else 32)
-    cta_y = min(max(y, y2 - 168), y2 - 134)
-    draw.text((inner_x, cta_y), cta_title, font=cta_font, fill=(215, 255, 232, 250))
+    cta_body_font = _font(26 if height <= 1100 else 29, bold=True)
+    cta_y = min(max(y, y2 - 82), y2 - 74)
     _draw_wrapped_text(
         draw,
-        (inner_x, cta_y + 52),
-        "Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes.",
+        (inner_x, cta_y),
+        _cta_text(draft),
         cta_body_font,
         inner_w,
-        fill=(232, 239, 248, 226),
+        fill=(232, 239, 248, 232),
         line_gap=6,
     )
 

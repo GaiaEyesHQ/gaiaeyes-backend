@@ -10,8 +10,12 @@ if str(ROOT) not in sys.path:
 
 import bots.social_alerts.shadow_drafts as shadow_drafts
 from bots.social_alerts.shadow_drafts import (
+    CTA,
+    CME_HOOKS,
+    MAX_CONTEXT_CHIPS,
+    SCHUMANN_ALERT_CHIPS,
     SCHUMANN_HOOKS,
-    SCHUMANN_SYMPTOM_CHIPS,
+    SIGNAL_FOOTERS,
     build_review_markdown,
     build_shadow_payload,
     write_shadow_payload,
@@ -95,9 +99,23 @@ def test_space_alerts_keep_health_pattern_context() -> None:
     for category in ("geomagnetic", "cme"):
         draft = drafts[category]
         square = draft["overlay_spec"]["square_image"]
-        assert "Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes." in draft["caption"]
+        assert CTA in draft["overlay_spec"]["story_reel"]["frames"][-1]["text"]
         assert "full signal read" not in draft["caption"]
-        assert {"Sleep", "HRV", "Focus", "Pain"} <= set(square["context_chips"])
+        assert "before posting" not in draft["subtitle"].lower()
+        assert "review" not in draft["subtitle"].lower()
+        assert "before posting" not in square["subtitle"].lower()
+        assert "review" not in square["subtitle"].lower()
+        assert {"Sleep", "HRV"} <= set(square["context_chips"])
+        assert len(square["context_chips"]) <= MAX_CONTEXT_CHIPS
+
+    cme_caption = drafts["cme"]["caption"]
+    assert drafts["cme"]["title"] in {hook for hooks in CME_HOOKS.values() for hook in hooks}
+    assert "Recovery conditions look noisier today." in cme_caption
+    assert "alongside the CME signal" in cme_caption
+    assert CTA in cme_caption
+    assert "Gaia Eyes compares symptoms, wearables, exposures, and environmental signals over time." not in cme_caption
+    assert "CME activity is elevated" not in cme_caption
+    assert "CME activity is present" not in cme_caption
 
 
 def test_geomagnetic_kp_thresholds_use_watch_at_3_5_and_high_at_5() -> None:
@@ -181,9 +199,9 @@ def test_schumann_alert_uses_human_first_trust_copy() -> None:
     assert "compare" in draft["subtitle"].lower() or "worth comparing" in draft["subtitle"].lower()
     assert "Schumann resonance is one of Earth's background electromagnetic signals." in draft["caption"]
     assert square["label"] == "HEALTH WATCH"
-    assert square["context_chips"] == SCHUMANN_SYMPTOM_CHIPS
-    assert square["footer"] == "Body - Space - Earth - Connected"
-    assert len(square["context_chips"]) <= 8
+    assert square["context_chips"] == SCHUMANN_ALERT_CHIPS
+    assert square["footer"] == SIGNAL_FOOTERS["schumann"]
+    assert len(square["context_chips"]) <= MAX_CONTEXT_CHIPS
     assert len(square["metric_chips"]) <= 2
     joined = json.dumps(draft).lower()
     assert "causing" not in joined
@@ -215,7 +233,7 @@ def test_review_markdown_is_human_scannable(tmp_path: Path) -> None:
     markdown = build_review_markdown(payload)
     assert "# Social Alerts Shadow Review" in markdown
     assert "Auto publish: `False`" in markdown
-    assert "Geomagnetic storm watch" in markdown
+    assert any(hook in markdown for hooks in shadow_drafts.GEOMAGNETIC_HOOKS.values() for hook in hooks)
     assert "Post caption copy:" in markdown
     assert "```text" in markdown
     assert "Context only" not in markdown

@@ -1,3 +1,4 @@
+import os
 import sys
 import unittest
 from datetime import date, datetime, timezone
@@ -7,8 +8,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+
 from services.mc_modals.modal_builder import build_earthscope_summary, build_modal_models
-from services.patterns.personal_relevance import compute_personal_relevance, _visible_pattern_row
+from app.routers.patterns import _build_explanation, _outcome_label, _signal_label
+from services.patterns.personal_relevance import compute_personal_relevance, pattern_anchor_statement, _visible_pattern_row
 
 
 class PatternPersonalRelevanceTests(unittest.TestCase):
@@ -139,6 +143,56 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
         solar_wind = next(row for row in relevance["ranked_drivers"] if row["key"] == "sw")
         self.assertTrue(solar_wind["hard_visible"])
         self.assertGreaterEqual(solar_wind["display_score"], solar_wind["signal_strength"])
+
+    def test_sensitivity_reason_uses_public_copy(self) -> None:
+        relevance = compute_personal_relevance(
+            day=date(2026, 3, 17),
+            drivers=[
+                {
+                    "key": "kp",
+                    "label": "Kp Index",
+                    "severity": "watch",
+                    "state": "Watch",
+                    "value": 5.7,
+                    "unit": "Kp",
+                    "signal_strength": 0.72,
+                    "show_driver": True,
+                }
+            ],
+            pattern_rows=[],
+            user_tags=["geomagnetic_sensitive"],
+            recent_outcomes={},
+        )
+
+        primary = relevance["primary_driver"]
+        self.assertIsNotNone(primary)
+        assert primary is not None
+        self.assertEqual(primary["role_label"], "Leading now")
+        self.assertIn("what you asked Gaia Eyes to track", primary["personal_reason"])
+        self.assertNotIn("sensitivity profile", primary["personal_reason"])
+
+    def test_pattern_route_labels_release_safe_outcomes(self) -> None:
+        self.assertEqual(_signal_label("ulf_exposed"), "ULF activity")
+        self.assertEqual(_outcome_label("resting_hr_elevated_day"), "Resting HR elevated")
+        self.assertEqual(
+            _build_explanation(
+                {
+                    "signal_key": "ulf_exposed",
+                    "outcome_key": "resting_hr_elevated_day",
+                }
+            ),
+            "In your history, days with resting HR elevated have overlapped more when ULF activity was elevated.",
+        )
+        self.assertEqual(
+            pattern_anchor_statement(
+                {
+                    "signal_key": "ulf_exposed",
+                    "outcome_key": "hrv_dip_day",
+                },
+                variant="short",
+            ),
+            "ULF activity has lined up with more HRV dips for you.",
+        )
 
     def test_allergen_driver_prefers_matching_specific_pollen_pattern(self) -> None:
         relevance = compute_personal_relevance(

@@ -160,6 +160,10 @@ INTRO_LINES = [
     "Subtle field, real effects.",
     "Magnetic weather with personality.",
     "Nervous systems may notice today.",
+    "Your sleep window gets a vote.",
+    "Head pressure deserves a little context.",
+    "Recovery patterns may tell the story.",
+    "Body signals first, space weather second.",
     "Keep pacing and stay curious.",
     "Calm outside, sensitive inside.",
     "Today's signal is a mixed bag.",
@@ -423,42 +427,42 @@ EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
 
 HOOKS = {
     "calm": [
-        "Quieter field today—good for deep focus.",
-        "Calm geomagnetics; lock in your rhythm.",
-        "Steady skies, steady mind.",
-        "Low Kp, longer runway for clarity.",
-        "Baseline is smooth—use your late‑morning window.",
-        "Stable backdrop—great for prolonged focus.",
-        "Quiet day upstairs—take advantage and get things done.",
-        "Magnetic weather is tame—work your plan.",
+        "Sleep may have more room tonight.",
+        "Recovery gets a cleaner window today.",
+        "Your nervous system may exhale a little.",
+        "Body signals may run quieter today.",
+        "Lower-noise day for HRV and recovery.",
+        "A steadier day for sensitive systems.",
+        "Less static, more body bandwidth.",
+        "Pain and pressure may have less background noise.",
     ],
     "unsettled": [
-        "Ride the waves, not stormy, but active.",
-        "Spikes‑and‑dips kind of day.",
-        "A few bumps in the road; keep a steady pace and push on.",
-        "Unsettled doesn’t mean unworkable—buffer your tasks with breaks.",
-        "Short surges, brief dips—ride the middle line.",
-        "Minor fluctuation day—aim for a steady pace.",
-        "Today has a little attitude—be mindful of your energy.",
-        "Patchy energy—reduce your workload if possible today.",
+        "Head pressure may need extra margin today.",
+        "Mood and energy may wobble a little.",
+        "HRV may prefer a gentler pace today.",
+        "Restlessness could have a louder background.",
+        "Sensitive systems may feel the chop first.",
+        "Sleep and focus may need softer edges.",
+        "A body-check day, not a push day.",
+        "Brain fog may come in small waves.",
     ],
     "stormy": [
-        "Charged air today—channel the energy.",
-        "Storm‑leaning field—work in bursts, expect longer recoveries.",
-        "Today might pack a punch.",
-        "Strong coupling window—guard your spoons today.",
-        "Prickly atmosphere—don't let it make you one.",
-        "Big signal day; keep your load honest.",
-        "Amplified everything—rest and reset.",
-        "Volatile day—work steady, not in sprints.",
+        "Pain sensitivity may need a wider buffer.",
+        "Protect the recovery window today.",
+        "A louder signal day for sensitive bodies.",
+        "Migraine-prone systems may want less load.",
+        "Sleep and HRV may need backup support.",
+        "Nervous systems may run louder today.",
+        "This is a lower-load body day.",
+        "Head, mood, and recovery may all ask for slack.",
     ],
     "neutral": [
-        "Neutral energy. You set the pace",
-        "Low-drama field; use the steadier window.",
-        "Little influence—enjoy a clear day.",
-        "Ordinary—enjoy a normal day.",
-        "Middle‑of‑the‑road day—consistency wins.",
-        "Plain sailing—don’t overcomplicate it.",
+        "Track the body pattern, not just the sky.",
+        "A good day to compare symptoms and signals.",
+        "Small body shifts are still data.",
+        "Sleep, mood, and pressure are worth noting.",
+        "Watch the overlap, not the drama.",
+        "Let your wearable trends add context.",
     ],
 }
 
@@ -738,6 +742,7 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
         "clear runway",
         "daily earthscope",
         "earthscope",
+        "geomagnetic storm watch",
         "magnetic calm",
         "quiet skies",
         "space weather update",
@@ -774,28 +779,32 @@ def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_title
     tone = _tone_from_ctx(ctx)
     pools = {
         "calm": [
-            "Steadier Body Window",
-            "A Cleaner Focus Day",
             "Recovery Has More Room",
+            "Sleep Gets A Softer Window",
+            "Lower Noise Body Day",
             "Nervous System Breathing Room",
+            "HRV Gets A Cleaner Read",
         ],
         "unsettled": [
-            "Pace Before The Spike",
-            "Brain Bandwidth Watch",
+            "Head Pressure Watch",
+            "Restlessness Has More Static",
             "Sensitive Systems Take Note",
             "A Choppier Body Day",
+            "Brain Fog Comes In Waves",
         ],
         "stormy": [
-            "Keep The Load Lighter",
+            "Pain Sensitivity Needs Slack",
             "Body Signals May Run Loud",
             "Protect The Recovery Window",
-            "Stormy Skies Softer Pace",
+            "Migraine Margins Matter Today",
+            "Sleep Needs Backup Support",
         ],
         "neutral": [
             "Check The Body Pattern",
-            "Small Signals Worth Watching",
-            "Pacing Beats Guessing",
+            "Small Symptoms Worth Watching",
+            "Wearable Trends Need Context",
             "Track The Overlap",
+            "Mood Sleep Pressure Check",
         ],
     }
     options = pools.get(tone, pools["neutral"])
@@ -837,7 +846,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "It should feel like the top line of a social post, not a report label. "
         "Vary the doorway: sometimes sleep, sometimes focus, sometimes mood, pain, HRV/recovery, headaches, restlessness, or pacing. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
-        "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Space Weather Update. "
+        "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update. "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
     )
@@ -905,12 +914,12 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
     if tone == "stormy":
         return _stable_choice(
             [
-                "Keep today in shorter, steadier bursts.",
-                "Dial the day down a notch.",
-                "Make room for extra recovery today.",
-                "Let the signal set a gentler pace.",
-                "This is a protect-your-bandwidth day.",
-                "Short bursts beat big pushes today.",
+                "Pain sensitivity may need a wider buffer today.",
+                "Protect the recovery window before symptoms get loud.",
+                "Sleep and HRV may need backup support today.",
+                "Give your nervous system fewer fights to manage.",
+                "This is a lower-load body day.",
+                "Head, mood, and recovery all deserve extra slack.",
             ],
             seed_text=f"{day_iso}|{platform}|stormy|caption-lead",
             banned_openers=banned,
@@ -919,11 +928,11 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
         return _stable_choice(
             [
                 "Build in a little more nervous-system slack today.",
-                "Keep your plan flexible today.",
-                "Give your attention a wider lane today.",
-                "Pace the day before it paces you.",
-                "Leave extra room between pushes today.",
-                "Treat today like a variable-signal day.",
+                "Head pressure may need extra margin today.",
+                "Mood and energy may wobble a little today.",
+                "HRV may prefer a gentler pace today.",
+                "Restlessness could have a louder background today.",
+                "Treat today like a body-check day.",
             ],
             seed_text=f"{day_iso}|{platform}|unsettled|caption-lead",
             banned_openers=banned,
@@ -931,14 +940,14 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
     if tone in {"calm", "neutral"}:
         return _stable_choice(
             [
-                "Use the steadier window while it is here.",
-                "Take the cleaner runway while you have it.",
-                "This is a good day to catch up gently.",
-                "Let the calmer field work in your favor.",
-                "Make the easy momentum count today.",
-                "A steadier backdrop gives you room to focus.",
-                "Use the quiet stretch for one thing that matters.",
-                "Good day for calm progress, not overreach.",
+                "Recovery may have more room today.",
+                "Sleep gets a softer landing window today.",
+                "Body signals may run quieter today.",
+                "This is a good day to compare symptoms and signals.",
+                "Less static may make wearable trends easier to read.",
+                "Pain and pressure may have less background noise today.",
+                "A steadier day can make the pattern easier to spot.",
+                "Check sleep, mood, and pressure while the signal is quieter.",
             ],
             seed_text=f"{day_iso}|{platform}|{tone}|caption-lead",
             banned_openers=banned,
@@ -1361,12 +1370,12 @@ def _caption_creativity_score(caption: str, ctx: Dict[str, Any], recent_caps: Li
         score += 5.0
     if len(first.split()) <= 12:
         score += 1.0
-    if re.search(r"\b(body|sleep|hrv|heart|mood|pain|migraine|headache|sinus|pressure|nervous system|energy|wired|foggy|calm|scattered|catch-up|reset|restless|recovery)\b", first_l):
-        score += 2.0
+    if re.search(r"\b(body|sleep|hrv|heart|mood|pain|migraine|headache|sinus|pressure|nervous system|wired|foggy|scattered|reset|restless|recovery|symptoms?|wearable|sensitive systems?)\b", first_l):
+        score += 3.0
     if "?" in first:
         score += 1.0
-    if re.search(r"\b(focused? work blocks?|work blocks?|deep-work|tasks?|productiv(e|ity)|catch up)\b", first_l):
-        score -= 1.5
+    if re.search(r"\b(focused? work blocks?|work blocks?|deep-work|tasks?|productiv(e|ity)|catch up|clear runway|focus day)\b", first_l):
+        score -= 2.5
     if re.search(r"\b(today|the day)\s+(feels|has|is)\b", first_l):
         score -= 6.0
     if re.search(r"\b(geomagnetic conditions|space weather|magnetic backdrop|steady magnetic backdrop|standard energy field)\b", first_l):
@@ -2809,7 +2818,7 @@ def _rewrite_shadow_caption_minimal(
         "Do not open with technical phrases like 'Geomagnetic conditions', 'Unsettled geomagnetic conditions', "
         "'Near-Earth space', 'Recent solar eruptions', or 'Unsettled space weather'. "
         "Use at most one analogy. Keep the science grounded, but do not lead with it. "
-        "Do not mention clinicians, professional audiences, HRV, autonomic markers, or other app-style support language in the caption. "
+        "Do not mention clinicians or professional audiences. HRV/recovery language is allowed when it sounds like a normal wearable/body-pattern cue, not a clinical report. "
         "Do not copy phrases directly from the context bullets. "
         "No emojis. No questions. No fear language. No deterministic medical claims. "
         "Do not include measurements, units, or a metric footer. "

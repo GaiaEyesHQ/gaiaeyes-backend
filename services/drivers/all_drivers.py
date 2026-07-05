@@ -324,8 +324,8 @@ def _role_for_index(index: int, *, state_key: str) -> tuple[str, str]:
     if index == 0 and state_key != "quiet":
         return "leading", "Leading now"
     if index < 3 and state_key != "quiet":
-        return "supporting", "Supporting signal"
-    return "background", "In the background"
+        return "supporting", "Also active"
+    return "background", "Worth watching"
 
 
 def _state_for_driver(key: str, raw_state: Any, severity: Any) -> tuple[str, str]:
@@ -701,7 +701,7 @@ def _seed_ulf_driver(raw_context: Mapping[str, Any] | None) -> Optional[Dict[str
     if station_count:
         reading_bits.append(f"{station_count} stations")
     reading = " • ".join(reading_bits)
-    active_now_text = f"ULF field motion is {label.lower()} right now."
+    active_now_text = f"ULF activity is {label.lower()} right now."
     if confidence_label:
         active_now_text += f" Confidence looks {confidence_label.lower()}."
 
@@ -714,7 +714,7 @@ def _seed_ulf_driver(raw_context: Mapping[str, Any] | None) -> Optional[Dict[str
         signal_strength=0.92 if severity == "high" else 0.72 if severity == "watch" else 0.54,
         force_visible=severity == "high",
         show_driver=True,
-        short_reason="Regional ULF field motion is elevated right now.",
+        short_reason="Regional ULF activity is elevated right now.",
         active_now_text=active_now_text,
         source_hint="Regional ULF context",
         updated_at=_iso(context.get("ts_utc")),

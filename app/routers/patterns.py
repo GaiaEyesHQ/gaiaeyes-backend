@@ -36,6 +36,7 @@ SIGNAL_LABELS = {
     "lunar_full_window_exposed": "Full moon window",
     "lunar_new_window_exposed": "New moon window",
     "schumann_exposed": "Schumann variability",
+    "ulf_exposed": "ULF activity",
 }
 
 OUTCOME_LABELS = {
@@ -48,6 +49,7 @@ OUTCOME_LABELS = {
     "focus_fog_day": "Brain fog",
     "hrv_dip_day": "HRV dips",
     "high_hr_day": "Higher heart-rate days",
+    "resting_hr_elevated_day": "Resting HR elevated",
     "short_sleep_day": "Short sleep",
 }
 
@@ -77,10 +79,19 @@ def _outcome_label(outcome_key: str) -> str:
     return OUTCOME_LABELS.get(outcome_key, outcome_key.replace("_", " ").title())
 
 
+def _sentence_case_outcome(outcome_key: str) -> str:
+    return (
+        _outcome_label(outcome_key)
+        .lower()
+        .replace("hrv", "HRV")
+        .replace("resting hr", "resting HR")
+    )
+
+
 def _build_explanation(row: Dict[str, Any]) -> str:
     signal_key = str(row.get("signal_key") or "")
     outcome_key = str(row.get("outcome_key") or "")
-    outcome = _outcome_label(outcome_key).lower()
+    outcome = _sentence_case_outcome(outcome_key)
 
     if signal_key == "pressure_swing_exposed":
         return f"In your history, days with {outcome} have overlapped more when pressure swings exceeded 6 hPa."
@@ -104,7 +115,9 @@ def _build_explanation(row: Dict[str, Any]) -> str:
         return "In your history, HRV dip days have overlapped more with higher Schumann-variability days."
     if signal_key == "schumann_exposed":
         return f"In your history, days with {outcome} have overlapped more with higher Schumann-variability days."
-    return f"In your history, days with {outcome} have overlapped more when {_signal_label(signal_key).lower()} were elevated."
+    if signal_key == "ulf_exposed":
+        return f"In your history, days with {outcome} have overlapped more when ULF activity was elevated."
+    return f"In your history, days with {outcome} have overlapped more when {_signal_label(signal_key).lower()} was elevated."
 
 
 def _priority_boost(user_tags: set[str], row: Dict[str, Any]) -> int:

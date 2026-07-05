@@ -49,8 +49,12 @@ def _iso(ts):
     return ts.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _should_skip_stale_visual(row: Dict[str, Any], ts: Any) -> bool:
+def _should_skip_visual(row: Dict[str, Any], ts: Any) -> bool:
     key = str(row.get("key") or "").lower()
+    # Keep backend visuals aligned with the current app contract: Tomsk overlays
+    # stay hidden until that ingestion path is intentionally re-enabled.
+    if key.startswith("tomsk_"):
+        return True
     if not key.startswith("cumiana_") or ts is None:
         return False
     if getattr(ts, "tzinfo", None) is None:
@@ -191,7 +195,7 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
     for row in rows or []:
         asset_type = row.get("asset_type") or "image"
         ts = row.get("ts")
-        if _should_skip_stale_visual(row, ts):
+        if _should_skip_visual(row, ts):
             continue
         iso_ts = _iso(ts)
         if iso_ts and (latest_ts is None or iso_ts > latest_ts):

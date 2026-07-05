@@ -14,6 +14,7 @@ os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 
 from bots.earthscope_post.earthscope_generate import (
+    _caption_context_lead,
     _clean_llm_title,
     _fallback_social_title,
     _normalize_rewrite_payload,
@@ -125,6 +126,7 @@ def test_clean_llm_title_rejects_generic_or_recent_fallback_labels():
     assert _clean_llm_title("Clear Runway", set()) is None
     assert _clean_llm_title("Quiet Skies", set()) is None
     assert _clean_llm_title("Magnetic Calm", set()) is None
+    assert _clean_llm_title("Geomagnetic Storm Watch", set()) is None
     assert _clean_llm_title("Brain Tabs Closing", {"brain tabs closing"}) is None
 
 
@@ -137,6 +139,37 @@ def test_fallback_social_title_replaces_generic_report_label():
 
     assert title not in {"Clear Runway", "Magnetic Calm", "Quiet Skies"}
     assert _clean_llm_title(title, {"clear runway", "magnetic calm", "quiet skies"}) == title
+
+
+def test_fallback_social_title_uses_symptom_pattern_language():
+    title = _fallback_social_title(
+        {"day": "2026-07-04", "platform": "default", "kp_max_24h": 5.7},
+        "Active Geomagnetics",
+        {"active geomagnetics", "clear runway", "quiet skies"},
+    )
+
+    assert any(
+        term in title.lower()
+        for term in ("pain", "body", "recovery", "migraine", "sleep")
+    )
+
+
+def test_caption_context_lead_stays_symptom_based_for_calm_days():
+    lead = _caption_context_lead(
+        {
+            "day": "2026-07-04",
+            "platform": "default",
+            "kp_max_24h": 1.7,
+            "bz_min": 0.3,
+        }
+    )
+
+    assert any(
+        term in lead.lower()
+        for term in ("recovery", "sleep", "body", "symptoms", "wearable", "pain", "pressure", "mood")
+    )
+    assert "catch up" not in lead.lower()
+    assert "focus" not in lead.lower()
 
 
 def test_polish_public_caption_replaces_repetitive_day_feels_opener():
@@ -232,6 +265,36 @@ def test_select_best_rewrite_candidate_prefers_body_hook_over_productivity_hook(
 
     assert selected is not None
     assert selected["caption"].startswith("Head feel a little clearer today?")
+
+
+def test_select_best_rewrite_candidate_prefers_wearable_symptom_hook_over_catchup():
+    obj = {
+        "candidates": [
+            {
+                "caption": "Good day to catch up gently. Keep your plan simple and take breaks.",
+                "snapshot": "The field looks calmer today.",
+                "affects": "Some people may notice steadier recovery.",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
+            },
+            {
+                "caption": "Wearable trends may be easier to read today. The quieter backdrop gives sleep, pressure, and recovery patterns a cleaner comparison point.",
+                "snapshot": "The field looks calmer today.",
+                "affects": "Some people may notice steadier recovery.",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
+            },
+        ]
+    }
+
+    selected = _select_best_rewrite_candidate(
+        obj,
+        {"cmes_24h": 0, "flares_24h": 0, "kp_max_24h": 2.0},
+        {"banned_openers": [], "recent_captions": []},
+    )
+
+    assert selected is not None
+    assert selected["caption"].startswith("Wearable trends")
 
 
 def test_facebook_caption_profile_is_longer_than_instagram():

@@ -12,14 +12,14 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from bots.social_alerts.asset_bootstrap_pack import bootstrap_background_candidates, bootstrap_background_prompts
 
 
-CTA = "Compare this with sleep, HRV, symptoms, and exposures in Gaia Eyes."
+CTA = "See if this lines up with your body in Gaia Eyes."
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
 SOCIAL_BACKGROUND_PREFIX = "social/share/backgrounds"
-MAX_CONTEXT_CHIPS = 8
+MAX_CONTEXT_CHIPS = 5
 VISUAL_STYLE = {
     "layout": "trust_first_alert_card",
-    "notes": "Use a dark navy/black gradient, subtle spectrogram texture, small Gaia Eyes branding, one glass text panel, up to eight context chips, and no more than two metrics.",
+    "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line.",
 }
 BACKGROUND_KEYWORDS = {
     "geomagnetic": ["space_weather", "kp", "bz", "solar_wind"],
@@ -61,23 +61,75 @@ SCHUMANN_SYMPTOM_CHIPS = [
     "Headache",
     "Sinus pressure",
 ]
-SPACE_HEALTH_CHIPS = [
+GEOMAGNETIC_HEALTH_CHIPS = [
     "Sleep",
     "HRV",
+    "Headache",
+    "Restless",
     "Focus",
-    "Pain",
-    "Migraine",
-    "Wired/tired",
-    "Recovery",
-    "Exposures",
 ]
+CME_HEALTH_CHIPS = [
+    "Sleep",
+    "HRV",
+    "Recovery",
+    "Pain",
+    "Restless",
+]
+FLARE_HEALTH_CHIPS = [
+    "Energy",
+    "Focus",
+    "Sleep",
+    "Headache",
+    "Wired/tired",
+]
+SCHUMANN_ALERT_CHIPS = [
+    "Sleep issues",
+    "Low HRV",
+    "Scattered",
+    "Brain fog",
+    "Headache",
+]
+GEOMAGNETIC_HOOKS = {
+    "watch": ["Body feeling buzzy?", "Feeling extra wired?", "Head pressure kicking up?"],
+    "high": ["Feeling extra wired?", "Restless for no reason?", "Nervous system on alert?"],
+}
+CME_HOOKS = {
+    "watch": ["Sleep feeling lighter?", "Recovery feeling slower?", "Wired but tired today?"],
+    "high": ["Wired but tired today?", "Recovery feeling off?", "Sleep feeling fragile?"],
+}
+FLARE_HOOKS = {
+    "watch": ["Focus feeling patchy?", "Energy coming in waves?", "Brain tabs everywhere?"],
+    "high": ["Energy feeling jumpy?", "Focus feeling scattered?", "Feeling overstimulated?"],
+}
+SIGNAL_SUBTITLES = {
+    "geomagnetic": "Geomagnetic activity is up. Gaia Eyes watches windows like this alongside sleep, HRV, headaches, focus, and restless energy.",
+    "solar_flare": "Solar flare activity is elevated. Some people track windows like this with energy, focus, headaches, and sleep.",
+    "cme": "Recovery conditions look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy alongside the CME signal.",
+}
+SIGNAL_CAPTIONS = {
+    "geomagnetic": "{title}\n\nGeomagnetic activity is up, including Kp/Bz and solar-wind movement. If sleep, HRV, headaches, focus, or restless energy feel different today, this is a useful window to log.\n\nGaia Eyes helps compare body data with environmental signals over time.\n\n{hashtags}",
+    "solar_flare": "{title}\n\nSolar flare activity is elevated. Some people like to track windows like this with energy, focus, headaches, sleep, and recovery markers.\n\nGaia Eyes helps you see whether these signals line up with your own patterns.\n\n{hashtags}",
+    "cme": "{title}\n\nRecovery conditions look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it alongside the CME signal and let the pattern build.\n\n{cta}\n\n{hashtags}",
+}
+SIGNAL_LABELS = {
+    "geomagnetic": "PATTERN WATCH",
+    "solar_flare": "HEALTH WATCH",
+    "cme": "RECOVERY WATCH",
+    "schumann": "HEALTH WATCH",
+}
+SIGNAL_FOOTERS = {
+    "geomagnetic": "Track sleep, HRV, symptoms, and signals.",
+    "solar_flare": "Track energy, focus, symptoms, and signals.",
+    "cme": "Track recovery, sleep, HRV, and symptoms.",
+    "schumann": "Track sleep, HRV, symptoms, and resonance.",
+}
 SCHUMANN_SUBTITLES = [
     "Earth's resonance signal is above baseline. Compare it with sleep, HRV, focus, and pain patterns.",
     "Earth's Schumann signal is up. Worth comparing with sleep, HRV, headaches, and wired/tired days.",
     "Earth's resonance is moving. Gaia Eyes helps compare it with body patterns over time.",
 ]
 SCHUMANN_CAPTION_TEMPLATES = [
-    "{hook}\n\nSchumann resonance is one of Earth's background electromagnetic signals. The current reading is running above its recent baseline.\n\nThat does not make it a diagnosis or a symptom prediction. But if sleep, HRV, focus, headaches, sinus pressure, or wired/tired energy feel off, this is the kind of signal Gaia Eyes helps you compare over time.\n\nBody - Space - Earth - Connected\n\n#GaiaEyes #SchumannResonance #HRV #SleepPatterns",
+    "{hook}\n\nSchumann resonance is one of Earth's background electromagnetic signals. The current reading is running above its recent baseline.\n\nIf sleep, HRV, focus, headaches, sinus pressure, or wired/tired energy feel off, this is the kind of signal Gaia Eyes helps you compare over time.\n\n#GaiaEyes #SchumannResonance #HRV #SleepPatterns",
     "{hook}\n\nThe Schumann signal is elevated compared with its recent baseline. Some people like to watch these windows alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.\n\nGaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
     "{hook}\n\nCurrent Schumann activity is running higher than its recent baseline. One signal by itself does not explain a body day, but repeated overlaps can be worth noticing.\n\nGaia Eyes helps you compare this kind of Earth signal with sleep, HRV, focus, pain, and symptom logs so patterns can get clearer over time.\n\n#GaiaEyes #EarthSignals #SleepPatterns #HRV",
 ]
@@ -241,12 +293,12 @@ def _base_overlay(
             "canvas": {"width": 1080, "height": 1080},
             "safe_area": {"left": 96, "right": 96, "top": 104, "bottom": 132},
             "visual_style": VISUAL_STYLE,
-            "label": "HEALTH WATCH",
+            "label": SIGNAL_LABELS.get(category, "HEALTH WATCH"),
             "title": title,
             "subtitle": subtitle,
             "context_chips": list(context_chips or [])[:MAX_CONTEXT_CHIPS],
             "metric_chips": chips[:2],
-            "footer": "Body - Space - Earth - Connected",
+            "footer": SIGNAL_FOOTERS.get(category, "Track your patterns in Gaia Eyes."),
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
@@ -258,12 +310,12 @@ def _base_overlay(
             "canvas": {"width": 1080, "height": 1350},
             "safe_area": {"left": 86, "right": 86, "top": 132, "bottom": 142},
             "visual_style": VISUAL_STYLE,
-            "label": "HEALTH WATCH",
+            "label": SIGNAL_LABELS.get(category, "HEALTH WATCH"),
             "title": title,
             "subtitle": subtitle,
             "context_chips": list(context_chips or [])[:MAX_CONTEXT_CHIPS],
             "metric_chips": chips[:2],
-            "footer": "Body - Space - Earth - Connected",
+            "footer": SIGNAL_FOOTERS.get(category, "Track your patterns in Gaia Eyes."),
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
@@ -280,12 +332,12 @@ def _base_overlay(
                 {"role": "signal", "text": subtitle, "context_chips": list(context_chips or [])[:MAX_CONTEXT_CHIPS], "metric_chips": chips[:2]},
                 {"role": "cta", "text": CTA},
             ],
-            "label": "HEALTH WATCH",
+            "label": SIGNAL_LABELS.get(category, "HEALTH WATCH"),
             "title": title,
             "subtitle": subtitle,
             "context_chips": list(context_chips or [])[:MAX_CONTEXT_CHIPS],
             "metric_chips": chips[:2],
-            "footer": "Body - Space - Earth - Connected",
+            "footer": SIGNAL_FOOTERS.get(category, "Track your patterns in Gaia Eyes."),
             "theme_keys": theme_keys,
             "background_keywords": background_keywords,
             "background_candidates": background_candidates,
@@ -306,6 +358,20 @@ def _caption(title: str, subtitle: str, *, hashtags: str = DEFAULT_HASHTAGS) -> 
     if lead and lead[-1] not in ".?!":
         lead = f"{lead}."
     return f"{lead} {subtitle} {CTA}\n\n{hashtags}"
+
+
+def _signal_caption(category: str, title: str, *, hashtags: str = DEFAULT_HASHTAGS) -> str:
+    template = SIGNAL_CAPTIONS.get(category)
+    if not template:
+        return _caption(title, SIGNAL_SUBTITLES.get(category, ""), hashtags=hashtags)
+    return template.format(title=title, cta=CTA, hashtags=hashtags)
+
+
+def _pick_hook(hooks: Mapping[str, Sequence[str]], severity: str, seed: str) -> str:
+    options = list(hooks.get(severity) or hooks.get("watch") or [])
+    if not options:
+        return "Worth watching today?"
+    return options[_variant_index(seed, len(options))]
 
 
 def _draft(
@@ -468,9 +534,13 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
             geomagnetic_severity = geomagnetic_severity or "watch"
 
     if geomagnetic_severity:
-        title = "Geomagnetic pattern watch" if geomagnetic_severity == "watch" else "Geomagnetic storm watch"
-        subtitle = "Kp/Bz and solar wind are active enough to compare with body-pattern notes before posting."
         metrics = {"kp": kp, "kp_max_24h": kp_max, "bz_nt": bz, "solar_wind_kms": solar_wind}
+        title = _pick_hook(
+            GEOMAGNETIC_HOOKS,
+            geomagnetic_severity,
+            _event_id("geomagnetic", geomagnetic_severity, metrics),
+        )
+        subtitle = SIGNAL_SUBTITLES["geomagnetic"]
         drafts.append(
             _draft(
                 category="geomagnetic",
@@ -483,7 +553,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                     {"label": "Bz", "value": _fmt_number(bz, suffix=" nT")},
                     {"label": "SW", "value": _fmt_number(solar_wind, digits=0, suffix=" km/s")},
                 ],
-                context_chips=SPACE_HEALTH_CHIPS,
+                context_chips=GEOMAGNETIC_HEALTH_CHIPS,
                 theme_keys=["geomagnetic", "solar", "space_weather"],
                 background_candidates=_social_background_candidates(
                     BACKGROUND_KEYWORDS["geomagnetic"],
@@ -498,6 +568,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                     _source_ref("Space daily mart", "marts.space_weather_daily"),
                 ],
                 asof=asof,
+                caption=_signal_caption("geomagnetic", title),
             )
         )
 
@@ -508,16 +579,22 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
     elif flare_rank[0] == 3 and flare_rank[1] >= 5.0:
         flare_severity = "watch"
     if flare_severity:
-        title = "Solar flare activity is elevated" if flare_severity == "watch" else "X-class solar flare watch"
-        subtitle = "The flare signal is notable; review the live solar context before posting."
+        metrics = {"xray_max_class": flare_class}
+        title = _pick_hook(
+            FLARE_HOOKS,
+            flare_severity,
+            _event_id("solar_flare", flare_severity, metrics),
+        )
+        subtitle = SIGNAL_SUBTITLES["solar_flare"]
         drafts.append(
             _draft(
                 category="solar_flare",
                 severity=flare_severity,
                 title=title,
                 subtitle=subtitle,
-                metrics={"xray_max_class": flare_class},
+                metrics=metrics,
                 chips=[{"label": "Max flare", "value": flare_class}],
+                context_chips=FLARE_HEALTH_CHIPS,
                 theme_keys=["solar_flare", "solar", "space_weather"],
                 background_candidates=_social_background_candidates(
                     BACKGROUND_KEYWORDS["solar_flare"],
@@ -534,6 +611,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                 ],
                 asof=asof,
                 media_assets=MEDIA_ASSETS["solar_flare"],
+                caption=_signal_caption("solar_flare", title),
             )
         )
 
@@ -549,20 +627,25 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
         elif cmes_max_speed >= 600:
             cme_severity = cme_severity or "watch"
     if cme_severity:
-        title = "Solar motion watch" if cme_severity == "watch" else "CME activity is elevated"
-        subtitle = "CME activity is present; review coronagraph context and compare body-pattern notes before posting."
+        metrics = {"cmes_count": cmes_count, "cmes_max_speed_kms": cmes_max_speed}
+        title = _pick_hook(
+            CME_HOOKS,
+            cme_severity,
+            _event_id("cme", cme_severity, metrics),
+        )
+        subtitle = SIGNAL_SUBTITLES["cme"]
         drafts.append(
             _draft(
                 category="cme",
                 severity=cme_severity,
                 title=title,
                 subtitle=subtitle,
-                metrics={"cmes_count": cmes_count, "cmes_max_speed_kms": cmes_max_speed},
+                metrics=metrics,
                 chips=[
                     {"label": "CMEs", "value": _fmt_number(cmes_count, digits=0)},
                     {"label": "Max speed", "value": _fmt_number(cmes_max_speed, digits=0, suffix=" km/s")},
                 ],
-                context_chips=SPACE_HEALTH_CHIPS,
+                context_chips=CME_HEALTH_CHIPS,
                 theme_keys=["cme", "solar", "space_weather"],
                 background_candidates=_social_background_candidates(
                     BACKGROUND_KEYWORDS["cme"],
@@ -574,6 +657,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                 ],
                 asof=asof,
                 media_assets=MEDIA_ASSETS["cme"],
+                caption=_signal_caption("cme", title),
             )
         )
 
@@ -636,7 +720,7 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
             {"label": "Z-score", "value": _fmt_number(zscore)},
             {"label": "F1", "value": _fmt_number(value, suffix=" Hz")},
         ],
-        context_chips=SCHUMANN_SYMPTOM_CHIPS,
+        context_chips=SCHUMANN_ALERT_CHIPS,
         theme_keys=["schumann", "resonance", "earthscope"],
         background_candidates=_social_background_candidates(
             BACKGROUND_KEYWORDS["schumann"],

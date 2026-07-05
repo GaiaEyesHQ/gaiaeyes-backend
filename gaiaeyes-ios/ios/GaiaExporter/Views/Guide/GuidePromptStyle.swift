@@ -86,7 +86,7 @@ struct GuidePromptStyle {
         case .balanced:
             switch profile.guideType {
             case .cat:
-                return "Use this space for quick orientation, light feedback, and a calmer read on the day."
+                return "Start with what your body may notice, then open deeper context if you need it."
             case .dog:
                 return "Use this space to get oriented fast, leave a little feedback, and keep the day grounded."
             case .robot:

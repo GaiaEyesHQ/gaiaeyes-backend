@@ -676,7 +676,7 @@ struct SymptomsLogPage: View {
 
                 if !suggestedSymptoms.isEmpty {
                     SymptomSectionCard(title: "Suggested right now", icon: "sparkles") {
-                        Text("Suggestions use current drivers, active patterns, recent logs, and any modal context.")
+                        Text("Suggested from today’s signals, your patterns, and recent logs.")
                             .font(.caption)
                             .foregroundColor(.secondary)
 
