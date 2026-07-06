@@ -82,6 +82,15 @@ def test_safe_properties_allowlists_expected_keys_only():
             "trigger": "switch",
             "tab": "outlook",
             "pain_type": "nerve",
+            "energy_level": "low",
+            "system_load": "high",
+            "focus": "migraine",
+            "intensity": "2",
+            "includes_migraine": "true",
+            "includes_note": "false",
+            "submitted_count": "1",
+            "queued_count": "0",
+            "failed_count": "0",
             "note_text": "private note",
             "count": "123",
         }
@@ -94,6 +103,16 @@ def test_safe_properties_allowlists_expected_keys_only():
         "symptom_code": "HEADACHE",
         "trigger": "switch",
         "tab": "outlook",
+        "pain_type": "nerve",
+        "energy_level": "low",
+        "system_load": "high",
+        "focus": "migraine",
+        "intensity": "2",
+        "includes_migraine": "true",
+        "includes_note": "false",
+        "submitted_count": "1",
+        "queued_count": "0",
+        "failed_count": "0",
         "count": "123",
     }
 
@@ -118,6 +137,7 @@ async def test_ingest_analytics_uses_authenticated_user_and_sanitizes_properties
                     "surface": "onboarding",
                     "driver_key": "solar_wind",
                     "pain_type": "nerve",
+                    "energy_level": "low",
                     "note_text": "private note",
                 },
             }
@@ -147,5 +167,7 @@ async def test_ingest_analytics_uses_authenticated_user_and_sanitizes_properties
     assert values[8] == "onboarding"
     assert json.loads(values[9]) == {
         "driver_key": "solar_wind",
+        "energy_level": "low",
+        "pain_type": "nerve",
         "surface": "onboarding",
     }

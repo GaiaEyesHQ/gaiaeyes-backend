@@ -977,7 +977,11 @@ def build_review_markdown(payload: Mapping[str, Any]) -> str:
 def write_shadow_review_markdown(payload: Mapping[str, Any], output_path: Path | str) -> Path:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(build_review_markdown(payload), encoding="utf-8")
+    markdown = build_review_markdown(payload)
+    path.write_text(markdown, encoding="utf-8")
+    latest_path = path.parent / "latest-review.md"
+    if path.name != latest_path.name:
+        latest_path.write_text(markdown, encoding="utf-8")
     return path
 
 

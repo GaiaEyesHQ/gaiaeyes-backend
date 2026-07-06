@@ -3980,13 +3980,11 @@ struct ContentView: View {
         reviewPositiveActionCount = 0
         AppAnalytics.track("app_review_prompt_requested", properties: ["reason": reason])
 #if canImport(StoreKit)
-        if #available(iOS 14.0, *),
+        if #available(iOS 16.0, *),
            let scene = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .first(where: { $0.activationState == .foregroundActive }) {
-            SKStoreReviewController.requestReview(in: scene)
-        } else {
-            SKStoreReviewController.requestReview()
+            AppStore.requestReview(in: scene)
         }
 #endif
     }
@@ -10151,6 +10149,28 @@ struct ContentView: View {
         }
 
         let failedCount = events.count - submittedCount - queuedCount
+        let trackedCount = submittedCount + queuedCount
+        if trackedCount > 0 {
+            AppAnalytics.track(
+                "symptom_logged",
+                properties: [
+                    "status": submittedCount > 0 ? "submitted" : "queued",
+                    "count": "\(events.count)",
+                    "submitted_count": "\(submittedCount)",
+                    "queued_count": "\(queuedCount)",
+                    "failed_count": "\(failedCount)",
+                ]
+            )
+        } else {
+            AppAnalytics.track(
+                "symptom_log_failed",
+                properties: [
+                    "status": "failed",
+                    "count": "\(events.count)",
+                    "failed_count": "\(failedCount)",
+                ]
+            )
+        }
 
         if submittedCount > 0 {
             await MainActor.run {
@@ -10212,6 +10232,14 @@ struct ContentView: View {
         let shouldPromptForMigraineExposures = events.contains {
             normalize($0.symptomCode) == "MIGRAINE"
         }
+        AppAnalytics.track(
+            "symptom_log_submitted",
+            properties: [
+                "source": symptomSheetPrefill == nil ? "manual" : "prefill",
+                "count": "\(events.count)",
+                "includes_migraine": shouldPromptForMigraineExposures ? "true" : "false",
+            ]
+        )
         dismissSheet()
 
         Task {
@@ -10242,6 +10270,12 @@ struct ContentView: View {
                         symptomSheetPrefill = nil
                     }
                 }
+            )
+        }
+        .onAppear {
+            AppAnalytics.track(
+                "symptom_log_opened",
+                properties: ["source": symptomSheetPrefill == nil ? "manual" : "prefill"]
             )
         }
     }

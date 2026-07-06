@@ -2,7 +2,7 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-05T14:40:36Z",
+  "generated_at": "2026-07-05T19:02:15Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 1,
   "drafts": [

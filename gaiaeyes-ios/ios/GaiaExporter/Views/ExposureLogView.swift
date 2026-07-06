@@ -43,6 +43,15 @@ struct ExposureLogView: View {
         focus == .migraine ? "Other possible trigger, timing, aura, food, cycle, weather..." : "Optional context"
     }
 
+    private var analyticsFocus: String {
+        switch focus {
+        case .general:
+            return "general"
+        case .migraine:
+            return "migraine"
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -119,6 +128,15 @@ struct ExposureLogView: View {
         }
         .navigationTitle("Exposure diary")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            AppAnalytics.track(
+                "exposure_log_opened",
+                properties: [
+                    "source": source,
+                    "focus": analyticsFocus,
+                ]
+            )
+        }
         .toolbar {
             if showsCloseButton {
                 ToolbarItem(placement: .cancellationAction) {
@@ -175,9 +193,28 @@ struct ExposureLogView: View {
                 )
             }
             statusMessage = "Saved \(selected.count) exposure\(selected.count == 1 ? "" : "s")."
+            AppAnalytics.track(
+                "exposure_logged",
+                properties: [
+                    "source": source,
+                    "focus": analyticsFocus,
+                    "count": "\(selected.count)",
+                    "intensity": "\(intensity)",
+                    "includes_note": noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "false" : "true",
+                ]
+            )
             onSaved()
             dismiss()
         } catch {
+            AppAnalytics.track(
+                "exposure_log_failed",
+                properties: [
+                    "source": source,
+                    "focus": analyticsFocus,
+                    "count": "\(selected.count)",
+                    "intensity": "\(intensity)",
+                ]
+            )
             alertMessage = error.localizedDescription
         }
     }

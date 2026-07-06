@@ -243,6 +243,7 @@ def test_review_markdown_is_human_scannable(tmp_path: Path) -> None:
     out_path = write_shadow_review_markdown(payload, tmp_path / "social-alerts.md")
     assert out_path.exists()
     written = out_path.read_text(encoding="utf-8")
+    assert (tmp_path / "latest-review.md").read_text(encoding="utf-8") == written
     assert "Background candidates:" in written
     assert "bootstrap:social_alerts/solar_aurora" in written
     assert "Background keywords:" in written

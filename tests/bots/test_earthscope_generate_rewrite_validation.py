@@ -17,6 +17,7 @@ from bots.earthscope_post.earthscope_generate import (
     _caption_context_lead,
     _clean_llm_title,
     _fallback_social_title,
+    _finalize_rewrite_payload,
     _normalize_rewrite_payload,
     _platform_caption_profile,
     _polish_public_caption,
@@ -99,6 +100,20 @@ def test_normalize_rewrite_payload_accepts_list_playbook():
 
     assert normalized["playbook"] == "Pick one task\nKeep caffeine earlier\nProtect wind-down"
     assert _validate_rewrite(normalized, {"cmes_24h": 0, "flares_24h": 0}) is not None
+
+
+def test_finalize_rewrite_payload_normalizes_playbook_bullets():
+    finalized = _finalize_rewrite_payload(
+        {
+            "caption": "Keep the day simple.",
+            "snapshot": "The field looks calmer today.",
+            "affects": "Focus may feel steady for some sensitive systems.",
+            "playbook": "Pick one task\n2. Keep caffeine earlier\n• Protect wind-down",
+            "hashtags": "#GaiaEyes #SpaceWeather",
+        }
+    )
+
+    assert finalized["playbook"] == "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down"
 
 
 def test_validate_rewrite_rejects_awkward_event_synonyms_and_brand_signoff():

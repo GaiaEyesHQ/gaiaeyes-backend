@@ -231,6 +231,7 @@ function gaiaeyes_analytics_render_admin_page() {
     $engagement = is_array($summary) ? ($summary['engagement'] ?? []) : [];
     $feature_adoption = is_array($summary) ? ($summary['feature_adoption'] ?? []) : [];
     $navigation = is_array($summary) ? ($summary['navigation'] ?? []) : [];
+    $activation = is_array($summary) ? ($summary['activation'] ?? []) : [];
     $tab_usage = is_array($summary) ? ($summary['tab_usage'] ?? []) : [];
     ?>
     <div class="wrap">
@@ -292,7 +293,10 @@ function gaiaeyes_analytics_render_admin_page() {
                 <?php gaiaeyes_analytics_render_metric('All-time events', $lifetime['events'] ?? 0, !empty($lifetime['last_event_at']) ? 'Last event: ' . (string) $lifetime['last_event_at'] : 'No stored events yet'); ?>
                 <?php gaiaeyes_analytics_render_metric('Onboarding completed', gaiaeyes_analytics_event_count($onboarding, 'onboarding_completed')); ?>
                 <?php gaiaeyes_analytics_render_metric('Health sync completed', gaiaeyes_analytics_event_count($health_sync, 'health_backfill_completed')); ?>
-                <?php gaiaeyes_analytics_render_metric('Daily check-ins', gaiaeyes_analytics_event_count($engagement, 'daily_checkin_completed')); ?>
+                <?php gaiaeyes_analytics_render_metric('Check-ins started', gaiaeyes_analytics_event_count($engagement, 'daily_checkin_started')); ?>
+                <?php gaiaeyes_analytics_render_metric('Check-ins completed', gaiaeyes_analytics_event_count($engagement, 'daily_checkin_completed')); ?>
+                <?php gaiaeyes_analytics_render_metric('Symptoms logged', gaiaeyes_analytics_event_count($engagement, 'symptom_logged')); ?>
+                <?php gaiaeyes_analytics_render_metric('Exposures logged', gaiaeyes_analytics_event_count($engagement, 'exposure_logged')); ?>
                 <?php gaiaeyes_analytics_render_metric('Lunar enabled', gaiaeyes_analytics_event_count($feature_adoption, 'lunar_tracking_enabled')); ?>
                 <?php gaiaeyes_analytics_render_metric('Notifications enabled', gaiaeyes_analytics_event_count($feature_adoption, 'notifications_enabled')); ?>
                 <?php gaiaeyes_analytics_render_metric('Explore tab views', gaiaeyes_analytics_event_count($tab_usage, 'explore')); ?>
@@ -301,6 +305,7 @@ function gaiaeyes_analytics_render_admin_page() {
             <div class="gaia-analytics-panels">
                 <?php gaiaeyes_analytics_render_daily_table($summary['daily'] ?? []); ?>
                 <?php gaiaeyes_analytics_render_table('Top Events', $summary['top_events'] ?? []); ?>
+                <?php gaiaeyes_analytics_render_table('Activation Funnel', $activation, 'No activation events in this range.'); ?>
                 <?php gaiaeyes_analytics_render_table('Onboarding Funnel', $onboarding); ?>
                 <?php gaiaeyes_analytics_render_table('Health Sync', $health_sync); ?>
                 <?php gaiaeyes_analytics_render_table('Engagement', $engagement); ?>

@@ -454,7 +454,7 @@ def _metrics_line(chips: Sequence[Mapping[str, Any]]) -> str:
         label = _safe_text(chip.get("label") if isinstance(chip, Mapping) else "")
         value = _safe_text(chip.get("value") if isinstance(chip, Mapping) else "")
         if label and value and value != "--":
-            parts.append(f"{label} {value}")
+            parts.append(f"{label}: {value}")
     return " | ".join(parts)
 
 

@@ -51,6 +51,7 @@ jobs:
       GAIAEYES_API_BASE: https://gaiaeyes-backend.onrender.com
       EARTHSCOPE_HYBRID_REWRITE: "true"
       EARTHSCOPE_FORCE_RULES: "false"
+      EARTHSCOPE_OUTPUT_JSON_PATH: ${{ github.workspace }}/artifacts/earthscope_daily.json
       EARTHSCOPE_PUBLIC_SHADOW: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.public_shadow || 'false') || 'false' }}
       EARTHSCOPE_PUBLIC_CANDIDATE_MODE: public_draft_restored
       EARTHSCOPE_PUBLIC_SHADOW_OUTPUT: ${{ github.workspace }}/artifacts/public-earthscope-shadow.json
@@ -73,6 +74,12 @@ jobs:
           DATE_ARG=""
           if [ -n "${{ github.event.inputs.date }}" ]; then DATE_ARG="--date ${{ github.event.inputs.date }}"; fi
           python earthscope_generate.py $DATE_ARG --platform ${{ env.EARTHSCOPE_PLATFORM }}
+      - name: Upload EarthScope daily JSON artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: earthscope-daily-json-${{ github.run_id }}
+          path: ${{ env.EARTHSCOPE_OUTPUT_JSON_PATH }}
+          if-no-files-found: error
       - name: Upload public EarthScope shadow artifact
         if: ${{ env.EARTHSCOPE_PUBLIC_SHADOW == 'true' }}
         uses: actions/upload-artifact@v4
@@ -135,6 +142,16 @@ jobs:
         run: |
           git -C "${MEDIA_REPO_PATH}" config user.name  "github-actions[bot]"
           git -C "${MEDIA_REPO_PATH}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Download EarthScope daily JSON artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: earthscope-daily-json-${{ github.run_id }}
+          path: ${{ github.workspace }}/artifacts/earthscope-daily
+      - name: Stage EarthScope daily JSON into media repo
+        run: |
+          set -euo pipefail
+          mkdir -p "${MEDIA_REPO_PATH}/data"
+          cp "${GITHUB_WORKSPACE}/artifacts/earthscope-daily/earthscope_daily.json" "${MEDIA_REPO_PATH}/data/earthscope_daily.json"
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -213,6 +230,17 @@ jobs:
             echo "[upload] No files uploaded successfully."
             exit 1
           fi
+      - name: Publish EarthScope daily JSON to media repo
+        run: |
+          set -euo pipefail
+          cd "${MEDIA_REPO_PATH}"
+          git add data/earthscope_daily.json
+          if git diff --cached --quiet; then
+            echo "earthscope_daily.json unchanged"
+            exit 0
+          fi
+          git commit -m "Update EarthScope daily JSON"
+          git push origin main
       - name: Get media repo commit sha
         id: media_sha
         run: |

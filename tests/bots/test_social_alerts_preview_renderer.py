@@ -10,7 +10,14 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bots.social_alerts.preview_renderer import DEFAULT_CTA, _context_chips, _cta_text, render_shadow_previews, resolve_background_image
+from bots.social_alerts.preview_renderer import (
+    DEFAULT_CTA,
+    _context_chips,
+    _cta_text,
+    _metrics_line,
+    render_shadow_previews,
+    resolve_background_image,
+)
 from bots.social_alerts.shadow_drafts import CTA, build_shadow_payload
 
 
@@ -116,3 +123,7 @@ def test_renderer_uses_draft_cta_and_public_fallback_chips() -> None:
     joined = " ".join(chips).lower()
     assert "review" not in joined
     assert "before posting" not in joined
+
+
+def test_metrics_line_reads_like_public_copy() -> None:
+    assert _metrics_line([{"label": "CMEs", "value": "3"}]) == "CMEs: 3"

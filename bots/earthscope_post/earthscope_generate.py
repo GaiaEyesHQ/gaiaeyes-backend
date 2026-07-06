@@ -1206,6 +1206,18 @@ def _normalize_rewrite_payload(obj: Any) -> Any:
             cleaned[key] = normalized
     return cleaned
 
+
+def _normalize_playbook_bullets(text: str) -> str:
+    lines: List[str] = []
+    for raw_line in _strip_section_labels(str(text or "")).splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^(?:[-*•]|\d+[.)])\s*", "", line).strip()
+        if line:
+            lines.append(f"- {line}")
+    return "\n".join(lines)
+
 # --- Robust JSON extractor ---
 from typing import Optional
 def _extract_first_json_object(text: str) -> Optional[str]:
@@ -1341,7 +1353,7 @@ def _finalize_rewrite_payload(obj: Dict[str, str]) -> Dict[str, str]:
     out["caption"] = _scrub_banned_phrases(_sanitize_caption(out["caption"]))
     out["snapshot"] = _strip_section_labels(_scrub_banned_phrases(out["snapshot"]))
     out["affects"] = _strip_section_labels(_scrub_banned_phrases(out["affects"]))
-    out["playbook"] = _strip_section_labels(_scrub_banned_phrases(out["playbook"]))
+    out["playbook"] = _normalize_playbook_bullets(_scrub_banned_phrases(out["playbook"]))
     return out
 
 
@@ -1616,11 +1628,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         if not valid:
             _dbg(f"rewrite: raw response snippet => {text[:180]}")
         if valid:
-            # final scrubs
-            valid["caption"] = _scrub_banned_phrases(_sanitize_caption(valid["caption"]))
-            valid["snapshot"] = _strip_section_labels(_scrub_banned_phrases(valid["snapshot"]))
-            valid["affects"] = _strip_section_labels(_scrub_banned_phrases(valid["affects"]))
-            valid["playbook"] = _strip_section_labels(_scrub_banned_phrases(valid["playbook"]))
+            valid = _finalize_rewrite_payload(valid)
             # Soft length diagnostics (debug only)
             def _sent_count(x: str) -> int:
                 parts = re.split(r"(?<=[\.!?])\s+", x.strip()) if x and isinstance(x, str) else []

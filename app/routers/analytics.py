@@ -26,9 +26,17 @@ _ALLOWED_PROPERTY_KEYS = {
     "count",
     "detail_choice",
     "driver_key",
+    "energy_level",
+    "failed_count",
     "filter",
+    "focus",
+    "includes_migraine",
+    "includes_note",
+    "intensity",
     "key",
+    "pain_type",
     "prediction_match",
+    "queued_count",
     "reason",
     "role",
     "route",
@@ -38,6 +46,8 @@ _ALLOWED_PROPERTY_KEYS = {
     "source",
     "status",
     "step",
+    "submitted_count",
+    "system_load",
     "surface",
     "symptom_code",
     "tab",
@@ -62,6 +72,13 @@ _ENGAGEMENT_EVENTS = [
     "daily_checkin_started",
     "daily_checkin_completed",
     "daily_checkin_skipped",
+    "symptom_log_opened",
+    "symptom_log_submitted",
+    "symptom_logged",
+    "symptom_log_failed",
+    "exposure_log_opened",
+    "exposure_logged",
+    "exposure_log_failed",
     "symptom_followup_dismissed",
     "symptom_followup_answered",
     "all_drivers_opened",
@@ -85,6 +102,22 @@ _FEATURE_ADOPTION_EVENTS = [
 ]
 _NAVIGATION_EVENTS = [
     "tab_viewed",
+]
+_ACTIVATION_EVENTS = [
+    "onboarding_started",
+    "healthkit_permission_started",
+    "healthkit_permission_completed",
+    "health_backfill_completed",
+    "onboarding_completed",
+    "tab_viewed",
+    "daily_checkin_started",
+    "daily_checkin_completed",
+    "symptom_log_opened",
+    "symptom_log_submitted",
+    "symptom_logged",
+    "exposure_log_opened",
+    "exposure_logged",
+    "notifications_enabled",
 ]
 
 
@@ -218,6 +251,13 @@ async def _fetch_group(cur, start_utc: datetime, end_utc: datetime, event_names:
         prepare=False,
     )
     return _json_rows(await cur.fetchall())
+
+
+async def _fetch_funnel(cur, start_utc: datetime, end_utc: datetime, event_names: List[str]) -> List[dict[str, Any]]:
+    rows = await _fetch_group(cur, start_utc, end_utc, event_names)
+    event_order = {event_name: index for index, event_name in enumerate(event_names)}
+    rows.sort(key=lambda row: event_order.get(str(row.get("event_name") or ""), 999))
+    return rows
 
 
 @router.post("/v1/analytics/events", dependencies=[Depends(require_write_auth)])
@@ -365,6 +405,7 @@ async def analytics_summary(
         engagement = await _fetch_group(cur, start_utc, end_utc, _ENGAGEMENT_EVENTS)
         feature_adoption = await _fetch_group(cur, start_utc, end_utc, _FEATURE_ADOPTION_EVENTS)
         navigation = await _fetch_group(cur, start_utc, end_utc, _NAVIGATION_EVENTS)
+        activation = await _fetch_funnel(cur, start_utc, end_utc, _ACTIVATION_EVENTS)
 
         await cur.execute(
             """
@@ -425,6 +466,7 @@ async def analytics_summary(
         "engagement": engagement,
         "feature_adoption": feature_adoption,
         "navigation": navigation,
+        "activation": activation,
         "tab_usage": tab_usage,
         "errors": errors,
         "error": None,
