@@ -8731,7 +8731,7 @@ struct ContentView: View {
         } else if let summary = vocabulary.translating(guideEarthscopeSummary), !summary.isEmpty {
             headline = summary
         } else {
-            headline = "Your live signal stack is ready."
+            headline = "Your live signals are ready."
         }
         let explanation: String
         if let syncStamp = experienceProfile.lastBackfillAt, !syncStamp.isEmpty {
@@ -13334,7 +13334,7 @@ struct ContentView: View {
                 }
 
                 if rows.isEmpty {
-                    Text("No major signal stack is standing out yet.")
+                    Text("No major signal is standing out yet.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(12)
@@ -13452,9 +13452,16 @@ struct ContentView: View {
                                 .foregroundColor(panelAccent.opacity(0.95))
                                 .frame(width: 30, height: 30)
                                 .background(panelAccent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            Text("Signals to Watch")
-                                .font(.headline.weight(.semibold))
-                                .foregroundColor(.white.opacity(0.92))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Signals to Watch")
+                                    .font(.headline.weight(.semibold))
+                                    .foregroundColor(.white.opacity(0.92))
+                                if let lastUpdatedText, !lastUpdatedText.isEmpty {
+                                    Text("Updated \(lastUpdatedText)")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                         Text(whatMattersSummaryLine)
                             .font(.caption)
@@ -13522,11 +13529,6 @@ struct ContentView: View {
                         )
                     }
 
-                    if let lastUpdatedText, !lastUpdatedText.isEmpty {
-                        Text("Last updated: \(lastUpdatedText)")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
                 }
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
@@ -14423,7 +14425,7 @@ struct ContentView: View {
             if showsPersonalCards {
                 return "Open a card for a calm, plain-language read on what may matter for you right now."
             }
-            return "Space, local, and earth-system context lives here when you want a deeper read."
+            return "Space, local, and earth context is here when you want a deeper read."
         }
 
         private var understandingCard: some View {
@@ -14456,8 +14458,8 @@ struct ContentView: View {
                 HubCard(
                     title: "All Drivers",
                     icon: "list.bullet.rectangle.portrait",
-                    status: "Open the full system-level driver stack Gaia Eyes is watching right now.",
-                    pillText: dashboardDrivers.isEmpty ? "Loading" : "Priority Order",
+                    status: "See the signals Gaia Eyes is comparing for you right now.",
+                    pillText: dashboardDrivers.isEmpty ? "Loading" : "Current order",
                     severity: dashboardDrivers.isEmpty ? .warn : .ok,
                     metrics: [
                         HubMetric(label: "Visible", value: dashboardDrivers.isEmpty ? "—" : "\(dashboardDrivers.count)", tint: GaugePalette.low),
@@ -14881,7 +14883,7 @@ struct ContentView: View {
             } else if hazardsLoading {
                 status = "Refreshing the GDACS hazard brief."
             } else if total > 0 {
-                status = "Global hazards stay available as optional exploration."
+                status = "Global hazard context is available here if you want the broader picture."
             } else {
                 status = "Open for the latest hazard brief if you want broader context."
             }
@@ -14948,8 +14950,8 @@ struct ContentView: View {
                                 .font(.headline.weight(.semibold))
                             Text(
                                 showsPersonalCards
-                                    ? "Interesting context, but kept secondary so Insights stays fast and personal."
-                                    : "These deeper system feeds stay reachable here without competing with the primary tabs."
+                                    ? "Optional data views live here when you want more context behind today’s read."
+                                    : "Optional data views live here when you want a deeper look behind the signals."
                             )
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -15629,6 +15631,7 @@ struct ContentView: View {
         private func dailyOutlookRow(_ day: UserOutlookDay, index: Int) -> some View {
             let drivers = visibleDrivers(day.topDrivers ?? [])
             let domains = day.likelyElevatedDomains ?? []
+            let hasDetails = !drivers.isEmpty || !domains.isEmpty
             let state = dailyState(day)
             let accent = dailyAccentColor(index: index)
             let title = dailyTitle(day)
@@ -15658,7 +15661,17 @@ struct ContentView: View {
                     }
                 }
 
-                domainPills(domains, drivers: drivers, primary: drivers.first)
+                if hasDetails {
+                    domainPills(domains, drivers: drivers, primary: drivers.first)
+                } else {
+                    Text("Nothing of concern is showing up on the radar right now. We’ll keep checking and update if anything changes.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
             }
             .padding(12)
             .padding(.leading, 3)
@@ -15705,7 +15718,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Free shows the next 24 hours")
                         .font(.subheadline.weight(.semibold))
-                    Text("Plus unlocks the 72-hour and 7-day outlook, including the longer signal mix and likely body-context windows.")
+                    Text("Plus unlocks the 72-hour and 7-day outlook, including longer forecast signals and the body patterns they may line up with.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

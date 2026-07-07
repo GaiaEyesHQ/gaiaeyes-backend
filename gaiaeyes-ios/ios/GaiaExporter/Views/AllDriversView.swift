@@ -22,13 +22,13 @@ private struct AllDriversCopy {
                 activeMetricTitle: "Active",
                 categoryMetricTitle: "Category",
                 stateMetricTitle: "State",
-                setupHintsTitle: "Ways to sharpen this view",
+                setupHintsTitle: "Ways to make this view more personal",
                 loadingText: "Loading current drivers…",
                 calmTitle: tone == .humorous ? "Nothing especially loud right now" : "Nothing especially strong right now",
                 calmBody: tone.resolveCopy(
                     straight: "Conditions look relatively calm. You can still explore what Gaia Eyes watches for you.",
-                    balanced: "Conditions look relatively calm. You can still explore the full driver stack Gaia Eyes is watching.",
-                    humorous: "Conditions look relatively calm. The signal pile-up is taking a breather, but the full stack is still here if you want context."
+                    balanced: "Conditions look relatively calm. You can still explore the signals Gaia Eyes is watching.",
+                    humorous: "Conditions look relatively calm. The louder signals are taking a breather, but the full list is still here if you want context."
                 ),
                 learningBody: tone.resolveCopy(
                     straight: "We’re still learning how this tends to line up for you.",
@@ -49,7 +49,7 @@ private struct AllDriversCopy {
                 calmBody: tone.resolveCopy(
                     straight: "Conditions look relatively calm. You can still explore what Gaia Eyes is tracking.",
                     balanced: "Conditions look relatively calm. You can still explore the full set of influences Gaia Eyes is tracking.",
-                    humorous: "Conditions look relatively calm. The field is behaving itself, but the full signal stack is still here if you want context."
+                    humorous: "Conditions look relatively calm. The field is behaving itself, but the full signal list is still here if you want context."
                 ),
                 learningBody: tone.resolveCopy(
                     straight: "We’re still learning how these patterns tend to line up for you.",
@@ -84,6 +84,7 @@ struct AllDriversView: View {
     @State private var selectedFilter: DriverCategory = .all
     @State private var expandedDriverID: String?
     @State private var focusedDriverID: String?
+    @State private var staleFocusMessage: String?
     @State private var hasTrackedOpen: Bool = false
     @State private var shareDraft: ShareDraft?
 
@@ -138,7 +139,16 @@ struct AllDriversView: View {
     }
 
     private func translatedText(_ raw: String?) -> String? {
-        vocabulary.presenting(raw)
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch trimmed.lowercased() {
+        case "connect health data":
+            return "Health data not current yet"
+        case "body context gets better when your baseline data is available.":
+            return "Recent Health data helps personalize this view. If HealthKit is already connected, it may just need today's wearable sync."
+        default:
+            return vocabulary.presenting(trimmed)
+        }
     }
 
     private func localizedTemperatureDelta(_ celsius: Double?) -> String {
@@ -254,6 +264,7 @@ struct AllDriversView: View {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
             expandedDriverID = expandedDriverID == driver.id ? nil : driver.id
             focusedDriverID = driver.id
+            staleFocusMessage = nil
         }
         if expandedDriverID == driver.id {
             return
@@ -270,7 +281,11 @@ struct AllDriversView: View {
 
     private func applyInitialFocus(from payload: AllDriversSnapshot) {
         guard let initialFocusKey else { return }
-        guard let match = payload.drivers.first(where: { $0.matches(focusKey: initialFocusKey) }) else { return }
+        guard let match = payload.drivers.first(where: { $0.matches(focusKey: initialFocusKey) }) else {
+            staleFocusMessage = "That signal has updated since Home loaded. Showing the current driver list instead."
+            return
+        }
+        staleFocusMessage = nil
         expandedDriverID = match.id
         focusedDriverID = match.id
     }
@@ -445,7 +460,7 @@ struct AllDriversView: View {
             bullets = driver.currentSymptoms.prefix(3).map { "Linked symptom: \($0)" }
         }
         if bullets.isEmpty {
-            bullets = ["Worth watching in the broader driver stack."]
+            bullets = ["Worth watching with the other signals in view."]
         }
 
         let accent = accentLevel(for: driver.severity ?? driver.state)
@@ -498,7 +513,7 @@ struct AllDriversView: View {
             ),
             accentLevel: accent,
             eyebrow: "Active influences",
-            title: activeCount > 1 ? "Influences are stacking" : "Today's signal stack",
+            title: activeCount > 1 ? "Several signals are active" : "Today's signals",
             subtitle: nil,
             signText: nil,
             primaryText: visibleDriverLine,
@@ -512,7 +527,7 @@ struct AllDriversView: View {
             branding: .gaiaEyes
         )
         let caption = [
-            activeCount > 1 ? "Influences are stacking (\(activeCount) active)." : "Today's signal stack is quiet.",
+            activeCount > 1 ? "Several signals are active (\(activeCount) active)." : "Today's signals look quiet.",
             visibleDriverLine.isEmpty ? nil : "In the mix: \(visibleDriverLine).",
             "Use it as a quick read on what may be shaping the day."
         ]
@@ -534,6 +549,7 @@ struct AllDriversView: View {
         guard let match = snapshot?.drivers.first(where: { $0.matches(focusKey: focusKey) }) else { return }
         AppAnalytics.track("signal_bar_tapped", properties: ["surface": "all_drivers", "signal_key": signal.key])
         withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+            staleFocusMessage = nil
             selectedFilter = match.category
             expandedDriverID = match.id
             focusedDriverID = match.id
@@ -674,7 +690,7 @@ struct AllDriversView: View {
             Label("More drivers are included with Plus", systemImage: "lock.fill")
                 .font(.headline)
                 .foregroundColor(.white)
-            Text("Free shows a driver preview in this view. Plus unlocks the full driver stack, deeper detail, and the pattern and outlook links behind each signal.")
+            Text("Free shows a driver preview in this view. Plus unlocks more signals, deeper detail, and the pattern and outlook links behind each one.")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.68))
                 .fixedSize(horizontal: false, vertical: true)
@@ -721,6 +737,15 @@ struct AllDriversView: View {
                             Text(cleanError)
                                 .font(.caption)
                                 .foregroundColor(.orange)
+                        }
+
+                        if let staleFocusMessage {
+                            Text(staleFocusMessage)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
 
                         DriverCategoryFilterView(
@@ -834,6 +859,7 @@ struct AllDriversView: View {
                     await load(force: true)
                 }
                 .onChange(of: selectedFilter, initial: false) { _, newValue in
+                    staleFocusMessage = nil
                     AppAnalytics.track("all_drivers_filter_changed", properties: ["filter": newValue.rawValue])
                 }
                 .onChange(of: focusedDriverID, initial: false) { _, newValue in
