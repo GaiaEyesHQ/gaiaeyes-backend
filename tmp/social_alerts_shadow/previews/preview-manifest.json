@@ -2,19 +2,19 @@
   "schema_version": "social_alerts_preview_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-06T05:04:55Z",
-  "source_payload_generated_at": "2026-07-05T19:02:15Z",
+  "generated_at": "2026-07-07T06:11:33Z",
+  "source_payload_generated_at": "2026-07-07T06:11:27Z",
   "rendered_count": 1,
   "rendered": [
     {
-      "draft_id": "social_alert.cme.high.ef11bdfd7181",
+      "draft_id": "social_alert.cme.high.6b0d08c27bee",
       "category": "cme",
       "severity": "high",
       "title": "Recovery feeling off?",
       "outputs": [
         {
           "format": "square_image",
-          "path": "tmp/social_alerts_shadow/previews/cme-high-ef11bdfd7181-square.png",
+          "path": "tmp/social_alerts_shadow/previews/cme-high-6b0d08c27bee-square.png",
           "canvas": {
             "width": 1080,
             "height": 1080
@@ -25,7 +25,7 @@
         },
         {
           "format": "feed_card",
-          "path": "tmp/social_alerts_shadow/previews/cme-high-ef11bdfd7181-feed.png",
+          "path": "tmp/social_alerts_shadow/previews/cme-high-6b0d08c27bee-feed.png",
           "canvas": {
             "width": 1080,
             "height": 1350
@@ -36,7 +36,7 @@
         },
         {
           "format": "story_reel_frame",
-          "path": "tmp/social_alerts_shadow/previews/cme-high-ef11bdfd7181-story.png",
+          "path": "tmp/social_alerts_shadow/previews/cme-high-6b0d08c27bee-story.png",
           "canvas": {
             "width": 1080,
             "height": 1920

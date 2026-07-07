@@ -14850,9 +14850,9 @@ struct ContentView: View {
             } else if quakeLoading {
                 status = "Refreshing the global quake snapshot."
             } else if maxMag != nil {
-                status = "Interesting global quake context, outside the core daily loop."
+                status = "Recent global quake context is available."
             } else {
-                status = "Open for recent quake context when you want to explore."
+                status = "Recent quake counts and notable global events."
             }
 
             return NavigationLink(value: InsightsRoute.earthquakes) {
@@ -14883,9 +14883,9 @@ struct ContentView: View {
             } else if hazardsLoading {
                 status = "Refreshing the GDACS hazard brief."
             } else if total > 0 {
-                status = "Global hazard context is available here if you want the broader picture."
+                status = "Global hazard alerts are available when something needs attention."
             } else {
-                status = "Open for the latest hazard brief if you want broader context."
+                status = "Latest hazard brief is ready when you want a broader look."
             }
 
             return NavigationLink(value: InsightsRoute.hazards) {
@@ -16969,6 +16969,30 @@ struct ContentView: View {
             return iso
         }
 
+        private func parsedForecastDate(_ iso: String?) -> Date? {
+            guard let raw = iso?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty else {
+                return nil
+            }
+            let dayPart = String(raw.prefix(10))
+            let simple = DateFormatter()
+            simple.locale = Locale(identifier: "en_US_POSIX")
+            simple.timeZone = TimeZone(secondsFromGMT: 0)
+            simple.dateFormat = "yyyy-MM-dd"
+            return simple.date(from: dayPart)
+        }
+
+        private func isCurrentForecastDay(_ iso: String?) -> Bool {
+            guard let date = parsedForecastDate(iso) else {
+                return true
+            }
+            return Calendar.current.startOfDay(for: date) >= Calendar.current.startOfDay(for: Date())
+        }
+
+        private var currentForecastDays: [SpaceForecastDay] {
+            (outlook?.forecastDaily ?? []).filter { isCurrentForecastDay($0.forecastDay) }
+        }
+
         private func watchFlags(for day: SpaceForecastDay) -> [String] {
             var flags: [String] = []
             if day.cmeWatch == true { flags.append("CME watch") }
@@ -17159,7 +17183,8 @@ struct ContentView: View {
                                 }
                             }
 
-                            if let forecastDays = outlook?.forecastDaily, !forecastDays.isEmpty {
+                            let forecastDays = currentForecastDays
+                            if !forecastDays.isEmpty {
                                 let displayedForecastDays = showAllForecastDays ? forecastDays : Array(forecastDays.prefix(3))
                                 LocalConditionsSurfaceCard(title: "7-Day Space Forecast", icon: "calendar") {
                                     VStack(alignment: .leading, spacing: 12) {
@@ -17262,6 +17287,13 @@ struct ContentView: View {
                                             }
                                         }
                                     }
+                                }
+                            } else if outlook?.forecastDaily?.isEmpty == false {
+                                LocalConditionsSurfaceCard(title: "7-Day Space Forecast", icon: "calendar") {
+                                    Text("The space forecast is refreshing. Gaia Eyes will update this when the next outlook window is available.")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
                         } else {
@@ -23416,7 +23448,9 @@ struct ContentView: View {
         }
 
         private var swNowValue: Double? {
-            latestSpacePoint?.sw ?? features?.swSpeedAvg?.value
+            latestSpacePoint?.sw
+                ?? outlook?.swSpeedNowKms
+                ?? features?.swSpeedAvg?.value
         }
 
         private var swMax24Value: Double? {
@@ -23425,6 +23459,7 @@ struct ContentView: View {
 
         private var bzNowValue: Double? {
             latestSpacePoint?.bz
+                ?? outlook?.bzNow
         }
 
         private var bzMin24Value: Double? {
@@ -23502,7 +23537,7 @@ struct ContentView: View {
                             Button { dismiss() } label: { Label("Close", systemImage: "xmark.circle") }
                                 .buttonStyle(.bordered)
                             Spacer()
-                            Text("Cached payloads reused for offline view")
+                            Text("Latest available space data")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -25046,6 +25081,30 @@ struct ContentView: View {
             return iso
         }
 
+        private func parsedForecastDate(_ iso: String?) -> Date? {
+            guard let raw = iso?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty else {
+                return nil
+            }
+            let dayPart = String(raw.prefix(10))
+            let simple = DateFormatter()
+            simple.locale = Locale(identifier: "en_US_POSIX")
+            simple.timeZone = TimeZone(secondsFromGMT: 0)
+            simple.dateFormat = "yyyy-MM-dd"
+            return simple.date(from: dayPart)
+        }
+
+        private func isCurrentForecastDay(_ iso: String?) -> Bool {
+            guard let date = parsedForecastDate(iso) else {
+                return true
+            }
+            return Calendar.current.startOfDay(for: date) >= Calendar.current.startOfDay(for: Date())
+        }
+
+        private var currentForecastDays: [LocalForecastDay] {
+            (snapshot?.forecastDaily ?? []).filter { isCurrentForecastDay($0.day) }
+        }
+
         private func forecastTempRange(_ day: LocalForecastDay) -> String {
             let high = LocalConditionsFormatting.formatTemperature(day.tempHighC, unit: tempUnit)
             let low = LocalConditionsFormatting.formatTemperature(day.tempLowC, unit: tempUnit)
@@ -25405,7 +25464,8 @@ struct ContentView: View {
                             }
                         }
 
-                        if let forecastDays = snapshot?.forecastDaily, !forecastDays.isEmpty {
+                        let forecastDays = currentForecastDays
+                        if !forecastDays.isEmpty {
                             let displayedForecastDays = showAllForecastDays ? forecastDays : Array(forecastDays.prefix(3))
                             LocalConditionsSurfaceCard(title: "7-Day Forecast", icon: "calendar") {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -25488,6 +25548,13 @@ struct ContentView: View {
                                         .buttonStyle(.plain)
                                     }
                                 }
+                            }
+                        } else if snapshot?.forecastDaily?.isEmpty == false {
+                            LocalConditionsSurfaceCard(title: "7-Day Forecast", icon: "calendar") {
+                                Text("The local forecast is refreshing. Gaia Eyes will update this when the next outlook window is available.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
 

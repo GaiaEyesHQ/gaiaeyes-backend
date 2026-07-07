@@ -2,23 +2,23 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-05T19:02:15Z",
+  "generated_at": "2026-07-07T06:11:27Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 1,
   "drafts": [
     {
-      "id": "social_alert.cme.high.ef11bdfd7181",
+      "id": "social_alert.cme.high.6b0d08c27bee",
       "mode": "shadow",
       "auto_publish": false,
       "review_status": "needs_human_review",
       "category": "cme",
       "severity": "high",
-      "asof": "2026-07-03T03:04:16Z",
+      "asof": "2026-07-07T01:11:32Z",
       "title": "Recovery feeling off?",
-      "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
-      "caption": "Recovery feeling off?\n\nBody signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this solar-motion window and let the pattern build.\n\nSee if this lines up with your body in Gaia Eyes.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
+      "caption": "Recovery feeling off?\n\nBody signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this active solar window and let the pattern build.\n\nTrack this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
       "metrics": {
-        "cmes_count": 3.0,
+        "cmes_count": 4.0,
         "cmes_max_speed_kms": null
       },
       "source_refs": [
@@ -49,7 +49,7 @@
           },
           "label": "RECOVERY WATCH",
           "title": "Recovery feeling off?",
-          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
+          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -60,7 +60,7 @@
           "metric_chips": [
             {
               "label": "CMEs",
-              "value": "3"
+              "value": "4"
             },
             {
               "label": "Max speed",
@@ -116,7 +116,7 @@
           },
           "label": "RECOVERY WATCH",
           "title": "Recovery feeling off?",
-          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
+          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -127,7 +127,7 @@
           "metric_chips": [
             {
               "label": "CMEs",
-              "value": "3"
+              "value": "4"
             },
             {
               "label": "Max speed",
@@ -188,7 +188,7 @@
             },
             {
               "role": "signal",
-              "text": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
+              "text": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
               "context_chips": [
                 "Sleep",
                 "HRV",
@@ -199,7 +199,7 @@
               "metric_chips": [
                 {
                   "label": "CMEs",
-                  "value": "3"
+                  "value": "4"
                 },
                 {
                   "label": "Max speed",
@@ -209,12 +209,12 @@
             },
             {
               "role": "cta",
-              "text": "See if this lines up with your body in Gaia Eyes."
+              "text": "Track this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes."
             }
           ],
           "label": "RECOVERY WATCH",
           "title": "Recovery feeling off?",
-          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this solar-motion window.",
+          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -225,7 +225,7 @@
           "metric_chips": [
             {
               "label": "CMEs",
-              "value": "3"
+              "value": "4"
             },
             {
               "label": "Max speed",

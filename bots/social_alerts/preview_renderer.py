@@ -21,7 +21,7 @@ from bots.social_alerts.asset_bootstrap_pack import BOOTSTRAP_PREFIX, bootstrap_
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MEDIA_BASE_URL = "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals"
 DEFAULT_PREVIEW_DIR = Path("tmp") / "social_alerts_shadow" / "previews"
-DEFAULT_CTA = "See if this lines up with your body in Gaia Eyes."
+DEFAULT_CTA = "Track this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes."
 FALLBACK_GRADIENTS = {
     "solar_flare": ((36, 10, 5), (236, 138, 42), (5, 20, 34)),
     "cme": ((7, 18, 32), (68, 148, 214), (240, 144, 54)),

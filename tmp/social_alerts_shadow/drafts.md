@@ -2,7 +2,7 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-05T19:02:15Z`
+- Generated at: `2026-07-07T06:11:27Z`
 - Draft count: `1`
 
 ## 1. Recovery feeling off?
@@ -10,22 +10,22 @@
 - Category: `cme`
 - Severity: `high`
 - Review status: `needs_human_review`
-- As of: `2026-07-03T03:04:16Z`
+- As of: `2026-07-07T01:11:32Z`
 
 Post caption copy:
 
 ```text
 Recovery feeling off?
 
-Body signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this solar-motion window and let the pattern build.
+Body signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this active solar window and let the pattern build.
 
-See if this lines up with your body in Gaia Eyes.
+Track this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```
 
 Metrics:
-- `cmes_count`: `3.0`
+- `cmes_count`: `4.0`
 - `cmes_max_speed_kms`: `None`
 
 Background candidates:

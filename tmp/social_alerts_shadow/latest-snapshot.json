@@ -1,137 +1,159 @@
 {
-  "generated_at": "2026-07-03T03:04:16Z",
+  "generated_at": "2026-07-07T01:11:32Z",
   "source_mode": "db_snapshot",
   "space_weather": {
-    "timestamp_utc": "2026-07-03T01:12:00Z",
+    "timestamp_utc": "2026-07-07T00:16:00Z",
     "now": {
-      "kp": 0.7,
-      "bz_nt": 3.0,
-      "solar_wind_kms": 381.0
+      "kp": 1.7,
+      "bz_nt": 1.0,
+      "solar_wind_kms": 400.0
     },
     "last_24h": {
-      "kp_max": 2.0
+      "kp_max": 2.7
     },
     "xray_max_class": null,
-    "flares_count": 2,
-    "cmes_count": 3,
+    "flares_count": 1,
+    "cmes_count": 4,
     "cmes_max_speed_kms": null
   },
   "space_daily": {
-    "day": "2026-07-02",
+    "day": "2026-07-06",
     "kp_now": null,
-    "kp_max": 2.0,
+    "kp_max": 2.7,
     "bz_now": null,
-    "bz_min": 2.0,
+    "bz_min": -3.0,
     "sw_speed_now_kms": null,
-    "sw_speed_avg": 337.0,
+    "sw_speed_avg": 446.0,
     "xray_max_class": null,
-    "flares_count": 2,
-    "cmes_count": 3,
+    "flares_count": 1,
+    "cmes_count": 4,
     "cmes_max_speed_kms": null,
-    "updated_at": "2026-07-02T20:04:25Z"
+    "updated_at": "2026-07-06T20:28:37Z"
   },
   "schumann": {
-    "zscore_30d": -0.2352853246318243,
-    "pct_30d": 0.4888888888888889,
-    "stddev_24h": 0.10916666666666952,
-    "value_hz": 7.66,
+    "zscore_30d": -0.7129657439405019,
+    "pct_30d": 0.25,
+    "stddev_24h": 0.05102564102563978,
+    "value_hz": 7.80333333333333,
     "combined": {
-      "f1_hz": 7.66
+      "f1_hz": 7.80333333333333
     },
     "station_id": "cumiana",
-    "day": "2026-07-03",
-    "sample_count": 45
+    "day": "2026-07-06",
+    "sample_count": 44
   },
   "active_states": [],
   "quakes": {
     "events": [
       {
-        "time_utc": "2026-07-02T11:06:21Z",
-        "mag": 5.2,
-        "depth_km": 10.0,
-        "lat": 35.3034,
-        "lon": 27.2953,
-        "place": "23 km SSE of Karpathos, Greece",
+        "time_utc": "2026-07-06T16:15:51Z",
+        "mag": 5.1,
+        "depth_km": 20.998,
+        "lat": -32.5446,
+        "lon": -71.8252,
+        "place": "56 km W of La Ligua, Chile",
         "source": "usgs",
-        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9lz",
-        "id": "us6000t9lz"
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tahc",
+        "id": "us6000tahc"
       },
       {
-        "time_utc": "2026-07-02T05:23:17Z",
+        "time_utc": "2026-07-06T14:43:38Z",
+        "mag": 5.1,
+        "depth_km": 10.0,
+        "lat": -16.892,
+        "lon": -172.07,
+        "place": "211 km ESE of Hihifo, Tonga",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000taft",
+        "id": "us6000taft"
+      },
+      {
+        "time_utc": "2026-07-06T08:41:38Z",
+        "mag": 5.4,
+        "depth_km": 35.0,
+        "lat": 4.9091,
+        "lon": 125.1424,
+        "place": "65 km SSW of Sarangani, Philippines",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tadj",
+        "id": "us6000tadj"
+      },
+      {
+        "time_utc": "2026-07-06T08:11:11Z",
+        "mag": 5.8,
+        "depth_km": 35.0,
+        "lat": 4.9886,
+        "lon": 125.326,
+        "place": "48 km SSW of Sarangani, Philippines",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tadc",
+        "id": "us6000tadc"
+      },
+      {
+        "time_utc": "2026-07-05T15:53:33Z",
+        "mag": 5.0,
+        "depth_km": 10.0,
+        "lat": -29.1964,
+        "lon": -72.0113,
+        "place": "106 km NW of Coquimbo, Chile",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000taab",
+        "id": "us6000taab"
+      },
+      {
+        "time_utc": "2026-07-05T15:30:13Z",
+        "mag": 5.0,
+        "depth_km": 10.0,
+        "lat": 31.5649,
+        "lon": 104.126,
+        "place": "26 km NNW of Mianzhu, Deyang, Sichuan, China",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000taaa",
+        "id": "us6000taaa"
+      },
+      {
+        "time_utc": "2026-07-05T15:03:27Z",
+        "mag": 5.0,
+        "depth_km": 10.0,
+        "lat": 31.5223,
+        "lon": 104.0978,
+        "place": "23 km NNW of Mianzhu, Deyang, Sichuan, China",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000taa2",
+        "id": "us6000taa2"
+      },
+      {
+        "time_utc": "2026-07-05T14:42:04Z",
+        "mag": 5.0,
+        "depth_km": 10.0,
+        "lat": -29.2333,
+        "lon": -71.9385,
+        "place": "98 km NW of Coquimbo, Chile",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000ta9n",
+        "id": "us6000ta9n"
+      },
+      {
+        "time_utc": "2026-07-05T14:22:26Z",
+        "mag": 5.8,
+        "depth_km": 685.692,
+        "lat": -19.9807,
+        "lon": -179.03,
+        "place": "274 km SE of Levuka, Fiji",
+        "source": "usgs",
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000ta9m",
+        "id": "us6000ta9m"
+      },
+      {
+        "time_utc": "2026-07-05T07:37:07Z",
         "mag": 5.3,
-        "depth_km": 10.0,
-        "lat": -60.9974,
-        "lon": -23.537,
-        "place": "South Sandwich Islands region",
+        "depth_km": 82.936,
+        "lat": 50.0397,
+        "lon": 156.0014,
+        "place": "71 km S of Severo-Kuril’sk, Russia",
         "source": "usgs",
-        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9kl",
-        "id": "us6000t9kl"
-      },
-      {
-        "time_utc": "2026-07-02T05:14:00Z",
-        "mag": 5.2,
-        "depth_km": 10.0,
-        "lat": -57.8826,
-        "lon": -8.4887,
-        "place": "east of the South Sandwich Islands",
-        "source": "usgs",
-        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9kj",
-        "id": "us6000t9kj"
-      },
-      {
-        "time_utc": "2026-07-02T02:57:42Z",
-        "mag": 5.2,
-        "depth_km": 183.485,
-        "lat": -58.4797,
-        "lon": -26.5923,
-        "place": "South Sandwich Islands region",
-        "source": "usgs",
-        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9jv",
-        "id": "us6000t9jv"
-      },
-      {
-        "time_utc": "2026-07-01T21:13:40Z",
-        "mag": 5.7,
-        "depth_km": 259.0,
-        "lat": -16.9457,
-        "lon": -174.8243,
-        "place": "155 km SW of Hihifo, Tonga",
-        "source": "usgs",
-        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9hu",
-        "id": "us6000t9hu"
-      },
-      {
-        "time_utc": "2026-07-01T17:57:02Z",
-        "mag": 5.5,
-        "depth_km": 212.915,
-        "lat": 36.567,
-        "lon": 70.4491,
-        "place": "47 km SW of Jurm, Afghanistan",
-        "source": "usgs",
-        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9gg",
-        "id": "us6000t9gg"
-      },
-      {
-        "time_utc": "2026-07-01T12:08:29Z",
-        "mag": 6.0,
-        "depth_km": 43.568,
-        "lat": 40.1637,
-        "lon": 142.3927,
-        "place": "49 km E of Noda, Japan",
-        "source": "usgs",
-        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9ej",
-        "id": "us6000t9ej"
-      },
-      {
-        "time_utc": "2026-07-01T10:42:43Z",
-        "mag": 5.6,
-        "depth_km": 536.709,
-        "lat": -20.1466,
-        "lon": 178.6881,
-        "place": "224 km S of Suva, Fiji",
-        "source": "usgs",
-        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9e1",
-        "id": "us6000t9e1"
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000ta86",
+        "id": "us6000ta86"
       }
     ]
   },
@@ -140,25 +162,398 @@
       {
         "source": "gdacs",
         "kind": "wildfire",
-        "title": "Green forest fire notification in Canada",
-        "location": "Canada",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
         "severity": "info",
         "started_at": null,
         "ended_at": null,
         "payload": {
-          "id": "WF1029255",
-          "ts": "2026-07-02T23:05:49Z",
+          "id": "WF1029345",
+          "ts": "2026-07-06T19:16:59Z",
           "lat": null,
           "lon": null,
-          "body": "On 26/06/2026, a forest fire started in Canada,  until 02/07/2026.",
+          "body": "On 25/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
           "type": "wildfire",
           "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029255"
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029345"
           ],
-          "title": "Green forest fire notification in Canada",
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
           "source": "gdacs",
-          "details": "On 26/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "location": "Canada",
+          "details": "On 25/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029340",
+          "ts": "2026-07-06T19:05:49Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 30/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029340"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
+          "source": "gdacs",
+          "details": "On 30/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo, Angola",
+        "location": "The Democratic Republic of Congo, Angola",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029341",
+          "ts": "2026-07-06T19:06:15Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 30/06/2026, a forest fire started in The Democratic Republic of Congo, Angola,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029341"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo, Angola",
+          "source": "gdacs",
+          "details": "On 30/06/2026, a forest fire started in The Democratic Republic of Congo, Angola,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo, Angola",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029342",
+          "ts": "2026-07-06T19:06:22Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 29/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029342"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
+          "source": "gdacs",
+          "details": "On 29/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Angola",
+        "location": "Angola",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029343",
+          "ts": "2026-07-06T19:06:45Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 29/06/2026, a forest fire started in Angola,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029343"
+          ],
+          "title": "Green forest fire notification in Angola",
+          "source": "gdacs",
+          "details": "On 29/06/2026, a forest fire started in Angola,  until 06/07/2026.",
+          "location": "Angola",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029344",
+          "ts": "2026-07-06T19:16:03Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 26/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029344"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
+          "source": "gdacs",
+          "details": "On 26/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029346",
+          "ts": "2026-07-06T19:20:50Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 24/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029346"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
+          "source": "gdacs",
+          "details": "On 24/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029334",
+          "ts": "2026-07-06T19:00:23Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 06/07/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029334"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
+          "source": "gdacs",
+          "details": "On 06/07/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Angola",
+        "location": "Angola",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029335",
+          "ts": "2026-07-06T19:00:30Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 05/07/2026, a forest fire started in Angola,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029335"
+          ],
+          "title": "Green forest fire notification in Angola",
+          "source": "gdacs",
+          "details": "On 05/07/2026, a forest fire started in Angola,  until 06/07/2026.",
+          "location": "Angola",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029336",
+          "ts": "2026-07-06T19:00:56Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 04/07/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029336"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
+          "source": "gdacs",
+          "details": "On 04/07/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029337",
+          "ts": "2026-07-06T19:03:29Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 02/07/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029337"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
+          "source": "gdacs",
+          "details": "On 02/07/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Zambia",
+        "location": "Zambia",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029338",
+          "ts": "2026-07-06T19:04:11Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 01/07/2026, a forest fire started in Zambia,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029338"
+          ],
+          "title": "Green forest fire notification in Zambia",
+          "source": "gdacs",
+          "details": "On 01/07/2026, a forest fire started in Zambia,  until 06/07/2026.",
+          "location": "Zambia",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in The Democratic Republic of Congo",
+        "location": "The Democratic Republic of Congo",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029339",
+          "ts": "2026-07-06T19:05:35Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 30/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029339"
+          ],
+          "title": "Green forest fire notification in The Democratic Republic of Congo",
+          "source": "gdacs",
+          "details": "On 30/06/2026, a forest fire started in The Democratic Republic of Congo,  until 06/07/2026.",
+          "location": "The Democratic Republic of Congo",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "211 km ESE of Hihifo, Tonga",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us6000taft",
+          "ts": "2026-07-06T14:43:38Z",
+          "lat": -16.892,
+          "lon": -172.07,
+          "mag": 5.1,
+          "body": "211 km ESE of Hihifo, Tonga",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us6000taft"
+          ],
+          "title": "211 km ESE of Hihifo, Tonga",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "56 km W of La Ligua, Chile",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us6000tahc",
+          "ts": "2026-07-06T16:15:51Z",
+          "lat": -32.5446,
+          "lon": -71.8252,
+          "mag": 5.1,
+          "body": "56 km W of La Ligua, Chile",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tahc"
+          ],
+          "title": "56 km W of La Ligua, Chile",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "flood",
+        "title": "Green flood alert in Costa Rica",
+        "location": "Costa Rica",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "FL1104003",
+          "ts": "2026-07-06T11:28:47Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 02/07/2026, a flood started in Costa Rica, lasting until 04/07/2026 (last update). The flood caused 0 deaths and 250 displaced .",
+          "type": "flood",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104003"
+          ],
+          "title": "Green flood alert in Costa Rica",
+          "source": "gdacs",
+          "details": "On 02/07/2026, a flood started in Costa Rica, lasting until 04/07/2026 (last update). The flood caused 0 deaths and 250 displaced .",
+          "location": "Costa Rica",
           "severity": "info"
         }
       },
@@ -171,18 +566,266 @@
         "started_at": null,
         "ended_at": null,
         "payload": {
-          "id": "WF1029251",
-          "ts": "2026-07-02T23:00:58Z",
+          "id": "WF1029333",
+          "ts": "2026-07-06T19:03:16Z",
           "lat": null,
           "lon": null,
-          "body": "On 02/07/2026, a forest fire started in Australia,  until 02/07/2026.",
+          "body": "On 02/07/2026, a forest fire started in Australia,  until 06/07/2026.",
           "type": "wildfire",
           "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029251"
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029333"
           ],
           "title": "Green forest fire notification in Australia",
           "source": "gdacs",
-          "details": "On 02/07/2026, a forest fire started in Australia,  until 02/07/2026.",
+          "details": "On 02/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "location": "Australia",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Orange forest fire notification in France",
+        "location": "France",
+        "severity": "orange",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029331",
+          "ts": "2026-07-06T07:00:27Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 04/07/2026, a forest fire started in France,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029331"
+          ],
+          "title": "Orange forest fire notification in France",
+          "source": "gdacs",
+          "details": "On 04/07/2026, a forest fire started in France,  until 06/07/2026.",
+          "location": "France",
+          "severity": "orange"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Australia",
+        "location": "Australia",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029332",
+          "ts": "2026-07-06T19:00:16Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 06/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029332"
+          ],
+          "title": "Green forest fire notification in Australia",
+          "source": "gdacs",
+          "details": "On 06/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "location": "Australia",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "48 km SSW of Sarangani, Philippines",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us6000tadc",
+          "ts": "2026-07-06T08:11:11Z",
+          "lat": 4.9886,
+          "lon": 125.326,
+          "mag": 5.8,
+          "body": "48 km SSW of Sarangani, Philippines",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tadc"
+          ],
+          "title": "48 km SSW of Sarangani, Philippines",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in France",
+        "location": "France",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029331",
+          "ts": "2026-07-06T07:00:27Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 04/07/2026, a forest fire started in France,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029331"
+          ],
+          "title": "Green forest fire notification in France",
+          "source": "gdacs",
+          "details": "On 04/07/2026, a forest fire started in France,  until 06/07/2026.",
+          "location": "France",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "ash",
+        "title": "Volcanic eruption is on going for Etna in Italy",
+        "location": "Italy",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "VO1000142",
+          "ts": "2026-07-06T07:32:30Z",
+          "lat": null,
+          "lon": null,
+          "body": "Volcano Etna is emitting ash clouds according to the regional VAAC. The aviation alert level is Green.",
+          "type": "ash",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=VO&eventid=1000142"
+          ],
+          "title": "Volcanic eruption is on going for Etna in Italy",
+          "source": "gdacs",
+          "details": "Volcano Etna is emitting ash clouds according to the regional VAAC. The aviation alert level is Green.",
+          "location": "Italy",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "quake",
+        "title": "Green earthquake (Magnitude 5.8M, Depth:35km) in Philippines 06/07/2026 08:11 UTC, 250 thousand in MMI>=IV.",
+        "location": "Philippines 06/07/2026 08:11 UTC, 250 thousand in MMI>=IV.",
+        "severity": "red",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "EQ1550395",
+          "ts": "2026-07-06T08:35:27Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 7/6/2026 8:11:11 AM, an earthquake occurred in Philippines potentially affecting 250 thousand in MMI>=IV. The earthquake had Magnitude 5.8M, Depth:35km.",
+          "type": "quake",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1550395"
+          ],
+          "title": "Green earthquake (Magnitude 5.8M, Depth:35km) in Philippines 06/07/2026 08:11 UTC, 250 thousand in MMI>=IV.",
+          "source": "gdacs",
+          "details": "On 7/6/2026 8:11:11 AM, an earthquake occurred in Philippines potentially affecting 250 thousand in MMI>=IV. The earthquake had Magnitude 5.8M, Depth:35km.",
+          "location": "Philippines 06/07/2026 08:11 UTC, 250 thousand in MMI>=IV.",
+          "severity": "red"
+        }
+      },
+      {
+        "source": "media",
+        "kind": "quake",
+        "title": "65 km SSW of Sarangani, Philippines",
+        "location": null,
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "us6000tadj",
+          "ts": "2026-07-06T08:41:38Z",
+          "lat": 4.9091,
+          "lon": 125.1424,
+          "mag": 5.4,
+          "body": "65 km SSW of Sarangani, Philippines",
+          "type": "quake",
+          "links": [
+            "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tadj"
+          ],
+          "title": "65 km SSW of Sarangani, Philippines",
+          "source": "media",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Australia",
+        "location": "Australia",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029328",
+          "ts": "2026-07-06T07:02:25Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 02/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029328"
+          ],
+          "title": "Green forest fire notification in Australia",
+          "source": "gdacs",
+          "details": "On 02/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "location": "Australia",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Australia",
+        "location": "Australia",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029326",
+          "ts": "2026-07-05T23:01:45Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 03/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029326"
+          ],
+          "title": "Green forest fire notification in Australia",
+          "source": "gdacs",
+          "details": "On 03/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "location": "Australia",
+          "severity": "info"
+        }
+      },
+      {
+        "source": "gdacs",
+        "kind": "wildfire",
+        "title": "Green forest fire notification in Australia",
+        "location": "Australia",
+        "severity": "info",
+        "started_at": null,
+        "ended_at": null,
+        "payload": {
+          "id": "WF1029329",
+          "ts": "2026-07-05T23:02:38Z",
+          "lat": null,
+          "lon": null,
+          "body": "On 02/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "type": "wildfire",
+          "links": [
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029329"
+          ],
+          "title": "Green forest fire notification in Australia",
+          "source": "gdacs",
+          "details": "On 02/07/2026, a forest fire started in Australia,  until 06/07/2026.",
           "location": "Australia",
           "severity": "info"
         }
@@ -196,18 +839,18 @@
         "started_at": null,
         "ended_at": null,
         "payload": {
-          "id": "WF1029253",
-          "ts": "2026-07-02T23:02:45Z",
+          "id": "WF1029330",
+          "ts": "2026-07-06T19:07:57Z",
           "lat": null,
           "lon": null,
-          "body": "On 28/06/2026, a forest fire started in Canada,  until 02/07/2026.",
+          "body": "On 28/06/2026, a forest fire started in Canada,  until 05/07/2026.",
           "type": "wildfire",
           "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029253"
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029330"
           ],
           "title": "Green forest fire notification in Canada",
           "source": "gdacs",
-          "details": "On 28/06/2026, a forest fire started in Canada,  until 02/07/2026.",
+          "details": "On 28/06/2026, a forest fire started in Canada,  until 05/07/2026.",
           "location": "Canada",
           "severity": "info"
         }
@@ -215,200 +858,25 @@
       {
         "source": "gdacs",
         "kind": "wildfire",
-        "title": "Green forest fire notification in Canada",
-        "location": "Canada",
+        "title": "Green forest fire notification in Australia",
+        "location": "Australia",
         "severity": "info",
         "started_at": null,
         "ended_at": null,
         "payload": {
-          "id": "WF1029252",
-          "ts": "2026-07-02T23:02:31Z",
+          "id": "WF1029327",
+          "ts": "2026-07-06T07:02:39Z",
           "lat": null,
           "lon": null,
-          "body": "On 28/06/2026, a forest fire started in Canada,  until 02/07/2026.",
+          "body": "On 02/07/2026, a forest fire started in Australia,  until 06/07/2026.",
           "type": "wildfire",
           "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029252"
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029327"
           ],
-          "title": "Green forest fire notification in Canada",
+          "title": "Green forest fire notification in Australia",
           "source": "gdacs",
-          "details": "On 28/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "location": "Canada",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Canada",
-        "location": "Canada",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029254",
-          "ts": "2026-07-02T23:03:06Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 27/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029254"
-          ],
-          "title": "Green forest fire notification in Canada",
-          "source": "gdacs",
-          "details": "On 27/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "location": "Canada",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "cyclone",
-        "title": "Orange notification for tropical cyclone MAYSAK-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (21.806 million in Tropical Storm).",
-        "location": "Tropical Storm).",
-        "severity": "orange",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "TC1001281",
-          "ts": "2026-07-01T21:07:04Z",
-          "lat": null,
-          "lon": null,
-          "body": "From 01/07/2026 to 02/07/2026, a Tropical Depression (maximum wind speed of 74 km/h) MAYSAK-26 was active in NWPacific. The cyclone affects these countries: China, Viet Nam (vulnerability High). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (21.806 million in tropical storm).",
-          "type": "cyclone",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001281"
-          ],
-          "title": "Orange notification for tropical cyclone MAYSAK-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (21.806 million in Tropical Storm).",
-          "source": "gdacs",
-          "details": "From 01/07/2026 to 02/07/2026, a Tropical Depression (maximum wind speed of 74 km/h) MAYSAK-26 was active in NWPacific. The cyclone affects these countries: China, Viet Nam (vulnerability High). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (21.806 million in tropical storm).",
-          "location": "Tropical Storm).",
-          "severity": "orange"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Canada",
-        "location": "Canada",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029248",
-          "ts": "2026-07-02T19:10:24Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 24/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029248"
-          ],
-          "title": "Green forest fire notification in Canada",
-          "source": "gdacs",
-          "details": "On 24/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "location": "Canada",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Angola",
-        "location": "Angola",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029250",
-          "ts": "2026-07-02T19:28:10Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 17/06/2026, a forest fire started in Angola,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029250"
-          ],
-          "title": "Green forest fire notification in Angola",
-          "source": "gdacs",
-          "details": "On 17/06/2026, a forest fire started in Angola,  until 02/07/2026.",
-          "location": "Angola",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Angola",
-        "location": "Angola",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029245",
-          "ts": "2026-07-02T23:02:03Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 29/06/2026, a forest fire started in Angola,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029245"
-          ],
-          "title": "Green forest fire notification in Angola",
-          "source": "gdacs",
-          "details": "On 29/06/2026, a forest fire started in Angola,  until 02/07/2026.",
-          "location": "Angola",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Russian Federation",
-        "location": "Russian Federation",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029247",
-          "ts": "2026-07-02T23:10:51Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 25/06/2026, a forest fire started in Russian Federation,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029247"
-          ],
-          "title": "Green forest fire notification in Russian Federation",
-          "source": "gdacs",
-          "details": "On 25/06/2026, a forest fire started in Russian Federation,  until 02/07/2026.",
-          "location": "Russian Federation",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Angola",
-        "location": "Angola",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029246",
-          "ts": "2026-07-02T23:08:50Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 25/06/2026, a forest fire started in Angola,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029246"
-          ],
-          "title": "Green forest fire notification in Angola",
-          "source": "gdacs",
-          "details": "On 25/06/2026, a forest fire started in Angola,  until 02/07/2026.",
-          "location": "Angola",
+          "details": "On 02/07/2026, a forest fire started in Australia,  until 06/07/2026.",
+          "location": "Australia",
           "severity": "info"
         }
       },
@@ -421,466 +889,20 @@
         "started_at": null,
         "ended_at": null,
         "payload": {
-          "id": "WF1029249",
-          "ts": "2026-07-02T23:15:01Z",
+          "id": "WF1029325",
+          "ts": "2026-07-06T15:16:39Z",
           "lat": null,
           "lon": null,
-          "body": "On 23/06/2026, a forest fire started in The Democratic Republic of Congo,  until 02/07/2026.",
+          "body": "On 25/06/2026, a forest fire started in The Democratic Republic of Congo,  until 05/07/2026.",
           "type": "wildfire",
           "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029249"
+            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029325"
           ],
           "title": "Green forest fire notification in The Democratic Republic of Congo",
           "source": "gdacs",
-          "details": "On 23/06/2026, a forest fire started in The Democratic Republic of Congo,  until 02/07/2026.",
+          "details": "On 25/06/2026, a forest fire started in The Democratic Republic of Congo,  until 05/07/2026.",
           "location": "The Democratic Republic of Congo",
           "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in The Democratic Republic of Congo",
-        "location": "The Democratic Republic of Congo",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029244",
-          "ts": "2026-07-02T23:01:27Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 30/06/2026, a forest fire started in The Democratic Republic of Congo,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029244"
-          ],
-          "title": "Green forest fire notification in The Democratic Republic of Congo",
-          "source": "gdacs",
-          "details": "On 30/06/2026, a forest fire started in The Democratic Republic of Congo,  until 02/07/2026.",
-          "location": "The Democratic Republic of Congo",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Botswana",
-        "location": "Botswana",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029243",
-          "ts": "2026-07-02T23:01:11Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 01/07/2026, a forest fire started in Botswana,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029243"
-          ],
-          "title": "Green forest fire notification in Botswana",
-          "source": "gdacs",
-          "details": "On 01/07/2026, a forest fire started in Botswana,  until 02/07/2026.",
-          "location": "Botswana",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "cyclone",
-        "title": "Orange notification for tropical cyclone TEN-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (17.77 million in Tropical Storm).",
-        "location": "Tropical Storm).",
-        "severity": "orange",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "TC1001281",
-          "ts": "2026-07-01T21:07:04Z",
-          "lat": null,
-          "lon": null,
-          "body": "From 01/07/2026 to 02/07/2026, a Tropical Depression (maximum wind speed of 74 km/h) TEN-26 was active in NWPacific. The cyclone affects these countries: China, Viet Nam (vulnerability High). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (17.77 million in tropical storm).",
-          "type": "cyclone",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001281"
-          ],
-          "title": "Orange notification for tropical cyclone TEN-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (17.77 million in Tropical Storm).",
-          "source": "gdacs",
-          "details": "From 01/07/2026 to 02/07/2026, a Tropical Depression (maximum wind speed of 74 km/h) TEN-26 was active in NWPacific. The cyclone affects these countries: China, Viet Nam (vulnerability High). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (17.77 million in tropical storm).",
-          "location": "Tropical Storm).",
-          "severity": "orange"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "cyclone",
-        "title": "Red notification for tropical cyclone BAVI-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 48400 .",
-        "location": null,
-        "severity": "red",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "TC1001279",
-          "ts": "2026-07-01T01:51:41Z",
-          "lat": null,
-          "lon": null,
-          "body": "From 01/07/2026 to 02/07/2026, a Tropical Storm (maximum wind speed of 250 km/h) BAVI-26 was active in NWPacific. The cyclone affects these countries: Northern Mariana Islands (vulnerability Medium). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 48400 .",
-          "type": "cyclone",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001279"
-          ],
-          "title": "Red notification for tropical cyclone BAVI-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 48400 .",
-          "source": "gdacs",
-          "details": "From 01/07/2026 to 02/07/2026, a Tropical Storm (maximum wind speed of 250 km/h) BAVI-26 was active in NWPacific. The cyclone affects these countries: Northern Mariana Islands (vulnerability Medium). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 48400 .",
-          "location": null,
-          "severity": "red"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Canada",
-        "location": "Canada",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029242",
-          "ts": "2026-07-02T15:08:55Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 25/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029242"
-          ],
-          "title": "Green forest fire notification in Canada",
-          "source": "gdacs",
-          "details": "On 25/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "location": "Canada",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "media",
-        "kind": "quake",
-        "title": "23 km SSE of Karpathos, Greece",
-        "location": null,
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "us6000t9lz",
-          "ts": "2026-07-02T11:06:21Z",
-          "lat": 35.3034,
-          "lon": 27.2953,
-          "mag": 5.2,
-          "body": "23 km SSE of Karpathos, Greece",
-          "type": "quake",
-          "links": [
-            "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9lz"
-          ],
-          "title": "23 km SSE of Karpathos, Greece",
-          "source": "media",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "flood",
-        "title": "Green flood alert in Nigeria",
-        "location": "Nigeria",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "FL1103997",
-          "ts": "2026-07-02T10:57:47Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 01/07/2026, a flood started in Nigeria, lasting until 03/07/2026 (last update). The flood caused 0 deaths and 20 displaced .",
-          "type": "flood",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103997"
-          ],
-          "title": "Green flood alert in Nigeria",
-          "source": "gdacs",
-          "details": "On 01/07/2026, a flood started in Nigeria, lasting until 03/07/2026 (last update). The flood caused 0 deaths and 20 displaced .",
-          "location": "Nigeria",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Canada",
-        "location": "Canada",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029241",
-          "ts": "2026-07-02T11:04:16Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 27/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029241"
-          ],
-          "title": "Green forest fire notification in Canada",
-          "source": "gdacs",
-          "details": "On 27/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "location": "Canada",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "flood",
-        "title": "Green flood alert in Thailand",
-        "location": "Thailand",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "FL1103996",
-          "ts": "2026-07-02T10:08:34Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 01/07/2026, a flood started in Thailand, lasting until 03/07/2026 (last update). The flood caused 0 deaths and 67 displaced .",
-          "type": "flood",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103996"
-          ],
-          "title": "Green flood alert in Thailand",
-          "source": "gdacs",
-          "details": "On 01/07/2026, a flood started in Thailand, lasting until 03/07/2026 (last update). The flood caused 0 deaths and 67 displaced .",
-          "location": "Thailand",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "flood",
-        "title": "Green flood alert in Slovakia",
-        "location": "Slovakia",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "FL1103998",
-          "ts": "2026-07-02T11:18:41Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 01/07/2026, a flood started in Slovakia, lasting until 02/07/2026 (last update). The flood caused 0 deaths and 0 displaced .",
-          "type": "flood",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103998"
-          ],
-          "title": "Green flood alert in Slovakia",
-          "source": "gdacs",
-          "details": "On 01/07/2026, a flood started in Slovakia, lasting until 02/07/2026 (last update). The flood caused 0 deaths and 0 displaced .",
-          "location": "Slovakia",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "cyclone",
-        "title": "Orange notification for tropical cyclone TEN-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (17.193 million in Tropical Storm).",
-        "location": "Tropical Storm).",
-        "severity": "orange",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "TC1001281",
-          "ts": "2026-07-01T21:07:04Z",
-          "lat": null,
-          "lon": null,
-          "body": "From 01/07/2026 to 02/07/2026, a Tropical Depression (maximum wind speed of 74 km/h) TEN-26 was active in NWPacific. The cyclone affects these countries: China, Viet Nam (vulnerability High). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (17.193 million in tropical storm).",
-          "type": "cyclone",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001281"
-          ],
-          "title": "Orange notification for tropical cyclone TEN-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (17.193 million in Tropical Storm).",
-          "source": "gdacs",
-          "details": "From 01/07/2026 to 02/07/2026, a Tropical Depression (maximum wind speed of 74 km/h) TEN-26 was active in NWPacific. The cyclone affects these countries: China, Viet Nam (vulnerability High). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (17.193 million in tropical storm).",
-          "location": "Tropical Storm).",
-          "severity": "orange"
-        }
-      },
-      {
-        "source": "media",
-        "kind": "quake",
-        "title": "South Sandwich Islands region",
-        "location": null,
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "us6000t9kl",
-          "ts": "2026-07-02T05:23:17Z",
-          "lat": -60.9974,
-          "lon": -23.537,
-          "mag": 5.3,
-          "body": "South Sandwich Islands region",
-          "type": "quake",
-          "links": [
-            "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9kl"
-          ],
-          "title": "South Sandwich Islands region",
-          "source": "media",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in The Democratic Republic of Congo",
-        "location": "The Democratic Republic of Congo",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029240",
-          "ts": "2026-07-02T15:21:55Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 20/06/2026, a forest fire started in The Democratic Republic of Congo,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029240"
-          ],
-          "title": "Green forest fire notification in The Democratic Republic of Congo",
-          "source": "gdacs",
-          "details": "On 20/06/2026, a forest fire started in The Democratic Republic of Congo,  until 02/07/2026.",
-          "location": "The Democratic Republic of Congo",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "media",
-        "kind": "quake",
-        "title": "South Sandwich Islands region",
-        "location": null,
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "us6000t9jv",
-          "ts": "2026-07-02T02:57:42Z",
-          "lat": -58.4797,
-          "lon": -26.5923,
-          "mag": 5.2,
-          "body": "South Sandwich Islands region",
-          "type": "quake",
-          "links": [
-            "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9jv"
-          ],
-          "title": "South Sandwich Islands region",
-          "source": "media",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "flood",
-        "title": "Green flood alert in Vietnam",
-        "location": "Vietnam",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "FL1103992",
-          "ts": "2026-07-02T09:06:20Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 25/06/2026, a flood started in Vietnam, lasting until 27/06/2026 (last update). The flood caused 0 deaths and 8 displaced .",
-          "type": "flood",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103992"
-          ],
-          "title": "Green flood alert in Vietnam",
-          "source": "gdacs",
-          "details": "On 25/06/2026, a flood started in Vietnam, lasting until 27/06/2026 (last update). The flood caused 0 deaths and 8 displaced .",
-          "location": "Vietnam",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "media",
-        "kind": "quake",
-        "title": "east of the South Sandwich Islands",
-        "location": null,
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "us6000t9kj",
-          "ts": "2026-07-02T05:14:00Z",
-          "lat": -57.8826,
-          "lon": -8.4887,
-          "mag": 5.2,
-          "body": "east of the South Sandwich Islands",
-          "type": "quake",
-          "links": [
-            "https://earthquake.usgs.gov/earthquakes/eventpage/us6000t9kj"
-          ],
-          "title": "east of the South Sandwich Islands",
-          "source": "media",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "wildfire",
-        "title": "Green forest fire notification in Canada",
-        "location": "Canada",
-        "severity": "info",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "WF1029239",
-          "ts": "2026-07-02T03:07:40Z",
-          "lat": null,
-          "lon": null,
-          "body": "On 26/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "type": "wildfire",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029239"
-          ],
-          "title": "Green forest fire notification in Canada",
-          "source": "gdacs",
-          "details": "On 26/06/2026, a forest fire started in Canada,  until 02/07/2026.",
-          "location": "Canada",
-          "severity": "info"
-        }
-      },
-      {
-        "source": "gdacs",
-        "kind": "cyclone",
-        "title": "Orange notification for tropical cyclone TEN-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (27.727 million in Tropical Storm).",
-        "location": "Tropical Storm).",
-        "severity": "orange",
-        "started_at": null,
-        "ended_at": null,
-        "payload": {
-          "id": "TC1001281",
-          "ts": "2026-07-01T21:07:04Z",
-          "lat": null,
-          "lon": null,
-          "body": "From 01/07/2026 to 02/07/2026, a Tropical Depression (maximum wind speed of 74 km/h) TEN-26 was active in NWPacific. The cyclone affects these countries: China, Viet Nam (vulnerability High). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (27.727 million in tropical storm).",
-          "type": "cyclone",
-          "links": [
-            "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001281"
-          ],
-          "title": "Orange notification for tropical cyclone TEN-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (27.727 million in Tropical Storm).",
-          "source": "gdacs",
-          "details": "From 01/07/2026 to 02/07/2026, a Tropical Depression (maximum wind speed of 74 km/h) TEN-26 was active in NWPacific. The cyclone affects these countries: China, Viet Nam (vulnerability High). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (27.727 million in tropical storm).",
-          "location": "Tropical Storm).",
-          "severity": "orange"
         }
       }
     ]
