@@ -110,10 +110,22 @@ def test_space_alerts_keep_health_pattern_context() -> None:
 
     cme_caption = drafts["cme"]["caption"]
     assert drafts["cme"]["title"] in {hook for hooks in CME_HOOKS.values() for hook in hooks}
+    assert drafts["cme"]["title"] in {
+        "Feeling drained today?",
+        "Moving in slow motion today?",
+        "Battery on empty today?",
+        "Nerves on overdrive?",
+        "Feeling restless today?",
+        "Pain level worse today?",
+    }
+    assert "Feeling off today?" not in cme_caption
     assert "Recovery feeling off?" not in cme_caption
     assert "Body signals look noisier today." not in cme_caption
-    assert "The sun influences more than we think." in cme_caption
-    assert "When solar activity is elevated" in cme_caption
+    assert "The sun influences more than we think." not in cme_caption
+    assert (
+        "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy."
+        in cme_caption
+    )
     assert "Quick context: a CME is a burst of solar material" in cme_caption
     assert "Studies are exploring links between solar activity" in cme_caption
     assert "alongside the CME signal" not in cme_caption

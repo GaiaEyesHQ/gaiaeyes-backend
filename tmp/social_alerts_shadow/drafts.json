@@ -2,7 +2,7 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-07T16:32:10Z",
+  "generated_at": "2026-07-07T17:00:58Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 1,
   "drafts": [
@@ -14,9 +14,9 @@
       "category": "cme",
       "severity": "high",
       "asof": "2026-07-07T01:11:32Z",
-      "title": "Feeling off today?",
-      "subtitle": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
-      "caption": "Feeling off today?\n\nThe sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.\n\nQuick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.\n\nWant to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "title": "Nerves on overdrive?",
+      "subtitle": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
+      "caption": "Nerves on overdrive?\n\nWhen solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.\n\nQuick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.\n\nWant to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app\n\n#GaiaEyes #SpaceWeather #EarthSignals",
       "metrics": {
         "cmes_count": 4.0,
         "cmes_max_speed_kms": null
@@ -48,8 +48,8 @@
             "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
           },
           "label": "SOLAR WATCH",
-          "title": "Feeling off today?",
-          "subtitle": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
+          "title": "Nerves on overdrive?",
+          "subtitle": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -106,8 +106,8 @@
             "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
           },
           "label": "SOLAR WATCH",
-          "title": "Feeling off today?",
-          "subtitle": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
+          "title": "Nerves on overdrive?",
+          "subtitle": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -166,11 +166,11 @@
           "frames": [
             {
               "role": "hook",
-              "text": "Feeling off today?"
+              "text": "Nerves on overdrive?"
             },
             {
               "role": "signal",
-              "text": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
+              "text": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
               "context_chips": [
                 "Sleep",
                 "HRV",
@@ -186,8 +186,8 @@
             }
           ],
           "label": "SOLAR WATCH",
-          "title": "Feeling off today?",
-          "subtitle": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
+          "title": "Nerves on overdrive?",
+          "subtitle": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
           "context_chips": [
             "Sleep",
             "HRV",

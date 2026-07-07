@@ -2,10 +2,10 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-07T16:32:10Z`
+- Generated at: `2026-07-07T17:00:58Z`
 - Draft count: `1`
 
-## 1. Feeling off today?
+## 1. Nerves on overdrive?
 
 - Category: `cme`
 - Severity: `high`
@@ -15,9 +15,9 @@
 Post caption copy:
 
 ```text
-Feeling off today?
+Nerves on overdrive?
 
-The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.
+When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.
 
 Quick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.
 

@@ -94,8 +94,8 @@ GEOMAGNETIC_HOOKS = {
     "high": ["Feeling extra wired?", "Restless for no reason?", "Nervous system on alert?"],
 }
 CME_HOOKS = {
-    "watch": ["Sleep feeling lighter?", "Feeling off today?", "Wired but tired today?"],
-    "high": ["Wired but tired today?", "Feeling off today?", "Sleep feeling fragile?"],
+    "watch": ["Feeling drained today?", "Moving in slow motion today?", "Feeling restless today?"],
+    "high": ["Battery on empty today?", "Nerves on overdrive?", "Pain level worse today?"],
 }
 FLARE_HOOKS = {
     "watch": ["Focus feeling patchy?", "Energy coming in waves?", "Brain tabs everywhere?"],
@@ -104,12 +104,12 @@ FLARE_HOOKS = {
 SIGNAL_SUBTITLES = {
     "geomagnetic": "Geomagnetic activity is up. Gaia Eyes watches windows like this alongside sleep, HRV, headaches, focus, and restless energy.",
     "solar_flare": "Solar flare activity is elevated. Some people track windows like this with energy, focus, headaches, and sleep.",
-    "cme": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
+    "cme": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
 }
 SIGNAL_CAPTIONS = {
     "geomagnetic": "{title}\n\nGeomagnetic activity is up, including Kp/Bz and solar-wind movement. If sleep, HRV, headaches, focus, or restless energy feel different today, this is a useful window to log.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
     "solar_flare": "{title}\n\nElevated solar activity is showing up today. Some people like to track windows like this with energy, focus, headaches, sleep, and recovery markers.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
-    "cme": "{title}\n\nThe sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
+    "cme": "{title}\n\nWhen solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
 }
 SIGNAL_EXPLAINERS = {
     "geomagnetic": "Quick context: geomagnetic activity means Earth's magnetic environment is changing, often from solar-wind movement. Gaia Eyes watches these windows alongside sleep, HRV, headaches, focus, and symptom patterns.",

@@ -2,15 +2,15 @@
   "schema_version": "social_alerts_preview_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-07T16:32:16Z",
-  "source_payload_generated_at": "2026-07-07T16:32:10Z",
+  "generated_at": "2026-07-07T17:01:06Z",
+  "source_payload_generated_at": "2026-07-07T17:00:58Z",
   "rendered_count": 1,
   "rendered": [
     {
       "draft_id": "social_alert.cme.high.6b0d08c27bee",
       "category": "cme",
       "severity": "high",
-      "title": "Feeling off today?",
+      "title": "Nerves on overdrive?",
       "outputs": [
         {
           "format": "square_image",
