@@ -218,6 +218,53 @@ def fetch_post_for_day(day: str, platform: str = "default") -> Optional[dict]:
             return rows[0]
     return None
 
+
+def _metrics_sections(row: dict) -> dict:
+    metrics = row.get("metrics_json")
+    if isinstance(metrics, str):
+        try:
+            metrics = json.loads(metrics)
+        except Exception:
+            metrics = {}
+    if not isinstance(metrics, dict):
+        return {}
+    sections = metrics.get("sections")
+    return sections if isinstance(sections, dict) else {}
+
+
+def _clean_vo_sentence(text: object) -> str:
+    cleaned = " ".join(str(text or "").replace("•", " ").split())
+    return cleaned.strip(" -")
+
+
+def _first_action(text: object) -> str:
+    for raw in str(text or "").splitlines():
+        line = _clean_vo_sentence(raw)
+        if line:
+            return line
+    return ""
+
+
+def build_vo_text_from_post(row: dict) -> str:
+    sections = _metrics_sections(row)
+    caption = _clean_vo_sentence(row.get("caption") or sections.get("caption") or row.get("overview") or row.get("lead"))
+    affects = _clean_vo_sentence(sections.get("affects"))
+    action = _first_action(sections.get("playbook"))
+
+    parts: List[str] = []
+    if caption:
+        parts.append(caption)
+    if affects and affects.lower() not in caption.lower():
+        parts.append(affects)
+    if action:
+        parts.append(f"Try this today: {action}.")
+
+    text = " ".join(parts).strip()
+    if text:
+        return strip_metric_tail(text)
+    return ""
+
+
 def resolve_caption(platform: str = "default", target_day: Optional[str] = None) -> Optional[str]:
     if not SUPABASE_REST_URL:
         return None
@@ -238,6 +285,19 @@ def resolve_caption(platform: str = "default", target_day: Optional[str] = None)
             if isinstance(txt, str) and txt.strip():
                 return txt.strip()
     return None
+
+
+def resolve_vo_text(platform: str = "default", target_day: Optional[str] = None) -> Optional[str]:
+    if not SUPABASE_REST_URL:
+        return None
+    day = target_day or _latest_day_from_content(platform)
+    row = fetch_post_for_day(day, platform)
+    if not row:
+        return None
+    vo_text = build_vo_text_from_post(row)
+    if vo_text:
+        return vo_text
+    return resolve_caption(platform=platform, target_day=day)
 
 # Visual timing
 CLIP_DUR = 6.5   # seconds per still
@@ -563,7 +623,7 @@ def main():
     target_day = env_get("TARGET_DAY")
     caption_text = resolve_caption(platform=platform, target_day=target_day)
     post_caption = " ".join((caption_text or "").split())
-    vo_text_raw = caption_text or ""
+    vo_text_raw = resolve_vo_text(platform=platform, target_day=target_day) or caption_text or ""
     if not vo_text_raw.strip():
         vo_text_raw = guess_vo_text(EARTHSCOPE_JSON)
     vo_text = strip_metric_tail(vo_text_raw) if STRIP_METRICS else vo_text_raw

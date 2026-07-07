@@ -110,13 +110,29 @@ def test_space_alerts_keep_health_pattern_context() -> None:
 
     cme_caption = drafts["cme"]["caption"]
     assert drafts["cme"]["title"] in {hook for hooks in CME_HOOKS.values() for hook in hooks}
-    assert "Body signals look noisier today." in cme_caption
-    assert "during this active solar window" in cme_caption
+    assert "Recovery feeling off?" not in cme_caption
+    assert "Body signals look noisier today." not in cme_caption
+    assert "The sun influences more than we think." in cme_caption
+    assert "When solar activity is elevated" in cme_caption
+    assert "Quick context: a CME is a burst of solar material" in cme_caption
+    assert "Studies are exploring links between solar activity" in cme_caption
     assert "alongside the CME signal" not in cme_caption
     assert CTA in cme_caption
+    assert "https://GaiaEyes.com/app" in cme_caption
     assert "Gaia Eyes compares symptoms, wearables, exposures, and environmental signals over time." not in cme_caption
     assert "CME activity is elevated" not in cme_caption
     assert "CME activity is present" not in cme_caption
+    assert drafts["cme"]["overlay_spec"]["square_image"]["metric_chips"] == []
+    assert "Recovery" not in drafts["cme"]["overlay_spec"]["square_image"]["context_chips"]
+
+
+def test_schumann_caption_includes_brief_public_explainer_and_app_cta() -> None:
+    payload = build_shadow_payload({"schumann": {"zscore_30d": 3.2, "combined": {"f1_hz": 7.91}}})
+    schumann = next(draft for draft in payload["drafts"] if draft["category"] == "schumann")
+
+    assert "Quick context: Schumann resonance is part of Earth's natural electromagnetic background." in schumann["caption"]
+    assert "heart, sleep, mood, and nervous-system patterns" in schumann["caption"]
+    assert CTA in schumann["caption"]
 
 
 def test_geomagnetic_kp_thresholds_use_watch_at_3_5_and_high_at_5() -> None:

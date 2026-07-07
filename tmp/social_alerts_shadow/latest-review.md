@@ -2,10 +2,10 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-07T06:11:27Z`
+- Generated at: `2026-07-07T16:32:10Z`
 - Draft count: `1`
 
-## 1. Recovery feeling off?
+## 1. Feeling off today?
 
 - Category: `cme`
 - Severity: `high`
@@ -15,11 +15,13 @@
 Post caption copy:
 
 ```text
-Recovery feeling off?
+Feeling off today?
 
-Body signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this active solar window and let the pattern build.
+The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.
 
-Track this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes.
+Quick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.
+
+Want to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```

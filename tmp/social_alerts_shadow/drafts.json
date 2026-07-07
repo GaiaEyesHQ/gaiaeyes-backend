@@ -2,7 +2,7 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-07T06:11:27Z",
+  "generated_at": "2026-07-07T16:32:10Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 1,
   "drafts": [
@@ -14,9 +14,9 @@
       "category": "cme",
       "severity": "high",
       "asof": "2026-07-07T01:11:32Z",
-      "title": "Recovery feeling off?",
-      "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
-      "caption": "Recovery feeling off?\n\nBody signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this active solar window and let the pattern build.\n\nTrack this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes.\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "title": "Feeling off today?",
+      "subtitle": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
+      "caption": "Feeling off today?\n\nThe sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.\n\nQuick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.\n\nWant to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app\n\n#GaiaEyes #SpaceWeather #EarthSignals",
       "metrics": {
         "cmes_count": 4.0,
         "cmes_max_speed_kms": null
@@ -47,26 +47,17 @@
             "layout": "trust_first_alert_card",
             "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
           },
-          "label": "RECOVERY WATCH",
-          "title": "Recovery feeling off?",
-          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
+          "label": "SOLAR WATCH",
+          "title": "Feeling off today?",
+          "subtitle": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
           "context_chips": [
             "Sleep",
             "HRV",
-            "Recovery",
+            "Energy",
             "Pain",
             "Restless"
           ],
-          "metric_chips": [
-            {
-              "label": "CMEs",
-              "value": "4"
-            },
-            {
-              "label": "Max speed",
-              "value": "--"
-            }
-          ],
+          "metric_chips": [],
           "footer": "Track recovery, sleep, HRV, and symptoms.",
           "theme_keys": [
             "cme",
@@ -114,26 +105,17 @@
             "layout": "trust_first_alert_card",
             "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
           },
-          "label": "RECOVERY WATCH",
-          "title": "Recovery feeling off?",
-          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
+          "label": "SOLAR WATCH",
+          "title": "Feeling off today?",
+          "subtitle": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
           "context_chips": [
             "Sleep",
             "HRV",
-            "Recovery",
+            "Energy",
             "Pain",
             "Restless"
           ],
-          "metric_chips": [
-            {
-              "label": "CMEs",
-              "value": "4"
-            },
-            {
-              "label": "Max speed",
-              "value": "--"
-            }
-          ],
+          "metric_chips": [],
           "footer": "Track recovery, sleep, HRV, and symptoms.",
           "theme_keys": [
             "cme",
@@ -184,54 +166,36 @@
           "frames": [
             {
               "role": "hook",
-              "text": "Recovery feeling off?"
+              "text": "Feeling off today?"
             },
             {
               "role": "signal",
-              "text": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
+              "text": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
               "context_chips": [
                 "Sleep",
                 "HRV",
-                "Recovery",
+                "Energy",
                 "Pain",
                 "Restless"
               ],
-              "metric_chips": [
-                {
-                  "label": "CMEs",
-                  "value": "4"
-                },
-                {
-                  "label": "Max speed",
-                  "value": "--"
-                }
-              ]
+              "metric_chips": []
             },
             {
               "role": "cta",
-              "text": "Track this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes."
+              "text": "Want to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app"
             }
           ],
-          "label": "RECOVERY WATCH",
-          "title": "Recovery feeling off?",
-          "subtitle": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
+          "label": "SOLAR WATCH",
+          "title": "Feeling off today?",
+          "subtitle": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
           "context_chips": [
             "Sleep",
             "HRV",
-            "Recovery",
+            "Energy",
             "Pain",
             "Restless"
           ],
-          "metric_chips": [
-            {
-              "label": "CMEs",
-              "value": "4"
-            },
-            {
-              "label": "Max speed",
-              "value": "--"
-            }
-          ],
+          "metric_chips": [],
           "footer": "Track recovery, sleep, HRV, and symptoms.",
           "theme_keys": [
             "cme",

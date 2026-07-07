@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from bots.social_alerts.asset_bootstrap_pack import bootstrap_background_candidates, bootstrap_background_prompts
 
 
-CTA = "Track this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes."
+CTA = "Want to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app"
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
 SOCIAL_BACKGROUND_PREFIX = "social/share/backgrounds"
@@ -71,7 +71,7 @@ GEOMAGNETIC_HEALTH_CHIPS = [
 CME_HEALTH_CHIPS = [
     "Sleep",
     "HRV",
-    "Recovery",
+    "Energy",
     "Pain",
     "Restless",
 ]
@@ -94,8 +94,8 @@ GEOMAGNETIC_HOOKS = {
     "high": ["Feeling extra wired?", "Restless for no reason?", "Nervous system on alert?"],
 }
 CME_HOOKS = {
-    "watch": ["Sleep feeling lighter?", "Recovery feeling slower?", "Wired but tired today?"],
-    "high": ["Wired but tired today?", "Recovery feeling off?", "Sleep feeling fragile?"],
+    "watch": ["Sleep feeling lighter?", "Feeling off today?", "Wired but tired today?"],
+    "high": ["Wired but tired today?", "Feeling off today?", "Sleep feeling fragile?"],
 }
 FLARE_HOOKS = {
     "watch": ["Focus feeling patchy?", "Energy coming in waves?", "Brain tabs everywhere?"],
@@ -104,17 +104,23 @@ FLARE_HOOKS = {
 SIGNAL_SUBTITLES = {
     "geomagnetic": "Geomagnetic activity is up. Gaia Eyes watches windows like this alongside sleep, HRV, headaches, focus, and restless energy.",
     "solar_flare": "Solar flare activity is elevated. Some people track windows like this with energy, focus, headaches, and sleep.",
-    "cme": "Body signals look noisier today. Watch sleep, HRV trends, pain, recovery, and restless energy during this active solar window.",
+    "cme": "The sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.",
 }
 SIGNAL_CAPTIONS = {
-    "geomagnetic": "{title}\n\nGeomagnetic activity is up, including Kp/Bz and solar-wind movement. If sleep, HRV, headaches, focus, or restless energy feel different today, this is a useful window to log.\n\nGaia Eyes helps compare body data with environmental signals over time.\n\n{hashtags}",
-    "solar_flare": "{title}\n\nSolar flare activity is elevated. Some people like to track windows like this with energy, focus, headaches, sleep, and recovery markers.\n\nGaia Eyes helps you see whether these signals line up with your own patterns.\n\n{hashtags}",
-    "cme": "{title}\n\nBody signals look noisier today. If sleep feels lighter, HRV dips, pain flares, or recovery feels slower, log it during this active solar window and let the pattern build.\n\n{cta}\n\n{hashtags}",
+    "geomagnetic": "{title}\n\nGeomagnetic activity is up, including Kp/Bz and solar-wind movement. If sleep, HRV, headaches, focus, or restless energy feel different today, this is a useful window to log.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
+    "solar_flare": "{title}\n\nElevated solar activity is showing up today. Some people like to track windows like this with energy, focus, headaches, sleep, and recovery markers.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
+    "cme": "{title}\n\nThe sun influences more than we think. When solar activity is elevated, some people track sleep, HRV, headaches, pain, mood, and restless energy more closely.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
+}
+SIGNAL_EXPLAINERS = {
+    "geomagnetic": "Quick context: geomagnetic activity means Earth's magnetic environment is changing, often from solar-wind movement. Gaia Eyes watches these windows alongside sleep, HRV, headaches, focus, and symptom patterns.",
+    "solar_flare": "Quick context: elevated solar activity means solar signals like flares or related radiation are more active than usual. Gaia Eyes tracks these windows alongside energy, focus, headaches, sleep, and symptoms.",
+    "cme": "Quick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.",
+    "schumann": "Quick context: Schumann resonance is part of Earth's natural electromagnetic background. Researchers study how these low-frequency signals may relate to heart, sleep, mood, and nervous-system patterns.",
 }
 SIGNAL_LABELS = {
     "geomagnetic": "PATTERN WATCH",
     "solar_flare": "HEALTH WATCH",
-    "cme": "RECOVERY WATCH",
+    "cme": "SOLAR WATCH",
     "schumann": "HEALTH WATCH",
 }
 SIGNAL_FOOTERS = {
@@ -129,9 +135,9 @@ SCHUMANN_SUBTITLES = [
     "Earth's resonance is moving. Gaia Eyes helps compare it with body patterns over time.",
 ]
 SCHUMANN_CAPTION_TEMPLATES = [
-    "{hook}\n\nSchumann resonance is one of Earth's background electromagnetic signals. The current reading is running above its recent baseline.\n\nIf sleep, HRV, focus, headaches, sinus pressure, or wired/tired energy feel off, this is the kind of signal Gaia Eyes helps you compare over time.\n\n#GaiaEyes #SchumannResonance #HRV #SleepPatterns",
-    "{hook}\n\nThe Schumann signal is elevated compared with its recent baseline. Some people like to watch these windows alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.\n\nGaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
-    "{hook}\n\nCurrent Schumann activity is running higher than its recent baseline. One signal by itself does not explain a body day, but repeated overlaps can be worth noticing.\n\nGaia Eyes helps you compare this kind of Earth signal with sleep, HRV, focus, pain, and symptom logs so patterns can get clearer over time.\n\n#GaiaEyes #EarthSignals #SleepPatterns #HRV",
+    "{hook}\n\nSchumann resonance is one of Earth's background electromagnetic signals. The current reading is running above its recent baseline.\n\nIf sleep, HRV, focus, headaches, sinus pressure, or wired/tired energy feel off, this is the kind of signal Gaia Eyes helps you compare over time.\n\n{explainer}\n\n{cta}\n\n#GaiaEyes #SchumannResonance #HRV #SleepPatterns",
+    "{hook}\n\nThe Schumann signal is elevated compared with its recent baseline. Some people like to watch these windows alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.\n\nGaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.\n\n{explainer}\n\n{cta}\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
+    "{hook}\n\nCurrent Schumann activity is running higher than its recent baseline. One signal by itself does not explain a body day, but repeated overlaps can be worth noticing.\n\nGaia Eyes helps you compare this kind of Earth signal with sleep, HRV, focus, pain, and symptom logs so patterns can get clearer over time.\n\n{explainer}\n\n{cta}\n\n#GaiaEyes #EarthSignals #SleepPatterns #HRV",
 ]
 
 
@@ -364,7 +370,7 @@ def _signal_caption(category: str, title: str, *, hashtags: str = DEFAULT_HASHTA
     template = SIGNAL_CAPTIONS.get(category)
     if not template:
         return _caption(title, SIGNAL_SUBTITLES.get(category, ""), hashtags=hashtags)
-    return template.format(title=title, cta=CTA, hashtags=hashtags)
+    return template.format(title=title, explainer=SIGNAL_EXPLAINERS.get(category, ""), cta=CTA, hashtags=hashtags)
 
 
 def _pick_hook(hooks: Mapping[str, Sequence[str]], severity: str, seed: str) -> str:
@@ -641,10 +647,7 @@ def _space_drafts(snapshot: Mapping[str, Any], asof: Optional[str]) -> List[Dict
                 title=title,
                 subtitle=subtitle,
                 metrics=metrics,
-                chips=[
-                    {"label": "CMEs", "value": _fmt_number(cmes_count, digits=0)},
-                    {"label": "Max speed", "value": _fmt_number(cmes_max_speed, digits=0, suffix=" km/s")},
-                ],
+                chips=[],
                 context_chips=CME_HEALTH_CHIPS,
                 theme_keys=["cme", "solar", "space_weather"],
                 background_candidates=_social_background_candidates(
@@ -736,7 +739,7 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
         ],
         asof=asof,
         media_assets=MEDIA_ASSETS["schumann"],
-        caption=caption_template.format(hook=hook),
+        caption=caption_template.format(hook=hook, explainer=SIGNAL_EXPLAINERS["schumann"], cta=CTA),
     )
 
 

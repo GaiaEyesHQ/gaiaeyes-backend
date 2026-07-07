@@ -21,7 +21,7 @@ from bots.social_alerts.asset_bootstrap_pack import BOOTSTRAP_PREFIX, bootstrap_
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MEDIA_BASE_URL = "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals"
 DEFAULT_PREVIEW_DIR = Path("tmp") / "social_alerts_shadow" / "previews"
-DEFAULT_CTA = "Track this alongside sleep, HRV, symptoms, and exposures in Gaia Eyes."
+DEFAULT_CTA = "Want to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app"
 FALLBACK_GRADIENTS = {
     "solar_flare": ((36, 10, 5), (236, 138, 42), (5, 20, 34)),
     "cme": ((7, 18, 32), (68, 148, 214), (240, 144, 54)),
@@ -418,16 +418,8 @@ def _draw_glass_panel(
     accent: Tuple[int, int, int],
 ) -> None:
     x1, y1, x2, y2 = box
-    for step, alpha in enumerate((26, 18, 12), start=1):
-        inset = step * 8
-        draw.rounded_rectangle(
-            (x1 - inset, y1 - inset, x2 + inset, y2 + inset),
-            radius=radius + inset,
-            outline=(*accent, alpha),
-            width=2,
-        )
-    draw.rounded_rectangle(box, radius=radius, fill=(3, 12, 24, 205), outline=(*accent, 118), width=2)
-    draw.rounded_rectangle((x1 + 2, y1 + 2, x2 - 2, y2 - 2), radius=radius - 2, outline=(255, 255, 255, 24), width=1)
+    draw.rounded_rectangle((x1 - 7, y1 - 7, x2 + 7, y2 + 7), radius=radius + 7, outline=(*accent, 44), width=10)
+    draw.rounded_rectangle(box, radius=radius, fill=(3, 12, 24, 205), outline=(*accent, 194), width=4)
 
 
 def _fit_font(
@@ -671,12 +663,17 @@ def _render_alert_card(
         draw.text((inner_x, y), metric_text, font=metric_font, fill=(255, 220, 148, 245))
         y += _text_size(draw, metric_text, metric_font)[1] + body_gap
 
-    cta_body_font = _font(26 if height <= 1100 else 29, bold=True)
-    cta_y = min(max(y, y2 - 82), y2 - 74)
+    cta_body_font = _font(23 if height <= 1100 else 27, bold=True)
+    cta_text = _cta_text(draft)
+    cta_lines = _wrap_text(draw, cta_text, cta_body_font, inner_w)
+    cta_height = sum(_text_size(draw, line, cta_body_font)[1] for line in cta_lines)
+    if cta_lines:
+        cta_height += 6 * (len(cta_lines) - 1)
+    cta_y = min(max(y, y2 - cta_height - 24), y2 - cta_height - 12)
     _draw_wrapped_text(
         draw,
         (inner_x, cta_y),
-        _cta_text(draft),
+        cta_text,
         cta_body_font,
         inner_w,
         fill=(232, 239, 248, 232),
