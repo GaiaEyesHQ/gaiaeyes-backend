@@ -113,6 +113,54 @@ def test_resolve_background_uses_bootstrap_candidate_without_remote_fetch() -> N
     assert warnings == []
 
 
+def test_bootstrap_background_wins_before_live_still_override(tmp_path: Path) -> None:
+    live_image = _write_image(tmp_path / "ccor.png", (180, 72, 22))
+
+    image, source, warnings = resolve_background_image(
+        [
+            "social/share/backgrounds/cme.jpg",
+            "bootstrap:social_alerts/cme_wave",
+            "nasa/ccor1/latest.jpg",
+        ],
+        category="cme",
+        size=(1080, 1080),
+        media_base_url="https://example.invalid/space-visuals",
+        local_asset_overrides={"nasa/ccor1/latest.jpg": live_image},
+    )
+
+    assert image.size == (1080, 1080)
+    assert source == "bootstrap:social_alerts/cme_wave"
+    assert any("social/share/backgrounds/cme.jpg" in warning for warning in warnings)
+
+
+def test_render_prefers_background_candidates_before_live_stills(tmp_path: Path) -> None:
+    payload = build_shadow_payload(
+        {"space_weather": {"xray_max_class": "X1.2", "cmes_count": 1}},
+        generated_at="2026-04-30T12:05:00Z",
+    )
+    out_dir = tmp_path / "previews"
+    assets = {
+        "nasa/ccor1/latest.jpg": _write_image(tmp_path / "ccor.png", (180, 72, 22)),
+        "nasa/enlil/latest.jpg": _write_image(tmp_path / "enlil.png", (20, 64, 126)),
+    }
+
+    manifest = render_shadow_previews(
+        payload,
+        out_dir,
+        categories={"solar_flare", "cme"},
+        media_base_url="https://example.invalid/space-visuals",
+        local_asset_overrides=assets,
+    )
+
+    sources = [
+        output["asset_source"]
+        for rendered in manifest["rendered"]
+        for output in rendered["outputs"]
+    ]
+    assert sources
+    assert all(source.startswith("bootstrap:social_alerts/") for source in sources)
+
+
 def test_renderer_uses_draft_cta_and_public_fallback_chips() -> None:
     payload = build_shadow_payload({"space_weather": {"cmes_count": 1}})
     draft = next(item for item in payload["drafts"] if item["category"] == "cme")

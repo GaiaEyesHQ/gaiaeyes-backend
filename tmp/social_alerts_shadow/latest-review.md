@@ -2,7 +2,7 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-07T17:00:58Z`
+- Generated at: `2026-07-07T21:13:15Z`
 - Draft count: `1`
 
 ## 1. Nerves on overdrive?
@@ -21,7 +21,7 @@ When solar activity is elevated, some people notice changes in sleep, HRV, heada
 
 Quick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.
 
-Want to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app
+Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```

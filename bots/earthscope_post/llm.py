@@ -86,7 +86,7 @@ def _deterministic_markdown(day_iso: str,
 
     # Effects
     mood = "Calmer baseline with occasional ripples." if (kp is None or kp < 4) else "Heightened sensitivity; balance stimulation with recovery."
-    energy = "Smooth focus window; good for structured tasks." if (kp is None or kp < 4) else "Surges and dips; plan buffers and short breaks."
+    energy = "Smooth focus stretch; good for structured tasks." if (kp is None or kp < 4) else "Surges and dips; plan buffers and short breaks."
     heart = "Favorable for HRV coherence; use slow, even breathing." if (kp is None or kp < 4) else "HRV may fluctuate; double down on heart-focused breath."
     neuro = "Nervous system steady—pair with nature contact." if (kp is None or kp < 4) else "Extra grounding helps counter restlessness."
 

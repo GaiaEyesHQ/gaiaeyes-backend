@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from bots.social_alerts.asset_bootstrap_pack import bootstrap_background_candidates, bootstrap_background_prompts
 
 
-CTA = "Want to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app"
+CTA = "Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app"
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
 SOCIAL_BACKGROUND_PREFIX = "social/share/backgrounds"
@@ -102,18 +102,18 @@ FLARE_HOOKS = {
     "high": ["Energy feeling jumpy?", "Focus feeling scattered?", "Feeling overstimulated?"],
 }
 SIGNAL_SUBTITLES = {
-    "geomagnetic": "Geomagnetic activity is up. Gaia Eyes watches windows like this alongside sleep, HRV, headaches, focus, and restless energy.",
-    "solar_flare": "Solar flare activity is elevated. Some people track windows like this with energy, focus, headaches, and sleep.",
+    "geomagnetic": "Geomagnetic activity is up. Gaia Eyes watches signal periods like this alongside sleep, HRV, headaches, focus, and restless energy.",
+    "solar_flare": "Solar flare activity is elevated. Some people track signal periods like this with energy, focus, headaches, and sleep.",
     "cme": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
 }
 SIGNAL_CAPTIONS = {
-    "geomagnetic": "{title}\n\nGeomagnetic activity is up, including Kp/Bz and solar-wind movement. If sleep, HRV, headaches, focus, or restless energy feel different today, this is a useful window to log.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
-    "solar_flare": "{title}\n\nElevated solar activity is showing up today. Some people like to track windows like this with energy, focus, headaches, sleep, and recovery markers.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
+    "geomagnetic": "{title}\n\nGeomagnetic activity is up, including Kp/Bz and solar-wind movement. If sleep, HRV, headaches, focus, or restless energy feel different today, this is a useful signal period to log.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
+    "solar_flare": "{title}\n\nElevated solar activity is showing up today. Some people like to track signal periods like this with energy, focus, headaches, sleep, and recovery markers.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
     "cme": "{title}\n\nWhen solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.\n\n{explainer}\n\n{cta}\n\n{hashtags}",
 }
 SIGNAL_EXPLAINERS = {
-    "geomagnetic": "Quick context: geomagnetic activity means Earth's magnetic environment is changing, often from solar-wind movement. Gaia Eyes watches these windows alongside sleep, HRV, headaches, focus, and symptom patterns.",
-    "solar_flare": "Quick context: elevated solar activity means solar signals like flares or related radiation are more active than usual. Gaia Eyes tracks these windows alongside energy, focus, headaches, sleep, and symptoms.",
+    "geomagnetic": "Quick context: geomagnetic activity means Earth's magnetic environment is changing, often from solar-wind movement. Gaia Eyes watches these signal periods alongside sleep, HRV, headaches, focus, and symptom patterns.",
+    "solar_flare": "Quick context: elevated solar activity means solar signals like flares or related radiation are more active than usual. Gaia Eyes tracks these signal periods alongside energy, focus, headaches, sleep, and symptoms.",
     "cme": "Quick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.",
     "schumann": "Quick context: Schumann resonance is part of Earth's natural electromagnetic background. Researchers study how these low-frequency signals may relate to heart, sleep, mood, and nervous-system patterns.",
 }
@@ -136,7 +136,7 @@ SCHUMANN_SUBTITLES = [
 ]
 SCHUMANN_CAPTION_TEMPLATES = [
     "{hook}\n\nSchumann resonance is one of Earth's background electromagnetic signals. The current reading is running above its recent baseline.\n\nIf sleep, HRV, focus, headaches, sinus pressure, or wired/tired energy feel off, this is the kind of signal Gaia Eyes helps you compare over time.\n\n{explainer}\n\n{cta}\n\n#GaiaEyes #SchumannResonance #HRV #SleepPatterns",
-    "{hook}\n\nThe Schumann signal is elevated compared with its recent baseline. Some people like to watch these windows alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.\n\nGaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.\n\n{explainer}\n\n{cta}\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
+    "{hook}\n\nThe Schumann signal is elevated compared with its recent baseline. Some people like to watch these signal periods alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.\n\nGaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.\n\n{explainer}\n\n{cta}\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
     "{hook}\n\nCurrent Schumann activity is running higher than its recent baseline. One signal by itself does not explain a body day, but repeated overlaps can be worth noticing.\n\nGaia Eyes helps you compare this kind of Earth signal with sleep, HRV, focus, pain, and symptom logs so patterns can get clearer over time.\n\n{explainer}\n\n{cta}\n\n#GaiaEyes #EarthSignals #SleepPatterns #HRV",
 ]
 

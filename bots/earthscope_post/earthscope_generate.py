@@ -160,7 +160,7 @@ INTRO_LINES = [
     "Subtle field, real effects.",
     "Magnetic weather with personality.",
     "Nervous systems may notice today.",
-    "Your sleep window gets a vote.",
+    "Your sleep rhythm gets a vote.",
     "Head pressure deserves a little context.",
     "Recovery patterns may tell the story.",
     "Body signals first, space weather second.",
@@ -170,7 +170,7 @@ INTRO_LINES = [
     "Your body may read the room.",
     "Geomagnetics are setting the tone.",
     "The atmosphere feels a little spicy.",
-    "Steady skies, better rhythm windows.",
+    "Steady skies, better rhythm cues.",
     "Cosmic weather, human consequences.",
     "Today favors pacing over force.",
     "Field shifts, mood shifts, plan shifts.",
@@ -428,7 +428,7 @@ EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
 HOOKS = {
     "calm": [
         "Sleep may have more room tonight.",
-        "Recovery gets a cleaner window today.",
+        "Recovery gets a cleaner read today.",
         "Your nervous system may exhale a little.",
         "Body signals may run quieter today.",
         "Lower-noise day for HRV and recovery.",
@@ -448,7 +448,7 @@ HOOKS = {
     ],
     "stormy": [
         "Pain sensitivity may need a wider buffer.",
-        "Protect the recovery window today.",
+        "Protect recovery capacity today.",
         "A louder signal day for sensitive bodies.",
         "Migraine-prone systems may want less load.",
         "Sleep and HRV may need backup support.",
@@ -780,7 +780,7 @@ def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_title
     pools = {
         "calm": [
             "Recovery Has More Room",
-            "Sleep Gets A Softer Window",
+            "Sleep Gets Softer Signals",
             "Lower Noise Body Day",
             "Nervous System Breathing Room",
             "HRV Gets A Cleaner Read",
@@ -795,7 +795,7 @@ def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_title
         "stormy": [
             "Pain Sensitivity Needs Slack",
             "Body Signals May Run Loud",
-            "Protect The Recovery Window",
+            "Protect Recovery Capacity",
             "Migraine Margins Matter Today",
             "Sleep Needs Backup Support",
         ],
@@ -915,7 +915,7 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
         return _stable_choice(
             [
                 "Pain sensitivity may need a wider buffer today.",
-                "Protect the recovery window before symptoms get loud.",
+                "Protect recovery capacity before symptoms get loud.",
                 "Sleep and HRV may need backup support today.",
                 "Give your nervous system fewer fights to manage.",
                 "This is a lower-load body day.",
@@ -941,7 +941,7 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
         return _stable_choice(
             [
                 "Recovery may have more room today.",
-                "Sleep gets a softer landing window today.",
+                "Sleep may get a softer landing today.",
                 "Body signals may run quieter today.",
                 "This is a good day to compare symptoms and signals.",
                 "Less static may make wearable trends easier to read.",
@@ -1043,7 +1043,7 @@ def _legacy_public_rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
         feel.append(f"- Pattern note: {_pick_variant('nerve_note', seed_extra=1)}")
         feel.append("- Comms/GPS: Tech may be glitchy today. Satellite based services, especially. Nervous System sensitivities may increase.")
     else:
-        feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good window to get things done.'}")
+        feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good stretch to get things done.'}")
         feel.append("- Autonomic/HRV: Great for recovery and healing practices.")
         feel.append("- Sleep: Keep evening light warm and low.")
         if EARTHSCOPE_FIRST_PERSON:
@@ -1054,8 +1054,8 @@ def _legacy_public_rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
     if tone in ("stormy", "unsettled"):
         care_lines.append("- 5–10 min paced breathing (e.g., 4:6) or brief HRV biofeedback")
         care_lines.append("- Hydration + electrolytes; short daylight exposure; move easy")
-        care_lines.append("- Protect sleep: blue‑light filters and a consistent wind‑down")
-        care_lines.append("- If sensitive, quick grounding/outdoor walk; warm pack for nerve flare windows")
+        care_lines.append("- Protect sleep: blue‑light filters and a consistent evening routine")
+        care_lines.append("- If sensitive, quick grounding/outdoor walk; warm pack when nerve flares show up")
     else:
         care_lines.append("- Block 1–2 focus sessions (60–90 min) while the field is steady")
         care_lines.append("- Natural light and movement breaks to reinforce circadian tone")
@@ -1136,7 +1136,7 @@ def _summarize_context(facts: Dict[str, Any]) -> str:
     if flr and (flr or 0) > 0:
         parts.append("fresh solar flare effects")
     if isinstance(kp, (int, float)) and kp >= 5:
-        parts.append("geomagnetic storm window")
+        parts.append("geomagnetic storm period")
     elif isinstance(kp, (int, float)) and kp >= 4:
         parts.append("active geomagnetics")
     if isinstance(sr, (int, float)) and sr:
@@ -1481,6 +1481,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. No questions. "
+        "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
         "Never claim deterministic health effects; use 'some may', 'can', 'for some'. "
         "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags. "
         "No markdown, no extra keys, no code fences. "
@@ -1676,6 +1677,7 @@ def _rewrite_json_candidates(
         "Avoid report-like openings, labels, and repeated phrasing. Do not reuse recent_openers. "
         "Avoid overusing work-block advice. If you mention focus, make it feel like body-pattern guidance, not productivity coaching. "
         "Avoid the ban_phrases exactly; choose natural wording instead of trying to synonym-swap them. "
+        "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
         "Use evidence-scaled language: may, can, for some, tends to. No diagnosis, certainty, detox, cure, or treatment claims. "
         "Return only JSON with a candidates array. Each candidate must include caption, snapshot, affects, playbook, and hashtags."
     )
@@ -1691,7 +1693,7 @@ def _rewrite_json_candidates(
             "style": "human, emotionally relatable, curious, practical, sometimes funny",
             "target_platform": caption_profile["platform"],
             "hook_doorways_to_rotate": [
-                "sleep or wind-down",
+                "sleep or bedtime routine",
                 "HRV or recovery",
                 "mood or restlessness",
                 "headache or sinus pressure",
@@ -2815,9 +2817,9 @@ def _rewrite_shadow_caption_minimal(
         "The atmosphere might feel a tad unsettled—think gentle wave, not wild storm. Expect fluctuations in focus and energy, so take breaks between tasks.",
     ]
     anti_examples = [
-        "A geomagnetic storm window is active with a strong southward field and elevated solar wind pressure, so conditions are punchier than usual.",
+        "A geomagnetic storm period is active with a strong southward field and elevated solar wind pressure, so conditions are punchier than usual.",
         "Unsettled geomagnetic conditions with a south-leaning field and recent solar activity—expect variability through the day.",
-        "The geomagnetic window is active with the field leaning south and the global resonance a touch lively, so nervous-system sensitivity may be higher.",
+        "The geomagnetic setup is active with the field leaning south and the global resonance a touch lively, so nervous-system sensitivity may be higher.",
     ]
     system_msg = (
         "You are editing only the public Gaia Eyes caption in the founder's voice. "
@@ -2829,6 +2831,7 @@ def _rewrite_shadow_caption_minimal(
         "Do not mention clinicians or professional audiences. HRV/recovery language is allowed when it sounds like a normal wearable/body-pattern cue, not a clinical report. "
         "Do not copy phrases directly from the context bullets. "
         "No emojis. No questions. No fear language. No deterministic medical claims. "
+        "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
         "Do not include measurements, units, or a metric footer. "
         "Keep it to 2–3 sentences and end on a practical pacing note. "
         "Return ONLY a compact JSON object with the string key: caption."

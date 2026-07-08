@@ -78,6 +78,8 @@ def test_shadow_copy_stays_conservative_and_contextual() -> None:
     joined = " ".join(draft["caption"].lower() for draft in payload["drafts"])
     assert "context only" not in joined
     assert "not medical advice" not in joined
+    assert "affect you" not in joined
+    assert "windows like this" not in joined
     assert "forecast of symptoms" not in joined
     assert "cause" not in joined
     assert "cure" not in joined

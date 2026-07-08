@@ -114,7 +114,7 @@ def test_bz_missing_uses_placeholder(feats):
 
 def test_earthscope_hook_title_leads_with_symptom_pattern():
     title = _earthscope_hook_title(
-        "Focus and attention may come in shorter windows. Sleep wind-down can be more sensitive.",
+        "Focus and attention may come in shorter stretches. Sleep routines can be more sensitive.",
         tone="unsettled",
         energy="Elevated",
     )
@@ -129,7 +129,7 @@ def test_earthscope_hook_title_leads_with_symptom_pattern():
 
 def test_earthscope_hook_title_uses_calm_focus_language():
     title = _earthscope_hook_title(
-        "Focus windows can be slightly extended as the field is mostly cooperative.",
+        "Focus stretches can feel slightly easier as the field is mostly cooperative.",
         tone="neutral",
         energy="Calm",
     )
@@ -144,7 +144,7 @@ def test_earthscope_hook_title_does_not_question_imperative_calm_hook(monkeypatc
     )
 
     title = _earthscope_hook_title(
-        "Focus windows can be slightly extended as the field is mostly cooperative.",
+        "Focus stretches can feel slightly easier as the field is mostly cooperative.",
         tone="neutral",
         energy="Calm",
     )

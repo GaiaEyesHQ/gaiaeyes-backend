@@ -10,7 +10,10 @@ ENV it uses (all optional, sane defaults applied when possible):
 - MEDIA_REPO_PATH           : path to the gaiaeyes-media checkout (cards and JSON live here)
 - EARTHSCOPE_OUTPUT_JSON_PATH: path to earthscope_daily.json (to pull short VO text)
 - OPENAI_API_KEY            : your OpenAI API key (for TTS). If missing, VO is skipped.
-- REEL_TTS_VOICE            : e.g., "alloy" (default), any supported TTS voice
+- REEL_TTS_VOICE            : e.g., "marin" (default), any supported TTS voice
+- REEL_TTS_MODEL            : OpenAI TTS model, default gpt-4o-mini-tts
+- REEL_VO_LEAD_PAD_SEC      : optional leading silence before VO (default 0.45)
+- REEL_MUSIC_VOLUME_DB      : music bed gain before ducking (default -9dB)
 - REEL_DURATION_SEC         : total output duration target (if set, otherwise inferred)
 - SUPABASE_URL              : e.g., https://<project>.supabase.co (for audio manifest default)
 - SUPABASE_AUDIO_BASE       : Explicit prefix for audio assets (default:
@@ -136,6 +139,8 @@ OPENAI_API_KEY = env_get("OPENAI_API_KEY")
 REEL_TTS_VOICE = env_get("REEL_TTS_VOICE", "marin")
 REEL_TTS_MODEL = env_get("REEL_TTS_MODEL", "gpt-4o-mini-tts")
 REEL_TTS_FALLBACK_MODEL = env_get("REEL_TTS_FALLBACK_MODEL", "gpt-4o-mini-tts")
+REEL_VO_LEAD_PAD_SEC = env_get("REEL_VO_LEAD_PAD_SEC", "0.45")
+REEL_MUSIC_VOLUME_DB = env_get("REEL_MUSIC_VOLUME_DB", "-9")
 REEL_REQUIRE_VO = env_get("REEL_REQUIRE_VO", "0") == "1"
 REEL_MOOD = env_get("REEL_MOOD", None)
 REEL_OUT_PATH = Path(env_get("REEL_OUT_PATH", env_get("REEL_OUT", str(IMAGES_DIR / "reel.mp4"))))
@@ -245,24 +250,80 @@ def _first_action(text: object) -> str:
     return ""
 
 
+def _first_sentences(text: object, *, max_sentences: int = 2, max_chars: int = 360) -> str:
+    cleaned = _clean_vo_sentence(text)
+    if not cleaned:
+        return ""
+    parts = [item.strip() for item in re.split(r"(?<=[.!?])\s+", cleaned) if item.strip()]
+    out = " ".join(parts[:max_sentences]).strip() if parts else cleaned
+    if len(out) <= max_chars:
+        return out
+    return out[:max_chars].rsplit(" ", 1)[0].rstrip(" ,;:-") + "."
+
+
+def _explicit_vo_text(row: dict, sections: dict) -> str:
+    candidates = [
+        row.get("voiceover"),
+        row.get("vo_text"),
+        row.get("short_caption"),
+        row.get("reel_caption"),
+        sections.get("voiceover"),
+        sections.get("vo_text"),
+        sections.get("reel_voiceover"),
+    ]
+    cards = row.get("cards")
+    if isinstance(cards, dict):
+        for key in ("voiceover", "reel", "caption"):
+            node = cards.get(key)
+            if isinstance(node, dict):
+                candidates.extend([node.get("voiceover"), node.get("vo_text"), node.get("short"), node.get("text")])
+    for value in candidates:
+        cleaned = _clean_vo_sentence(value)
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def _audio_db(value: object, default: float = -9.0) -> str:
+    raw = str(value or "").strip().lower()
+    try:
+        amount = float(raw[:-2] if raw.endswith("db") else raw)
+    except Exception:
+        amount = default
+    return f"{amount:g}dB"
+
+
+def _vo_lead_filter() -> str:
+    try:
+        lead = max(0.0, float(str(REEL_VO_LEAD_PAD_SEC or "").strip()))
+    except Exception:
+        lead = 0.45
+    delay_ms = int(round(lead * 1000))
+    if delay_ms <= 0:
+        return ""
+    return f"adelay={delay_ms}|{delay_ms},afade=t=in:st=0:d=0.08,"
+
+
 def build_vo_text_from_post(row: dict) -> str:
     sections = _metrics_sections(row)
-    caption = _clean_vo_sentence(row.get("caption") or sections.get("caption") or row.get("overview") or row.get("lead"))
-    affects = _clean_vo_sentence(sections.get("affects"))
+    explicit = _explicit_vo_text(row, sections)
+    if explicit:
+        return strip_metric_tail(explicit)
+
+    caption = _first_sentences(row.get("caption") or sections.get("caption") or row.get("overview") or row.get("lead"))
     action = _first_action(sections.get("playbook"))
 
     parts: List[str] = []
     if caption:
         parts.append(caption)
-    if affects and affects.lower() not in caption.lower():
-        parts.append(affects)
     if action:
         parts.append(f"Try this today: {action}.")
 
     text = " ".join(parts).strip()
     if text:
         return strip_metric_tail(text)
-    return ""
+    affects = _first_sentences(sections.get("affects"), max_sentences=1, max_chars=220)
+    return strip_metric_tail(affects) if affects else ""
 
 
 def resolve_caption(platform: str = "default", target_day: Optional[str] = None) -> Optional[str]:
@@ -516,12 +577,14 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
     Compose final audio mix and mux with video.
     - If VO + bed: sidechain-compress bed under VO, limiter on master.
     - If VO only: limiter.
-    - If bed only: set bed to -12 dB, fade out 200 ms at tail.
+    - If bed only: set bed to configured gain, fade out 200 ms at tail.
     - Else: copy video with no audio.
     """
     # Always re-encode video to be safe for social (yuv420p, H.264 high)
     common_video = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high", "-level", "4.1", "-r", str(FPS), "-movflags", "+faststart"]
     duration_str = f"{total_duration:.3f}"
+    music_volume = _audio_db(REEL_MUSIC_VOLUME_DB, -9.0)
+    vo_prefix = _vo_lead_filter()
 
     if vo_wav and bed_wav and vo_wav.exists() and bed_wav.exists():
         # Loop/trim bed to exactly duration; then sidechain duck it under VO, resample/mix to stereo/44.1k, and limit peaks
@@ -532,8 +595,8 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "-stream_loop", "-1", "-i", str(bed_wav),
             "-filter_complex",
             (
-                f"[1:a]aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=44100,asplit=2[vo_sc][vo_mix];"
-                f"[2:a]atrim=0:{duration_str},asetpts=N/SR/TB,volume=-12dB,"
+                f"[1:a]{vo_prefix}aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=44100,asplit=2[vo_sc][vo_mix];"
+                f"[2:a]atrim=0:{duration_str},asetpts=N/SR/TB,volume={music_volume},"
                 f"aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=44100[bed];"
                 f"[bed][vo_sc]sidechaincompress=threshold=0.05:ratio=8:attack=5:release=220:makeup=3[duck];"
                 f"[duck][vo_mix]amix=inputs=2:duration=longest:dropout_transition=250,alimiter=limit=0.98[aout]"
@@ -553,7 +616,7 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "ffmpeg", "-y",
             "-i", str(video_in),
             "-i", str(vo_wav),
-            "-filter_complex", "[1:a]aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=44100,alimiter=limit=0.98[aout]",
+            "-filter_complex", f"[1:a]{vo_prefix}aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=44100,alimiter=limit=0.98[aout]",
             "-map", "0:v",
             "-map", "[aout]",
             *common_video,
@@ -569,7 +632,7 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "ffmpeg", "-y",
             "-i", str(video_in),
             "-stream_loop", "-1", "-i", str(bed_wav),
-            "-filter_complex", f"[1:a]atrim=0:{duration_str},asetpts=N/SR/TB,volume=-12dB,afade=t=out:st={max(0.0, total_duration-0.2):.3f}:d=0.2[aout]",
+            "-filter_complex", f"[1:a]atrim=0:{duration_str},asetpts=N/SR/TB,volume={music_volume},afade=t=out:st={max(0.0, total_duration-0.2):.3f}:d=0.2[aout]",
             "-map", "0:v",
             "-map", "[aout]",
             *common_video,

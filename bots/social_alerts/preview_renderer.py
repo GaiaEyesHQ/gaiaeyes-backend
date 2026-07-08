@@ -21,7 +21,7 @@ from bots.social_alerts.asset_bootstrap_pack import BOOTSTRAP_PREFIX, bootstrap_
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MEDIA_BASE_URL = "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals"
 DEFAULT_PREVIEW_DIR = Path("tmp") / "social_alerts_shadow" / "previews"
-DEFAULT_CTA = "Want to find out if these affect you? Gaia Eyes tracks and compares this with sleep, HRV, symptoms, and exposures: https://GaiaEyes.com/app"
+DEFAULT_CTA = "Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app"
 FALLBACK_GRADIENTS = {
     "solar_flare": ((36, 10, 5), (236, 138, 42), (5, 20, 34)),
     "cme": ((7, 18, 32), (68, 148, 214), (240, 144, 54)),
@@ -253,7 +253,7 @@ def resolve_background_image(
         else:
             before_bootstrap.append(candidate)
 
-    for candidate in candidates:
+    for candidate in before_bootstrap:
         if candidate in overrides:
             try:
                 return _open_local_image(Path(overrides[candidate])), candidate, warnings
@@ -279,6 +279,13 @@ def resolve_background_image(
         generated = _bootstrap_background(candidate, category, size)
         if generated is not None:
             return generated, candidate, warnings
+
+    for candidate in after_bootstrap:
+        if candidate in overrides:
+            try:
+                return _open_local_image(Path(overrides[candidate])), candidate, warnings
+            except Exception as exc:
+                warnings.append(f"{candidate}: local override failed: {exc}")
 
     for candidate in after_bootstrap:
         url = _remote_url(candidate, base_url)
@@ -563,7 +570,7 @@ def _chip_rows(chips: Sequence[Mapping[str, Any]], *, width: int, x: int, y: int
 
 def _candidate_images(spec: Mapping[str, Any]) -> List[str]:
     candidates: List[str] = []
-    for key in ("still_candidates", "background_candidates"):
+    for key in ("background_candidates", "still_candidates"):
         values = spec.get(key)
         if not isinstance(values, list):
             continue

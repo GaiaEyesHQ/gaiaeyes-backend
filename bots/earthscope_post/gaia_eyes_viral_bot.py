@@ -680,7 +680,7 @@ def generate_daily_forecast(sch: float, kp_current: float) -> Tuple[str, str, st
         tip  = "Move gently, breathe deeper, drink water."
     else:
         mood = "The ideal energy day! Balanced energy—great for clarity and steady focus."
-        tip  = "Use the calmer window for one focused task, then reset before switching gears."
+        tip  = "Use the calmer stretch for one focused task, then reset before switching gears."
     return energy, mood, tip
 
 def get_daily_affirmation() -> str:
@@ -1382,11 +1382,11 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
             ],
         ),
         (
-            ("sleep", "wind-down", "bedtime", "fragmented"),
-            ["Ready for an easier wind-down?", "Protect tonight's reset", "Sleep could come easier"] if calm_context else [
+            ("sleep", "bedtime", "evening routine", "fragmented"),
+            ["Ready for an easier bedtime?", "Protect tonight's reset", "Sleep could come easier"] if calm_context else [
                 "Sleep feeling fragile?",
                 "Wired at bedtime?",
-                "Wind-down feeling harder?",
+                "Evening routine harder?",
             ],
         ),
         (
@@ -1399,7 +1399,7 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
         ),
         (
             ("pain", "nerve", "flare", "reactivity", "sensitive"),
-            ["Less pain, more gain", "Use the easier window", "Body feeling steadier"] if calm_context else [
+            ["Less pain, more gain", "Use the easier stretch", "Body feeling steadier"] if calm_context else [
                 "Body feeling reactive?",
                 "Pain signals louder?",
                 "Sensitivity turned up?",
@@ -1420,7 +1420,7 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
             seed_text=f"{tone_l}|{energy_l}|fallback",
         )
     return _daily_title_variant(
-        ["Ready for a calmer day?", "Need a catch-up day?", "Use the steady window"],
+        ["Ready for a calmer day?", "Need a catch-up day?", "Use the steady stretch"],
         seed_text=f"{tone_l}|{energy_l}|fallback",
     )
 
@@ -1461,7 +1461,6 @@ def _public_card_text(text: str) -> str:
         (r"\bwithout unexpected interruptions\b", "with fewer unexpected interruptions"),
         (r"\bautonomic markers\b", "heart-rate and recovery trends"),
         (r"\bSleep and winding-down can benefit from keeping evening light and stimulation modest\b", "Sleep may come easier if evening light and stimulation stay modest"),
-        (r"\bwinding-down\b", "wind-down"),
         (r"\bClinicians often see\b", "Gaia Eyes often sees"),
         (r"\bClinicians and sensitive individuals should\b", "If you are sensitive,"),
         (r"\bClinicians\b", "Gaia Eyes"),
@@ -1495,7 +1494,7 @@ def _format_public_playbook(text: str) -> str:
     default_notes = [
         "Keep effort in shorter blocks and stop before you feel overloaded.",
         "Hydrate steadily and keep movement gentle.",
-        "Protect tonight's wind-down with dimmer light and lower stimulation.",
+        "Protect tonight's sleep routine with dimmer light and lower stimulation.",
     ]
     seen = " ".join(item.lower() for item in out)
     for note in default_notes:

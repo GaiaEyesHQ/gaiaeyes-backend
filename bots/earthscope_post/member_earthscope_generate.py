@@ -198,7 +198,7 @@ def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
         "hydrate steadily and pace your workload",
         "work in short focused blocks with brief resets",
         "add gentle movement every 60–90 minutes",
-        "protect your evening wind-down and sleep window",
+        "protect your evening routine and sleep rhythm",
         "keep late caffeine and extra stimulation lighter",
     ]
 

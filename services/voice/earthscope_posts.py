@@ -124,7 +124,7 @@ def _public_driver_bits(
     if (flares_24h or 0) > 0:
         driver_bits.append("fresh flare activity")
     if bz_desc in {"southward", "strong southward", "slightly southward"}:
-        driver_bits.append("southward IMF windows")
+        driver_bits.append("southward field orientation")
     if sw_band in {"elevated", "high", "very-high"}:
         driver_bits.append("faster solar wind")
     return driver_bits
@@ -135,11 +135,11 @@ def _public_actions(tone: str) -> list[str]:
         return [
             "5–10 min paced breathing or brief HRV biofeedback",
             "Hydration + electrolytes; short daylight exposure; move easy",
-            "Protect sleep with a consistent wind-down and softer screens",
+            "Protect sleep with a simple evening routine and softer screens",
             "If you run sensitive, keep load lighter and use short reset breaks",
         ]
     return [
-        "Use the steadier window for one or two focused work blocks",
+        "Use the steadier stretch for one or two focused tasks",
         "Keep light movement and natural light in the day to reinforce rhythm",
         "Hydrate and keep caffeine earlier so sleep stays easier later",
     ]
@@ -372,16 +372,16 @@ def render_public_earthscope_post(
     first_person = bool(facts.get("first_person"))
     if tone in {"stormy", "unsettled"}:
         affects_lines = [
-            "- Focus/energy: Expect more variability and shorter clean focus windows.",
+            "- Focus/energy: Expect more variability and shorter clean focus stretches.",
             "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
-            "- Sleep: Protect the wind-down window and keep late stimulation lighter.",
+            "- Sleep: Protect the evening routine and keep late stimulation lighter.",
             "- Pattern note: If you run sensitive, pace flares instead of forcing through them.",
         ]
     else:
         affects_lines = [
-            "- Focus/energy: Steadier conditions make longer focus windows easier to use.",
+            "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
             "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
-            "- Sleep: Keep evening light warm and low so the calmer window carries through.",
+            "- Sleep: Keep evening light warm and low so the calmer rhythm carries through.",
         ]
         if first_person:
             affects_lines.append("- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.")

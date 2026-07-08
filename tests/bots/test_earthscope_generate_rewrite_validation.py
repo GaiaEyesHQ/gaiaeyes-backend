@@ -31,7 +31,7 @@ def _rewrite_with(text: str) -> dict[str, str]:
         "caption": "Quiet backdrop today.",
         "snapshot": text,
         "affects": "Focus and sleep may feel steadier for some sensitive systems.",
-        "playbook": "- Keep the day simple\n- Protect wind-down",
+        "playbook": "- Keep the day simple\n- Protect evening routine",
         "hashtags": "#GaiaEyes #SpaceWeather",
     }
 
@@ -65,7 +65,7 @@ def test_validate_rewrite_rejects_directional_cme_language_without_arrival_conte
 
 def test_validate_rewrite_allows_directional_cme_language_with_arrival_context():
     result = _validate_rewrite(
-        _rewrite_with("A CME arrival is possible in the next window."),
+        _rewrite_with("A CME arrival is possible in the next day."),
         {"cmes_24h": 3, "flares_24h": 0, "earth_directed_cme_count_72h": 1},
     )
 
@@ -78,7 +78,7 @@ def test_validate_rewrite_rejects_typo_and_report_phrasing():
             "caption": "Neutral energy. You set the pace. The near-Earth field is quiet today.",
             "snapshot": "The field looks quieter today.",
             "affects": "Attention may come in usable blocs with small dips.",
-            "playbook": "- Keep the day simple\n- Protect wind-down",
+            "playbook": "- Keep the day simple\n- Protect evening routine",
             "hashtags": "#GaiaEyes #SpaceWeather",
         },
         {"cmes_24h": 0, "flares_24h": 0},
@@ -93,12 +93,12 @@ def test_normalize_rewrite_payload_accepts_list_playbook():
             "caption": "Quiet backdrop today.",
             "snapshot": "The field looks calmer today.",
             "affects": "Focus may feel steady for some sensitive systems.",
-            "playbook": ["Pick one task", "Keep caffeine earlier", "Protect wind-down"],
+            "playbook": ["Pick one task", "Keep caffeine earlier", "Protect evening routine"],
             "hashtags": "#GaiaEyes #SpaceWeather",
         }
     )
 
-    assert normalized["playbook"] == "Pick one task\nKeep caffeine earlier\nProtect wind-down"
+    assert normalized["playbook"] == "Pick one task\nKeep caffeine earlier\nProtect evening routine"
     assert _validate_rewrite(normalized, {"cmes_24h": 0, "flares_24h": 0}) is not None
 
 
@@ -108,12 +108,12 @@ def test_finalize_rewrite_payload_normalizes_playbook_bullets():
             "caption": "Keep the day simple.",
             "snapshot": "The field looks calmer today.",
             "affects": "Focus may feel steady for some sensitive systems.",
-            "playbook": "Pick one task\n2. Keep caffeine earlier\n• Protect wind-down",
+            "playbook": "Pick one task\n2. Keep caffeine earlier\n• Protect evening routine",
             "hashtags": "#GaiaEyes #SpaceWeather",
         }
     )
 
-    assert finalized["playbook"] == "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down"
+    assert finalized["playbook"] == "- Pick one task\n- Keep caffeine earlier\n- Protect evening routine"
 
 
 def test_validate_rewrite_rejects_awkward_event_synonyms_and_brand_signoff():
@@ -143,6 +143,20 @@ def test_clean_llm_title_rejects_generic_or_recent_fallback_labels():
     assert _clean_llm_title("Magnetic Calm", set()) is None
     assert _clean_llm_title("Geomagnetic Storm Watch", set()) is None
     assert _clean_llm_title("Brain Tabs Closing", {"brain tabs closing"}) is None
+
+
+def test_clean_llm_title_does_not_hard_reject_style_guidance_terms():
+    assert _clean_llm_title("Sleep Gets A Softer Window", set()) == "Sleep Gets A Softer Window"
+    assert _clean_llm_title("Ready For Easier Wind-Down", set()) == "Ready For Easier Wind-Down"
+
+
+def test_validate_rewrite_keeps_style_guidance_out_of_validator():
+    result = _validate_rewrite(
+        _rewrite_with("Sleep gets a softer window today."),
+        {"cmes_24h": 0, "flares_24h": 0},
+    )
+
+    assert result is not None
 
 
 def test_fallback_social_title_replaces_generic_report_label():
@@ -219,21 +233,21 @@ def test_select_best_rewrite_candidate_prefers_fresh_human_hook():
                 "caption": "Use the steadier window while it is here. Keep your work simple today.",
                 "snapshot": "The field looks calmer today.",
                 "affects": "Some people may notice steadier focus.",
-                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect evening routine",
                 "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
             },
             {
                 "caption": "Need a catch-up day? The background looks more cooperative, so use it for one thing that has been waiting.",
                 "snapshot": "The field looks calmer today.",
                 "affects": "Some people may notice steadier focus.",
-                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect evening routine",
                 "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
             },
             {
                 "caption": "Geomagnetic conditions are quiet today. Maintain structured productivity.",
                 "snapshot": "The field looks calmer today.",
                 "affects": "Some people may notice steadier focus.",
-                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect evening routine",
                 "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
             },
         ]
@@ -259,14 +273,14 @@ def test_select_best_rewrite_candidate_prefers_body_hook_over_productivity_hook(
                 "caption": "Good day for focused work blocks. Keep your plan simple and take breaks.",
                 "snapshot": "The field looks calmer today.",
                 "affects": "Some people may notice steadier focus.",
-                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect evening routine",
                 "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
             },
             {
-                "caption": "Head feel a little clearer today? The quieter signal window may support steadier pacing without pushing.",
+                "caption": "Head feel a little clearer today? The quieter signal mix may support steadier pacing without pushing.",
                 "snapshot": "The field looks calmer today.",
                 "affects": "Some people may notice steadier focus.",
-                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect evening routine",
                 "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
             },
         ]
@@ -289,14 +303,14 @@ def test_select_best_rewrite_candidate_prefers_wearable_symptom_hook_over_catchu
                 "caption": "Good day to catch up gently. Keep your plan simple and take breaks.",
                 "snapshot": "The field looks calmer today.",
                 "affects": "Some people may notice steadier recovery.",
-                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect evening routine",
                 "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
             },
             {
                 "caption": "Wearable trends may be easier to read today. The quieter backdrop gives sleep, pressure, and recovery patterns a cleaner comparison point.",
                 "snapshot": "The field looks calmer today.",
                 "affects": "Some people may notice steadier recovery.",
-                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect wind-down",
+                "playbook": "- Pick one task\n- Keep caffeine earlier\n- Protect evening routine",
                 "hashtags": "#GaiaEyes #SpaceWeather #HRV #Sleep #Focus #Wellness",
             },
         ]
