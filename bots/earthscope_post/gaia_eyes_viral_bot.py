@@ -1391,10 +1391,10 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
         ),
         (
             ("hrv", "heart-rate variability", "autonomic", "baseline"),
-            ["Ready for a calmer day?", "A steadier body day", "Recovery looking steadier"] if calm_context else [
-                "HRV running jumpy?",
-                "Recovery feeling strained?",
-                "Body signals running louder?",
+            ["Ready for a calmer day?", "Body feeling steadier?", "Less static today?"] if calm_context else [
+                "Body signals running loud?",
+                "Feeling wired for no reason?",
+                "Restless and tired?",
             ],
         ),
         (
@@ -1459,7 +1459,7 @@ def _public_card_text(text: str) -> str:
     replacements = [
         (r"\bFocus and sustained tasks are easier to run\b", "Focus and sustained tasks may feel easier to keep on track"),
         (r"\bwithout unexpected interruptions\b", "with fewer unexpected interruptions"),
-        (r"\bautonomic markers\b", "heart-rate and recovery trends"),
+        (r"\bautonomic markers\b", "body stress signals"),
         (r"\bSleep and winding-down can benefit from keeping evening light and stimulation modest\b", "Sleep may come easier if evening light and stimulation stay modest"),
         (r"\bClinicians often see\b", "Gaia Eyes often sees"),
         (r"\bClinicians and sensitive individuals should\b", "If you are sensitive,"),
@@ -1471,7 +1471,7 @@ def _public_card_text(text: str) -> str:
         (r"\bvibes\b", "signals"),
     ]
     for pattern, repl in replacements:
-        cleaned = re.sub(pattern, repl, cleaned)
+        cleaned = re.sub(pattern, repl, cleaned, flags=re.IGNORECASE)
     return cleaned
 
 

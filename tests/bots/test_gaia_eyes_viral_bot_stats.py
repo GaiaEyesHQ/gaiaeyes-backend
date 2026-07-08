@@ -152,6 +152,24 @@ def test_earthscope_hook_title_does_not_question_imperative_calm_hook(monkeypatc
     assert title == "Clear the mental tabs"
 
 
+def test_earthscope_hook_title_avoids_hrv_recovery_jargon():
+    title = _earthscope_hook_title(
+        "Heart-rate variability may feel variable with autonomic markers.",
+        tone="unsettled",
+        energy="Elevated",
+    )
+
+    assert title in {
+        "Body signals running loud?",
+        "Feeling wired for no reason?",
+        "Restless and tired?",
+    }
+    lowered = title.lower()
+    assert "hrv" not in lowered
+    assert "recovery" not in lowered
+    assert "heart-rate variability" not in lowered
+
+
 def test_public_card_title_prefers_stored_llm_title():
     title = _public_card_title("A good day to catch up", fallback="Ready to focus?")
 
@@ -170,6 +188,15 @@ def test_public_card_text_removes_clinician_and_vibes_language():
     assert "Clinicians" not in text
     assert "vibes" not in text
     assert "Gaia Eyes often sees" in text
+
+
+def test_public_card_text_simplifies_autonomic_markers():
+    text = _public_card_text("Autonomic markers may be easier to read.")
+
+    lowered = text.lower()
+    assert "autonomic" not in lowered
+    assert "recovery" not in lowered
+    assert "body stress signals" in lowered
 
 
 def test_format_public_playbook_outputs_clean_bullets():

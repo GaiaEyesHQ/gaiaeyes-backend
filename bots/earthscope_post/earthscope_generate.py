@@ -428,10 +428,10 @@ EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
 HOOKS = {
     "calm": [
         "Sleep may have more room tonight.",
-        "Recovery gets a cleaner read today.",
+        "Your body may feel less noisy today.",
         "Your nervous system may exhale a little.",
         "Body signals may run quieter today.",
-        "Lower-noise day for HRV and recovery.",
+        "Lower-noise day for sleep and focus.",
         "A steadier day for sensitive systems.",
         "Less static, more body bandwidth.",
         "Pain and pressure may have less background noise.",
@@ -439,7 +439,7 @@ HOOKS = {
     "unsettled": [
         "Head pressure may need extra margin today.",
         "Mood and energy may wobble a little.",
-        "HRV may prefer a gentler pace today.",
+        "Your body may prefer a gentler pace today.",
         "Restlessness could have a louder background.",
         "Sensitive systems may feel the chop first.",
         "Sleep and focus may need softer edges.",
@@ -448,13 +448,13 @@ HOOKS = {
     ],
     "stormy": [
         "Pain sensitivity may need a wider buffer.",
-        "Protect recovery capacity today.",
+        "Give your body extra slack today.",
         "A louder signal day for sensitive bodies.",
         "Migraine-prone systems may want less load.",
-        "Sleep and HRV may need backup support.",
+        "Sleep and energy may need backup support.",
         "Nervous systems may run louder today.",
         "This is a lower-load body day.",
-        "Head, mood, and recovery may all ask for slack.",
+        "Head, mood, and energy may all ask for slack.",
     ],
     "neutral": [
         "Track the body pattern, not just the sky.",
@@ -779,11 +779,11 @@ def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_title
     tone = _tone_from_ctx(ctx)
     pools = {
         "calm": [
-            "Recovery Has More Room",
+            "Body Feels Quieter",
             "Sleep Gets Softer Signals",
             "Lower Noise Body Day",
             "Nervous System Breathing Room",
-            "HRV Gets A Cleaner Read",
+            "Body Signals Look Clearer",
         ],
         "unsettled": [
             "Head Pressure Watch",
@@ -795,7 +795,7 @@ def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_title
         "stormy": [
             "Pain Sensitivity Needs Slack",
             "Body Signals May Run Loud",
-            "Protect Recovery Capacity",
+            "Protect Your Energy",
             "Migraine Margins Matter Today",
             "Sleep Needs Backup Support",
         ],
@@ -841,10 +841,11 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
     }
     sections = rewrite or {}
     sys = (
-        "You write Gaia Eyes daily social hook titles for people tracking sleep, HRV, pain, mood, headaches, and nervous-system sensitivity. "
+        "You write Gaia Eyes daily social hook titles for people noticing sleep trouble, pain, mood shifts, headaches, brain fog, restlessness, focus shifts, and low energy. "
         "Write one fresh, human, emotionally relatable 2–7 word title that matches the day’s actual caption. "
         "It should feel like the top line of a social post, not a report label. "
-        "Vary the doorway: sometimes sleep, sometimes focus, sometimes mood, pain, HRV/recovery, headaches, restlessness, or pacing. "
+        "Vary the doorway: sometimes sleep, focus, mood, pain, headaches, brain fog, restlessness, low energy, or pacing. "
+        "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
         "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update. "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
@@ -915,11 +916,11 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
         return _stable_choice(
             [
                 "Pain sensitivity may need a wider buffer today.",
-                "Protect recovery capacity before symptoms get loud.",
-                "Sleep and HRV may need backup support today.",
+                "Give your body extra slack before symptoms get loud.",
+                "Sleep and energy may need backup support today.",
                 "Give your nervous system fewer fights to manage.",
                 "This is a lower-load body day.",
-                "Head, mood, and recovery all deserve extra slack.",
+                "Head, mood, and energy all deserve extra slack.",
             ],
             seed_text=f"{day_iso}|{platform}|stormy|caption-lead",
             banned_openers=banned,
@@ -930,7 +931,7 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
                 "Build in a little more nervous-system slack today.",
                 "Head pressure may need extra margin today.",
                 "Mood and energy may wobble a little today.",
-                "HRV may prefer a gentler pace today.",
+                "Your body may prefer a gentler pace today.",
                 "Restlessness could have a louder background today.",
                 "Treat today like a body-check day.",
             ],
@@ -940,7 +941,7 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
     if tone in {"calm", "neutral"}:
         return _stable_choice(
             [
-                "Recovery may have more room today.",
+                "Your body may have more room today.",
                 "Sleep may get a softer landing today.",
                 "Body signals may run quieter today.",
                 "This is a good day to compare symptoms and signals.",
@@ -1473,6 +1474,9 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
     system_msg = (
         "You are Gaia Eyes’ daily weather desk: viral, practical, and lightly funny. "
         "Interpret today’s space/earth conditions for humans. "
+        "Write for a wide social audience at about a 3rd-grade reading level: short words, short sentences, no medical/science lecture voice. "
+        "The first sentence must not start with or center on HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. Lead with an everyday feeling instead: trouble sleeping, wired/tired, brain fog, head pressure, pain flare, low energy, restless body, or scattered focus. "
+        "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes, e.g. 'Plain English: HRV = small changes between heartbeats that can reflect body stress.' "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin or press release). Avoid sterile or overly technical phrasing (e.g., 'inward-pointing field component'). Prefer plain equivalents like 'southward field orientation' or 'field leaning south'. "
@@ -1499,7 +1503,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "draft": draft,
         "style": {
             "persona": "researcher-coach-comedian",
-            "audience": "people tracking pain, HRV, sleep, nervous-system sensitivity",
+            "audience": "people noticing sleep, pain, mood, headaches, low energy, brain fog, and body-pattern changes",
             "opener_palette": HOOKS.get(facts.get("tone") or "neutral", HOOKS["neutral"]),
             "ban_phrases": BAN_PHRASES,
             "bullet_style": "short",
@@ -1511,7 +1515,13 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
                 "structured approach to tasks",
                 "personal recovery efforts",
                 "remains effective",
-                "optimize your day"
+                "optimize your day",
+                "Recovery feeling off?",
+                "HRV running jumpy?",
+                "Recovery feeling strained?",
+                "parasympathetic",
+                "autonomic tone",
+                "autonomic markers"
             ],
             # Removed intro_hint and banned_openers from style
             "metaphor_hint": facts.get("metaphor_hint"),
@@ -1672,7 +1682,10 @@ def _rewrite_json_candidates(
         "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
-        "Lead with a felt human hook before explaining the signal context. Rotate the doorway across sleep, HRV/recovery, mood, pain sensitivity, headache/sinus pressure, restlessness, and focus; do not make focus/productivity the default. "
+        "Lead with a felt human hook before explaining the signal context. Rotate the doorway across trouble sleeping, wired/tired, brain fog, head pressure, pain flare, low energy, restless body, and scattered focus; do not make focus/productivity the default. "
+        "Do not open with HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. "
+        "Write for a wide social audience at about a 3rd-grade reading level: short words, short sentences, no medical/science lecture voice. "
+        "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes. "
         "You may use a question as the opening hook if it feels natural. Humor is welcome when warm and grounded. "
         "Avoid report-like openings, labels, and repeated phrasing. Do not reuse recent_openers. "
         "Avoid overusing work-block advice. If you mention focus, make it feel like body-pattern guidance, not productivity coaching. "
@@ -1689,16 +1702,18 @@ def _rewrite_json_candidates(
         "recent_caption_excerpts": [cap[:220] for cap in recent_caps[:8]],
         "draft_reference": draft,
         "voice": {
-            "audience": "people tracking pain, sleep, mood, HRV, wearable patterns, and nervous-system sensitivity",
+            "audience": "people noticing sleep, pain, mood, headaches, low energy, brain fog, and body-pattern changes",
             "style": "human, emotionally relatable, curious, practical, sometimes funny",
             "target_platform": caption_profile["platform"],
             "hook_doorways_to_rotate": [
                 "sleep or bedtime routine",
-                "HRV or recovery",
+                "wired/tired or body stress",
                 "mood or restlessness",
                 "headache or sinus pressure",
                 "pain or sensitivity",
-                "focus or mental noise",
+                "low energy or drained",
+                "brain fog or mental noise",
+                "scattered focus",
             ],
             "avoid": [
                 "weather report voice",
@@ -1707,10 +1722,13 @@ def _rewrite_json_candidates(
                 "clinician/professional framing",
                 "overexplaining the metrics",
                 "defaulting to focused work blocks",
+                "opening with HRV, heart-rate variability, recovery, or wearable jargon",
+                "parasympathetic/autonomic jargon",
+                "college-level science phrasing",
             ],
         },
         "candidate_requirements": {
-            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook and must differ across candidates.",
+            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, recovery, parasympathetic, or autonomic.",
             "snapshot": "2-4 plain-language sentences with no numeric space-weather measurements.",
             "affects": "2-4 sentences about possible felt patterns without certainty.",
             "playbook": "3-5 short bullets.",
@@ -2828,7 +2846,7 @@ def _rewrite_shadow_caption_minimal(
         "Do not open with technical phrases like 'Geomagnetic conditions', 'Unsettled geomagnetic conditions', "
         "'Near-Earth space', 'Recent solar eruptions', or 'Unsettled space weather'. "
         "Use at most one analogy. Keep the science grounded, but do not lead with it. "
-        "Do not mention clinicians or professional audiences. HRV/recovery language is allowed when it sounds like a normal wearable/body-pattern cue, not a clinical report. "
+        "Do not mention clinicians or professional audiences. Do not open with HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. Lead with everyday feeling words instead. If HRV or Schumann must appear, define it in a short final Plain English note. Write around a 3rd-grade reading level: short words, short sentences, and no science lecture voice. "
         "Do not copy phrases directly from the context bullets. "
         "No emojis. No questions. No fear language. No deterministic medical claims. "
         "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "

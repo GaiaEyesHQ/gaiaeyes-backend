@@ -2,7 +2,7 @@
   "schema_version": "social_alerts_shadow_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-07T21:13:15Z",
+  "generated_at": "2026-07-08T17:17:10Z",
   "source_mode": "existing_signal_snapshot",
   "draft_count": 1,
   "drafts": [
@@ -15,8 +15,8 @@
       "severity": "high",
       "asof": "2026-07-07T01:11:32Z",
       "title": "Nerves on overdrive?",
-      "subtitle": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
-      "caption": "Nerves on overdrive?\n\nWhen solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.\n\nQuick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.\n\nWant to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "subtitle": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
+      "caption": "Nerves on overdrive?\n\nA CME is a huge cloud from the Sun. It carries charged particles and magnetic energy. If that cloud heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree. Most people notice this as space weather news: auroras, satellite noise, radio issues, GPS weirdness, or power-grid watches.\n\nGaia Eyes looks at the body-pattern side of that same signal. Studies have explored relationships between solar/geomagnetic activity and HRV, autonomic regulation, headaches, sleep, mood, and cardiovascular timing. HeartMath and other researchers have also looked at how HRV can move with Schumann resonance and magnetic-field activity. The science is not finished, but the pattern question is real.\n\nThat is what Gaia Eyes is built to test personally: when the outside signal changes, do your sleep, HRV, pain, mood, energy, or symptoms change too? One day is just a note. Repeated overlaps become a pattern.\n\nGaia Eyes does not give medical advice. It is a pattern recognition system.\n\nWant to compare this with your own recovery patterns? Gaia Eyes tracks sleep, HRV, pain, mood, energy, symptoms, and Earth signals over time: https://GaiaEyes.com/app\n\n#GaiaEyes #SpaceWeather #EarthSignals",
       "metrics": {
         "cmes_count": 4.0,
         "cmes_max_speed_kms": null
@@ -49,7 +49,7 @@
           },
           "label": "SOLAR WATCH",
           "title": "Nerves on overdrive?",
-          "subtitle": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
+          "subtitle": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -107,7 +107,7 @@
           },
           "label": "SOLAR WATCH",
           "title": "Nerves on overdrive?",
-          "subtitle": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
+          "subtitle": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
           "context_chips": [
             "Sleep",
             "HRV",
@@ -170,7 +170,7 @@
             },
             {
               "role": "signal",
-              "text": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
+              "text": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
               "context_chips": [
                 "Sleep",
                 "HRV",
@@ -182,12 +182,12 @@
             },
             {
               "role": "cta",
-              "text": "Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app"
+              "text": "Want to compare this with your own recovery patterns? Gaia Eyes tracks sleep, HRV, pain, mood, energy, symptoms, and Earth signals over time: https://GaiaEyes.com/app"
             }
           ],
           "label": "SOLAR WATCH",
           "title": "Nerves on overdrive?",
-          "subtitle": "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.",
+          "subtitle": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
           "context_chips": [
             "Sleep",
             "HRV",

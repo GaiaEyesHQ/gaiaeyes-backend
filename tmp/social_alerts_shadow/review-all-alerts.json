@@ -1,0 +1,1048 @@
+{
+  "schema_version": "social_alerts_shadow_v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "generated_at": "2026-07-08T15:00:00Z",
+  "source_mode": "existing_signal_snapshot",
+  "draft_count": 4,
+  "drafts": [
+    {
+      "id": "social_alert.geomagnetic.high.0dd8f86bd3ce",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "geomagnetic",
+      "severity": "high",
+      "asof": "2026-07-08T15:00:00Z",
+      "title": "Nervous system on alert?",
+      "subtitle": "Geomagnetic activity is up. Gaia Eyes watches signal periods like this alongside sleep, HRV, headaches, focus, and restless energy.",
+      "caption": "Nervous system on alert?\n\nGeomagnetic activity means Earth's magnetic field is moving more than usual. That usually starts with the solar wind pushing on Earth's magnetic bubble, then shows up in signals like Kp, Bz, and aurora potential.\n\nResearchers have studied links between geomagnetic activity, the autonomic nervous system, HRV, cardiovascular stress, headaches, mood, and sleep for years. The results are not all identical, and many papers say more research is needed. That is exactly why Gaia Eyes is useful: it compares the outside signal with your own body data instead of using one study or one day as the whole answer.\n\nIf your body feels louder than the calendar says it should, log the basics: sleep, HRV, pain, mood, energy, symptoms, and exposures. Then compare it later instead of guessing in the moment.\n\nGaia Eyes does not give medical advice. It is a pattern recognition system.\n\nWant to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "kp": 6.1,
+        "kp_max_24h": 6.4,
+        "bz_nt": -9.2,
+        "solar_wind_kms": 640.0
+      },
+      "source_refs": [
+        {
+          "label": "SWPC space weather",
+          "path": "space_weather.now"
+        },
+        {
+          "label": "Space daily mart",
+          "path": "marts.space_weather_daily"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "label": "PATTERN WATCH",
+          "title": "Nervous system on alert?",
+          "subtitle": "Geomagnetic activity is up. Gaia Eyes watches signal periods like this alongside sleep, HRV, headaches, focus, and restless energy.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Headache",
+            "Restless",
+            "Focus"
+          ],
+          "metric_chips": [
+            {
+              "label": "Kp",
+              "value": "6.4"
+            },
+            {
+              "label": "Bz",
+              "value": "-9.2 nT"
+            }
+          ],
+          "footer": "Track sleep, HRV, symptoms, and signals.",
+          "theme_keys": [
+            "geomagnetic",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "space_weather",
+            "kp",
+            "bz",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/kp.jpg",
+            "social/share/backgrounds/bz.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/geospace_3h/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "aurora/viewline/tonight-north.png"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": []
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "label": "PATTERN WATCH",
+          "title": "Nervous system on alert?",
+          "subtitle": "Geomagnetic activity is up. Gaia Eyes watches signal periods like this alongside sleep, HRV, headaches, focus, and restless energy.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Headache",
+            "Restless",
+            "Focus"
+          ],
+          "metric_chips": [
+            {
+              "label": "Kp",
+              "value": "6.4"
+            },
+            {
+              "label": "Bz",
+              "value": "-9.2 nT"
+            }
+          ],
+          "footer": "Track sleep, HRV, symptoms, and signals.",
+          "theme_keys": [
+            "geomagnetic",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "space_weather",
+            "kp",
+            "bz",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/kp.jpg",
+            "social/share/backgrounds/bz.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/geospace_3h/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "aurora/viewline/tonight-north.png"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": []
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "Nervous system on alert?"
+            },
+            {
+              "role": "signal",
+              "text": "Geomagnetic activity is up. Gaia Eyes watches signal periods like this alongside sleep, HRV, headaches, focus, and restless energy.",
+              "context_chips": [
+                "Sleep",
+                "HRV",
+                "Headache",
+                "Restless",
+                "Focus"
+              ],
+              "metric_chips": [
+                {
+                  "label": "Kp",
+                  "value": "6.4"
+                },
+                {
+                  "label": "Bz",
+                  "value": "-9.2 nT"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app"
+            }
+          ],
+          "label": "PATTERN WATCH",
+          "title": "Nervous system on alert?",
+          "subtitle": "Geomagnetic activity is up. Gaia Eyes watches signal periods like this alongside sleep, HRV, headaches, focus, and restless energy.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Headache",
+            "Restless",
+            "Focus"
+          ],
+          "metric_chips": [
+            {
+              "label": "Kp",
+              "value": "6.4"
+            },
+            {
+              "label": "Bz",
+              "value": "-9.2 nT"
+            }
+          ],
+          "footer": "Track sleep, HRV, symptoms, and signals.",
+          "theme_keys": [
+            "geomagnetic",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "space_weather",
+            "kp",
+            "bz",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/kp.jpg",
+            "social/share/backgrounds/bz.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/geospace_3h/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "aurora/viewline/tonight-north.png"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "video_candidates": [],
+          "still_candidates": [],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "geomagnetic",
+        "severity": "high"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.geomagnetic.high"
+    },
+    {
+      "id": "social_alert.schumann.high.f895c4f3cb50",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "schumann",
+      "severity": "high",
+      "asof": "2026-07-08T15:00:00Z",
+      "title": "HRV lower than normal?",
+      "subtitle": "Earth's resonance signal is above baseline. Compare it with sleep, HRV, focus, and pain patterns.",
+      "caption": "HRV lower than normal?\n\nThe Schumann signal is elevated compared with its recent baseline. Some people like to watch these signal periods alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.\n\nGaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.\n\nSchumann resonance is part of Earth's natural electromagnetic background. HeartMath and other researchers have studied links between these signals, HRV, brain rhythms, sleep, mood, and nervous-system patterns.\n\nWant to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
+      "metrics": {
+        "zscore_30d": 3.2,
+        "value_hz": 7.91
+      },
+      "source_refs": [
+        {
+          "label": "Tomsk/Cumiana Schumann",
+          "path": "schumann"
+        },
+        {
+          "label": "Schumann active state",
+          "path": "active_states.schumann.variability_24h"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "label": "HEALTH WATCH",
+          "title": "HRV lower than normal?",
+          "subtitle": "Earth's resonance signal is above baseline. Compare it with sleep, HRV, focus, and pain patterns.",
+          "context_chips": [
+            "Sleep issues",
+            "Low HRV",
+            "Scattered",
+            "Brain fog",
+            "Headache"
+          ],
+          "metric_chips": [
+            {
+              "label": "Z-score",
+              "value": "3.2"
+            },
+            {
+              "label": "F1",
+              "value": "7.9 Hz"
+            }
+          ],
+          "footer": "Track sleep, HRV, symptoms, and resonance.",
+          "theme_keys": [
+            "schumann",
+            "resonance",
+            "earthscope"
+          ],
+          "background_keywords": [
+            "schumann",
+            "earthscope"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/schumann.jpg",
+            "social/share/backgrounds/earthscope.jpg",
+            "bootstrap:social_alerts/resonance_field",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/cumiana_share_latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Dark blue Schumann-style resonance field with soft cyan and violet frequency bands, subtle spectrogram texture, and quiet space for a health-first alert overlay.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": [
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg"
+          ]
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "label": "HEALTH WATCH",
+          "title": "HRV lower than normal?",
+          "subtitle": "Earth's resonance signal is above baseline. Compare it with sleep, HRV, focus, and pain patterns.",
+          "context_chips": [
+            "Sleep issues",
+            "Low HRV",
+            "Scattered",
+            "Brain fog",
+            "Headache"
+          ],
+          "metric_chips": [
+            {
+              "label": "Z-score",
+              "value": "3.2"
+            },
+            {
+              "label": "F1",
+              "value": "7.9 Hz"
+            }
+          ],
+          "footer": "Track sleep, HRV, symptoms, and resonance.",
+          "theme_keys": [
+            "schumann",
+            "resonance",
+            "earthscope"
+          ],
+          "background_keywords": [
+            "schumann",
+            "earthscope"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/schumann.jpg",
+            "social/share/backgrounds/earthscope.jpg",
+            "bootstrap:social_alerts/resonance_field",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/cumiana_share_latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Dark blue Schumann-style resonance field with soft cyan and violet frequency bands, subtle spectrogram texture, and quiet space for a health-first alert overlay.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": [
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg"
+          ]
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "HRV lower than normal?"
+            },
+            {
+              "role": "signal",
+              "text": "Earth's resonance signal is above baseline. Compare it with sleep, HRV, focus, and pain patterns.",
+              "context_chips": [
+                "Sleep issues",
+                "Low HRV",
+                "Scattered",
+                "Brain fog",
+                "Headache"
+              ],
+              "metric_chips": [
+                {
+                  "label": "Z-score",
+                  "value": "3.2"
+                },
+                {
+                  "label": "F1",
+                  "value": "7.9 Hz"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app"
+            }
+          ],
+          "label": "HEALTH WATCH",
+          "title": "HRV lower than normal?",
+          "subtitle": "Earth's resonance signal is above baseline. Compare it with sleep, HRV, focus, and pain patterns.",
+          "context_chips": [
+            "Sleep issues",
+            "Low HRV",
+            "Scattered",
+            "Brain fog",
+            "Headache"
+          ],
+          "metric_chips": [
+            {
+              "label": "Z-score",
+              "value": "3.2"
+            },
+            {
+              "label": "F1",
+              "value": "7.9 Hz"
+            }
+          ],
+          "footer": "Track sleep, HRV, symptoms, and resonance.",
+          "theme_keys": [
+            "schumann",
+            "resonance",
+            "earthscope"
+          ],
+          "background_keywords": [
+            "schumann",
+            "earthscope"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/schumann.jpg",
+            "social/share/backgrounds/earthscope.jpg",
+            "bootstrap:social_alerts/resonance_field",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/cumiana_share_latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Dark blue Schumann-style resonance field with soft cyan and violet frequency bands, subtle spectrogram texture, and quiet space for a health-first alert overlay.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "video_candidates": [],
+          "still_candidates": [
+            "schumann/latest/tomsk_share_latest.jpg",
+            "social/earthscope/latest/tomsk_share_latest.jpg"
+          ],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "schumann",
+        "severity": "high"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.schumann.high"
+    },
+    {
+      "id": "social_alert.cme.watch.e6e9eb687c6d",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "cme",
+      "severity": "watch",
+      "asof": "2026-07-08T15:00:00Z",
+      "title": "Moving in slow motion today?",
+      "subtitle": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
+      "caption": "Moving in slow motion today?\n\nA CME is a huge cloud from the Sun. It carries charged particles and magnetic energy. If that cloud heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree. Most people notice this as space weather news: auroras, satellite noise, radio issues, GPS weirdness, or power-grid watches.\n\nGaia Eyes looks at the body-pattern side of that same signal. Studies have explored relationships between solar/geomagnetic activity and HRV, autonomic regulation, headaches, sleep, mood, and cardiovascular timing. HeartMath and other researchers have also looked at how HRV can move with Schumann resonance and magnetic-field activity. The science is not finished, but the pattern question is real.\n\nThat is what Gaia Eyes is built to test personally: when the outside signal changes, do your sleep, HRV, pain, mood, energy, or symptoms change too? One day is just a note. Repeated overlaps become a pattern.\n\nGaia Eyes does not give medical advice. It is a pattern recognition system.\n\nWant to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "cmes_count": 2.0,
+        "cmes_max_speed_kms": 720.0
+      },
+      "source_refs": [
+        {
+          "label": "CCOR-1",
+          "path": "nasa/ccor1/latest.mp4"
+        },
+        {
+          "label": "ENLIL",
+          "path": "nasa/enlil/latest.mp4"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "label": "SOLAR WATCH",
+          "title": "Moving in slow motion today?",
+          "subtitle": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Energy",
+            "Pain",
+            "Restless"
+          ],
+          "metric_chips": [],
+          "footer": "Track recovery, sleep, HRV, and symptoms.",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ]
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "label": "SOLAR WATCH",
+          "title": "Moving in slow motion today?",
+          "subtitle": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Energy",
+            "Pain",
+            "Restless"
+          ],
+          "metric_chips": [],
+          "footer": "Track recovery, sleep, HRV, and symptoms.",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ]
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "Moving in slow motion today?"
+            },
+            {
+              "role": "signal",
+              "text": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
+              "context_chips": [
+                "Sleep",
+                "HRV",
+                "Energy",
+                "Pain",
+                "Restless"
+              ],
+              "metric_chips": []
+            },
+            {
+              "role": "cta",
+              "text": "Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app"
+            }
+          ],
+          "label": "SOLAR WATCH",
+          "title": "Moving in slow motion today?",
+          "subtitle": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log the pattern instead of guessing.",
+          "context_chips": [
+            "Sleep",
+            "HRV",
+            "Energy",
+            "Pain",
+            "Restless"
+          ],
+          "metric_chips": [],
+          "footer": "Track recovery, sleep, HRV, and symptoms.",
+          "theme_keys": [
+            "cme",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "cme",
+            "space_weather",
+            "solar_wind"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/cme.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "social/share/backgrounds/solar_wind.jpg",
+            "bootstrap:social_alerts/cme_wave",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Deep-space CME wave background with blue-white motion arcs and amber solar haze, designed for carousel and reel overlays.",
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg"
+          ],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "cme",
+        "severity": "watch"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.cme.watch"
+    },
+    {
+      "id": "social_alert.solar_flare.watch.a56f06809696",
+      "mode": "shadow",
+      "auto_publish": false,
+      "review_status": "needs_human_review",
+      "category": "solar_flare",
+      "severity": "watch",
+      "asof": "2026-07-08T15:00:00Z",
+      "title": "Focus feeling patchy?",
+      "subtitle": "Solar flare activity is elevated. Some people track signal periods like this with energy, focus, headaches, and sleep.",
+      "caption": "Focus feeling patchy?\n\nA solar flare is a burst of energy from the Sun. Most official space-weather alerts focus on technology first: radio noise, navigation disruption, satellites, and the changing space-weather background around Earth.\n\nGaia Eyes looks at the body-pattern side. Research on solar and geomagnetic activity has looked at HRV, nervous-system regulation, cardiovascular timing, headaches, sleep, and mood. The field is still developing, but the question is not random: if the outside signal changes, do your sleep, HRV, energy, focus, pain, or symptoms shift at the same time?\n\nIf today feels patchy, overstimulating, or unusually hard to settle into, keep the experiment simple: note what you feel, note what else was happening, and look for repeats over time.\n\nGaia Eyes does not give medical advice. It is a pattern recognition system.\n\nWant to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app\n\n#GaiaEyes #SpaceWeather #EarthSignals",
+      "metrics": {
+        "xray_max_class": "M5.6"
+      },
+      "source_refs": [
+        {
+          "label": "GOES X-ray",
+          "path": "space_weather.xray_max_class"
+        },
+        {
+          "label": "SWPC flare feed",
+          "path": "GOES_XRS_URL"
+        }
+      ],
+      "overlay_spec": {
+        "square_image": {
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "safe_area": {
+            "left": 96,
+            "right": 96,
+            "top": 104,
+            "bottom": 132
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "label": "HEALTH WATCH",
+          "title": "Focus feeling patchy?",
+          "subtitle": "Solar flare activity is elevated. Some people track signal periods like this with energy, focus, headaches, and sleep.",
+          "context_chips": [
+            "Energy",
+            "Focus",
+            "Sleep",
+            "Headache",
+            "Wired/tired"
+          ],
+          "metric_chips": [
+            {
+              "label": "Max flare",
+              "value": "M5.6"
+            }
+          ],
+          "footer": "Track energy, focus, symptoms, and signals.",
+          "theme_keys": [
+            "solar_flare",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "solar_flare",
+            "space_weather"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/solar_flare.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/solar_heat",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "nasa/lasco_c2/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Solar flare inspired glow with warm orange plasma, dark navy edges, and restrained contrast for readable alert text.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg"
+          ]
+        },
+        "feed_card": {
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "safe_area": {
+            "left": 86,
+            "right": 86,
+            "top": 132,
+            "bottom": 142
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "label": "HEALTH WATCH",
+          "title": "Focus feeling patchy?",
+          "subtitle": "Solar flare activity is elevated. Some people track signal periods like this with energy, focus, headaches, and sleep.",
+          "context_chips": [
+            "Energy",
+            "Focus",
+            "Sleep",
+            "Headache",
+            "Wired/tired"
+          ],
+          "metric_chips": [
+            {
+              "label": "Max flare",
+              "value": "M5.6"
+            }
+          ],
+          "footer": "Track energy, focus, symptoms, and signals.",
+          "theme_keys": [
+            "solar_flare",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "solar_flare",
+            "space_weather"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/solar_flare.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/solar_heat",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "nasa/lasco_c2/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Solar flare inspired glow with warm orange plasma, dark navy edges, and restrained contrast for readable alert text.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg"
+          ]
+        },
+        "story_reel": {
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "left": 92,
+            "right": 92,
+            "top": 220,
+            "bottom": 260
+          },
+          "visual_style": {
+            "layout": "trust_first_alert_card",
+            "notes": "Use a dark navy/black gradient, subtle signal texture, small Gaia Eyes branding, one compact text panel, up to five context chips, and one quiet metric line."
+          },
+          "frames": [
+            {
+              "role": "hook",
+              "text": "Focus feeling patchy?"
+            },
+            {
+              "role": "signal",
+              "text": "Solar flare activity is elevated. Some people track signal periods like this with energy, focus, headaches, and sleep.",
+              "context_chips": [
+                "Energy",
+                "Focus",
+                "Sleep",
+                "Headache",
+                "Wired/tired"
+              ],
+              "metric_chips": [
+                {
+                  "label": "Max flare",
+                  "value": "M5.6"
+                }
+              ]
+            },
+            {
+              "role": "cta",
+              "text": "Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app"
+            }
+          ],
+          "label": "HEALTH WATCH",
+          "title": "Focus feeling patchy?",
+          "subtitle": "Solar flare activity is elevated. Some people track signal periods like this with energy, focus, headaches, and sleep.",
+          "context_chips": [
+            "Energy",
+            "Focus",
+            "Sleep",
+            "Headache",
+            "Wired/tired"
+          ],
+          "metric_chips": [
+            {
+              "label": "Max flare",
+              "value": "M5.6"
+            }
+          ],
+          "footer": "Track energy, focus, symptoms, and signals.",
+          "theme_keys": [
+            "solar_flare",
+            "solar",
+            "space_weather"
+          ],
+          "background_keywords": [
+            "solar_flare",
+            "space_weather"
+          ],
+          "background_candidates": [
+            "social/share/backgrounds/solar_flare.jpg",
+            "social/share/backgrounds/space_weather.jpg",
+            "bootstrap:social_alerts/solar_aurora",
+            "bootstrap:social_alerts/solar_heat",
+            "bootstrap:social_alerts/earthscope_cosmic",
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg",
+            "nasa/lasco_c2/latest.jpg"
+          ],
+          "background_source": "social/share/backgrounds upload paths first; bootstrap:social_alerts generated pack; gaiaeyes-media/backgrounds/{square,tall}; compatible with gaia_eyes_viral_bot.py",
+          "background_prompts": [
+            "Subtle aurora arcs over a dark horizon, scientific but human, with cyan-green light and a calm black-blue card-safe background.",
+            "Solar flare inspired glow with warm orange plasma, dark navy edges, and restrained contrast for readable alert text.",
+            "Gaia Eyes cosmic health-pattern background: earth glow, subtle signal lines, deep navy field, and premium wellness-tech restraint."
+          ],
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "still_candidates": [
+            "nasa/ccor1/latest.jpg",
+            "nasa/enlil/latest.jpg",
+            "nasa/aia_304/latest.jpg"
+          ],
+          "motion_notes": "Shadow spec only. Use subtle zoom and chip fade-ins when reel rendering is enabled."
+        },
+        "rendering_status": "spec_only",
+        "category": "solar_flare",
+        "severity": "watch"
+      },
+      "guardrails": {
+        "claim_strength": "context_only",
+        "medical_causality": "avoid",
+        "requires_review_before_publish": true
+      },
+      "dedupe_key": "social_alert.solar_flare.watch"
+    }
+  ],
+  "review_notes": [
+    "Human review is required before any social publish.",
+    "Payload is text, metadata, and overlay specs only; no media rendering or platform posting is performed.",
+    "Copy intentionally avoids medical causality and symptom prediction."
+  ]
+}

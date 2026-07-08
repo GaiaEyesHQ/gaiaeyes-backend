@@ -15,10 +15,11 @@ from bots.social_alerts.preview_renderer import (
     _context_chips,
     _cta_text,
     _metrics_line,
+    _split_cta_text,
     render_shadow_previews,
     resolve_background_image,
 )
-from bots.social_alerts.shadow_drafts import CTA, build_shadow_payload
+from bots.social_alerts.shadow_drafts import CTA, CTA_BY_CATEGORY, build_shadow_payload
 
 
 def _write_image(path: Path, color: tuple[int, int, int]) -> Path:
@@ -164,8 +165,13 @@ def test_render_prefers_background_candidates_before_live_stills(tmp_path: Path)
 def test_renderer_uses_draft_cta_and_public_fallback_chips() -> None:
     payload = build_shadow_payload({"space_weather": {"cmes_count": 1}})
     draft = next(item for item in payload["drafts"] if item["category"] == "cme")
-    assert _cta_text(draft) == CTA
+    assert _cta_text(draft) == CTA_BY_CATEGORY["cme"]
     assert DEFAULT_CTA == CTA
+    assert _split_cta_text(CTA) == (
+        "Want to compare this with your own patterns?",
+        "Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app",
+    )
+    assert _cta_text({}) == DEFAULT_CTA
 
     chips = _context_chips({}, "cme")
     joined = " ".join(chips).lower()

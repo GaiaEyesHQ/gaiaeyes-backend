@@ -493,6 +493,16 @@ def _cta_text(draft: Mapping[str, Any]) -> str:
     return DEFAULT_CTA
 
 
+def _split_cta_text(text: str) -> Tuple[str, str]:
+    cleaned = _safe_text(text)
+    if not cleaned:
+        return "", ""
+    if "?" not in cleaned:
+        return "", cleaned
+    title, body = cleaned.split("?", 1)
+    return f"{title.strip()}?", body.strip()
+
+
 def _draw_context_chips(
     draw: ImageDraw.ImageDraw,
     chips: Sequence[str],
@@ -615,7 +625,7 @@ def _render_alert_card(
     accent = _category_accent(category)
     margin = 74 if height <= 1100 else 86
     if height <= 1100:
-        panel = (margin, 156, width - margin, height - 300)
+        panel = (margin, 156, width - margin, height - 94)
         title_max = 68
         subtitle_size = 31
         body_gap = 20
@@ -670,21 +680,40 @@ def _render_alert_card(
         draw.text((inner_x, y), metric_text, font=metric_font, fill=(255, 220, 148, 245))
         y += _text_size(draw, metric_text, metric_font)[1] + body_gap
 
-    cta_body_font = _font(23 if height <= 1100 else 27, bold=True)
     cta_text = _cta_text(draft)
-    cta_lines = _wrap_text(draw, cta_text, cta_body_font, inner_w)
-    cta_height = sum(_text_size(draw, line, cta_body_font)[1] for line in cta_lines)
-    if cta_lines:
-        cta_height += 6 * (len(cta_lines) - 1)
+    cta_title, cta_body = _split_cta_text(cta_text)
+    cta_title_font = _font(29 if height <= 1100 else 34, bold=True)
+    cta_body_font = _font(25 if height <= 1100 else 30, bold=True)
+    cta_title_lines = _wrap_text(draw, cta_title, cta_title_font, inner_w) if cta_title else []
+    cta_body_lines = _wrap_text(draw, cta_body, cta_body_font, inner_w) if cta_body else _wrap_text(draw, cta_text, cta_body_font, inner_w)
+    cta_height = sum(_text_size(draw, line, cta_title_font)[1] for line in cta_title_lines)
+    if cta_title_lines:
+        cta_height += 7 * (len(cta_title_lines) - 1)
+    if cta_title_lines and cta_body_lines:
+        cta_height += 11
+    cta_height += sum(_text_size(draw, line, cta_body_font)[1] for line in cta_body_lines)
+    if cta_body_lines:
+        cta_height += 7 * (len(cta_body_lines) - 1)
     cta_y = min(max(y, y2 - cta_height - 24), y2 - cta_height - 12)
+    if cta_title_lines:
+        cta_y = _draw_wrapped_text(
+            draw,
+            (inner_x, cta_y),
+            cta_title,
+            cta_title_font,
+            inner_w,
+            fill=(248, 254, 255, 244),
+            line_gap=7,
+        )
+        cta_y += 11
     _draw_wrapped_text(
         draw,
         (inner_x, cta_y),
-        cta_text,
+        cta_body if cta_title else cta_text,
         cta_body_font,
         inner_w,
         fill=(232, 239, 248, 232),
-        line_gap=6,
+        line_gap=7,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

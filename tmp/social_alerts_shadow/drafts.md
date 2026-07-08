@@ -2,7 +2,7 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-07T21:13:15Z`
+- Generated at: `2026-07-08T17:16:57Z`
 - Draft count: `1`
 
 ## 1. Nerves on overdrive?
@@ -17,11 +17,15 @@ Post caption copy:
 ```text
 Nerves on overdrive?
 
-When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy.
+A CME is a huge cloud from the Sun. It carries charged particles and magnetic energy. If that cloud heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree. Most people notice this as space weather news: auroras, satellite noise, radio issues, GPS weirdness, or power-grid watches.
 
-Quick context: a CME is a burst of solar material that can interact with Earth's magnetic field. Studies are exploring links between solar activity, Earth signals, weather patterns, and human health.
+Gaia Eyes looks at the body-pattern side of that same signal. Studies have explored relationships between solar/geomagnetic activity and HRV, autonomic regulation, headaches, sleep, mood, and cardiovascular timing. HeartMath and other researchers have also looked at how HRV can move with Schumann resonance and magnetic-field activity. The science is not finished, but the pattern question is real.
 
-Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app
+That is what Gaia Eyes is built to test personally: when the outside signal changes, do your sleep, HRV, pain, mood, energy, or symptoms change too? One day is just a note. Repeated overlaps become a pattern.
+
+Gaia Eyes does not give medical advice. It is a pattern recognition system.
+
+Want to compare this with your own recovery patterns? Gaia Eyes tracks sleep, HRV, pain, mood, energy, symptoms, and Earth signals over time: https://GaiaEyes.com/app
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```

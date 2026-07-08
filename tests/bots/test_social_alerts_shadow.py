@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 import bots.social_alerts.shadow_drafts as shadow_drafts
 from bots.social_alerts.shadow_drafts import (
     CTA,
+    CTA_BY_CATEGORY,
     CME_HOOKS,
     MAX_CONTEXT_CHIPS,
     SCHUMANN_ALERT_CHIPS,
@@ -70,16 +71,21 @@ def test_build_shadow_payload_generates_reviewable_drafts_without_publish() -> N
 def test_shadow_copy_stays_conservative_and_contextual() -> None:
     payload = build_shadow_payload(
         {
-            "space_weather": {"now": {"kp": 6.4, "bz_nt": -10.0, "solar_wind_kms": 660}},
+            "space_weather": {
+                "now": {"kp": 6.4, "bz_nt": -10.0, "solar_wind_kms": 660},
+                "xray_max_class": "M5.6",
+                "cmes_count": 1,
+            },
             "local": {"air": {"aqi": 172}},
         }
     )
 
     joined = " ".join(draft["caption"].lower() for draft in payload["drafts"])
     assert "context only" not in joined
-    assert "not medical advice" not in joined
+    assert "does not give medical advice" in joined
     assert "affect you" not in joined
     assert "windows like this" not in joined
+    assert "pattern recognition system" in joined
     assert "forecast of symptoms" not in joined
     assert "cause" not in joined
     assert "cure" not in joined
@@ -101,7 +107,7 @@ def test_space_alerts_keep_health_pattern_context() -> None:
     for category in ("geomagnetic", "cme"):
         draft = drafts[category]
         square = draft["overlay_spec"]["square_image"]
-        assert CTA in draft["overlay_spec"]["story_reel"]["frames"][-1]["text"]
+        assert CTA_BY_CATEGORY[category] in draft["overlay_spec"]["story_reel"]["frames"][-1]["text"]
         assert "full signal read" not in draft["caption"]
         assert "before posting" not in draft["subtitle"].lower()
         assert "review" not in draft["subtitle"].lower()
@@ -124,14 +130,15 @@ def test_space_alerts_keep_health_pattern_context() -> None:
     assert "Recovery feeling off?" not in cme_caption
     assert "Body signals look noisier today." not in cme_caption
     assert "The sun influences more than we think." not in cme_caption
-    assert (
-        "When solar activity is elevated, some people notice changes in sleep, HRV, headaches, pain, mood, and energy."
-        in cme_caption
-    )
-    assert "Quick context: a CME is a burst of solar material" in cme_caption
-    assert "Studies are exploring links between solar activity" in cme_caption
+    assert "A CME is a huge cloud from the Sun." in cme_caption
+    assert "kind of like wind shaking a tree" in cme_caption
+    assert "auroras, satellite noise, radio issues, GPS weirdness, or power-grid watches" in cme_caption
+    assert "Studies have explored relationships between solar/geomagnetic activity and HRV" in cme_caption
+    assert "HeartMath and other researchers have also looked at how HRV can move with Schumann resonance" in cme_caption
+    assert "The science is not finished, but the pattern question is real." in cme_caption
+    assert "Gaia Eyes does not give medical advice. It is a pattern recognition system." in cme_caption
     assert "alongside the CME signal" not in cme_caption
-    assert CTA in cme_caption
+    assert CTA_BY_CATEGORY["cme"] in cme_caption
     assert "https://GaiaEyes.com/app" in cme_caption
     assert "Gaia Eyes compares symptoms, wearables, exposures, and environmental signals over time." not in cme_caption
     assert "CME activity is elevated" not in cme_caption
@@ -144,9 +151,35 @@ def test_schumann_caption_includes_brief_public_explainer_and_app_cta() -> None:
     payload = build_shadow_payload({"schumann": {"zscore_30d": 3.2, "combined": {"f1_hz": 7.91}}})
     schumann = next(draft for draft in payload["drafts"] if draft["category"] == "schumann")
 
-    assert "Quick context: Schumann resonance is part of Earth's natural electromagnetic background." in schumann["caption"]
-    assert "heart, sleep, mood, and nervous-system patterns" in schumann["caption"]
-    assert CTA in schumann["caption"]
+    assert "Schumann resonance is one of Earth's background electromagnetic signals." in schumann["caption"]
+    assert "HeartMath and other researchers have studied links between Schumann resonance" in schumann["caption"]
+    assert "real research thread Gaia Eyes helps you compare against your own body data" in schumann["caption"]
+    assert "Gaia Eyes does not give medical advice. It is a pattern recognition system." in schumann["caption"]
+    assert CTA_BY_CATEGORY["schumann"] in schumann["caption"]
+
+
+def test_space_alert_ctas_vary_by_category_without_changing_app_link() -> None:
+    payload = build_shadow_payload(
+        {
+            "space_weather": {
+                "now": {"kp": 6.4, "bz_nt": -10.0, "solar_wind_kms": 660},
+                "xray_max_class": "M5.6",
+                "cmes_count": 1,
+            },
+            "schumann": {"zscore_30d": 3.2, "combined": {"f1_hz": 7.91}},
+        }
+    )
+
+    ctas = []
+    for draft in payload["drafts"]:
+        frames = draft["overlay_spec"]["story_reel"]["frames"]
+        cta = next(frame["text"] for frame in frames if frame["role"] == "cta")
+        ctas.append(cta)
+        assert "https://GaiaEyes.com/app" in cta
+        assert cta in draft["caption"]
+
+    assert len(set(ctas)) == len(ctas)
+    assert CTA not in ctas
 
 
 def test_geomagnetic_kp_thresholds_use_watch_at_3_5_and_high_at_5() -> None:
