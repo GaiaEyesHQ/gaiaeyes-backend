@@ -4,6 +4,9 @@ import hashlib
 from typing import Any, Mapping, Sequence
 
 
+APP_URL = "gaiaeyes.com/app"
+APP_DOWNLOAD_LINE = f"Download Gaia Eyes: {APP_URL}"
+
 CTA_VARIANTS = [
     {
         "key": "solar-heart",
@@ -121,8 +124,10 @@ def select_earthscope_cta(seed: Any, *, context: Mapping[str, Any] | None = None
 def append_caption_cta(caption: str, *, seed: Any = "", context: Mapping[str, Any] | None = None) -> str:
     text = (caption or "").strip()
     cta = select_earthscope_cta(seed, context=context).get("caption", "").strip()
-    if not cta:
+    if APP_URL.lower() in text.lower():
         return text
+    if not cta:
+        return f"{text}\n\n{APP_DOWNLOAD_LINE}" if text else APP_DOWNLOAD_LINE
     lower = text.lower()
     if any(
         marker in lower
@@ -136,5 +141,6 @@ def append_caption_cta(caption: str, *, seed: Any = "", context: Mapping[str, An
             "gaia eyes combines wearable data",
         )
     ):
-        return text
-    return f"{text}\n\n{cta}" if text else cta
+        return f"{text}\n\n{APP_DOWNLOAD_LINE}" if text else APP_DOWNLOAD_LINE
+    cta_block = f"{cta}\n{APP_DOWNLOAD_LINE}"
+    return f"{text}\n\n{cta_block}" if text else cta_block

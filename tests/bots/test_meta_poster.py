@@ -202,8 +202,10 @@ def test_derive_caption_adds_rotating_app_cta_before_hashtags():
     )
 
     assert "Gaia Eyes" in caption
+    assert "gaiaeyes.com/app" in caption
     assert "Focus may come in shorter windows." in caption
     assert caption.endswith("#GaiaEyes")
+    assert caption.index("gaiaeyes.com/app") < caption.index("#GaiaEyes")
     assert tags == "#GaiaEyes"
 
 

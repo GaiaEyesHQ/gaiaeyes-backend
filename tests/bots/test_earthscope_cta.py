@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bots.earthscope_post.cta import CTA_VARIANTS, append_caption_cta, select_earthscope_cta
+from bots.earthscope_post.cta import APP_URL, CTA_VARIANTS, append_caption_cta, select_earthscope_cta
 
 
 def test_select_earthscope_cta_is_deterministic():
@@ -21,6 +21,23 @@ def test_append_caption_cta_rotates_from_seed():
 
     assert caption.startswith("Today may feel a little scattered.")
     assert "Gaia Eyes" in caption
+    assert APP_URL in caption
+
+
+def test_append_caption_cta_adds_app_link_to_existing_cta():
+    caption = append_caption_cta(
+        "Sensitive to background signals? Gaia Eyes compares them with sleep and symptoms.",
+        seed="2026-06-09",
+    )
+
+    assert caption.count(APP_URL) == 1
+    assert caption.endswith(APP_URL)
+
+
+def test_append_caption_cta_does_not_duplicate_app_link():
+    caption = append_caption_cta(f"Download Gaia Eyes: {APP_URL}", seed="2026-06-09")
+
+    assert caption == f"Download Gaia Eyes: {APP_URL}"
 
 
 def test_select_earthscope_cta_uses_schumann_context():

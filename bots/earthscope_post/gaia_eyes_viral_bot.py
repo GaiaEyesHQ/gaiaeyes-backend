@@ -47,7 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from bots.earthscope_post.cta import select_earthscope_cta
+from bots.earthscope_post.cta import APP_DOWNLOAD_LINE, select_earthscope_cta
 
 HERE = Path(__file__).resolve().parent
 FONTS_DIR = HERE / "fonts"
@@ -1354,7 +1354,7 @@ def render_stats_card_from_features(
     y = _draw_wrapped_multilines(draw, cta, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
 
-    _overlay_logo_and_tagline(im, "Open Gaia Eyes for your pattern read.")
+    _overlay_logo_and_tagline(im, APP_DOWNLOAD_LINE)
     return im.convert("RGB")
 
 
