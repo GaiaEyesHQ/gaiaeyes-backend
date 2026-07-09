@@ -17,7 +17,7 @@ Requirements:
   pip install requests python-dotenv pillow
 
 Environment (.env) on desktop:
-  MEDIA_REPO_PATH=/Users/jenniferobrien/Documents/gaiaeyes-media
+  MEDIA_REPO_PATH=/path/to/gaiaeyes-media
   LOGO_PATH=/Users/jenniferobrien/Desktop/GaiaEyes/GaiaEyesLogo.png
   SUPABASE_REST_URL=https://<project>.supabase.co/rest/v1
   SUPABASE_ANON_KEY=<anon-or-empty>
@@ -106,7 +106,7 @@ from dotenv import load_dotenv
 OUTPUT_DIR = HERE / "Output"
 
 load_dotenv(HERE / ".env")
-MEDIA_REPO_PATH = Path(os.getenv("MEDIA_REPO_PATH", "/Users/jenniferobrien/Documents/gaiaeyes-media")).expanduser()
+MEDIA_REPO_PATH = Path(os.getenv("MEDIA_REPO_PATH", str(REPO_ROOT / "gaiaeyes-media"))).expanduser()
 LOGO_PATH = Path(os.getenv("LOGO_PATH", "/Users/jenniferobrien/Desktop/GaiaEyes/GaiaEyesLogo.png")).expanduser()
 
 IMG_PATH_REPO = MEDIA_REPO_PATH / "images" / "dailypost.jpg"
@@ -986,6 +986,46 @@ def _shadowed_text(draw: ImageDraw.ImageDraw, xy: tuple[int,int], text: str, fon
     draw.text((x+offset[0], y+offset[1]), text, font=font, fill=shadow)
     draw.text((x, y), text, font=font, fill=fill)
 
+def _earthscope_hook_accent(title: str, energy: Optional[str]) -> tuple[int, int, int, int]:
+    title_l = (title or "").lower()
+    if any(k in title_l for k in ("sleep", "rest", "restless", "wired")):
+        return (216, 202, 255, 255)
+    if any(k in title_l for k in ("pain", "head", "sinus", "migraine")):
+        return (255, 185, 205, 255)
+    if any(k in title_l for k in ("focus", "brain", "mental", "mind")):
+        return (125, 226, 255, 255)
+    energy_l = (energy or "").lower()
+    if "elevated" in energy_l or "high" in energy_l:
+        return (255, 218, 132, 255)
+    if "mild" in energy_l:
+        return (185, 230, 160, 255)
+    return (235, 245, 255, 255)
+
+def _glowed_text(
+    im: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    text: str,
+    font: ImageFont.ImageFont,
+    fill=(235,245,255,255),
+    glow: Optional[tuple[int, int, int, int]] = None,
+) -> None:
+    x, y = xy
+    glow = glow or fill
+    glow_layer = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow_layer)
+    glow_draw.text((x, y), text, font=font, fill=(*glow[:3], 180))
+    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=10))
+    im.alpha_composite(glow_layer)
+
+    tight_layer = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    tight_draw = ImageDraw.Draw(tight_layer)
+    tight_draw.text((x, y), text, font=font, fill=(*glow[:3], 110))
+    tight_layer = tight_layer.filter(ImageFilter.GaussianBlur(radius=3))
+    im.alpha_composite(tight_layer)
+
+    _shadowed_text(draw, xy, text, font=font, fill=fill, shadow=(0,0,0,215), offset=(2,2))
+
 def _draw_badge(im: Image.Image, draw: ImageDraw.ImageDraw, text: str, xy: tuple[int,int],
                 pad: tuple[int,int]=(20,10), fill=(60,180,120,200), stroke=(0,0,0,120),
                 font: Optional[ImageFont.ImageFont]=None, radius: Optional[int]=None, stroke_width: int = 2
@@ -1521,6 +1561,7 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
     _add_top_gradient(im, height=220, alpha_top=170)
     draw = ImageDraw.Draw(im)
     font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 66)
+    font_tip  = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "Oswald-Bold.ttf"], 54)
     font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 36)
     fg = (235,245,255,255)
     x0, y = 80, 120
@@ -1532,26 +1573,25 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
     if "QUICK TIP:" in body:
         parts = body.split("QUICK TIP:", 1)
         body = parts[0].rstrip()
-        tip_head, tip_body = "QUICK TIP:", parts[1].strip()
+        tip_head, tip_body = "QUICK TIP", parts[1].strip()
     # If both were present originally (due to ordering), ensure we didn't drop one
     # by checking original text again
     if tip_head is None and "QUICK TIP:" in (aff_body or ""):
         sub = aff_body.split("QUICK TIP:", 1)
         aff_body = sub[0].rstrip()
-        tip_head, tip_body = "QUICK TIP:", sub[1].strip()
+        tip_head, tip_body = "QUICK TIP", sub[1].strip()
 
-    # Daily headers for affects/care cards
     title_norm = (title or "").strip().lower()
-    if title_norm in ("how this affects you", "how it may feel") or title_norm.endswith("?"):
-        header = f"Daily EarthScope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
-        _shadowed_text(draw, (x0, y), header, font=font_h1, fill=fg)
-        y += 70
-    if title_norm in ("self-care playbook", "care notes"):
-        header = f"Daily EarthScope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
-        _shadowed_text(draw, (x0, y), header, font=font_h1, fill=fg)
-        y += 70
+    is_affects_card = title_norm in ("how this affects you", "how it may feel") or title_norm.endswith("?") or bool(tip_head)
+    is_care_card = title_norm in ("self-care playbook", "care notes")
 
-    _shadowed_text(draw, (x0, y), title, font=font_h1, fill=fg); y += 80
+    accent = _earthscope_hook_accent(title, energy)
+    if is_affects_card and not is_care_card:
+        _glowed_text(im, draw, (x0, y), title, font=font_h1, fill=fg, glow=accent)
+        y += 102
+    else:
+        _shadowed_text(draw, (x0, y), title, font=font_h1, fill=fg)
+        y += 92 if is_care_card else 82
 
     # Normalize lists: bullets or numbered -> bullet list (applies to body only)
     if " - " in body or body.strip().startswith("-") or re.match(r"^\d+\.\s", body.strip()):
@@ -1592,15 +1632,17 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
             processed.append(p)
         body = "\n".join([f"• {p}" for p in processed])
 
-    y = _draw_wrapped_multilines(draw, body, font_body, x0, y, W - x0 - 120, line_gap=54)
+    body_line_gap = 60 if is_care_card else 56
+    y = _draw_wrapped_multilines(draw, body, font_body, x0, y, W - x0 - 120, line_gap=body_line_gap)
     # reserve footer space before special sections
     safe_bottom = H - 170
 
     # Render special sub-sections without bullets
     if tip_head and tip_body:
-        y += 24
-        _shadowed_text(draw, (x0, y), tip_head, font=font_h1, fill=fg); y += 60
-        y = _draw_wrapped_to_bottom(draw, tip_body, font_body, x0, y, W - x0 - 120, bottom=safe_bottom, line_gap=54)
+        y += 42
+        _glowed_text(im, draw, (x0, y), tip_head, font=font_tip, fill=fg, glow=accent)
+        y += 70
+        y = _draw_wrapped_to_bottom(draw, tip_body, font_body, x0, y, W - x0 - 120, bottom=safe_bottom, line_gap=56)
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 

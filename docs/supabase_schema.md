@@ -325,7 +325,7 @@ Projection of the `gaia.daily_summary` table limited to the core metrics:
   | `label` | `text` | User-facing label. |
   | `description` | `text` | Optional explanation of the symptom. |
   | `is_active` | `boolean` | Indicates if the symptom code is selectable (default `true`). |
-- **Seed Data**: `nerve_pain`, `zaps`, `drained`, `headache`, `anxious`, `insomnia`, `other`
+- **Seed Data**: `nerve_pain`, `zaps`, `drained`, `headache`, `migraine`, `anxious`, `insomnia`, `other`
 
 ## `raw` Schema
 
@@ -574,6 +574,9 @@ Refresh helper for analytics materialized views.
 
 ### Nerve Pain Symptom Code Upsert
 Migration `20251017123000_seed_nerve_pain_symptom_code.sql` ensures a `nerve_pain` symptom code exists in any schema containing a `symptom_codes` table, gracefully handling column variations.
+
+### Migraine Symptom + Pattern Outcome
+Migration `20260708143000_add_migraine_pattern_outcome.sql` keeps migraine separate from headache and adds migraine pattern outcome columns to `marts.user_daily_features` and `marts.user_daily_outcomes`.
 
 ## External Dependencies
 
@@ -1142,6 +1145,7 @@ CREATE TABLE storage.s3_multipart_uploads_parts (
 | `20251015142333_create_marts_magnetosphere_last24_view.sql` | Adds `marts.magnetosphere_last_24h` view. |
 | `20251017123000_seed_nerve_pain_symptom_code.sql` | Seeds/updates `nerve_pain` symptom code across available schemas. |
 | `20251019140000_setup_symptom_domain.sql` | Establishes symptom domain tables, RLS, materialized views, and helper function. |
+| `20260708143000_add_migraine_pattern_outcome.sql` | Adds migraine as a distinct symptom and pattern-engine outcome. |
 
 ---
 

@@ -119,7 +119,13 @@ can reuse them directly when posting events. Responses include a short cache hea
     {
       "symptom_code": "HEADACHE",
       "label": "Headache",
-      "description": "Headache or migraine",
+      "description": "Headache, head pain, or pressure",
+      "is_active": true
+    },
+    {
+      "symptom_code": "MIGRAINE",
+      "label": "Migraine",
+      "description": "Migraine attack, aura, light sensitivity, or migraine-specific head pain",
       "is_active": true
     },
     {

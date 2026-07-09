@@ -2,7 +2,7 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-08T17:17:10Z`
+- Generated at: `2026-07-09T08:24:31Z`
 - Draft count: `1`
 
 ## 1. Nerves on overdrive?
@@ -17,15 +17,17 @@ Post caption copy:
 ```text
 Nerves on overdrive?
 
-A CME is a huge cloud from the Sun. It carries charged particles and magnetic energy. If that cloud heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree. Most people notice this as space weather news: auroras, satellite noise, radio issues, GPS weirdness, or power-grid watches.
+A CME is a huge cloud from the Sun. If it heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree.
 
-Gaia Eyes looks at the body-pattern side of that same signal. Studies have explored relationships between solar/geomagnetic activity and HRV, autonomic regulation, headaches, sleep, mood, and cardiovascular timing. HeartMath and other researchers have also looked at how HRV can move with Schumann resonance and magnetic-field activity. The science is not finished, but the pattern question is real.
+Researchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
 
-That is what Gaia Eyes is built to test personally: when the outside signal changes, do your sleep, HRV, pain, mood, energy, or symptoms change too? One day is just a note. Repeated overlaps become a pattern.
+If sleep, HRV, pain, mood, energy, symptoms, exposures, or health conditions feel unusual, log it. One day is a note. Repeated overlaps become a pattern.
 
-Gaia Eyes does not give medical advice. It is a pattern recognition system.
+Decode the unseen in Gaia Eyes. Track what you feel and see whether your recovery patterns line up over time.
 
-Want to compare this with your own recovery patterns? Gaia Eyes tracks sleep, HRV, pain, mood, energy, symptoms, and Earth signals over time: https://GaiaEyes.com/app
+Open Gaia Eyes: compare this solar signal with your recovery patterns. https://GaiaEyes.com/app
+
+Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```

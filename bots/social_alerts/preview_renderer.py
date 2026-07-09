@@ -21,7 +21,7 @@ from bots.social_alerts.asset_bootstrap_pack import BOOTSTRAP_PREFIX, bootstrap_
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MEDIA_BASE_URL = "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals"
 DEFAULT_PREVIEW_DIR = Path("tmp") / "social_alerts_shadow" / "previews"
-DEFAULT_CTA = "Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app"
+DEFAULT_CTA = "Open Gaia Eyes: compare this signal with your body patterns. https://GaiaEyes.com/app"
 FALLBACK_GRADIENTS = {
     "solar_flare": ((36, 10, 5), (236, 138, 42), (5, 20, 34)),
     "cme": ((7, 18, 32), (68, 148, 214), (240, 144, 54)),
@@ -497,6 +497,10 @@ def _split_cta_text(text: str) -> Tuple[str, str]:
     cleaned = _safe_text(text)
     if not cleaned:
         return "", ""
+    if ":" in cleaned:
+        title, body = cleaned.split(":", 1)
+        if title.strip().lower().startswith("open gaia eyes") and body.strip():
+            return f"{title.strip()}:", body.strip()
     if "?" not in cleaned:
         return "", cleaned
     title, body = cleaned.split("?", 1)

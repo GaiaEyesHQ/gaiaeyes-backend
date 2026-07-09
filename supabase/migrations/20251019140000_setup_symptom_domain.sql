@@ -17,7 +17,8 @@ with payload(symptom_code, label, description) as (
     ('nerve_pain', 'Nerve pain', 'Pins/needles, burning, or nerve pain'),
     ('zaps', 'Zaps', 'Electric “zap” sensations'),
     ('drained', 'Drained', 'Sudden drop in energy'),
-    ('headache', 'Headache', 'Headache or migraine'),
+    ('headache', 'Headache', 'Headache, head pain, or pressure'),
+    ('migraine', 'Migraine', 'Migraine attack, aura, light sensitivity, or migraine-specific head pain'),
     ('anxious', 'Anxious', 'Anxiety, jittery, uneasy'),
     ('insomnia', 'Insomnia', 'Difficulty sleeping'),
     ('other', 'Other', 'Other symptom (use notes)')

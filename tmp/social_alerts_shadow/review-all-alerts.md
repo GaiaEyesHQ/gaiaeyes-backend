@@ -17,15 +17,17 @@ Post caption copy:
 ```text
 Nervous system on alert?
 
-Geomagnetic activity means Earth's magnetic field is moving more than usual. That usually starts with the solar wind pushing on Earth's magnetic bubble, then shows up in signals like Kp, Bz, and aurora potential.
+Geomagnetic activity is elevated right now while solar activity is stirring up Earth's magnetic field.
 
-Researchers have studied links between geomagnetic activity, the autonomic nervous system, HRV, cardiovascular stress, headaches, mood, and sleep for years. The results are not all identical, and many papers say more research is needed. That is exactly why Gaia Eyes is useful: it compares the outside signal with your own body data instead of using one study or one day as the whole answer.
+Researchers have studied links between geomagnetic activity, HRV, nervous-system regulation, headaches, mood, sleep, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
 
-If your body feels louder than the calendar says it should, log the basics: sleep, HRV, pain, mood, energy, symptoms, and exposures. Then compare it later instead of guessing in the moment.
+If your body feels louder than normal today, it may not be random. Sleep changes, HRV dips, headaches, pain, focus shifts, restless energy, mood changes, exposures, and health conditions are the kinds of patterns Gaia Eyes can help you compare with Earth signals.
 
-Gaia Eyes does not give medical advice. It is a pattern recognition system.
+Decode the unseen in Gaia Eyes. Log what you feel, track your conditions, and look for your personal patterns over time.
 
-Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app
+Open Gaia Eyes and compare today's signal with your own body patterns: https://GaiaEyes.com/app
+
+Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```
@@ -79,13 +81,17 @@ Post caption copy:
 ```text
 HRV lower than normal?
 
-The Schumann signal is elevated compared with its recent baseline. Some people like to watch these signal periods alongside sleep quality, HRV dips, brain fog, headaches, and nerve-pain flares.
+The Schumann signal is elevated compared with its recent baseline. That does not explain a body day by itself, but it can be worth comparing over time.
 
-Gaia Eyes is built for that comparison: not diagnosis, not doom, just pattern tracking across body, space, and Earth signals.
+HeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
 
-Schumann resonance is part of Earth's natural electromagnetic background. HeartMath and other researchers have studied links between these signals, HRV, brain rhythms, sleep, mood, and nervous-system patterns.
+If sleep quality, HRV dips, brain fog, headaches, nerve-pain flares, mood, exposures, or health conditions feel louder than normal, log it. One day is a note. Repeated overlaps become a pattern.
 
-Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app
+Decode the unseen in Gaia Eyes. Track what you feel and see whether your personal patterns line up over time.
+
+Open Gaia Eyes and compare today's Earth signal with your own body patterns: https://GaiaEyes.com/app
+
+Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
 #GaiaEyes #SchumannResonance #BodyPatterns #HRV
 ```
@@ -134,15 +140,17 @@ Post caption copy:
 ```text
 Moving in slow motion today?
 
-A CME is a huge cloud from the Sun. It carries charged particles and magnetic energy. If that cloud heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree. Most people notice this as space weather news: auroras, satellite noise, radio issues, GPS weirdness, or power-grid watches.
+A CME is a huge cloud from the Sun. If it heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree.
 
-Gaia Eyes looks at the body-pattern side of that same signal. Studies have explored relationships between solar/geomagnetic activity and HRV, autonomic regulation, headaches, sleep, mood, and cardiovascular timing. HeartMath and other researchers have also looked at how HRV can move with Schumann resonance and magnetic-field activity. The science is not finished, but the pattern question is real.
+Researchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
 
-That is what Gaia Eyes is built to test personally: when the outside signal changes, do your sleep, HRV, pain, mood, energy, or symptoms change too? One day is just a note. Repeated overlaps become a pattern.
+If sleep, HRV, pain, mood, energy, symptoms, exposures, or health conditions feel unusual, log it. One day is a note. Repeated overlaps become a pattern.
 
-Gaia Eyes does not give medical advice. It is a pattern recognition system.
+Decode the unseen in Gaia Eyes. Track what you feel and see whether your recovery patterns line up over time.
 
-Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app
+Open Gaia Eyes and compare this solar signal with your own recovery patterns: https://GaiaEyes.com/app
+
+Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```
@@ -194,15 +202,17 @@ Post caption copy:
 ```text
 Focus feeling patchy?
 
-A solar flare is a burst of energy from the Sun. Most official space-weather alerts focus on technology first: radio noise, navigation disruption, satellites, and the changing space-weather background around Earth.
+Solar flare activity is elevated right now. Most official alerts focus on radio noise, satellites, and navigation, but people often want to know what it could mean for their body day.
 
-Gaia Eyes looks at the body-pattern side. Research on solar and geomagnetic activity has looked at HRV, nervous-system regulation, cardiovascular timing, headaches, sleep, and mood. The field is still developing, but the question is not random: if the outside signal changes, do your sleep, HRV, energy, focus, pain, or symptoms shift at the same time?
+Researchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
 
-If today feels patchy, overstimulating, or unusually hard to settle into, keep the experiment simple: note what you feel, note what else was happening, and look for repeats over time.
+If focus, energy, sleep, headaches, pain, mood, exposures, or health conditions feel louder than normal, log it. One day is a note. Repeated overlaps become a pattern.
 
-Gaia Eyes does not give medical advice. It is a pattern recognition system.
+Decode the unseen in Gaia Eyes. Track what you feel and see whether your personal patterns line up over time.
 
-Want to compare this with your own patterns? Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app
+Open Gaia Eyes and compare today's solar signal with your own body patterns: https://GaiaEyes.com/app
+
+Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
 #GaiaEyes #SpaceWeather #EarthSignals
 ```

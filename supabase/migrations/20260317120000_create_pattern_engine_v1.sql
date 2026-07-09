@@ -62,6 +62,7 @@ create table if not exists marts.user_daily_features (
   symptom_total_events integer not null default 0,
   symptom_distinct_codes integer not null default 0,
   headache_symptom_events integer not null default 0,
+  migraine_symptom_events integer not null default 0,
   pain_symptom_events integer not null default 0,
   fatigue_symptom_events integer not null default 0,
   anxiety_symptom_events integer not null default 0,
@@ -120,6 +121,7 @@ create table if not exists marts.user_daily_outcomes (
   day date not null,
 
   headache_day boolean not null default false,
+  migraine_day boolean not null default false,
   pain_flare_day boolean not null default false,
   anxiety_day boolean not null default false,
   poor_sleep_day boolean not null default false,
@@ -131,6 +133,7 @@ create table if not exists marts.user_daily_outcomes (
   short_sleep_day boolean null,
 
   headache_events integer not null default 0,
+  migraine_events integer not null default 0,
   pain_flare_events integer not null default 0,
   anxiety_events integer not null default 0,
   poor_sleep_events integer not null default 0,

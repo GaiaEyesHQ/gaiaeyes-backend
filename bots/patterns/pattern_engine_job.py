@@ -94,7 +94,8 @@ ALL_FLAG_KEYS = SENSITIVITY_FLAG_KEYS + HEALTH_CONTEXT_FLAG_KEYS
 # Symptom groupings come directly from the v1 addendum. They are observational
 # groupings for self-reported logs only; they do not imply diagnosis.
 OUTCOME_SYMPTOM_CODES = {
-    "headache_day": {"headache", "migraine", "sinus_pressure", "light_sensitivity"},
+    "headache_day": {"headache", "sinus_pressure", "light_sensitivity"},
+    "migraine_day": {"migraine"},
     "pain_flare_day": {"pain", "joint_pain", "nerve_pain", "stiffness", "muscle_pain"},
     "fatigue_day": {"drained", "fatigue", "wired_tired", "low_energy"},
     "anxiety_day": {"anxious", "irritable", "panic", "restless", "wired"},
@@ -105,6 +106,7 @@ OUTCOME_SYMPTOM_CODES = {
 
 OUTCOME_EVENT_FIELDS = {
     "headache_day": "headache_symptom_events",
+    "migraine_day": "migraine_symptom_events",
     "pain_flare_day": "pain_symptom_events",
     "fatigue_day": "fatigue_symptom_events",
     "anxiety_day": "anxiety_symptom_events",
@@ -115,6 +117,7 @@ OUTCOME_EVENT_FIELDS = {
 
 OUTCOME_KIND = {
     "headache_day": "symptom",
+    "migraine_day": "symptom",
     "pain_flare_day": "symptom",
     "fatigue_day": "symptom",
     "anxiety_day": "symptom",
@@ -130,6 +133,7 @@ OUTCOME_KIND = {
 
 OUTCOME_CONFOUNDER_FLAGS = {
     "headache_day": {"temporary_illness_reported", "allergen_exposure_reported"},
+    "migraine_day": {"temporary_illness_reported", "allergen_exposure_reported"},
     "pain_flare_day": {"temporary_illness_reported", "overexertion_reported"},
     "fatigue_day": {
         "temporary_illness_reported",
@@ -275,35 +279,47 @@ SIGNAL_DEFINITIONS = {
 # Initial single-signal pairs from the task addendum.
 ASSOCIATION_PAIRS = [
     ("pressure_swing_exposed", "headache_day"),
+    ("pressure_swing_exposed", "migraine_day"),
     ("pressure_swing_exposed", "pain_flare_day"),
     ("pressure_swing_exposed", "focus_fog_day"),
     ("aqi_moderate_plus_exposed", "fatigue_day"),
     ("aqi_moderate_plus_exposed", "focus_fog_day"),
     ("aqi_moderate_plus_exposed", "headache_day"),
+    ("aqi_moderate_plus_exposed", "migraine_day"),
     ("pollen_overall_exposed", "headache_day"),
+    ("pollen_overall_exposed", "migraine_day"),
     ("pollen_overall_exposed", "fatigue_day"),
     ("pollen_overall_exposed", "focus_fog_day"),
     ("pollen_overall_exposed", "poor_sleep_day"),
     ("pollen_tree_exposed", "headache_day"),
+    ("pollen_tree_exposed", "migraine_day"),
     ("pollen_tree_exposed", "fatigue_day"),
     ("pollen_tree_exposed", "focus_fog_day"),
     ("pollen_grass_exposed", "headache_day"),
+    ("pollen_grass_exposed", "migraine_day"),
     ("pollen_grass_exposed", "fatigue_day"),
     ("pollen_grass_exposed", "focus_fog_day"),
     ("pollen_weed_exposed", "headache_day"),
+    ("pollen_weed_exposed", "migraine_day"),
     ("pollen_weed_exposed", "fatigue_day"),
     ("pollen_weed_exposed", "focus_fog_day"),
     ("pollen_mold_exposed", "headache_day"),
+    ("pollen_mold_exposed", "migraine_day"),
     ("pollen_mold_exposed", "fatigue_day"),
     ("pollen_mold_exposed", "focus_fog_day"),
     ("temp_swing_exposed", "pain_flare_day"),
+    ("temp_swing_exposed", "migraine_day"),
     ("temp_swing_exposed", "fatigue_day"),
     ("humidity_extreme_exposed", "headache_day"),
+    ("humidity_extreme_exposed", "migraine_day"),
     ("humidity_extreme_exposed", "fatigue_day"),
     ("humidity_extreme_exposed", "poor_sleep_day"),
     ("kp_g1_plus_exposed", "poor_sleep_day"),
+    ("kp_g1_plus_exposed", "migraine_day"),
     ("bz_south_exposed", "poor_sleep_day"),
+    ("bz_south_exposed", "migraine_day"),
     ("solar_wind_exposed", "fatigue_day"),
+    ("solar_wind_exposed", "migraine_day"),
     ("sleep_deficit_exposed", "fatigue_day"),
     ("solar_wind_exposed", "anxiety_day"),
     ("lunar_full_window_exposed", "poor_sleep_day"),
@@ -313,6 +329,7 @@ ASSOCIATION_PAIRS = [
     ("lunar_new_window_exposed", "short_sleep_day"),
     ("lunar_new_window_exposed", "restlessness_day"),
     ("schumann_exposed", "poor_sleep_day"),
+    ("schumann_exposed", "migraine_day"),
     ("schumann_exposed", "focus_fog_day"),
     ("schumann_exposed", "anxiety_day"),
     # Body-signal cards should use the biometric outcomes we already derive
@@ -329,6 +346,7 @@ ASSOCIATION_PAIRS = [
     ("schumann_exposed", "resting_hr_elevated_day"),
     ("bz_south_exposed", "resting_hr_elevated_day"),
     ("ulf_exposed", "poor_sleep_day"),
+    ("ulf_exposed", "migraine_day"),
     ("ulf_exposed", "focus_fog_day"),
     ("ulf_exposed", "hrv_dip_day"),
     ("ulf_exposed", "resting_hr_elevated_day"),
@@ -1002,6 +1020,7 @@ def _build_symptom_stats(rows: Sequence[dict[str, Any]]) -> dict[tuple[str, date
                 "symptom_total_events": 0,
                 "symptom_distinct_codes": 0,
                 "headache_symptom_events": 0,
+                "migraine_symptom_events": 0,
                 "pain_symptom_events": 0,
                 "fatigue_symptom_events": 0,
                 "anxiety_symptom_events": 0,
@@ -1503,6 +1522,7 @@ def build_user_daily_features(
             "symptom_total_events": _safe_int(symptom_row.get("symptom_total_events"), 0),
             "symptom_distinct_codes": _safe_int(symptom_row.get("symptom_distinct_codes"), 0),
             "headache_symptom_events": _safe_int(symptom_row.get("headache_symptom_events"), 0),
+            "migraine_symptom_events": _safe_int(symptom_row.get("migraine_symptom_events"), 0),
             "pain_symptom_events": _safe_int(symptom_row.get("pain_symptom_events"), 0),
             "fatigue_symptom_events": _safe_int(symptom_row.get("fatigue_symptom_events"), 0),
             "anxiety_symptom_events": _safe_int(symptom_row.get("anxiety_symptom_events"), 0),
@@ -1570,6 +1590,7 @@ def build_user_daily_outcomes(
             sleep_today = _safe_float(row.get("sleep_total_minutes"))
 
             headache_events = _safe_int(row.get("headache_symptom_events"), 0)
+            migraine_events = _safe_int(row.get("migraine_symptom_events"), 0)
             pain_events = _safe_int(row.get("pain_symptom_events"), 0)
             fatigue_events = _safe_int(row.get("fatigue_symptom_events"), 0)
             anxiety_events = _safe_int(row.get("anxiety_symptom_events"), 0)
@@ -1615,6 +1636,7 @@ def build_user_daily_outcomes(
                     "user_id": user_id,
                     "day": day_value,
                     "headache_day": headache_events > 0,
+                    "migraine_day": migraine_events > 0,
                     "pain_flare_day": pain_events > 0,
                     "anxiety_day": anxiety_events > 0,
                     "restlessness_day": restlessness_events > 0,
@@ -1628,6 +1650,7 @@ def build_user_daily_outcomes(
                     "resting_hr_elevated_day": resting_hr_elevated,
                     "temperature_deviation_day": temperature_deviation_day,
                     "headache_events": headache_events,
+                    "migraine_events": migraine_events,
                     "pain_flare_events": pain_events,
                     "anxiety_events": anxiety_events,
                     "restlessness_events": restlessness_events,
@@ -1961,6 +1984,7 @@ def _feature_insert_columns() -> list[str]:
         "symptom_total_events",
         "symptom_distinct_codes",
         "headache_symptom_events",
+        "migraine_symptom_events",
         "pain_symptom_events",
         "fatigue_symptom_events",
         "anxiety_symptom_events",
@@ -2015,6 +2039,7 @@ def _outcome_insert_columns() -> list[str]:
         "user_id",
         "day",
         "headache_day",
+        "migraine_day",
         "pain_flare_day",
         "anxiety_day",
         "restlessness_day",
@@ -2028,6 +2053,7 @@ def _outcome_insert_columns() -> list[str]:
         "resting_hr_elevated_day",
         "temperature_deviation_day",
         "headache_events",
+        "migraine_events",
         "pain_flare_events",
         "anxiety_events",
         "restlessness_events",

@@ -193,7 +193,13 @@ def fake_store(monkeypatch):
             {
                 "symptom_code": "HEADACHE",
                 "label": "Headache",
-                "description": "Headache or migraine",
+                "description": "Headache, head pain, or pressure",
+                "is_active": True,
+            },
+            {
+                "symptom_code": "MIGRAINE",
+                "label": "Migraine",
+                "description": "Migraine attack, aura, light sensitivity, or migraine-specific head pain",
                 "is_active": True,
             },
             {
@@ -276,7 +282,7 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
             "day": "2024-04-02",
             "symptom_code": "HEADACHE",
             "events": 1,
-            "mean_severity": None,
+            "mean_severity": 5.0,
             "last_ts": "2024-04-02T07:45:00+00:00",
         },
         {

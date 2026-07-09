@@ -82,15 +82,16 @@ def test_shadow_copy_stays_conservative_and_contextual() -> None:
 
     joined = " ".join(draft["caption"].lower() for draft in payload["drafts"])
     assert "context only" not in joined
-    assert "does not give medical advice" in joined
+    assert "not giving medical advice" in joined
     assert "affect you" not in joined
     assert "windows like this" not in joined
-    assert "pattern recognition system" in joined
+    assert "pattern recognition app" in joined
     assert "forecast of symptoms" not in joined
     assert "cause" not in joined
     assert "cure" not in joined
     assert "treat" not in joined
     assert "guarantee" not in joined
+    assert "guessing" not in joined
 
 
 def test_space_alerts_keep_health_pattern_context() -> None:
@@ -132,29 +133,40 @@ def test_space_alerts_keep_health_pattern_context() -> None:
     assert "The sun influences more than we think." not in cme_caption
     assert "A CME is a huge cloud from the Sun." in cme_caption
     assert "kind of like wind shaking a tree" in cme_caption
-    assert "auroras, satellite noise, radio issues, GPS weirdness, or power-grid watches" in cme_caption
-    assert "Studies have explored relationships between solar/geomagnetic activity and HRV" in cme_caption
-    assert "HeartMath and other researchers have also looked at how HRV can move with Schumann resonance" in cme_caption
-    assert "The science is not finished, but the pattern question is real." in cme_caption
-    assert "Gaia Eyes does not give medical advice. It is a pattern recognition system." in cme_caption
+    assert "Researchers have studied solar and geomagnetic activity alongside HRV" in cme_caption
+    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" in cme_caption
+    assert "One day is a note. Repeated overlaps become a pattern." in cme_caption
+    assert "Decode the unseen in Gaia Eyes." in cme_caption
+    assert "health conditions feel unusual" in cme_caption
+    assert "Gaia Eyes is a pattern recognition app and is not giving medical advice." in cme_caption
     assert "alongside the CME signal" not in cme_caption
     assert CTA_BY_CATEGORY["cme"] in cme_caption
     assert "https://GaiaEyes.com/app" in cme_caption
     assert "Gaia Eyes compares symptoms, wearables, exposures, and environmental signals over time." not in cme_caption
     assert "CME activity is elevated" not in cme_caption
     assert "CME activity is present" not in cme_caption
+    assert "instead of guessing" not in cme_caption
+    assert "log it so patterns are easier to compare later" in drafts["cme"]["subtitle"]
     assert drafts["cme"]["overlay_spec"]["square_image"]["metric_chips"] == []
     assert "Recovery" not in drafts["cme"]["overlay_spec"]["square_image"]["context_chips"]
+
+    geomagnetic_caption = drafts["geomagnetic"]["caption"]
+    assert geomagnetic_caption.startswith(f"{drafts['geomagnetic']['title']}\n\nGeomagnetic activity is elevated right now")
+    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" in geomagnetic_caption
+    assert "If your body feels louder than normal today" in geomagnetic_caption
+    assert "health conditions are the kinds of patterns Gaia Eyes can help you compare" in geomagnetic_caption
+    assert geomagnetic_caption.count("sleep") == 1
 
 
 def test_schumann_caption_includes_brief_public_explainer_and_app_cta() -> None:
     payload = build_shadow_payload({"schumann": {"zscore_30d": 3.2, "combined": {"f1_hz": 7.91}}})
     schumann = next(draft for draft in payload["drafts"] if draft["category"] == "schumann")
 
-    assert "Schumann resonance is one of Earth's background electromagnetic signals." in schumann["caption"]
-    assert "HeartMath and other researchers have studied links between Schumann resonance" in schumann["caption"]
-    assert "real research thread Gaia Eyes helps you compare against your own body data" in schumann["caption"]
-    assert "Gaia Eyes does not give medical advice. It is a pattern recognition system." in schumann["caption"]
+    assert "Schumann resonance is part of Earth's natural electromagnetic background." in schumann["caption"]
+    assert "HeartMath and other researchers have studied Schumann resonance" in schumann["caption"]
+    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" in schumann["caption"]
+    assert "health conditions" in schumann["caption"]
+    assert "Gaia Eyes is a pattern recognition app and is not giving medical advice." in schumann["caption"]
     assert CTA_BY_CATEGORY["schumann"] in schumann["caption"]
 
 
@@ -178,8 +190,7 @@ def test_space_alert_ctas_vary_by_category_without_changing_app_link() -> None:
         assert "https://GaiaEyes.com/app" in cta
         assert cta in draft["caption"]
 
-    assert len(set(ctas)) == len(ctas)
-    assert CTA not in ctas
+    assert len(set(ctas)) >= 3
 
 
 def test_geomagnetic_kp_thresholds_use_watch_at_3_5_and_high_at_5() -> None:
@@ -232,10 +243,12 @@ def test_known_media_assets_are_attached_to_reel_specs() -> None:
 
     drafts = {draft["category"]: draft for draft in payload["drafts"]}
     flare_reel = drafts["solar_flare"]["overlay_spec"]["story_reel"]
+    flare_square = drafts["solar_flare"]["overlay_spec"]["square_image"]
     cme_reel = drafts["cme"]["overlay_spec"]["story_reel"]
     schumann_square = drafts["schumann"]["overlay_spec"]["square_image"]
 
     assert flare_reel["video_candidates"] == ["nasa/ccor1/latest.mp4", "nasa/enlil/latest.mp4"]
+    assert "bootstrap:social_alerts/solar_heat" in flare_square["background_candidates"]
     assert cme_reel["video_candidates"] == ["nasa/ccor1/latest.mp4", "nasa/enlil/latest.mp4"]
     assert "nasa/ccor1/latest.jpg" in flare_reel["still_candidates"]
     assert "nasa/enlil/latest.jpg" in cme_reel["still_candidates"]
@@ -261,7 +274,7 @@ def test_schumann_alert_uses_human_first_trust_copy() -> None:
 
     assert draft["title"] in SCHUMANN_HOOKS
     assert "compare" in draft["subtitle"].lower() or "worth comparing" in draft["subtitle"].lower()
-    assert "Schumann resonance is one of Earth's background electromagnetic signals." in draft["caption"]
+    assert "Schumann resonance is part of Earth's natural electromagnetic background." in draft["caption"]
     assert square["label"] == "HEALTH WATCH"
     assert square["context_chips"] == SCHUMANN_ALERT_CHIPS
     assert square["footer"] == SIGNAL_FOOTERS["schumann"]

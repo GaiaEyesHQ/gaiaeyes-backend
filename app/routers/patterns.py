@@ -41,6 +41,7 @@ SIGNAL_LABELS = {
 
 OUTCOME_LABELS = {
     "headache_day": "Head / sinus pressure",
+    "migraine_day": "Migraine",
     "pain_flare_day": "Pain flares",
     "fatigue_day": "Fatigue",
     "anxiety_day": "Anxious or restless days",
@@ -125,8 +126,11 @@ def _priority_boost(user_tags: set[str], row: Dict[str, Any]) -> int:
     signal_key = str(row.get("signal_key") or "")
 
     score = 0
-    if outcome_key == "headache_day" and "migraine_history" in user_tags:
-        score += 40
+    if "migraine_history" in user_tags:
+        if outcome_key == "migraine_day":
+            score += 45
+        elif outcome_key == "headache_day":
+            score += 20
     if outcome_key == "pain_flare_day" and user_tags.intersection(
         {"arthritis", "autoimmune_condition", "chronic_pain", "fibromyalgia", "hypermobility_eds", "pain_sensitive"}
     ):

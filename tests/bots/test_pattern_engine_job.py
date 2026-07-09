@@ -212,6 +212,40 @@ class PatternEngineJobTests(unittest.TestCase):
         self.assertTrue(outcome_rows[0]["resting_hr_elevated_day"])
         self.assertTrue(outcome_rows[0]["temperature_deviation_day"])
 
+    def test_migraine_symptom_events_flow_into_pattern_outcomes(self) -> None:
+        day = date(2026, 3, 17)
+        updated_at = datetime(2026, 3, 17, tzinfo=timezone.utc)
+
+        feature_rows = build_user_daily_features(
+            base_rows=[{"user_id": "user-1", "day": day}],
+            gauges={},
+            gauge_deltas={},
+            symptom_stats={
+                ("user-1", day): {
+                    "symptom_total_events": 2,
+                    "symptom_distinct_codes": 1,
+                    "migraine_symptom_events": 2,
+                }
+            },
+            camera_rows={},
+            tag_flags={},
+            day_zip_map={},
+            current_zip_map={},
+            local_signals_daily={},
+            schumann_daily={},
+            updated_at=updated_at,
+        )
+
+        self.assertEqual(feature_rows[0]["migraine_symptom_events"], 2)
+
+        outcome_rows = build_user_daily_outcomes(feature_rows, updated_at=updated_at)
+
+        self.assertTrue(outcome_rows[0]["migraine_day"])
+        self.assertEqual(outcome_rows[0]["migraine_events"], 2)
+        self.assertIn("migraine_symptom_events", pattern_engine_job._feature_insert_columns())
+        self.assertIn("migraine_day", pattern_engine_job._outcome_insert_columns())
+        self.assertIn("migraine_events", pattern_engine_job._outcome_insert_columns())
+
     def test_body_signal_pairs_include_sleep_and_heart_rate_outcomes(self) -> None:
         self.assertIn(("solar_wind_exposed", "high_hr_day"), ASSOCIATION_PAIRS)
         self.assertIn(("solar_wind_exposed", "resting_hr_elevated_day"), ASSOCIATION_PAIRS)

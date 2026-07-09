@@ -168,8 +168,8 @@ def test_renderer_uses_draft_cta_and_public_fallback_chips() -> None:
     assert _cta_text(draft) == CTA_BY_CATEGORY["cme"]
     assert DEFAULT_CTA == CTA
     assert _split_cta_text(CTA) == (
-        "Want to compare this with your own patterns?",
-        "Gaia Eyes tracks sleep, HRV, symptoms, exposures, and Earth signals over time: https://GaiaEyes.com/app",
+        "Open Gaia Eyes:",
+        "compare this signal with your body patterns. https://GaiaEyes.com/app",
     )
     assert _cta_text({}) == DEFAULT_CTA
 
