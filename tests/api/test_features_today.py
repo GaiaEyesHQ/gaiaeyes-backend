@@ -100,6 +100,64 @@ def test_pool_metrics_show_pressure_requires_waiting_requests():
     assert summary._pool_metrics_show_pressure({"open": 8, "free": 0, "used": 8, "waiting": 1}) is True
 
 
+async def test_mart_refresh_recovers_transaction_after_daily_summary_failure(monkeypatch):
+    class _RefreshCursor(_FakeCursor):
+        def __init__(self):
+            self.calls = []
+            self._exists_row = None
+
+        async def execute(self, query, params=None):
+            self.calls.append((query, params))
+            if "gaia.refresh_daily_summary_user" in query:
+                raise RuntimeError("daily summary failed")
+            if "to_regprocedure" in query:
+                self._exists_row = ("gaia.refresh_daily_summary_sleep_user(uuid,date,text)",)
+
+        async def fetchone(self):
+            return self._exists_row
+
+    class _RefreshConn(_FakeConn):
+        def __init__(self):
+            self.refresh_cursor = _RefreshCursor()
+            self.commits = 0
+            self.rollbacks = 0
+
+        def cursor(self, *args, **kwargs):  # noqa: ARG002
+            return self.refresh_cursor
+
+        async def commit(self):
+            self.commits += 1
+
+        async def rollback(self):
+            self.rollbacks += 1
+
+    conn = _RefreshConn()
+
+    class _RefreshPool:
+        def connection(self, timeout=None):  # noqa: ARG002
+            class _Context:
+                async def __aenter__(self):
+                    return conn
+
+                async def __aexit__(self, exc_type, exc, tb):  # noqa: ARG002
+                    return False
+
+            return _Context()
+
+    async def _get_pool():
+        return _RefreshPool()
+
+    monkeypatch.setattr(summary, "get_pool", _get_pool)
+
+    await summary._execute_mart_refresh(str(uuid4()), date(2026, 7, 9), "America/Chicago")
+
+    executed_sql = "\n".join(query for query, _ in conn.refresh_cursor.calls)
+    assert conn.rollbacks == 1
+    assert conn.commits == 2
+    assert "gaia.refresh_daily_summary_sleep_user" in executed_sql
+    assert "marts.refresh_daily_features_user" in executed_sql
+
+
 def test_ingest_queue_env_parsing_falls_back_for_invalid_values(monkeypatch):
     monkeypatch.setenv("GAIA_INGEST_MAX_ACTIVE_WRITES", "not-an-int")
     monkeypatch.setenv("GAIA_INGEST_BACKLOG_RETRY_DELAY_SECONDS", "not-a-float")

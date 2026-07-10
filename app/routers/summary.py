@@ -270,6 +270,7 @@ async def _execute_mart_refresh(
                         (user_id, day_local, tz_name),
                     )
                 except Exception as exc:
+                    await _rollback_safely(conn)
                     logger.warning(
                         "[MART] daily summary refresh failed user=%s day=%s tz=%s error=%s",
                         user_id,
@@ -277,6 +278,8 @@ async def _execute_mart_refresh(
                         tz_name,
                         exc,
                     )
+                else:
+                    await conn.commit()
                 try:
                     await cur.execute(
                         "select to_regprocedure('gaia.refresh_daily_summary_sleep_user(uuid,date,text)')"
@@ -288,6 +291,7 @@ async def _execute_mart_refresh(
                             (user_id, day_local, tz_name),
                         )
                 except Exception as exc:
+                    await _rollback_safely(conn)
                     logger.warning(
                         "[MART] sleep summary repair failed user=%s day=%s tz=%s error=%s",
                         user_id,
@@ -295,18 +299,23 @@ async def _execute_mart_refresh(
                         tz_name,
                         exc,
                     )
+                else:
+                    await conn.commit()
                 try:
                     await cur.execute(
                         "select marts.refresh_daily_features_user(%s::uuid, %s::date)",
                         (user_id, day_local),
                     )
                 except Exception as exc:
+                    await _rollback_safely(conn)
                     logger.warning(
                         "[MART] daily features refresh failed user=%s day=%s error=%s",
                         user_id,
                         day_local,
                         exc,
                     )
+                else:
+                    await conn.commit()
     except Exception as exc:  # pragma: no cover - diagnostic logging
         logger.warning(
             "[MART] refresh failed user=%s day=%s error=%s",
