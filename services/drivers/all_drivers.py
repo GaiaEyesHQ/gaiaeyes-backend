@@ -1488,6 +1488,8 @@ async def _fetch_current_symptom_rows(conn, user_id: str) -> list[dict[str, Any]
 
 
 async def _fetch_space_context(conn, day: date) -> dict[str, Any]:
+    from services.space_weather_current import fetch_current_space_weather
+
     today = datetime.now(UTC)
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(
@@ -1540,6 +1542,14 @@ async def _fetch_space_context(conn, day: date) -> dict[str, Any]:
             prepare=False,
         )
         sep_row = dict(await cur.fetchone() or {})
+
+    live = await asyncio.to_thread(fetch_current_space_weather)
+    if live.get("sw_speed_now_kms") is not None:
+        daily["sw_speed_now_kms"] = live["sw_speed_now_kms"]
+    if live.get("bz_now") is not None:
+        daily["bz_now"] = live["bz_now"]
+    if live.get("updated_at"):
+        daily["updated_at"] = live["updated_at"]
 
     return {"daily": daily, "cme": cme_row, "sep": sep_row}
 

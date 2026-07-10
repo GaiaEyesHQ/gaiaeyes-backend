@@ -32,7 +32,11 @@ class SignalResolverTests(unittest.TestCase):
             "bz_nt": -9.0,
             "sw_speed_kms": 464.0,
         }
-        with patch.object(signal_resolver.pg, "fetchrow", side_effect=[daily, latest]):
+        with patch.object(signal_resolver.pg, "fetchrow", side_effect=[daily, latest]), patch.object(
+            signal_resolver,
+            "fetch_current_space_weather",
+            return_value={},
+        ):
             snapshot = signal_resolver._fetch_space_snapshot(date(2026, 7, 9))
 
         self.assertEqual(snapshot["kp_now"], 3.7)

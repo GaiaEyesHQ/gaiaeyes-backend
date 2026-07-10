@@ -10,6 +10,7 @@ from services.db import pg
 from services.time.moon import moon_phase
 from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.local_payload import get_local_payload
+from services.space_weather_current import fetch_current_space_weather
 
 
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
@@ -105,6 +106,15 @@ def _fetch_space_snapshot(day: date) -> Dict[str, Any]:
         if latest.get("sw_speed_kms") is not None:
             out["sw_speed_now_kms"] = latest.get("sw_speed_kms")
         out["space_now_ts"] = latest.get("ts_utc")
+
+    live = fetch_current_space_weather()
+    live_ts = live.get("updated_at")
+    if live.get("sw_speed_now_kms") is not None:
+        out["sw_speed_now_kms"] = live["sw_speed_now_kms"]
+    if live.get("bz_now") is not None:
+        out["bz_now"] = live["bz_now"]
+    if live_ts:
+        out["space_now_ts"] = datetime.fromisoformat(str(live_ts).replace("Z", "+00:00"))
 
     return out
 

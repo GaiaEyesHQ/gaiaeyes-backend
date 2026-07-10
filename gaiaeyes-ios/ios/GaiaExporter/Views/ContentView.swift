@@ -2484,14 +2484,17 @@ private func mergedUserOutlook(_ preferred: UserForecastOutlook?, fallback: User
 private func mergedSpaceOutlook(_ preferred: SpaceForecastOutlook?, fallback: SpaceForecastOutlook?) -> SpaceForecastOutlook? {
     guard let preferred else { return fallback }
     guard let fallback else { return preferred }
+    let preferredHasCurrentSnapshot = preferred.kp?.now != nil
+        || preferred.bzNow != nil
+        || preferred.swSpeedNowKms != nil
     return SpaceForecastOutlook(
         issuedAt: preferred.issuedAt ?? fallback.issuedAt,
         sections: preferLongerArray(preferred.sections, fallback: fallback.sections) ?? [],
         notes: preferLongerArray(preferred.notes, fallback: fallback.notes),
         kp: preferred.kp ?? fallback.kp,
-        bzNow: preferred.bzNow ?? fallback.bzNow,
-        swSpeedNowKms: preferred.swSpeedNowKms ?? fallback.swSpeedNowKms,
-        swDensityNowCm3: preferred.swDensityNowCm3 ?? fallback.swDensityNowCm3,
+        bzNow: preferredHasCurrentSnapshot ? preferred.bzNow : fallback.bzNow,
+        swSpeedNowKms: preferredHasCurrentSnapshot ? preferred.swSpeedNowKms : fallback.swSpeedNowKms,
+        swDensityNowCm3: preferredHasCurrentSnapshot ? preferred.swDensityNowCm3 : fallback.swDensityNowCm3,
         headline: preferred.headline?.nilIfTrimmedEmpty ?? fallback.headline?.nilIfTrimmedEmpty,
         confidence: preferred.confidence?.nilIfTrimmedEmpty ?? fallback.confidence?.nilIfTrimmedEmpty,
         summary: preferred.summary?.nilIfTrimmedEmpty ?? fallback.summary?.nilIfTrimmedEmpty,

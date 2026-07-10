@@ -104,7 +104,20 @@ struct AllDriversView: View {
         return drivers.filter { $0.category == selectedFilter }
     }
 
+    private func currentSignal(for driver: DriverDetailItem) -> SignalPill? {
+        let key = driver.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return signalBar.first { signal in
+            let driverKey = (signal.driverKey ?? signal.key)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            return driverKey == key
+        }
+    }
+
     private func shouldDisplayDriver(_ driver: DriverDetailItem) -> Bool {
+        if ["kp", "solar_wind"].contains(driver.key), currentSignal(for: driver)?.state == .quiet {
+            return false
+        }
         guard driver.key == "allergens" || driver.key.contains("pollen") else {
             return true
         }
@@ -158,6 +171,11 @@ struct AllDriversView: View {
     }
 
     private func localizedReading(for driver: DriverDetailItem) -> String? {
+        if ["kp", "solar_wind"].contains(driver.key),
+           let signal = currentSignal(for: driver),
+           signal.value != "—" {
+            return signal.value
+        }
         if driver.key == "temp" {
             return localizedTemperatureDelta(driver.readingValue)
         }

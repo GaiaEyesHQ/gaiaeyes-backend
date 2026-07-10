@@ -30,6 +30,7 @@ from app.db.health import get_health_monitor
 from services.forecast_outlook import ensure_space_forecast_daily, serialize_space_forecast_rows
 from services.geomagnetic_context import build_ulf_payload
 from services.time.moon import lunar_overlay_windows, moon_context_for_day
+from services.space_weather_current import fetch_current_space_weather
 from app.utils.auth import require_admin
 
 DEFAULT_TIMEZONE = "America/Chicago"
@@ -3123,9 +3124,13 @@ async def space_forecast_outlook(
 
     impacts_source = payload.get("impacts") or payload.get("impacts_plain")
 
+    current_space = await asyncio.to_thread(fetch_current_space_weather)
     outlook = {
         "ok": True,
         "kp": kp_block,
+        "issued_at": current_space.get("updated_at"),
+        "bz_now": current_space.get("bz_now"),
+        "sw_speed_now_kms": current_space.get("sw_speed_now_kms"),
         "headline": _first_str(payload.get("headline"), aurora_headline, "Space weather outlook"),
         "confidence": _normalize_confidence(payload.get("confidence") or aurora_confidence) or "medium",
         "summary": _first_str(payload.get("summary"), payload.get("body")),
