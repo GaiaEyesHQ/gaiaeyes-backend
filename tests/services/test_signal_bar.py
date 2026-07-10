@@ -18,6 +18,22 @@ except ModuleNotFoundError as exc:  # pragma: no cover - optional DB deps are ab
 
 @unittest.skipIf(_IMPORT_ERROR is not None, f"Signal bar tests require optional dependencies: {_IMPORT_ERROR}")
 class SignalBarTests(unittest.TestCase):
+    def test_build_signal_bar_prefers_current_solar_wind_over_higher_daily_average(self) -> None:
+        with patch.object(
+            signal_bar.signal_resolver,
+            "_fetch_space_snapshot",
+            return_value={"kp_now": 3.7, "sw_speed_now_kms": 464.0, "sw_speed_avg": 566.0},
+        ), patch.object(signal_bar, "_fetch_schumann_snapshot", return_value=None):
+            payload = signal_bar.build_signal_bar(
+                day=date(2026, 7, 9),
+                active_states=[],
+                local_payload={},
+            )
+
+        items = {item["key"]: item for item in payload["items"]}
+        self.assertEqual(items["solar_wind"]["value"], "464 km/s")
+        self.assertEqual(items["solar_wind"]["state"], "quiet")
+
     def test_build_signal_bar_maps_live_states_to_core_pills(self) -> None:
         local_payload = {
             "asof": "2026-03-26T12:00:00Z",

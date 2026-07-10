@@ -441,6 +441,8 @@ def normalize_environmental_drivers(
         severity = _severity_from_alert(alert)
         state = _severity_title(severity)
         existing = picked.get(driver_key)
+        if driver_key in {"kp", "bz", "sw"} and existing is None:
+            continue
         value = existing.get("value") if existing else _driver_value_from_local(driver_key, normalized_local)
         picked[driver_key] = _pick_stronger(
             existing,

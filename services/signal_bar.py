@@ -247,8 +247,7 @@ def build_signal_bar(
 
     sw_now = _safe_float(space.get("sw_speed_now_kms"))
     sw_avg = _safe_float(space.get("sw_speed_avg"))
-    sw_candidates = [value for value in (sw_now, sw_avg) if value is not None]
-    sw_value = max(sw_candidates) if sw_candidates else None
+    sw_value = sw_now if sw_now is not None else sw_avg
 
     schumann_live = _fetch_schumann_snapshot()
     schumann_trigger_state = _signal_state(normalized_active, "schumann.variability_24h")

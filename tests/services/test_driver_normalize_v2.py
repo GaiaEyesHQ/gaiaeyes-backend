@@ -70,6 +70,18 @@ class DriverNormalizeV2Tests(unittest.TestCase):
         self.assertEqual(humidity["severity"], "watch")
         self.assertEqual(humidity["display"], "Humidity: Watch (82%)")
 
+    def test_stale_space_alerts_do_not_create_current_drivers(self) -> None:
+        rows = normalize_environmental_drivers(
+            active_states=[],
+            local_payload={},
+            alerts_json=[
+                {"key": "alert.geomagnetic_active", "severity": "watch"},
+                {"key": "alert.solar_wind_speed", "severity": "watch"},
+            ],
+        )
+
+        self.assertFalse(any(row["key"] in {"kp", "sw"} for row in rows))
+
     def test_normalize_environmental_drivers_preserves_force_visible_high_signal(self) -> None:
         rows = normalize_environmental_drivers(
             active_states=[

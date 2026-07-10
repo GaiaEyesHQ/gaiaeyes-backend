@@ -18,6 +18,47 @@ except ModuleNotFoundError as exc:  # pragma: no cover - optional DB deps are ab
 
 @unittest.skipIf(_IMPORT_ERROR is not None, f"Signal resolver tests require optional dependencies: {_IMPORT_ERROR}")
 class SignalResolverTests(unittest.TestCase):
+    def test_fetch_space_snapshot_prefers_latest_current_readings_over_daily_row(self) -> None:
+        daily = {
+            "kp_now": 5.0,
+            "kp_max": 5.0,
+            "bz_now": -7.0,
+            "sw_speed_now_kms": 566.0,
+            "sw_speed_avg": 566.0,
+        }
+        latest = {
+            "ts_utc": None,
+            "kp_index": 3.7,
+            "bz_nt": -9.0,
+            "sw_speed_kms": 464.0,
+        }
+        with patch.object(signal_resolver.pg, "fetchrow", side_effect=[daily, latest]):
+            snapshot = signal_resolver._fetch_space_snapshot(date(2026, 7, 9))
+
+        self.assertEqual(snapshot["kp_now"], 3.7)
+        self.assertEqual(snapshot["bz_now"], -9.0)
+        self.assertEqual(snapshot["sw_speed_now_kms"], 464.0)
+        self.assertEqual(snapshot["sw_speed_avg"], 566.0)
+
+    def test_resolve_signals_prefers_current_solar_wind_over_higher_daily_average(self) -> None:
+        with patch.object(
+            signal_resolver,
+            "_fetch_space_snapshot",
+            return_value={"sw_speed_now_kms": 464.0, "sw_speed_avg": 566.0},
+        ), patch.object(signal_resolver, "_fetch_schumann_stddev_24h", return_value=None), patch.object(
+            signal_resolver,
+            "_full_moon_days_to",
+            return_value=99.0,
+        ):
+            signals = signal_resolver.resolve_signals(
+                "user-1",
+                date(2026, 7, 9),
+                local_payload={"weather": {}},
+                definition={"signal_definitions": []},
+            )
+
+        self.assertFalse(any(item["signal_key"] == "spaceweather.sw_speed" for item in signals))
+
     def test_resolve_signals_uses_solar_wind_average_fallback(self) -> None:
         with patch.object(
             signal_resolver,
@@ -35,7 +76,7 @@ class SignalResolverTests(unittest.TestCase):
             signals = signal_resolver.resolve_signals(
                 "user-1",
                 date(2026, 3, 17),
-                local_payload={},
+                local_payload={"weather": {}},
                 definition={"signal_definitions": []},
             )
 

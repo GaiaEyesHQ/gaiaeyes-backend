@@ -98,11 +98,11 @@ def _fetch_space_snapshot(day: date) -> Dict[str, Any]:
         latest = None
 
     if latest:
-        if out.get("kp_now") is None and latest.get("kp_index") is not None:
+        if latest.get("kp_index") is not None:
             out["kp_now"] = latest.get("kp_index")
-        if out.get("bz_now") is None and latest.get("bz_nt") is not None:
+        if latest.get("bz_nt") is not None:
             out["bz_now"] = latest.get("bz_nt")
-        if out.get("sw_speed_now_kms") is None and latest.get("sw_speed_kms") is not None:
+        if latest.get("sw_speed_kms") is not None:
             out["sw_speed_now_kms"] = latest.get("sw_speed_kms")
         out["space_now_ts"] = latest.get("ts_utc")
 
@@ -495,8 +495,7 @@ def resolve_signals(
 
     sw_speed_now = _safe_float(space.get("sw_speed_now_kms"))
     sw_speed_avg = _safe_float(space.get("sw_speed_avg"))
-    sw_candidates = [value for value in (sw_speed_now, sw_speed_avg) if value is not None]
-    sw_speed = max(sw_candidates) if sw_candidates else None
+    sw_speed = sw_speed_now if sw_speed_now is not None else sw_speed_avg
     if sw_speed is not None:
         state = None
         severity = None
