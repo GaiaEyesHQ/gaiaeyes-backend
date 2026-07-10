@@ -6,10 +6,93 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from services.drivers.driver_normalize import normalize_environmental_drivers
+from services.drivers.driver_normalize import (
+    merge_signal_bar_driver_candidates,
+    normalize_environmental_drivers,
+    signal_bar_driver_candidates,
+)
 
 
 class DriverNormalizeV2Tests(unittest.TestCase):
+    def test_signal_bar_candidate_keeps_state_and_numeric_value_separate(self) -> None:
+        rows = signal_bar_driver_candidates(
+            {
+                "items": [
+                    {
+                        "key": "solar_wind",
+                        "value": "577 km/s",
+                        "numeric_value": 577.0,
+                        "state": "elevated",
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["state"], "Elevated")
+        self.assertEqual(rows[0]["value"], 577.0)
+        self.assertEqual(rows[0]["display"], "Solar Wind: Elevated (577 km/s)")
+
+    def test_signal_bar_current_wind_replaces_stale_driver_value(self) -> None:
+        rows = merge_signal_bar_driver_candidates(
+            [
+                {
+                    "key": "sw",
+                    "label": "Solar Wind",
+                    "severity": "high",
+                    "state": "High",
+                    "value": 619.0,
+                    "unit": "km/s",
+                    "display": "Solar Wind: High (619 km/s)",
+                }
+            ],
+            {
+                "items": [
+                    {
+                        "key": "solar_wind",
+                        "value": "577 km/s",
+                        "numeric_value": 577.0,
+                        "state": "elevated",
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["state"], "Elevated")
+        self.assertEqual(rows[0]["value"], 577.0)
+
+    def test_signal_bar_current_quiet_kp_removes_stale_active_driver(self) -> None:
+        rows = merge_signal_bar_driver_candidates(
+            [
+                {
+                    "key": "kp",
+                    "label": "Kp Index",
+                    "severity": "watch",
+                    "state": "Elevated",
+                    "value": 5.0,
+                },
+                {
+                    "key": "schumann",
+                    "label": "Schumann",
+                    "severity": "watch",
+                    "state": "Active",
+                },
+            ],
+            {
+                "items": [
+                    {
+                        "key": "kp",
+                        "value": "3.0",
+                        "numeric_value": 3.0,
+                        "state": "quiet",
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual([row["key"] for row in rows], ["schumann"])
+
     def test_normalize_environmental_drivers_dedupes_family_and_prefers_stronger(self) -> None:
         active_states = [
             {"signal_key": "earthweather.pressure_swing_12h", "state": "moderate", "value": -6.4},

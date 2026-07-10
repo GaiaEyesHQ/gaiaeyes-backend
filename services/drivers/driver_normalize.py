@@ -536,15 +536,59 @@ def signal_bar_driver_candidates(signal_bar: Mapping[str, Any] | None) -> List[D
         severity = severity_map.get(raw_state)
         if not severity:
             continue
-        state = str(item.get("value") or item.get("state") or severity).strip() or severity
+        state = str(item.get("state") or severity).strip() or severity
         rows.append(
             _candidate(
                 driver_key,
                 severity=severity,
                 state=state,
-                value=_safe_float(item.get("value")),
+                value=_safe_float(item.get("numeric_value")),
                 signal_strength=0.9 if severity == "high" else 0.76 if severity == "watch" else 0.55,
                 force_visible=severity == "high",
             )
         )
+    return rows
+
+
+def merge_signal_bar_driver_candidates(
+    drivers: Iterable[Dict[str, Any]],
+    signal_bar: Mapping[str, Any] | None,
+) -> List[Dict[str, Any]]:
+    """Align current Kp and solar-wind drivers with the signal-bar snapshot."""
+    rows = [dict(item) for item in drivers if isinstance(item, dict)]
+    quiet_current_keys: set[str] = set()
+    if isinstance(signal_bar, Mapping):
+        bar_key_map = {"kp": "kp", "solar_wind": "sw"}
+        for item in signal_bar.get("items") or []:
+            if not isinstance(item, Mapping):
+                continue
+            driver_key = bar_key_map.get(str(item.get("key") or "").strip().lower())
+            if not driver_key or _safe_float(item.get("numeric_value")) is None:
+                continue
+            if str(item.get("state") or "").strip().lower() in {"quiet", "calm", "stable", "low"}:
+                quiet_current_keys.add(driver_key)
+
+    if quiet_current_keys:
+        rows = [
+            item
+            for item in rows
+            if str(item.get("key") or "").strip().lower() not in quiet_current_keys
+        ]
+    indexes = {
+        str(item.get("key") or "").strip().lower(): index
+        for index, item in enumerate(rows)
+        if str(item.get("key") or "").strip()
+    }
+
+    for candidate in signal_bar_driver_candidates(signal_bar):
+        key = str(candidate.get("key") or "").strip().lower()
+        existing_index = indexes.get(key)
+        if existing_index is not None:
+            if key in {"kp", "sw"}:
+                rows[existing_index] = candidate
+            continue
+        if key:
+            indexes[key] = len(rows)
+            rows.append(candidate)
+
     return rows

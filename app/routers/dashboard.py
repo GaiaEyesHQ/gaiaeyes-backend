@@ -45,7 +45,7 @@ from services.patterns.personal_relevance import (
     fetch_recent_outcome_summary,
 )
 from services.personalization.health_context import build_personalization_profile
-from services.drivers.driver_normalize import signal_bar_driver_candidates
+from services.drivers.driver_normalize import merge_signal_bar_driver_candidates
 from services.signal_bar import build_signal_bar
 
 
@@ -933,16 +933,7 @@ async def _build_dashboard_payload(
         active_states=active_states,
         local_payload=local_payload,
     )
-    existing_driver_keys = {
-        str(item.get("key") or "").strip().lower()
-        for item in drivers
-        if isinstance(item, dict)
-    }
-    for signal_driver in signal_bar_driver_candidates(signal_bar_payload):
-        key = str(signal_driver.get("key") or "").strip().lower()
-        if key and key not in existing_driver_keys:
-            drivers.append(signal_driver)
-            existing_driver_keys.add(key)
+    drivers = merge_signal_bar_driver_candidates(drivers, signal_bar_payload)
     profile = build_personalization_profile(user_tags)
     exposure_summary = await asyncio.to_thread(fetch_exposure_summary, user_id, day, profile=profile)
     exposure_summary = exposure_summary if isinstance(exposure_summary, dict) else {}

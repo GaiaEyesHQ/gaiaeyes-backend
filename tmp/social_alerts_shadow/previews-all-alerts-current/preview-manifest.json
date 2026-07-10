@@ -2,19 +2,19 @@
   "schema_version": "social_alerts_preview_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-10T14:16:45Z",
-  "source_payload_generated_at": "2026-07-08T15:00:00Z",
+  "generated_at": "2026-07-10T14:33:56Z",
+  "source_payload_generated_at": "2026-07-10T15:00:00Z",
   "rendered_count": 4,
   "rendered": [
     {
-      "draft_id": "social_alert.geomagnetic.high.0dd8f86bd3ce",
+      "draft_id": "social_alert.geomagnetic.high.04141456fc98",
       "category": "geomagnetic",
       "severity": "high",
       "title": "Nervous system on alert?",
       "outputs": [
         {
           "format": "square_image",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/geomagnetic-high-0dd8f86bd3ce-square.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/geomagnetic-high-04141456fc98-square.png",
           "canvas": {
             "width": 1080,
             "height": 1080
@@ -30,7 +30,7 @@
         },
         {
           "format": "feed_card",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/geomagnetic-high-0dd8f86bd3ce-feed.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/geomagnetic-high-04141456fc98-feed.png",
           "canvas": {
             "width": 1080,
             "height": 1350
@@ -46,7 +46,7 @@
         },
         {
           "format": "story_reel_frame",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/geomagnetic-high-0dd8f86bd3ce-story.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/geomagnetic-high-04141456fc98-story.png",
           "canvas": {
             "width": 1080,
             "height": 1920
@@ -66,11 +66,11 @@
       "draft_id": "social_alert.schumann.high.f895c4f3cb50",
       "category": "schumann",
       "severity": "high",
-      "title": "HRV lower than normal?",
+      "title": "Wired but tired?",
       "outputs": [
         {
           "format": "square_image",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/schumann-high-f895c4f3cb50-square.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/schumann-high-f895c4f3cb50-square.png",
           "canvas": {
             "width": 1080,
             "height": 1080
@@ -84,7 +84,7 @@
         },
         {
           "format": "feed_card",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/schumann-high-f895c4f3cb50-feed.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/schumann-high-f895c4f3cb50-feed.png",
           "canvas": {
             "width": 1080,
             "height": 1350
@@ -98,7 +98,7 @@
         },
         {
           "format": "story_reel_frame",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/schumann-high-f895c4f3cb50-story.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/schumann-high-f895c4f3cb50-story.png",
           "canvas": {
             "width": 1080,
             "height": 1920
@@ -120,7 +120,7 @@
       "outputs": [
         {
           "format": "square_image",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/cme-watch-e6e9eb687c6d-square.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/cme-watch-e6e9eb687c6d-square.png",
           "canvas": {
             "width": 1080,
             "height": 1080
@@ -135,7 +135,7 @@
         },
         {
           "format": "feed_card",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/cme-watch-e6e9eb687c6d-feed.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/cme-watch-e6e9eb687c6d-feed.png",
           "canvas": {
             "width": 1080,
             "height": 1350
@@ -150,7 +150,7 @@
         },
         {
           "format": "story_reel_frame",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/cme-watch-e6e9eb687c6d-story.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/cme-watch-e6e9eb687c6d-story.png",
           "canvas": {
             "width": 1080,
             "height": 1920
@@ -176,46 +176,49 @@
       "outputs": [
         {
           "format": "square_image",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/solar-flare-watch-a56f06809696-square.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/solar-flare-watch-a56f06809696-square.png",
           "canvas": {
             "width": 1080,
             "height": 1080
           },
-          "asset_source": "bootstrap:social_alerts/solar_aurora",
+          "asset_source": "bootstrap:social_alerts/solar_heat",
           "video_candidates": [],
           "warnings": [
             "social/share/backgrounds/solar_flare.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_flare.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/flare.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/flare.jpg: HTTP Error 400: Bad Request",
             "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request"
           ]
         },
         {
           "format": "feed_card",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/solar-flare-watch-a56f06809696-feed.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/solar-flare-watch-a56f06809696-feed.png",
           "canvas": {
             "width": 1080,
             "height": 1350
           },
-          "asset_source": "bootstrap:social_alerts/solar_aurora",
+          "asset_source": "bootstrap:social_alerts/solar_heat",
           "video_candidates": [],
           "warnings": [
             "social/share/backgrounds/solar_flare.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_flare.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/flare.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/flare.jpg: HTTP Error 400: Bad Request",
             "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request"
           ]
         },
         {
           "format": "story_reel_frame",
-          "path": "tmp/social_alerts_shadow/previews-all-alerts/solar-flare-watch-a56f06809696-story.png",
+          "path": "tmp/social_alerts_shadow/previews-all-alerts-current/solar-flare-watch-a56f06809696-story.png",
           "canvas": {
             "width": 1080,
             "height": 1920
           },
-          "asset_source": "bootstrap:social_alerts/solar_aurora",
+          "asset_source": "bootstrap:social_alerts/solar_heat",
           "video_candidates": [
             "nasa/ccor1/latest.mp4",
             "nasa/enlil/latest.mp4"
           ],
           "warnings": [
             "social/share/backgrounds/solar_flare.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_flare.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/flare.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/flare.jpg: HTTP Error 400: Bad Request",
             "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request"
           ]
         }

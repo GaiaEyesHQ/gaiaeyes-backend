@@ -418,15 +418,20 @@ def _poster_background(base: Image.Image, size: Tuple[int, int], category: str) 
 
 
 def _draw_glass_panel(
-    draw: ImageDraw.ImageDraw,
+    image: Image.Image,
     box: Tuple[int, int, int, int],
     *,
     radius: int,
     accent: Tuple[int, int, int],
 ) -> None:
-    x1, y1, x2, y2 = box
-    draw.rounded_rectangle((x1 - 7, y1 - 7, x2 + 7, y2 + 7), radius=radius + 7, outline=(*accent, 44), width=10)
-    draw.rounded_rectangle(box, radius=radius, fill=(3, 12, 24, 205), outline=(*accent, 194), width=4)
+    glow = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
+    glow_draw.rounded_rectangle(box, radius=radius, outline=(*accent, 118), width=13)
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=5))
+    image.alpha_composite(glow)
+
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle(box, radius=radius, fill=(3, 12, 24, 214), outline=(*accent, 228), width=7)
 
 
 def _fit_font(
@@ -644,7 +649,7 @@ def _render_alert_card(
         subtitle_size = 36
         body_gap = 28
 
-    _draw_glass_panel(draw, panel, radius=44, accent=accent)
+    _draw_glass_panel(image, panel, radius=44, accent=accent)
 
     brand_font = _font(25, bold=True)
     brand = "Gaia Eyes"

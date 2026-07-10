@@ -162,6 +162,27 @@ def test_render_prefers_background_candidates_before_live_stills(tmp_path: Path)
     assert all(source.startswith("bootstrap:social_alerts/") for source in sources)
 
 
+def test_geomagnetic_render_uses_bootstrap_background_pool(tmp_path: Path) -> None:
+    payload = build_shadow_payload(
+        {"space_weather": {"now": {"kp": 6.4, "bz_nt": -9.2, "solar_wind_kms": 640}}},
+        generated_at="2026-04-30T12:05:00Z",
+    )
+
+    manifest = render_shadow_previews(
+        payload,
+        tmp_path / "previews",
+        categories={"geomagnetic"},
+        media_base_url="https://example.invalid/space-visuals",
+    )
+
+    sources = [
+        output["asset_source"]
+        for rendered in manifest["rendered"]
+        for output in rendered["outputs"]
+    ]
+    assert sources == ["bootstrap:social_alerts/solar_aurora"] * 3
+
+
 def test_renderer_uses_draft_cta_and_public_fallback_chips() -> None:
     payload = build_shadow_payload({"space_weather": {"cmes_count": 1}})
     draft = next(item for item in payload["drafts"] if item["category"] == "cme")

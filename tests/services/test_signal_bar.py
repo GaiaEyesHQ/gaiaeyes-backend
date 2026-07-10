@@ -32,6 +32,7 @@ class SignalBarTests(unittest.TestCase):
 
         items = {item["key"]: item for item in payload["items"]}
         self.assertEqual(items["solar_wind"]["value"], "464 km/s")
+        self.assertEqual(items["solar_wind"]["numeric_value"], 464.0)
         self.assertEqual(items["solar_wind"]["state"], "quiet")
 
     def test_build_signal_bar_maps_live_states_to_core_pills(self) -> None:
@@ -74,8 +75,10 @@ class SignalBarTests(unittest.TestCase):
         items = {item["key"]: item for item in payload["items"]}
         self.assertEqual(items["kp"]["state"], "strong")
         self.assertEqual(items["kp"]["value"], "6.2")
+        self.assertEqual(items["kp"]["numeric_value"], 6.2)
         self.assertEqual(items["solar_wind"]["state"], "elevated")
         self.assertEqual(items["solar_wind"]["value"], "689 km/s")
+        self.assertEqual(items["solar_wind"]["numeric_value"], 689.0)
         self.assertEqual(items["schumann"]["state"], "elevated")
         self.assertEqual(items["schumann"]["value"], "Elevated")
         self.assertEqual(items["pressure"]["state"], "watch")
