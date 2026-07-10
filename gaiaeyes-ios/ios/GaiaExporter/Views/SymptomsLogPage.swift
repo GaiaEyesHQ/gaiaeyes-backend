@@ -64,14 +64,31 @@ struct SymptomPreset: Identifiable, Hashable {
 
     static func fromDefinitions(_ definitions: [SymptomCodeDefinition]) -> [SymptomPreset] {
         var seen: Set<String> = []
-        let mapped = definitions.filter { $0.isActive }.compactMap { definition -> SymptomPreset? in
+        let serverPresets = definitions.filter { $0.isActive }.compactMap { definition -> SymptomPreset? in
             let preset = SymptomPreset(definition: definition)
             if seen.insert(preset.code).inserted {
                 return preset
             }
             return nil
         }
-        return ensureFallback(in: mapped)
+        guard !serverPresets.isEmpty else { return defaults }
+
+        let serverByCode = Dictionary(uniqueKeysWithValues: serverPresets.map { ($0.code, $0) })
+        var merged: [SymptomPreset] = []
+        var mergedCodes: Set<String> = []
+
+        for localPreset in defaults where localPreset.code != SymptomCodeHelper.fallbackCode {
+            let preset = serverByCode[localPreset.code] ?? localPreset
+            if mergedCodes.insert(preset.code).inserted {
+                merged.append(preset)
+            }
+        }
+
+        for preset in serverPresets where preset.code != SymptomCodeHelper.fallbackCode && mergedCodes.insert(preset.code).inserted {
+            merged.append(preset)
+        }
+
+        return ensureFallback(in: merged)
     }
 
     static func ensureFallback(in presets: [SymptomPreset]) -> [SymptomPreset] {
