@@ -79,8 +79,8 @@ def collect_news_items():
     # SWPC JSON/TXT endpoints (authoritative)
     items += parse_swpc_alerts("https://services.swpc.noaa.gov/products/alerts.json", "swpc-alerts-json", ["SWPC","alerts"])
     items += parse_swpc_kp("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json", "swpc-kp-3day", ["SWPC","kp"])
-    items += parse_swpc_rtsw_plasma1d("https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json", "swpc-rtsw-plasma1d", ["SWPC","DSCOVR"])
-    items += parse_swpc_rtsw_mag1d("https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json", "swpc-rtsw-mag1d", ["SWPC","DSCOVR"])
+    items += parse_swpc_rtsw_plasma1d("https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json", "swpc-rtsw-plasma1d", ["SWPC","SOLAR-1","ACE"])
+    items += parse_swpc_rtsw_mag1d("https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json", "swpc-rtsw-mag1d", ["SWPC","SOLAR-1","ACE"])
     items += parse_swpc_ovation_latest("https://services.swpc.noaa.gov/json/ovation_aurora_latest.json", "swpc-ovation-latest", ["SWPC","OVATION"])
     items += parse_swpc_geomag_3day_txt("https://services.swpc.noaa.gov/text/3-day-forecast.txt", "swpc-geomag-3day", ["SWPC","forecast"])
     # Freshness + excludes

@@ -952,30 +952,32 @@ add_shortcode('gaia_space_detail', function($atts){
         })();
 
         Promise.all([
-          fetch('https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null),
-          fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null)
+          fetch('https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null),
+          fetch('https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null)
         ]).then(([mag,plasma])=>{
           try{
-            const mRows = Array.isArray(mag)? mag.slice(1):[];
+            const mRows = Array.isArray(mag)? mag.filter(r=>r && r.active === true):[];
             const bz = [];
             mRows.forEach(r=>{
-              const t = r[0], v = parseFloat(r[3]);
+              const t = r.time_tag, v = parseFloat(r.bz_gsm);
               if (!t || !isFinite(v)) return;
               const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
               bz.push({ x: new Date(ts), y: v });
             });
+            bz.sort((a,b)=>a.x-b.x);
             renderSpark('sparkBz', bz, { xLabel:'UTC time', yLabel:'IMF Bz', units:'nT', zeroLine:true, color:'#a7d3ff' });
             const lp = latestPoint(bz); setVal('sparkBzVal', lp ? (lp.y.toFixed(1)+' nT') : '—');
           }catch(e){}
           try{
-            const pRows = Array.isArray(plasma)? plasma.slice(1):[];
+            const pRows = Array.isArray(plasma)? plasma.filter(r=>r && r.active === true):[];
             const sw = [];
             pRows.forEach(r=>{
-              const t = r[0], v = parseFloat(r[2]);
+              const t = r.time_tag, v = parseFloat(r.proton_speed);
               if (!t || !isFinite(v)) return;
               const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
               sw.push({ x: new Date(ts), y: v });
             });
+            sw.sort((a,b)=>a.x-b.x);
             renderSpark('sparkSw', sw, { xLabel:'UTC time', yLabel:'Solar wind speed', units:'km/s', yMin:0, color:'#ffd089' });
             const lp = latestPoint(sw); setVal('sparkSwVal', lp ? (lp.y.toFixed(0)+' km/s') : '—');
           }catch(e){}

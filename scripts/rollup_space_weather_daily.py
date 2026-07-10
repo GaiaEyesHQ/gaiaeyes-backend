@@ -25,6 +25,10 @@ with sw as (
     max(kp_index)              as kp_max,
     min(bz_nt)                 as bz_min,
     avg(sw_speed_kms)          as sw_speed_avg,
+    (array_agg(kp_index order by ts_utc desc) filter (where kp_index is not null))[1] as kp_now,
+    (array_agg(bz_nt order by ts_utc desc) filter (where bz_nt is not null))[1] as bz_now,
+    (array_agg(sw_speed_kms order by ts_utc desc) filter (where sw_speed_kms is not null))[1] as sw_speed_now_kms,
+    max(ts_utc) filter (where kp_index is not null or bz_nt is not null or sw_speed_kms is not null) as now_ts,
     count(*)                   as row_count
   from ext.space_weather
   where ts_utc >= date_trunc('day', now() - interval '{DAYS_BACK} days')
@@ -60,12 +64,18 @@ ap as (
   group by 1
 )
 insert into marts.space_weather_daily
-  (day, kp_max, bz_min, sw_speed_avg, row_count, flares_count, cmes_count, aurora_hp_north_gw, aurora_hp_south_gw, updated_at)
+  (day, kp_max, bz_min, sw_speed_avg, kp_now, bz_now, sw_speed_now, sw_speed_now_kms, now_ts,
+   row_count, flares_count, cmes_count, aurora_hp_north_gw, aurora_hp_south_gw, updated_at)
 select
   sw.day,
   sw.kp_max,
   sw.bz_min,
   sw.sw_speed_avg,
+  sw.kp_now,
+  sw.bz_now,
+  sw.sw_speed_now_kms,
+  sw.sw_speed_now_kms,
+  sw.now_ts,
   sw.row_count,
   coalesce(dk.flares_count, 0),
   coalesce(dk.cmes_count, 0),
@@ -79,6 +89,11 @@ on conflict (day) do update
 set kp_max       = excluded.kp_max,
     bz_min       = excluded.bz_min,
     sw_speed_avg = excluded.sw_speed_avg,
+    kp_now       = excluded.kp_now,
+    bz_now       = excluded.bz_now,
+    sw_speed_now = excluded.sw_speed_now,
+    sw_speed_now_kms = excluded.sw_speed_now_kms,
+    now_ts       = excluded.now_ts,
     row_count    = excluded.row_count,
     flares_count = excluded.flares_count,
     cmes_count   = excluded.cmes_count,

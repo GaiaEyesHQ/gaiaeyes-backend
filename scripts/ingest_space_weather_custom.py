@@ -4,8 +4,8 @@ Ingest Kp (1-minute) + SWPC Solar Wind (plasma + mag) into ext.space_weather.
 
 Sources (defaults):
 - Kp 1m:   https://services.swpc.noaa.gov/json/planetary_k_index_1m.json  (list of dicts; Kp may be "3-", "4+", etc.)
-- Plasma:  https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json  (array-of-arrays)
-- Mag:     https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json     (array-of-arrays; includes Bz)
+- Plasma:  https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json  (SOLAR-1 primary, ACE backup)
+- Mag:     https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json   (SOLAR-1 primary, ACE backup)
 
 Upserts into ext.space_weather:
   ts_utc (PK), kp_index, bz_nt, sw_speed_kms, src='noaa-swpc', meta jsonb
@@ -44,8 +44,8 @@ DB  = env("SUPABASE_DB_URL", required=True)
 
 # Recommended SWPC product endpoints:
 KP  = env("KP_URL",  "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json")
-SW  = env("SW_URL",  "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json")
-MAG = env("MAG_URL", "https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json")
+SW  = env("SW_URL",  "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json")
+MAG = env("MAG_URL", "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json")
 
 UA  = env("HTTP_USER_AGENT", "(gaiaeyes.com, help@gaiaeyes.com)")
 SINCE_HOURS = int(env("SINCE_HOURS", "72"))
@@ -215,6 +215,22 @@ def idx_by_ts(objs, ts_keys=("time_tag", "time", "timestamp", "date", "datetime"
     return out
 
 
+def active_rows(objs):
+    """Use only the spacecraft SWPC marks active when that field is present."""
+    if not isinstance(objs, list):
+        return objs
+    if not any(isinstance(row, dict) and "active" in row for row in objs):
+        return objs
+    return [
+        row for row in objs
+        if isinstance(row, dict) and str(row.get("active")).strip().lower() in {"1", "true", "yes"}
+    ]
+
+
+def first_present(row, keys):
+    return next((row.get(key) for key in keys if row.get(key) not in (None, "")), None)
+
+
 # ---------------------- HTTP + DB ----------------------
 
 async def get_json(client: httpx.AsyncClient, url: str):
@@ -224,14 +240,14 @@ async def get_json(client: httpx.AsyncClient, url: str):
 
 
 UPSERT_SQL = """
-insert into ext.space_weather (ts_utc, kp_index, bz_nt, sw_speed_kms, src, meta)
+insert into ext.space_weather as existing (ts_utc, kp_index, bz_nt, sw_speed_kms, src, meta)
 values ($1, $2, $3, $4, $5, $6::jsonb)
 on conflict (ts_utc) do update
-set kp_index     = excluded.kp_index,
-    bz_nt        = excluded.bz_nt,
-    sw_speed_kms = excluded.sw_speed_kms,
+set kp_index     = coalesce(excluded.kp_index, existing.kp_index),
+    bz_nt        = coalesce(excluded.bz_nt, existing.bz_nt),
+    sw_speed_kms = coalesce(excluded.sw_speed_kms, existing.sw_speed_kms),
     src          = excluded.src,
-    meta         = excluded.meta;
+    meta         = coalesce(existing.meta, '{}'::jsonb) || excluded.meta;
 """
 
 
@@ -249,6 +265,8 @@ async def main():
     kp_json  = normalize_array_of_arrays(kp_json)   # no-op if already dicts
     sw_json  = normalize_array_of_arrays(sw_json)
     mag_json = normalize_array_of_arrays(mag_json)
+    sw_json  = active_rows(sw_json)
+    mag_json = active_rows(mag_json)
 
     # Index by timestamp within SINCE_HOURS window
     kp_by_ts  = idx_by_ts(kp_json, ts_keys=("time_tag", "time", "timestamp", "date", "datetime"))
@@ -267,30 +285,29 @@ async def main():
         mgd = mag_by_ts.get(ts, {})
 
         # Kp (1m) candidate keys — now with robust string parsing
-        kp_raw = (
-            kpd.get("kp_index") or kpd.get("kp") or kpd.get("Kp")
-            or kpd.get("estimated_kp") or kpd.get("kp_value")
-        )
+        kp_raw = first_present(kpd, ("estimated_kp", "kp_index", "kp", "Kp", "kp_value"))
         kp_val = kp_to_float(kp_raw)
 
         # Solar wind speed (km/s) candidate keys seen in plasma products
         # Common columns include: 'speed', 'plasma_speed', 'proton_speed', 'flow_speed', 'velocity'
-        sw_speed = f(
-            swd.get("speed") or swd.get("plasma_speed") or swd.get("proton_speed")
-            or swd.get("flow_speed") or swd.get("velocity")
-        )
+        sw_speed = f(first_present(
+            swd,
+            ("speed", "plasma_speed", "proton_speed", "flow_speed", "velocity"),
+        ))
 
         # Bz (nT) from MAG products (prefer GSM if available)
-        bz_val = f(
-            mgd.get("bz_gsm") or mgd.get("bz_gse") or mgd.get("bz") or mgd.get("Bz")
-        )
+        bz_val = f(first_present(mgd, ("bz_gsm", "bz_gse", "bz", "Bz")))
 
         meta = {
             "sources": {
                 "kp": KP,
                 "plasma": SW,
                 "mag": MAG
-            }
+            },
+            "spacecraft": {
+                "plasma": swd.get("source"),
+                "mag": mgd.get("source"),
+            },
         }
 
         rows.append((ts, kp_val, bz_val, sw_speed, SRC, json.dumps(meta)))

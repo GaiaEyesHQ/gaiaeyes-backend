@@ -13,13 +13,14 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 
 | Script | Purpose & Outputs | Key environment variables |
 | --- | --- | --- |
+| `backfill_space_weather_hapi.py` | Repairs bounded gaps in `ext.space_weather` from NOAA's archived active-spacecraft HAPI datasets while preserving existing Kp and rejecting non-nominal values. | `SUPABASE_DB_URL`, `BACKFILL_START_UTC`, `BACKFILL_END_UTC`; optional `SWPC_HAPI_BASE`, `HTTP_USER_AGENT` |
 | `ingest_alerts_us.py` | Pulls active severe-weather alerts from the NWS API and emits `alerts_us_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH` |
 | `ingest_gdacs.py` | Parses the GDACS RSS feed for global hazard alerts, writes `gdacs_latest.json`, and upserts the latest alerts into `ext.gdacs_alerts` via Supabase REST when credentials are present. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`, `GDACS_RSS`; optional `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` for DB upsert |
 | `ingest_nasa_donki.py` | Fetches NASA DONKI flare and CME events (plus GOES flux summaries), upserts them into `ext.donki_event`, and optionally emits `flares_cmes.json`. | `SUPABASE_DB_URL`, `NASA_API_KEY` (required); `START_DAYS_AGO`, `OUTPUT_JSON_PATH`, `OUTPUT_JSON_GZIP`, retry tuning vars |
 | `ingest_schumann_github.py` | Pulls Schumann resonance telemetry from the `gaiaeyes-media` GitHub repo, upserts station readings into `ext.schumann_*`, and should be followed by `psql "$SUPABASE_DB_URL" -c "refresh materialized view marts.schumann_daily"` so the daily mart stays current. | `SUPABASE_DB_URL` or `DATABASE_URL` |
 | `ingest_space_news.py` | Aggregates space-weather RSS/JSON feeds (NASA, SWPC, DONKI) into a news digest JSON file. | `OUTPUT_JSON_PATH`, `MEDIA_DIR`, `LOOKBACK_DAYS`, plus DONKI API key via `NASA_API_KEY` when provided |
 | `ingest_space_weather_custom.py` | Streams high-resolution Kp, solar-wind plasma, and magnetometer data into `ext.space_weather`. | `SUPABASE_DB_URL` (required); optional overrides for `KP_URL`, `SW_URL`, `MAG_URL`, `HTTP_USER_AGENT`, `SINCE_HOURS` |
-| `ingest_space_weather_swpc.py` | Fetches SWPC summary feeds (Kp, speed, Bz), merges timestamps, upserts into `ext.space_weather`, and can emit a dashboard JSON snapshot. | `SUPABASE_DB_URL` (required); `SINCE_HOURS`, `OUTPUT_JSON_PATH`, `OUTPUT_JSON_GZIP`, `NEXT72_DEFAULT`, `HTTP_USER_AGENT` |
+| `ingest_space_weather_swpc.py` | Fetches SWPC Kp plus the active NOAA RTSW solar-wind feeds (SOLAR-1 primary, ACE backup), rejects stale feeds, merges timestamps, preserves spacecraft provenance, upserts into `ext.space_weather`, and can emit a dashboard JSON snapshot. | `SUPABASE_DB_URL` (required); `SINCE_HOURS`, `MAX_SOURCE_AGE_MINUTES`, `OUTPUT_JSON_PATH`, `OUTPUT_JSON_GZIP`, `NEXT72_DEFAULT`, `HTTP_USER_AGENT` |
 | `ingest_space_forecasts_step1.py` | Consolidated Step 1 ingestion covering Enlil CME runs, SEP/radiation belts, OVATION aurora power (`ext.aurora_power` + `marts.aurora_outlook`), coronal-hole forecasts, D-RAP text absorption (`ext.drap_absorption` + `marts.drap_absorption_daily`), SuperMAG magnetometer indices (`ext.magnetometer_chain` + `marts.magnetometer_regional`), and solar-cycle predictions. | `SUPABASE_DB_URL` (required unless `--dry-run`), `NASA_API`, `SUPERMAG_USERNAME`; optional `--days`, `--only`, `SUPERMAG_STATIONS` |
 | `ingest_usgs_quakes.py` | Collects USGS day/week feeds, curates recent M5+ events, optional PostgREST upserts, and writes `quakes_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`; optional `SUPABASE_REST_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY` |
 | `ingest_usgs_history.py` | Builds historical quake trend series (daily/monthly) and emits `quakes_history.json`. | `OUTPUT_JSON_PATH`, `HISTORY_DAYS`, `HISTORY_MONTHS` |
@@ -31,7 +32,7 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 
 | Script | Purpose & Outputs | Key environment variables |
 | --- | --- | --- |
-| `rollup_space_weather_daily.py` | Aggregates `ext.space_weather` telemetry and DONKI counts into `marts.space_weather_daily`. | `SUPABASE_DB_URL`; `DAYS_BACK` |
+| `rollup_space_weather_daily.py` | Aggregates `ext.space_weather` telemetry and DONKI counts into `marts.space_weather_daily`, including the latest current Kp, Bz, solar-wind speed, and source timestamp for each day. | `SUPABASE_DB_URL`; `DAYS_BACK` |
 | `rollup_health_daily.py` | Summarizes Gaia health samples into `gaia.daily_summary` using a configurable timezone. | `SUPABASE_DB_URL`; `DAYS_BACK`; `USER_TZ` |
 | `rollup_daily_features.py` | Joins `gaia.daily_summary` health metrics and derived body-context signals with space-weather and Schumann mart data into `marts.daily_features`. | `SUPABASE_DB_URL`; `DAYS_BACK` |
 

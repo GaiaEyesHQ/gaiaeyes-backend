@@ -153,8 +153,8 @@ GaiaSpark.renderSpark(canvasOrId, data, {
   * `feature_flags` – feature availability (e.g., `flare_markers`, `aurora_probability`) used to show overlay toggles.
 * Sparklines supplement feed data with live NOAA endpoints:
   * `…/json/goes/primary/xrays-7-day.json`
-  * `…/products/solar-wind/mag-1-day.json`
-  * `…/products/solar-wind/plasma-1-day.json`
+  * `…/json/rtsw/rtsw_mag_1m.json` (NOAA-active spacecraft)
+  * `…/json/rtsw/rtsw_wind_1m.json` (NOAA-active spacecraft)
 * Graceful fallback strings (`—`) render if data missing.
 
 **Assets overview**
@@ -453,4 +453,3 @@ This section focuses on the spark helper usage inside the Space Dashboard.
 * `.github/workflows/site-assets-check.yml` – nightly (07:00 UTC) HEAD check over inventory; fails on 404/5xx so broken feeds surface quickly.
 * `.github/workflows/hazards.yml` – builds the Global Hazards snapshot every 10 minutes and publishes to the media repo for the homepage brief.
 * Use the asset inventory to flag new oversized downloads (>2 MB) and annotate them in the TODO table above.
-

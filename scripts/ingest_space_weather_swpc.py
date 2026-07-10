@@ -3,12 +3,12 @@
 NOAA SWPC ingester → ext.space_weather
 
 Fetches from these SWPC endpoints (JSON):
-- Planetary K-index (3h bins): 
-  https://services.swpc.noaa.gov/products/summary/planetary-k-index.json
-- Solar wind speed (km/s):
-  https://services.swpc.noaa.gov/products/summary/solar-wind-speed.json
-- Solar wind magnetic field (includes Bz in nT):
-  https://services.swpc.noaa.gov/products/summary/solar-wind-mag-field.json
+- Estimated planetary K-index (chart updates every minute):
+  https://services.swpc.noaa.gov/json/planetary_k_index_1m.json
+- Active solar wind plasma (SOLAR-1 primary, ACE backup):
+  https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json
+- Active solar wind magnetic field (SOLAR-1 primary, ACE backup):
+  https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json
 
 Merges by timestamp (UTC), then upserts into ext.space_weather:
   ts_utc (PK), kp_index, bz_nt, sw_speed_kms, src='noaa-swpc', meta jsonb
@@ -18,8 +18,8 @@ ENV:
   SINCE_HOURS      (optional)  -- default: 72
 
 Notes:
-- SWPC “summary/*.json” endpoints return an array-of-arrays:
-  first row is headers; subsequent rows are values with the same column order.
+- The RTSW feeds include all available spacecraft. Only rows marked `active=true`
+  are ingested so SWPC controls the SOLAR-1/ACE operational handoff.
 - We pick rows newer than now()-SINCE_HOURS.
 """
 
@@ -29,6 +29,7 @@ import asyncpg
 import httpx
 
 SINCE_HOURS = int(os.getenv("SINCE_HOURS", "72"))
+MAX_SOURCE_AGE_MINUTES = int(os.getenv("MAX_SOURCE_AGE_MINUTES", "90"))
 DB = os.getenv("SUPABASE_DB_URL")
 if not DB:
     print("Missing SUPABASE_DB_URL", file=sys.stderr)
@@ -41,22 +42,19 @@ NEXT72_DEFAULT = os.getenv("NEXT72_DEFAULT", "Quiet to unsettled")
 SRC = "noaa-swpc"
 BASE_SUM = "https://services.swpc.noaa.gov/products/summary"
 BASE_PROD = "https://services.swpc.noaa.gov/products"
+BASE_RTSW = "https://services.swpc.noaa.gov/json/rtsw"
 URLS_LIST = {
-    # Prefer products/* 1-day, then 7-day; keep summary as last fallback
     "kp": [
+        "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json",
         f"{BASE_PROD}/noaa-planetary-k-index.json",
-        f"{BASE_SUM}/planetary-k-index.json",
     ],
     "speed": [
-        f"{BASE_PROD}/solar-wind/plasma-1-day.json",
-        f"{BASE_PROD}/solar-wind/plasma-7-day.json",
-        f"{BASE_SUM}/solar-wind-speed.json",            # preferred (works, single-object)
+        f"{BASE_RTSW}/rtsw_wind_1m.json",
+        f"{BASE_SUM}/solar-wind-speed.json",
     ],
     "mag": [
-        f"{BASE_PROD}/solar-wind/mag-1-day.json",
-        f"{BASE_PROD}/solar-wind/mag-7-day.json",
+        f"{BASE_RTSW}/rtsw_mag_1m.json",
         f"{BASE_SUM}/solar-wind-mag-field.json",
-        f"{BASE_SUM}/solar-wind-mag.json",
     ],
 }
 ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
@@ -276,19 +274,61 @@ async def fetch_json_array(client: httpx.AsyncClient, url: str):
         raise ValueError(f"Unexpected JSON shape from {url}")
     return table  # array-of-arrays: [ header_row, row1, row2, ... ]
 
-async def fetch_any_json_array(client: httpx.AsyncClient, urls: list[str], label: str):
+
+def _truthy(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes"}
+
+
+def latest_table_timestamp(table, *, active_only: bool = False) -> datetime | None:
+    if not table or not isinstance(table[0], list):
+        return None
+    header = {str(name).lower(): i for i, name in enumerate(table[0])}
+    ts_i = next((header[name] for name in ("time_tag", "timestamp", "time") if name in header), None)
+    active_i = header.get("active")
+    if ts_i is None:
+        return None
+    timestamps = []
+    for row in table[1:]:
+        if not isinstance(row, list) or ts_i >= len(row):
+            continue
+        if active_only and active_i is not None:
+            active_value = row[active_i] if active_i < len(row) else None
+            if not _truthy(active_value):
+                continue
+        ts = parse_iso(row[ts_i])
+        if ts is not None:
+            timestamps.append(ts)
+    return max(timestamps) if timestamps else None
+
+
+async def fetch_any_json_array(
+    client: httpx.AsyncClient,
+    urls: list[str],
+    label: str,
+    *,
+    max_age_minutes: int | None = None,
+    active_only: bool = False,
+):
     last_err = None
     for u in urls:
         try:
             arr = await fetch_json_array(client, u)
+            if max_age_minutes is not None:
+                latest = latest_table_timestamp(arr, active_only=active_only)
+                cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
+                if latest is None or latest < cutoff:
+                    stamp = latest.isoformat() if latest else "missing"
+                    raise ValueError(f"stale feed (latest={stamp})")
             print(f"[info] {label} fetched from {u}")
-            return arr
+            return arr, u
         except Exception as e:
             last_err = e
             print(f"[warn] {label} fetch failed for {u}: {e}")
             continue
     print(f"[warn] {label} fetch failed for all URLs")
-    return []
+    return [], None
 
 async def fetch_text(client: httpx.AsyncClient, url: str) -> str:
     r = await client.get(url)
@@ -354,7 +394,7 @@ def rows_to_records(arr, wanted_cols):
         out.append({"ts": ts, "row": r, "idx": idx})
     return out
 
-def merge_metric(records, candidates, field_name, out_map):
+def merge_metric(records, candidates, field_name, out_map, *, active_only: bool = False):
     """
     For each record with a ts, extract the metric from candidate columns (first that exists)
     and store in out_map[ts][field_name].
@@ -371,11 +411,18 @@ def merge_metric(records, candidates, field_name, out_map):
             break
     if col_i is None:
         return
+    active_i = idx.get("active")
+    source_i = idx.get("source")
+    quality_i = idx.get("overall_quality")
     for rec in records:
         ts = rec["ts"]
         if not ts:
             continue
         row = rec["row"]
+        if active_only and active_i is not None:
+            active_value = row[active_i] if active_i < len(row) else None
+            if not _truthy(active_value):
+                continue
         val = None
         if col_i < len(row):
             val = coerce_float(row[col_i])
@@ -383,6 +430,12 @@ def merge_metric(records, candidates, field_name, out_map):
             out_map[ts] = {}
         if val is not None:
             out_map[ts][field_name] = val
+            provenance = out_map[ts].setdefault("_provenance", {})
+            provenance[field_name] = {
+                "spacecraft": row[source_i] if source_i is not None and source_i < len(row) else None,
+                "active": row[active_i] if active_i is not None and active_i < len(row) else None,
+                "overall_quality": row[quality_i] if quality_i is not None and quality_i < len(row) else None,
+            }
 
 def filter_since(d: dict, hours: int):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -471,14 +524,19 @@ def parse_alert_rows(arr):
     return []
 
 UPSERT_SQL = """
-insert into ext.space_weather (ts_utc, kp_index, bz_nt, sw_speed_kms, src, meta)
+insert into ext.space_weather as existing (ts_utc, kp_index, bz_nt, sw_speed_kms, src, meta)
 values ($1, $2, $3, $4, $5, $6::jsonb)
 on conflict (ts_utc) do update
-set kp_index     = excluded.kp_index,
-    bz_nt        = excluded.bz_nt,
-    sw_speed_kms = excluded.sw_speed_kms,
+set kp_index     = coalesce(excluded.kp_index, existing.kp_index),
+    bz_nt        = coalesce(excluded.bz_nt, existing.bz_nt),
+    sw_speed_kms = coalesce(excluded.sw_speed_kms, existing.sw_speed_kms),
     src          = excluded.src,
-    meta         = excluded.meta;
+    meta         = (coalesce(existing.meta, '{}'::jsonb) || excluded.meta)
+                   || jsonb_build_object(
+                        'measurements',
+                        coalesce(existing.meta->'measurements', '{}'::jsonb)
+                        || coalesce(excluded.meta->'measurements', '{}'::jsonb)
+                      );
 """
 
 UPSERT_ALERT_SQL = """
@@ -498,9 +556,26 @@ async def main():
     headers = {"User-Agent": UA, "Accept": "application/json"}
     timeout = httpx.Timeout(45.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
-        kp_arr   = await fetch_any_json_array(client, URLS_LIST["kp"],   "kp")
-        spd_arr  = await fetch_any_json_array(client, URLS_LIST["speed"],"speed")
-        mag_arr  = await fetch_any_json_array(client, URLS_LIST["mag"],  "mag")
+        kp_arr, kp_source_url = await fetch_any_json_array(
+            client,
+            URLS_LIST["kp"],
+            "kp",
+            max_age_minutes=MAX_SOURCE_AGE_MINUTES,
+        )
+        spd_arr, speed_source_url = await fetch_any_json_array(
+            client,
+            URLS_LIST["speed"],
+            "speed",
+            max_age_minutes=MAX_SOURCE_AGE_MINUTES,
+            active_only=True,
+        )
+        mag_arr, mag_source_url = await fetch_any_json_array(
+            client,
+            URLS_LIST["mag"],
+            "mag",
+            max_age_minutes=MAX_SOURCE_AGE_MINUTES,
+            active_only=True,
+        )
         # Optional feeds
         try:
             alerts_arr = await fetch_json_array(client, ALERTS_URL)
@@ -522,12 +597,18 @@ async def main():
     merged = {}
 
     # Kp can be under different header names; common ones in these feeds:
-    # 'kp_index', 'kp_est', 'kp'
-    merge_metric(kp_recs,  ["kp_index","kp_est","kp"],               "kp_index",     merged)
+    # Prefer NOAA's decimal near-real-time estimate; retain coarser aliases as fallbacks.
+    merge_metric(kp_recs, ["estimated_kp","kp_est","kp_index","kp"], "kp_index", merged)
     # Speed (km/s) appears as: 'windspeed', 'speed', 'V', 'proton_speed', 'solar_wind_speed', 'sw_speed'
-    merge_metric(spd_recs, ["windspeed","speed","V","proton_speed","solar_wind_speed","sw_speed"], "sw_speed_kms", merged)
+    merge_metric(
+        spd_recs,
+        ["windspeed","speed","V","proton_speed","solar_wind_speed","sw_speed"],
+        "sw_speed_kms",
+        merged,
+        active_only=True,
+    )
     # Bz (nT) appears as: 'bz_gsm', 'Bz', 'bz', 'bz_nt'
-    merge_metric(mag_recs, ["bz_gsm","Bz","bz","bz_nt"], "bz_nt", merged)
+    merge_metric(mag_recs, ["bz_gsm","Bz","bz","bz_nt"], "bz_nt", merged, active_only=True)
 
     # Keep recent
     merged = filter_since(merged, SINCE_HOURS)
@@ -565,9 +646,9 @@ async def main():
     # headline/confidence from forecast
     next_headline, next_conf = parse_next72_headline(forecast_txt)
     sources_meta = {
-        "kp_source": URLS_LIST["kp"][0] if URLS_LIST.get("kp") else None,
-        "speed_source": URLS_LIST["speed"][0] if URLS_LIST.get("speed") else None,
-        "mag_source": URLS_LIST["mag"][0] if URLS_LIST.get("mag") else None,
+        "kp_source": kp_source_url,
+        "speed_source": speed_source_url,
+        "mag_source": mag_source_url,
         "alerts_source": ALERTS_URL,
         "forecast_source": FORECAST_URL,
     }
@@ -576,9 +657,10 @@ async def main():
     rows = []
     for ts, v in sorted(merged.items()):
         meta = {
-            "kp_source": URLS_LIST["kp"][0] if URLS_LIST.get("kp") else None,
-            "speed_source": URLS_LIST["speed"][0] if URLS_LIST.get("speed") else None,
-            "mag_source": URLS_LIST["mag"][0] if URLS_LIST.get("mag") else None,
+            "kp_source": kp_source_url,
+            "speed_source": speed_source_url,
+            "mag_source": mag_source_url,
+            "measurements": v.get("_provenance") or {},
         }
         rows.append((
             ts,

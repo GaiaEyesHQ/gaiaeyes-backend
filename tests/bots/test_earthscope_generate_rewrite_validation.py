@@ -147,6 +147,7 @@ def test_clean_llm_title_rejects_generic_or_recent_fallback_labels():
     assert _clean_llm_title("Mood Sleep Pressure Check", set()) is None
     assert _clean_llm_title("Wearable Trends Need Context", set()) is None
     assert _clean_llm_title("Check The Body Pattern", set()) is None
+    assert _clean_llm_title("Sensitive Systems Take Note", set()) is None
     assert _clean_llm_title("Brain Tabs Closing", {"brain tabs closing"}) is None
 
 

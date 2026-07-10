@@ -634,7 +634,7 @@ def _render_alert_card(
         subtitle_size = 31
         body_gap = 20
     elif height <= 1500:
-        panel = (margin, 250, width - margin, height - 310)
+        panel = (margin, 250, width - margin, height - 150)
         title_max = 76
         subtitle_size = 34
         body_gap = 24

@@ -748,6 +748,7 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
         "magnetic calm",
         "mood sleep pressure check",
         "quiet skies",
+        "sensitive systems take note",
         "space weather update",
         "steady field",
         "today's earthscope",
@@ -853,7 +854,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "Vary the doorway: sometimes sleep, focus, mood, pain, headaches, brain fog, restlessness, low energy, or pacing. "
         "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
-        "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern. "
+        "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note. "
         "Good shapes: 'Feeling Wired And Worn Out?', 'Brain Fog On A Loop?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
@@ -3247,6 +3248,7 @@ def main():
     # 2) Generate copy
     _reset_runtime_trace()
     snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
+    playbook = _normalize_playbook_bullets(playbook)
     short_caption, short_tags = generate_short_caption(
         ctx,
         live_sections={

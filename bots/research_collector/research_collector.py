@@ -390,29 +390,43 @@ def parse_swpc_kp(url: str, source_id: str, tags: list) -> list:
 
 
 # ---- Additional SWPC Parsers ----
+def _latest_active_rtsw_row(data: object) -> dict:
+    if not isinstance(data, list) or not data:
+        return {}
+    if isinstance(data[0], list):
+        header = [str(value).strip().lower() for value in data[0]]
+        rows = [
+            {header[i]: (row[i] if i < len(row) else None) for i in range(len(header))}
+            for row in data[1:]
+            if isinstance(row, list)
+        ]
+    else:
+        rows = [row for row in data if isinstance(row, dict)]
+    if any("active" in row for row in rows):
+        rows = [row for row in rows if str(row.get("active")).strip().lower() in {"1", "true", "yes"}]
+    rows = [row for row in rows if row.get("time_tag")]
+    return max(rows, key=lambda row: str(row.get("time_tag"))) if rows else {}
+
+
 def parse_swpc_rtsw_plasma1d(url: str, source_id: str, tags: list) -> list:
     r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
-    data = r.json()  # [header, row...]
+    data = r.json()
     out = []
-    if not isinstance(data, list) or len(data) < 2 or not isinstance(data[0], list):
+    latest = _latest_active_rtsw_row(data)
+    if not latest:
         return out
-    hdr = [h.strip().lower() for h in data[0]]
-    idx = {name: i for i, name in enumerate(hdr)}
-    last = data[-1]
-    try:
-        ts = last[idx.get("time_tag", 0)]
-        dens = last[idx.get("density", -1)]
-        speed = last[idx.get("speed", -1)]
-        temp = last[idx.get("temperature", -1)]
-    except Exception:
-        return out
+    ts = latest.get("time_tag")
+    dens = latest.get("proton_density", latest.get("density"))
+    speed = latest.get("proton_speed", latest.get("speed"))
+    temp = latest.get("proton_temperature", latest.get("temperature"))
+    spacecraft = latest.get("source") or "SWPC active spacecraft"
     title = f"RTSW Plasma: V={speed} km/s, n={dens} cm^-3"
     out.append({
         "source": source_id, "source_type": "api",
         "title": title,
         "url": normalize_url(url),
         "published_at": ts,
-        "summary_raw": f"NOAA DSCOVR real-time solar wind plasma (1-day): speed={speed} km/s, density={dens} cm^-3, temperature={temp} K",
+        "summary_raw": f"NOAA {spacecraft} real-time solar wind plasma: speed={speed} km/s, density={dens} cm^-3, temperature={temp} K",
         "tags": list(tags) + [_year_tag(ts)] + (['evergreen'] if EVERGREEN_MODE else [])
     })
     return out
@@ -422,24 +436,20 @@ def parse_swpc_rtsw_mag1d(url: str, source_id: str, tags: list) -> list:
     r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
     data = r.json()
     out = []
-    if not isinstance(data, list) or len(data) < 2 or not isinstance(data[0], list):
+    latest = _latest_active_rtsw_row(data)
+    if not latest:
         return out
-    hdr = [h.strip().lower() for h in data[0]]
-    idx = {name: i for i, name in enumerate(hdr)}
-    last = data[-1]
-    try:
-        ts = last[idx.get("time_tag", 0)]
-        bt = last[idx.get("bt", -1)]
-        bz = last[idx.get("bz_gsm", -1)]
-    except Exception:
-        return out
+    ts = latest.get("time_tag")
+    bt = latest.get("bt")
+    bz = latest.get("bz_gsm")
+    spacecraft = latest.get("source") or "SWPC active spacecraft"
     title = f"RTSW Mag: Bt={bt} nT, Bz={bz} nT"
     out.append({
         "source": source_id, "source_type": "api",
         "title": title,
         "url": normalize_url(url),
         "published_at": ts,
-        "summary_raw": f"NOAA DSCOVR real-time magnetic (1-day): Bt={bt} nT, Bz={bz} nT",
+        "summary_raw": f"NOAA {spacecraft} real-time magnetic field: Bt={bt} nT, Bz={bz} nT",
         "tags": list(tags) + [_year_tag(ts)] + (['evergreen'] if EVERGREEN_MODE else [])
     })
     return out

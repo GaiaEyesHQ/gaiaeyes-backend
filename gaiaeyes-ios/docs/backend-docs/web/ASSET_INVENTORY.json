@@ -221,7 +221,7 @@
         "notes": []
       },
       {
-        "url": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
+        "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
         "type": "json",
         "status": 200,
         "content_type": "application/json",
@@ -231,7 +231,7 @@
         "notes": []
       },
       {
-        "url": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+        "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json",
         "type": "json",
         "status": 200,
         "content_type": "application/json",
@@ -439,7 +439,7 @@
         ]
       },
       {
-        "url": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+        "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json",
         "type": "json",
         "status": 200,
         "content_type": "application/json",
@@ -449,7 +449,7 @@
         "notes": []
       },
       {
-        "url": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
+        "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
         "type": "json",
         "status": 200,
         "content_type": "application/json",
@@ -702,7 +702,7 @@
         "notes": []
       },
       {
-        "url": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+        "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json",
         "type": "json",
         "status": 200,
         "content_type": "application/json",
@@ -712,7 +712,7 @@
         "notes": []
       },
       {
-        "url": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
+        "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
         "type": "json",
         "status": 200,
         "content_type": "application/json",

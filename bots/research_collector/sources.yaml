@@ -35,12 +35,12 @@ api:
     tags: [earth, quake]
 
   - id: swpc-rtsw-plasma
-    url: https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json
+    url: https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json
     parser: swpc_rtsw_plasma1d
     tags: [swpc, rtsw, plasma]
 
   - id: swpc-rtsw-mag
-    url: https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json
+    url: https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json
     parser: swpc_rtsw_mag1d
     tags: [swpc, rtsw, mag]
 
@@ -75,12 +75,12 @@ api:
 
 api:
   - id: swpc-rtsw-plasma1d
-    url: https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json
+    url: https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json
     parser: swpc_rtsw_plasma1d
     tags: [space-weather, solar-wind, nowcast]
 
   - id: swpc-rtsw-mag1d
-    url: https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json
+    url: https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json
     parser: swpc_rtsw_mag1d
     tags: [space-weather, IMF, Bz, nowcast]
 
