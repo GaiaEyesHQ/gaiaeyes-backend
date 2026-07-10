@@ -2521,14 +2521,17 @@ private func mergedDashboardPayload(
     let fallbackSupporting = fallback.supportingDrivers ?? []
     let preferredCompact = preferred.driversCompact ?? []
     let fallbackCompact = fallback.driversCompact ?? []
+    let preferredIsServerSnapshot = preferred.freshness?.dashboard != nil
+        || preferred.cacheHit != nil
+        || preferred.stale != nil
 
-    let drivers = (preferredDrivers.count >= 3 || fallbackDrivers.count <= preferredDrivers.count)
+    let drivers = (preferredIsServerSnapshot || preferredDrivers.count >= 3 || fallbackDrivers.count <= preferredDrivers.count)
         ? preferred.drivers
         : fallback.drivers
-    let driversCompact = (preferredCompact.count >= 3 || fallbackCompact.count <= preferredCompact.count)
+    let driversCompact = (preferredIsServerSnapshot || preferredCompact.count >= 3 || fallbackCompact.count <= preferredCompact.count)
         ? preferred.driversCompact
         : fallback.driversCompact
-    let supportingDrivers = (preferredSupporting.count >= 2 || fallbackSupporting.count <= preferredSupporting.count)
+    let supportingDrivers = (preferredIsServerSnapshot || preferredSupporting.count >= 2 || fallbackSupporting.count <= preferredSupporting.count)
         ? preferred.supportingDrivers
         : fallback.supportingDrivers
 
@@ -2542,7 +2545,7 @@ private func mergedDashboardPayload(
         drivers: drivers,
         signalBar: preferred.signalBar ?? fallback.signalBar,
         driversCompact: driversCompact,
-        primaryDriver: preferred.primaryDriver ?? fallback.primaryDriver,
+        primaryDriver: preferredIsServerSnapshot ? preferred.primaryDriver : (preferred.primaryDriver ?? fallback.primaryDriver),
         supportingDrivers: supportingDrivers,
         patternRelevantGauges: preferred.patternRelevantGauges ?? fallback.patternRelevantGauges,
         activePatternRefs: preferred.activePatternRefs ?? fallback.activePatternRefs,
@@ -7097,10 +7100,10 @@ struct ContentView: View {
             }
             dashboardError = nil
             dashboardLastFetchAt = Date()
-            let out = DateFormatter()
-            out.dateStyle = .none
-            out.timeStyle = .short
-            dashboardLastUpdatedText = out.string(from: dashboardLastFetchAt)
+            dashboardLastUpdatedText = dashboardSnapshotUpdatedText(
+                resolvedPayload,
+                receivedAt: dashboardLastFetchAt
+            )
         }
         appLog("[UI] dashboard gauge fallback ok: \(sourceLabel) day=\(dashboardDay)")
         return true
@@ -7279,6 +7282,24 @@ struct ContentView: View {
         }
     }
 
+    private func dashboardSnapshotUpdatedText(
+        _ payload: DashboardPayload,
+        receivedAt: Date
+    ) -> String {
+        let freshness = payload.freshness?.dashboard
+        let servedAt: Date? = freshness?.servedAt.flatMap { raw in
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return fractional.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+        }
+        let cacheAge = max(0, freshness?.cacheAgeSeconds ?? payload.cacheAgeSeconds ?? 0)
+        let snapshotDate = (servedAt ?? receivedAt).addingTimeInterval(-cacheAge)
+        let out = DateFormatter()
+        out.dateStyle = .none
+        out.timeStyle = .short
+        return out.string(from: snapshotDate)
+    }
+
     private func fetchDashboardPayload(force: Bool = false) async {
         let shouldStart = await MainActor.run { () -> Bool in
             if dashboardFetchInFlight { return false }
@@ -7301,7 +7322,7 @@ struct ContentView: View {
 
         let api = state.apiWithAuth()
         let dashboardDay = chicagoTodayString()
-        let endpoint = "v1/dashboard?day=\(dashboardDay)"
+        let endpoint = "v1/dashboard?day=\(dashboardDay)\(force ? "&force=1" : "")"
         let startedAt = Date()
         let backoffs: [UInt64] = [500_000_000, 1_500_000_000]
         var lastError: Error?
@@ -7587,10 +7608,10 @@ struct ContentView: View {
                     }
                     dashboardError = nil
                     dashboardLastFetchAt = Date()
-                    let out = DateFormatter()
-                    out.dateStyle = .none
-                    out.timeStyle = .short
-                    dashboardLastUpdatedText = out.string(from: dashboardLastFetchAt)
+                    dashboardLastUpdatedText = dashboardSnapshotUpdatedText(
+                        resolvedPayload,
+                        receivedAt: dashboardLastFetchAt
+                    )
                 }
                 let shouldFollowUpStaleDashboard =
                     !force &&
