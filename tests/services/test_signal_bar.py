@@ -34,6 +34,8 @@ class SignalBarTests(unittest.TestCase):
         self.assertEqual(items["solar_wind"]["value"], "464 km/s")
         self.assertEqual(items["solar_wind"]["numeric_value"], 464.0)
         self.assertEqual(items["solar_wind"]["state"], "quiet")
+        self.assertEqual(payload["space"]["kp_now"], 3.7)
+        self.assertEqual(payload["space"]["sw_speed_now_kms"], 464.0)
 
     def test_build_signal_bar_maps_live_states_to_core_pills(self) -> None:
         local_payload = {
@@ -62,7 +64,10 @@ class SignalBarTests(unittest.TestCase):
             "_fetch_space_snapshot",
             return_value={
                 "kp_now": 6.2,
+                "kp_max": 6.7,
+                "bz_now": -4.8,
                 "sw_speed_now_kms": 689.0,
+                "sw_density_now_cm3": 7.3,
                 "updated_at": datetime(2026, 3, 26, 11, 55, tzinfo=timezone.utc),
             },
         ), patch.object(signal_bar, "_fetch_schumann_snapshot", return_value=None):
@@ -84,6 +89,17 @@ class SignalBarTests(unittest.TestCase):
         self.assertEqual(items["pressure"]["state"], "watch")
         self.assertEqual(items["pressure"]["value"], "1009 ↓")
         self.assertEqual(items["pressure"]["detail_target"], "local_conditions")
+        self.assertEqual(
+            payload["space"],
+            {
+                "kp_now": 6.2,
+                "kp_max_24h": 6.7,
+                "bz_now": -4.8,
+                "sw_speed_now_kms": 689.0,
+                "sw_density_now_cm3": 7.3,
+                "updated_at": "2026-03-26T11:55:00+00:00",
+            },
+        )
 
     def test_build_signal_bar_keeps_quiet_defaults_when_no_trigger_is_active(self) -> None:
         local_payload = {

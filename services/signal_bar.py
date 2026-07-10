@@ -313,5 +313,13 @@ def build_signal_bar(
 
     return {
         "updated_at": space_updated_at or pressure_updated_at or schumann_updated_at,
+        "space": {
+            "kp_now": kp_value,
+            "kp_max_24h": kp_max,
+            "bz_now": _safe_float(space.get("bz_now")),
+            "sw_speed_now_kms": sw_value,
+            "sw_density_now_cm3": _safe_float(space.get("sw_density_now_cm3")),
+            "updated_at": space_updated_at,
+        },
         "items": items,
     }

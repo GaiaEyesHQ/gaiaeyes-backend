@@ -70,11 +70,13 @@ struct AllDriversView: View {
     var hasPlusAccess: Bool = true
     var initialFocusKey: String? = nil
     var signalBar: [SignalPill] = []
+    var liveSpace: SignalBarSpaceSnapshot? = nil
     var onOpenCurrentSymptoms: (() -> Void)? = nil
     var onLogSymptoms: (() -> Void)? = nil
     var onOpenPatterns: (() -> Void)? = nil
     var onOpenOutlook: (() -> Void)? = nil
     var onOpenSetup: (() -> Void)? = nil
+    var onRefreshCurrentSpace: ((Bool) async -> Void)? = nil
 
     @AppStorage("all_drivers_cache_json") private var allDriversCacheJSON: String = ""
     @Environment(\.dismiss) private var dismiss
@@ -171,6 +173,15 @@ struct AllDriversView: View {
     }
 
     private func localizedReading(for driver: DriverDetailItem) -> String? {
+        if driver.key == "kp", liveSpace != nil {
+            return liveSpace?.kpNow.map { String(format: "%.1f", $0) } ?? "—"
+        }
+        if driver.key == "solar_wind", liveSpace != nil {
+            return liveSpace?.swSpeedNowKms.map { String(format: "%.0f km/s", $0) } ?? "—"
+        }
+        if (driver.key == "bz" || driver.key.contains("bz")), liveSpace != nil {
+            return liveSpace?.bzNow.map { String(format: "%.1f nT", $0) } ?? "—"
+        }
         if ["kp", "solar_wind"].contains(driver.key),
            let signal = currentSignal(for: driver),
            signal.value != "—" {
@@ -869,12 +880,16 @@ struct AllDriversView: View {
                             trackOpened(with: snapshot)
                         }
                     }
+                    async let currentSpaceRefresh: Void = onRefreshCurrentSpace?(false) ?? ()
                     if snapshot == nil || shouldRefreshOnAppear {
                         await load()
                     }
+                    _ = await currentSpaceRefresh
                 }
                 .refreshable {
-                    await load(force: true)
+                    async let currentSpaceRefresh: Void = onRefreshCurrentSpace?(true) ?? ()
+                    async let driversRefresh: Void = load(force: true)
+                    _ = await (currentSpaceRefresh, driversRefresh)
                 }
                 .onChange(of: selectedFilter, initial: false) { _, newValue in
                     staleFocusMessage = nil

@@ -91,8 +91,18 @@ struct SignalPill: Identifiable, Codable, Hashable {
     ]
 }
 
+struct SignalBarSpaceSnapshot: Codable, Hashable {
+    let kpNow: Double?
+    let kpMax24H: Double?
+    let bzNow: Double?
+    let swSpeedNowKms: Double?
+    let swDensityNowCm3: Double?
+    let updatedAt: String?
+}
+
 struct SignalBarSnapshot: Codable, Hashable {
     let updatedAt: String?
+    let space: SignalBarSpaceSnapshot?
     let items: [SignalPill]
 }
 

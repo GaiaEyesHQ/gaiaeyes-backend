@@ -4210,6 +4210,8 @@ struct ContentView: View {
     }
 
     private func signalBarDisplayValue(for item: SignalPill, key: String) -> String {
+        let snapshotValue = item.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasSnapshotValue = !snapshotValue.isEmpty && snapshotValue != "—"
         switch key {
         case "pressure":
             if let liveValue = pressureSignalBarValue(from: localHealth?.weather) {
@@ -4218,9 +4220,9 @@ struct ContentView: View {
             let cached = signalBarPressureValueCache.trimmingCharacters(in: .whitespacesAndNewlines)
             return cached.isEmpty ? item.value : cached
         case "kp":
-            return signalBarKPValue() ?? item.value
+            return hasSnapshotValue ? snapshotValue : (signalBarKPValue() ?? item.value)
         case "solar_wind", "sw":
-            return signalBarSolarWindValue() ?? item.value
+            return hasSnapshotValue ? snapshotValue : (signalBarSolarWindValue() ?? item.value)
         default:
             return item.value
         }
@@ -4257,7 +4259,8 @@ struct ContentView: View {
             current: features ?? lastKnownFeatures,
             outlook: resolvedSpaceOutlookPayload,
             series: resolvedSeriesPayload,
-            magnetosphere: magnetosphere
+            magnetosphere: magnetosphere,
+            liveSpace: dashboardPayload?.signalBar?.space
         )
     }
 
@@ -5833,10 +5836,11 @@ struct ContentView: View {
             localHealth?.allergens?.primaryLabel ?? localHealth?.allergens?.overallLabel.map { "Allergens \($0)" }
         ].compactMap { $0 }
 
+        let liveSpace = dashboardPayload?.signalBar?.space
         let spaceValues = [
-            (spaceOutlook?.kp?.now ?? selected?.kpCurrent?.value).map { String(format: "Kp %.1f", $0) },
-            (spaceOutlook?.swSpeedNowKms ?? selected?.swSpeedAvg?.value).map { String(format: "SW %.0f km/s", $0) },
-            (spaceOutlook?.bzNow ?? selected?.bzMin?.value).map { String(format: "Bz %.1f nT", $0) },
+            (liveSpace?.kpNow ?? spaceOutlook?.kp?.now ?? selected?.kpCurrent?.value).map { String(format: "Kp %.1f", $0) },
+            (liveSpace?.swSpeedNowKms ?? spaceOutlook?.swSpeedNowKms ?? selected?.swSpeedAvg?.value).map { String(format: "SW %.0f km/s", $0) },
+            (liveSpace?.bzNow ?? spaceOutlook?.bzNow ?? selected?.bzMin?.value).map { String(format: "Bz %.1f nT", $0) },
         ].compactMap { $0 }
 
         var sourceNotes: [String] = []
@@ -10020,7 +10024,8 @@ struct ContentView: View {
 
         async let outlookTask: Void = fetchSpaceOutlook(days: 7, force: force)
         async let magnetosphereTask: Void = fetchMagnetosphere(force: force)
-        _ = await (outlookTask, magnetosphereTask)
+        async let dashboardTask: Void = fetchDashboardPayload(force: force)
+        _ = await (outlookTask, magnetosphereTask, dashboardTask)
     }
 
     private enum SymptomLogAttemptStatus {
@@ -13922,7 +13927,13 @@ struct ContentView: View {
             return available.first?.1
         }
 
-        init(current: FeaturesToday?, outlook: SpaceForecastOutlook?, series: SpaceSeries?, magnetosphere: MagnetosphereData? = nil) {
+        init(
+            current: FeaturesToday?,
+            outlook: SpaceForecastOutlook?,
+            series: SpaceSeries?,
+            magnetosphere: MagnetosphereData? = nil,
+            liveSpace: SignalBarSpaceSnapshot? = nil
+        ) {
             let points = series?.spaceWeather ?? []
             let dated = points.compactMap { point -> (Date, SpacePoint)? in
                 guard let d = Self.parseISO(point.ts) else { return nil }
@@ -13941,35 +13952,40 @@ struct ContentView: View {
             let outlookIssuedTs = Self.parseISO(outlook?.issuedAt)
             let featuresTs = Self.parseISO(current?.updatedAt)
 
-            kpNow = Self.latestValue([
+            let fallbackKpNow = Self.latestValue([
                 (magnetosphereTs, magnetosphere?.kpis?.kp),
                 (outlookKpTs, outlook?.kp?.now),
                 (latestPointDate, latestPoint?.kp),
                 (featuresTs, current?.kpCurrent?.value)
             ])
-            kpMax = outlook?.kp?.last24hMax
+            kpNow = liveSpace != nil ? liveSpace?.kpNow : fallbackKpNow
+            let fallbackKpMax = outlook?.kp?.last24hMax
                 ?? last24.compactMap { $0.kp }.max()
                 ?? magnetosphere?.kpis?.kp
                 ?? current?.kpMax?.value
-            bzNow = Self.latestValue([
+            kpMax = liveSpace != nil ? liveSpace?.kpMax24H : fallbackKpMax
+            let fallbackBzNow = Self.latestValue([
                 (magnetosphereTs, magnetosphere?.sw?.bzNt),
                 (latestPointDate, latestPoint?.bz),
                 (outlookIssuedTs, outlook?.bzNow)
             ])
-            swSpeedNow = Self.latestValue([
+            bzNow = liveSpace != nil ? liveSpace?.bzNow : fallbackBzNow
+            let fallbackSwSpeedNow = Self.latestValue([
                 (magnetosphereTs, magnetosphere?.sw?.vKms),
                 (latestPointDate, latestPoint?.sw),
                 (outlookIssuedTs, outlook?.swSpeedNowKms),
                 (featuresTs, current?.swSpeedAvg?.value)
             ])
+            swSpeedNow = liveSpace != nil ? liveSpace?.swSpeedNowKms : fallbackSwSpeedNow
             swSpeedMax = last24.compactMap { $0.sw }.max()
                 ?? swSpeedNow
                 ?? magnetosphere?.sw?.vKms
                 ?? current?.swSpeedAvg?.value
-            swDensityNow = Self.latestValue([
+            let fallbackSwDensityNow = Self.latestValue([
                 (magnetosphereTs, magnetosphere?.sw?.nCm3),
                 (outlookIssuedTs, outlook?.swDensityNowCm3)
             ])
+            swDensityNow = liveSpace != nil ? liveSpace?.swDensityNowCm3 : fallbackSwDensityNow
             sScale = outlook?.data?.sep?.sScale
                 ?? sepScaleIndex.map { "S\(Int($0.rounded()))" }
                 ?? Self.sScale(for: sepFlux)
@@ -14180,6 +14196,8 @@ struct ContentView: View {
 
     private struct InsightsHubView: View {
         let current: FeaturesToday?
+        let liveSpace: SignalBarSpaceSnapshot?
+        let liveSpaceUpdatedText: String?
         let outlook: SpaceForecastOutlook?
         let userOutlook: UserForecastOutlook?
         let tempUnit: TemperatureUnit
@@ -14497,7 +14515,13 @@ struct ContentView: View {
         }
 
         private var spaceWeatherCard: some View {
-            let metrics = SpaceWeatherCardMetrics(current: current, outlook: outlook, series: nil, magnetosphere: magnetosphere)
+            let metrics = SpaceWeatherCardMetrics(
+                current: current,
+                outlook: outlook,
+                series: nil,
+                magnetosphere: magnetosphere,
+                liveSpace: liveSpace
+            )
             let kpNow = metrics.kpNow
             let swSpeed = metrics.swSpeedNow
             let geomagneticContext = current?.effectiveGeomagneticContext
@@ -14526,7 +14550,7 @@ struct ContentView: View {
                 context: geomagneticContext,
                 resolvedState: geomagneticState,
                 liveOverride: liveOverride,
-                updatedText: updatedText
+                updatedText: liveSpaceUpdatedText ?? updatedText
             )
             let geomagneticTint = GaugePalette.zoneColor(SpaceWeatherPresentation.toneKey(for: geomagneticState))
 
@@ -16857,6 +16881,7 @@ struct ContentView: View {
 
     private struct InsightsSpaceWeatherView: View {
         let current: FeaturesToday?
+        let liveSpace: SignalBarSpaceSnapshot?
         let updatedText: String?
         let usingYesterdayFallback: Bool
         let forecast: ForecastSummary?
@@ -16880,7 +16905,13 @@ struct ContentView: View {
         }
 
         private var metrics: SpaceWeatherCardMetrics {
-            SpaceWeatherCardMetrics(current: current, outlook: outlook, series: nil, magnetosphere: magnetosphere)
+            SpaceWeatherCardMetrics(
+                current: current,
+                outlook: outlook,
+                series: nil,
+                magnetosphere: magnetosphere,
+                liveSpace: liveSpace
+            )
         }
 
         private var needsInitialRefresh: Bool {
@@ -20023,6 +20054,8 @@ struct ContentView: View {
         return NavigationStack(path: $explorePath) {
             InsightsHubView(
                 current: selection.current,
+                liveSpace: dashboardPayload?.signalBar?.space,
+                liveSpaceUpdatedText: dashboardPayload?.signalBar?.space?.updatedAt.flatMap { formatUpdated($0) },
                 outlook: resolvedSpaceOutlookPayload,
                 userOutlook: resolvedUserOutlookPayload,
                 tempUnit: experienceProfile.tempUnit,
@@ -20129,7 +20162,8 @@ struct ContentView: View {
         case .spaceWeather:
             InsightsSpaceWeatherView(
                 current: selection.current,
-                updatedText: selection.updatedText,
+                liveSpace: dashboardPayload?.signalBar?.space,
+                updatedText: dashboardPayload?.signalBar?.space?.updatedAt.flatMap { formatUpdated($0) } ?? selection.updatedText,
                 usingYesterdayFallback: selection.usingYesterdayFallback,
                 forecast: forecast,
                 outlook: resolvedSpaceOutlookPayload,
@@ -20278,11 +20312,15 @@ struct ContentView: View {
                 hasPlusAccess: hasPlusAccess,
                 initialFocusKey: allDriversFocusKey,
                 signalBar: persistentSignalBarItems,
+                liveSpace: dashboardPayload?.signalBar?.space,
                 onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
                 onLogSymptoms: { openSymptomLogFromAllDrivers() },
                 onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
                 onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
-                onOpenSetup: { openSettingsFromAllDrivers() }
+                onOpenSetup: { openSettingsFromAllDrivers() },
+                onRefreshCurrentSpace: { force in
+                    await fetchDashboardPayload(force: force)
+                }
             )
         }
     }
@@ -21503,6 +21541,8 @@ struct ContentView: View {
             NavigationStack(path: $missionInsightsPath) {
                 InsightsHubView(
                     current: current,
+                    liveSpace: dashboardPayload?.signalBar?.space,
+                    liveSpaceUpdatedText: dashboardPayload?.signalBar?.space?.updatedAt.flatMap { formatUpdated($0) },
                     outlook: resolvedOutlook,
                     userOutlook: resolvedUserOutlook,
                     tempUnit: experienceProfile.tempUnit,
@@ -21582,7 +21622,8 @@ struct ContentView: View {
                     case .spaceWeather:
                         InsightsSpaceWeatherView(
                             current: current,
-                            updatedText: updatedText,
+                            liveSpace: dashboardPayload?.signalBar?.space,
+                            updatedText: dashboardPayload?.signalBar?.space?.updatedAt.flatMap { formatUpdated($0) } ?? updatedText,
                             usingYesterdayFallback: usingYesterdayFallback,
                             forecast: forecast,
                             outlook: resolvedOutlook,
@@ -21725,11 +21766,15 @@ struct ContentView: View {
                             hasPlusAccess: hasPlusAccess,
                             initialFocusKey: allDriversFocusKey,
                             signalBar: persistentSignalBarItems,
+                            liveSpace: dashboardPayload?.signalBar?.space,
                             onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
                             onLogSymptoms: { openSymptomLogFromAllDrivers() },
                             onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
                             onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
-                            onOpenSetup: { openSettingsFromAllDrivers() }
+                            onOpenSetup: { openSettingsFromAllDrivers() },
+                            onRefreshCurrentSpace: { force in
+                                await fetchDashboardPayload(force: force)
+                            }
                         )
                     }
                 }

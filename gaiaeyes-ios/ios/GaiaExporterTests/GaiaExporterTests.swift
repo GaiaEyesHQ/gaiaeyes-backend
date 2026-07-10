@@ -422,6 +422,65 @@ struct SymptomEnvelopeTests {
     }
 }
 
+struct SignalBarSnapshotTests {
+
+    @Test
+    func decodesLegacySnapshotWithoutSpaceBlock() throws {
+        let payload = """
+        {
+            "updated_at": "2026-07-10T16:42:00Z",
+            "items": []
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let snapshot = try decoder.decode(SignalBarSnapshot.self, from: payload)
+
+        #expect(snapshot.space == nil)
+        #expect(snapshot.items.isEmpty)
+    }
+
+    @Test
+    func decodesAtomicCurrentSpaceSnapshot() throws {
+        let payload = """
+        {
+            "updated_at": "2026-07-10T16:42:00Z",
+            "space": {
+                "kp_now": 1.0,
+                "kp_max_24h": 3.7,
+                "bz_now": null,
+                "sw_speed_now_kms": 602.4,
+                "sw_density_now_cm3": 7.3,
+                "updated_at": "2026-07-10T16:42:00Z"
+            },
+            "items": [
+                {
+                    "key": "solar_wind",
+                    "label": "SW",
+                    "value": "602 km/s",
+                    "state": "elevated",
+                    "driver_key": "solar_wind",
+                    "detail_target": "driver",
+                    "updated_at": "2026-07-10T16:42:00Z"
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let snapshot = try decoder.decode(SignalBarSnapshot.self, from: payload)
+
+        #expect(snapshot.space?.kpNow == 1.0)
+        #expect(snapshot.space?.kpMax24H == 3.7)
+        #expect(snapshot.space?.bzNow == nil)
+        #expect(snapshot.space?.swSpeedNowKms == 602.4)
+        #expect(snapshot.space?.swDensityNowCm3 == 7.3)
+        #expect(snapshot.items.first?.value == "602 km/s")
+    }
+}
+
 struct ShareEngineTests {
 
     @Test
