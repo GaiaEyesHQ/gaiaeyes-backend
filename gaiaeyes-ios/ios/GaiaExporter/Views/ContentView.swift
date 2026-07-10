@@ -8620,10 +8620,10 @@ struct ContentView: View {
             "air_quality_sensitive": OnboardingTagOption(id: "air_quality_sensitive", title: "Air Quality Sensitive", subtitle: "Air irritation can affect energy or focus."),
             "temperature_sensitive": OnboardingTagOption(id: "temperature_sensitive", title: "Temperature Sensitive", subtitle: "Rapid temperature changes can throw you off."),
             "allergies_sinus": OnboardingTagOption(id: "allergies_sinus", title: "Allergies / Sinus", subtitle: "Air and seasonal triggers affect you."),
-            "migraine_history": OnboardingTagOption(id: "migraine_history", title: "Migraine History", subtitle: "Head-pressure or migraine patterns matter here."),
+            "migraine_history": OnboardingTagOption(id: "migraine_history", title: "Migraine patterns", subtitle: "Migraine days can have different patterns than everyday headaches."),
             "chronic_pain": OnboardingTagOption(id: "chronic_pain", title: "Chronic Pain", subtitle: "Pain flare patterns matter here."),
             "fibromyalgia": OnboardingTagOption(id: "fibromyalgia", title: "Fibromyalgia", subtitle: "Pain and fatigue flares matter here."),
-            "nervous_system_dysregulation": OnboardingTagOption(id: "nervous_system_dysregulation", title: "Nervous System Dysregulation", subtitle: "Overload and regulation shifts matter here."),
+            "nervous_system_dysregulation": OnboardingTagOption(id: "nervous_system_dysregulation", title: "Nervous-system sensitivity", subtitle: "Overload, stress, or regulation shifts matter here."),
             "pots_dysautonomia": OnboardingTagOption(id: "pots_dysautonomia", title: "POTS / Dysautonomia", subtitle: "Circulation and autonomic changes matter here."),
             "insomnia_sleep_disruption": OnboardingTagOption(id: "insomnia_sleep_disruption", title: "Insomnia / Sleep Disruption", subtitle: "Sleep instability matters here."),
         ]
@@ -8717,7 +8717,7 @@ struct ContentView: View {
             OnboardingActivationDriver(
                 id: "personalization",
                 title: "Personalization is building",
-                detail: "Your sensitivities and context already shape what Gaia ranks higher for you."
+                detail: "Your sensitivities and context already help Gaia Eyes decide what to show first."
             ),
             OnboardingActivationDriver(
                 id: "next_action",
@@ -8727,7 +8727,7 @@ struct ContentView: View {
         ]
         let headline: String
         if let topDriver = liveDrivers.first?.title, !topDriver.isEmpty {
-            headline = "\(topDriver) is one of the clearest live signals right now."
+            headline = "\(topDriver) is one of the strongest things to watch right now."
         } else if let summary = vocabulary.translating(guideEarthscopeSummary), !summary.isEmpty {
             headline = summary
         } else {
@@ -8735,13 +8735,13 @@ struct ContentView: View {
         }
         let explanation: String
         if let syncStamp = experienceProfile.lastBackfillAt, !syncStamp.isEmpty {
-            explanation = "Gaia already has recent Health data layered into your live view. Personal patterns will sharpen as you log how you feel."
+            explanation = "Gaia Eyes already has recent Apple Health data in your live view. Personal patterns will sharpen as you log how you feel."
         } else {
-            explanation = "Gaia can already surface the strongest live conditions shaping today. Personal patterns will build as you log symptoms and add more history."
+            explanation = "Gaia Eyes can already show the strongest conditions around today. Personal patterns will build as you log symptoms and add more history."
         }
         let footer: String?
         if notificationPreferences.enabled {
-            footer = "Alerts are ready to follow the same signal families you chose here. Log how you feel in \(vocabulary.missionControlLabel) to start building personal patterns."
+            footer = "Alerts are ready for the areas you chose here. Log how you feel in \(vocabulary.missionControlLabel) to start building personal patterns."
         } else {
             footer = "Log how you feel in \(vocabulary.missionControlLabel) to start building personal patterns. You can adjust alerts and imports later in Settings."
         }
@@ -20573,7 +20573,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Prioritize lunar overlays")
                     .font(.subheadline.weight(.semibold))
-                Text("Keeps lunar markers and pattern summaries more prominent. Observational only.")
+                Text("Keeps moon phase markers and pattern summaries more prominent. Pattern tracking only.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -20683,7 +20683,7 @@ struct ContentView: View {
                         if backfillInFlight {
                             ProgressView().scaleEffect(0.8)
                         }
-                        Text(backfillInFlight ? "Syncing..." : "Sync Last 30 Days")
+                        Text(backfillInFlight ? "Syncing..." : "Import Last 30 Days")
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -20948,7 +20948,7 @@ struct ContentView: View {
                                         }
                                         if !healthTags.isEmpty {
                                             Divider()
-                                            Text("Optional health context")
+                                            Text("Your health context")
                                                 .font(.subheadline.weight(.semibold))
                                             ForEach(healthTags) { item in
                                                 let canonicalKey = canonicalProfileTagKey(item.tagKey)
@@ -21027,9 +21027,9 @@ struct ContentView: View {
                                     }
 
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("Signal Alerts")
+                                        Text("Earth + Space Alerts")
                                             .font(.subheadline.weight(.semibold))
-                                        Toggle("Signal alerts", isOn: $notificationPreferences.signalAlertsEnabled)
+                                        Toggle("Earth + space alerts", isOn: $notificationPreferences.signalAlertsEnabled)
                                         if notificationPreferences.signalAlertsEnabled {
                                             Toggle("Geomagnetic / Kp", isOn: $notificationPreferences.families.geomagnetic)
                                             Toggle("Solar wind / Bz coupling", isOn: $notificationPreferences.families.solarWind)
@@ -21068,9 +21068,9 @@ struct ContentView: View {
                                     Divider()
 
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("Symptom Follow-up Prompts")
+                                        Text("Follow-up Check-ins")
                                             .font(.subheadline.weight(.semibold))
-                                        Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
+                                        Toggle("Follow-up check-ins", isOn: $notificationPreferences.symptomFollowupsEnabled)
                                         Text(symptomFollowUpSettingsSummaryLine)
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
@@ -22743,7 +22743,7 @@ struct ContentView: View {
 
                 Button {
                     Task { await state.syncHealthBackfillLast30Days() }
-                } label: { Text("Sync Last 30 Days").frame(maxWidth: .infinity) }
+                } label: { Text("Import Last 30 Days").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .padding(.horizontal)

@@ -142,6 +142,11 @@ def test_clean_llm_title_rejects_generic_or_recent_fallback_labels():
     assert _clean_llm_title("Quiet Skies", set()) is None
     assert _clean_llm_title("Magnetic Calm", set()) is None
     assert _clean_llm_title("Geomagnetic Storm Watch", set()) is None
+    assert _clean_llm_title("High-Speed Solar Wind", set()) is None
+    assert _clean_llm_title("Track The Overlap", set()) is None
+    assert _clean_llm_title("Mood Sleep Pressure Check", set()) is None
+    assert _clean_llm_title("Wearable Trends Need Context", set()) is None
+    assert _clean_llm_title("Check The Body Pattern", set()) is None
     assert _clean_llm_title("Brain Tabs Closing", {"brain tabs closing"}) is None
 
 
@@ -179,8 +184,33 @@ def test_fallback_social_title_uses_symptom_pattern_language():
 
     assert any(
         term in title.lower()
-        for term in ("pain", "body", "recovery", "migraine", "sleep")
+        for term in ("pain", "body", "energy", "migraine", "sleep")
     )
+
+
+def test_fallback_social_title_uses_emotional_hooks_not_dashboard_labels():
+    blocked = {
+        "track the overlap",
+        "mood sleep pressure check",
+        "wearable trends need context",
+        "check the body pattern",
+    }
+
+    for tone_ctx in (
+        {"day": "2026-07-10", "platform": "default", "kp_max_24h": 2.0},
+        {"day": "2026-07-11", "platform": "default", "kp_max_24h": 3.8},
+        {"day": "2026-07-12", "platform": "default", "kp_max_24h": 5.8},
+        {"day": "2026-07-13", "platform": "default"},
+    ):
+        title = _fallback_social_title(tone_ctx, "Track The Overlap", blocked)
+        lowered = title.lower()
+
+        assert lowered not in blocked
+        assert _clean_llm_title(title, blocked) == title
+        assert any(
+            marker in lowered
+            for marker in ("?", "body", "sleep", "energy", "pain", "brain fog", "mood")
+        )
 
 
 def test_caption_context_lead_stays_symptom_based_for_calm_days():

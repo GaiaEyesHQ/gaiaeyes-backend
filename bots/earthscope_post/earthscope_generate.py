@@ -739,15 +739,21 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
     recent_lower = {str(item or "").strip().lower() for item in (recent_titles or set()) if str(item or "").strip()}
     generic = {
         "active geomagnetics",
+        "check the body pattern",
         "clear runway",
         "daily earthscope",
         "earthscope",
         "geomagnetic storm watch",
+        "high-speed solar wind",
         "magnetic calm",
+        "mood sleep pressure check",
         "quiet skies",
         "space weather update",
         "steady field",
         "today's earthscope",
+        "track the body pattern",
+        "track the overlap",
+        "wearable trends need context",
         "your earthscope",
     }
     if lowered in generic:
@@ -779,32 +785,32 @@ def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_title
     tone = _tone_from_ctx(ctx)
     pools = {
         "calm": [
-            "Body Feels Quieter",
-            "Sleep Gets Softer Signals",
-            "Lower Noise Body Day",
-            "Nervous System Breathing Room",
-            "Body Signals Look Clearer",
+            "Can Your Body Exhale Today?",
+            "Sleep May Finally Unclench",
+            "Less Static In Your Body",
+            "Your Body Gets Breathing Room",
+            "Could Today Feel Easier?",
         ],
         "unsettled": [
-            "Head Pressure Watch",
-            "Restlessness Has More Static",
-            "Sensitive Systems Take Note",
-            "A Choppier Body Day",
-            "Brain Fog Comes In Waves",
+            "Feeling Wired And Worn Out?",
+            "Is Your Body Running Loud?",
+            "Brain Fog On A Loop?",
+            "Restless For No Clear Reason?",
+            "Head Pressure Asking For Space?",
         ],
         "stormy": [
-            "Pain Sensitivity Needs Slack",
-            "Body Signals May Run Loud",
-            "Protect Your Energy",
-            "Migraine Margins Matter Today",
-            "Sleep Needs Backup Support",
+            "Pain Feeling Extra Loud?",
+            "Give Your Body More Slack",
+            "Energy Feeling Hard To Hold?",
+            "Migraine Pain Needs More Margin?",
+            "Sleep Needs Backup Tonight",
         ],
         "neutral": [
-            "Check The Body Pattern",
-            "Small Symptoms Worth Watching",
-            "Wearable Trends Need Context",
-            "Track The Overlap",
-            "Mood Sleep Pressure Check",
+            "Feeling Off For No Reason?",
+            "Tiny Symptoms Still Count",
+            "Is Your Body Whispering Today?",
+            "Mood Feeling Hard To Place?",
+            "Energy Jumpy But Tired?",
         ],
     }
     options = pools.get(tone, pools["neutral"])
@@ -843,11 +849,12 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
     sys = (
         "You write Gaia Eyes daily social hook titles for people noticing sleep trouble, pain, mood shifts, headaches, brain fog, restlessness, focus shifts, and low energy. "
         "Write one fresh, human, emotionally relatable 2–7 word title that matches the day’s actual caption. "
-        "It should feel like the top line of a social post, not a report label. "
+        "It should feel like the top line of a social post, not a report label, dashboard label, category name, or instruction. "
         "Vary the doorway: sometimes sleep, focus, mood, pain, headaches, brain fog, restlessness, low energy, or pacing. "
         "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
-        "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update. "
+        "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern. "
+        "Good shapes: 'Feeling Wired And Worn Out?', 'Brain Fog On A Loop?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
     )

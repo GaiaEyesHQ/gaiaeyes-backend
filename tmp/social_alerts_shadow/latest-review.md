@@ -2,7 +2,7 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-09T08:24:31Z`
+- Generated at: `2026-07-10T00:01:09Z`
 - Draft count: `1`
 
 ## 1. Nerves on overdrive?
@@ -23,7 +23,7 @@ Researchers have studied solar and geomagnetic activity alongside HRV, nervous-s
 
 If sleep, HRV, pain, mood, energy, symptoms, exposures, or health conditions feel unusual, log it. One day is a note. Repeated overlaps become a pattern.
 
-Decode the unseen in Gaia Eyes. Track what you feel and see whether your recovery patterns line up over time.
+Use Gaia Eyes as a recovery log: note what you feel, any wearable shifts, and the signal window, then compare what repeats over time.
 
 Open Gaia Eyes: compare this solar signal with your recovery patterns. https://GaiaEyes.com/app
 

@@ -136,7 +136,7 @@ def test_space_alerts_keep_health_pattern_context() -> None:
     assert "Researchers have studied solar and geomagnetic activity alongside HRV" in cme_caption
     assert "The science is still developing, but the question is exactly why Gaia Eyes exists" in cme_caption
     assert "One day is a note. Repeated overlaps become a pattern." in cme_caption
-    assert "Decode the unseen in Gaia Eyes." in cme_caption
+    assert "Use Gaia Eyes as a recovery log:" in cme_caption
     assert "health conditions feel unusual" in cme_caption
     assert "Gaia Eyes is a pattern recognition app and is not giving medical advice." in cme_caption
     assert "alongside the CME signal" not in cme_caption
@@ -165,6 +165,7 @@ def test_schumann_caption_includes_brief_public_explainer_and_app_cta() -> None:
     assert "Schumann resonance is part of Earth's natural electromagnetic background." in schumann["caption"]
     assert "HeartMath and other researchers have studied Schumann resonance" in schumann["caption"]
     assert "The science is still developing, but the question is exactly why Gaia Eyes exists" in schumann["caption"]
+    assert "Use Gaia Eyes as a body-pattern log:" in schumann["caption"]
     assert "health conditions" in schumann["caption"]
     assert "Gaia Eyes is a pattern recognition app and is not giving medical advice." in schumann["caption"]
     assert CTA_BY_CATEGORY["schumann"] in schumann["caption"]

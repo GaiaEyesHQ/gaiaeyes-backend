@@ -75,9 +75,9 @@ private struct OnboardingFlowCopy {
         case .scientific:
             return OnboardingFlowCopy(
                 headerSubtitle: tone.resolveCopy(
-                    straight: "Gaia Eyes is learning your language.",
-                    balanced: "Gaia Eyes is learning how to speak to you.",
-                    humorous: "Gaia Eyes is learning your settings before it starts trying to be helpful."
+                    straight: "Gaia Eyes is learning what matters to your body.",
+                    balanced: "Gaia Eyes is learning what matters to your body and your day.",
+                    humorous: "Gaia Eyes is learning your patterns before it starts trying to be helpful."
                 ),
                 welcomeTitle: "Understand how the world around you may connect to how you feel.",
                 welcomeSubtitle: tone.resolveCopy(
@@ -86,17 +86,17 @@ private struct OnboardingFlowCopy {
                     humorous: "We’ll set up just enough to make your first session useful without turning setup into a side quest."
                 ),
                 modeTitle: "How do you want to experience Gaia Eyes?",
-                modeSubtitle: "The underlying signal model stays the same. Only the presentation changes.",
+                modeSubtitle: "Choose the style you prefer. The same data stays underneath.",
                 guideTitle: "Choose your guide",
-                guideSubtitle: "A little personality, without changing the truth layer.",
+                guideSubtitle: "Pick the guide style that makes daily check-ins feel easier.",
                 toneTitle: "How should Gaia Eyes speak to you?",
-                toneSubtitle: "Tone changes the presentation, not the underlying truth.",
+                toneSubtitle: "Tone changes the wording, not the data.",
                 temperatureTitle: "How do you prefer temperature?",
-                temperatureSubtitle: "Gaia keeps weather data internally in Celsius and converts it only for display.",
+                temperatureSubtitle: "Choose the units you want to see. Gaia Eyes converts weather data for display.",
                 sensitivitiesTitle: "What tends to affect you most?",
                 sensitivitiesSubtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
-                healthContextTitle: "Optional health context",
-                healthContextSubtitle: "Self-reported context only. This helps Gaia weigh patterns more personally without making diagnoses.",
+                healthContextTitle: "Your health context",
+                healthContextSubtitle: "Self-reported context only. This helps Gaia Eyes personalize pattern tracking without making diagnoses.",
                 locationTitle: "Where should Gaia Eyes track local conditions?",
                 locationSubtitle: "Choose live GPS or a ZIP code. This powers local weather, pressure, air quality, and temperature context.",
                 useGPSOptionTitle: "Use GPS",
@@ -107,13 +107,13 @@ private struct OnboardingFlowCopy {
                 healthDataTitle: "Connect your health data",
                 healthDataSubtitle: "Optional, but useful for sleep, heart rate, recovery trends, and faster pattern detection.",
                 healthDataHint: tone.resolveCopy(
-                    straight: "Choose what Gaia can read. Leave anything sensitive unchecked.",
-                    balanced: "Choose what Gaia can read. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
-                    humorous: "Choose what Gaia can read. You can leave anything sensitive unchecked and keep the useful stuff."
+                    straight: "Choose what Gaia Eyes can import. Leave anything sensitive unchecked.",
+                    balanced: "Choose what Gaia Eyes can import. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
+                    humorous: "Choose what Gaia Eyes can import. You can leave anything sensitive unchecked and keep the useful stuff."
                 ),
                 healthEmptySelectionBody: "Nothing is selected. Tap Not Now, or check at least one metric to request Health access.",
-                backfillTitle: "Sync your last 30 days",
-                backfillSubtitle: "Import recent data so Gaia Eyes can recognize patterns sooner.",
+                backfillTitle: "Import your last 30 days",
+                backfillSubtitle: "Bring in recent Apple Health history so Gaia Eyes can start spotting patterns sooner.",
                 notificationsTitle: "Would you like helpful alerts?",
                 notificationsSubtitle: tone.resolveCopy(
                     straight: "Choose the alert families you care about.",
@@ -121,7 +121,7 @@ private struct OnboardingFlowCopy {
                     humorous: "Choose the alert families you care about. Gaia can keep the drama low until something actually changes."
                 ),
                 enableNotificationsTitle: "Enable Notifications",
-                signalAlertsTitle: "Signal Alerts",
+                signalAlertsTitle: "Earth + Space Alerts",
                 localConditionAlertsTitle: "Local Condition Alerts",
                 personalizedAlertsTitle: "Personalized Alerts",
                 geomagneticAlertTitle: "Geomagnetic Activity / Kp",
@@ -131,7 +131,7 @@ private struct OnboardingFlowCopy {
                 pressureAlertTitle: vocabulary.pressureSwingLabel,
                 aqiAlertTitle: vocabulary.aqiLabel,
                 temperatureAlertTitle: vocabulary.temperatureSwingLabel,
-                symptomFollowUpTitle: "Symptom Follow-up Prompts",
+                symptomFollowUpTitle: "Follow-up Check-ins",
                 symptomFollowUpBody: tone.resolveCopy(
                     balanced: "Gaia can send a check-in after you log a symptom so it can learn the arc, not just the spike.",
                     humorous: "Gaia can send a check-in after you log a symptom so it learns the arc, not just the plot twist."
@@ -143,9 +143,9 @@ private struct OnboardingFlowCopy {
         case .mystical:
             return OnboardingFlowCopy(
                 headerSubtitle: tone.resolveCopy(
-                    straight: "Gaia Eyes is learning your language.",
-                    balanced: "Gaia Eyes is learning how to speak to you.",
-                    humorous: "Gaia Eyes is learning your settings before it starts trying to be helpful."
+                    straight: "Gaia Eyes is learning what matters to your body.",
+                    balanced: "Gaia Eyes is learning what matters to your body and your day.",
+                    humorous: "Gaia Eyes is learning your patterns before it starts trying to be helpful."
                 ),
                 welcomeTitle: "Understand how the world around you may connect to how you feel.",
                 welcomeSubtitle: tone.resolveCopy(
@@ -154,17 +154,17 @@ private struct OnboardingFlowCopy {
                     humorous: "We’ll set up just enough to make your first session useful without turning setup into a side quest."
                 ),
                 modeTitle: "How do you want to experience Gaia Eyes?",
-                modeSubtitle: "The underlying signal model stays the same. Only the presentation changes.",
+                modeSubtitle: "Choose the style you prefer. The same data stays underneath.",
                 guideTitle: "Choose your guide",
-                guideSubtitle: "A little personality, without changing the truth layer.",
+                guideSubtitle: "Pick the guide style that makes daily check-ins feel easier.",
                 toneTitle: "How should Gaia Eyes speak to you?",
-                toneSubtitle: "Tone changes the presentation, not the underlying truth.",
+                toneSubtitle: "Tone changes the wording, not the data.",
                 temperatureTitle: "How do you prefer temperature?",
-                temperatureSubtitle: "Gaia keeps weather data internally in Celsius and converts it only for display.",
+                temperatureSubtitle: "Choose the units you want to see. Gaia Eyes converts weather data for display.",
                 sensitivitiesTitle: "What tends to affect you most?",
                 sensitivitiesSubtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
-                healthContextTitle: "Optional health context",
-                healthContextSubtitle: "Self-reported context only. This helps Gaia weigh patterns more personally without making diagnoses.",
+                healthContextTitle: "Your health context",
+                healthContextSubtitle: "Self-reported context only. This helps Gaia Eyes personalize pattern tracking without making diagnoses.",
                 locationTitle: "Where should Gaia Eyes track local conditions?",
                 locationSubtitle: "Choose live GPS or a ZIP code. This powers local weather, \(vocabulary.pressureSwingLabel.lowercased()), \(vocabulary.aqiLabel.lowercased()), and temperature context.",
                 useGPSOptionTitle: "Use GPS",
@@ -175,13 +175,13 @@ private struct OnboardingFlowCopy {
                 healthDataTitle: "Connect your health data",
                 healthDataSubtitle: "Optional, but useful for sleep, heart rate, recovery trends, and faster pattern detection.",
                 healthDataHint: tone.resolveCopy(
-                    straight: "Choose what Gaia can read. Leave anything sensitive unchecked.",
-                    balanced: "Choose what Gaia can read. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
-                    humorous: "Choose what Gaia can read. You can leave anything sensitive unchecked and keep the useful stuff."
+                    straight: "Choose what Gaia Eyes can import. Leave anything sensitive unchecked.",
+                    balanced: "Choose what Gaia Eyes can import. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
+                    humorous: "Choose what Gaia Eyes can import. You can leave anything sensitive unchecked and keep the useful stuff."
                 ),
                 healthEmptySelectionBody: "Nothing is selected. Tap Not Now, or check at least one metric to request Health access.",
-                backfillTitle: "Sync your last 30 days",
-                backfillSubtitle: "Import recent data so Gaia Eyes can recognize patterns sooner.",
+                backfillTitle: "Import your last 30 days",
+                backfillSubtitle: "Bring in recent Apple Health history so Gaia Eyes can start spotting patterns sooner.",
                 notificationsTitle: "Would you like helpful alerts?",
                 notificationsSubtitle: tone.resolveCopy(
                     straight: "Choose the alert families you care about.",
@@ -189,7 +189,7 @@ private struct OnboardingFlowCopy {
                     humorous: "Choose the alert families you care about. Gaia can keep the drama low until something actually changes."
                 ),
                 enableNotificationsTitle: "Enable Notifications",
-                signalAlertsTitle: "Field Alerts",
+                signalAlertsTitle: "Earth + Space Alerts",
                 localConditionAlertsTitle: "Local Condition Alerts",
                 personalizedAlertsTitle: "Personalized Alerts",
                 geomagneticAlertTitle: "\(vocabulary.geomagneticLabel) / \(vocabulary.kpLabel)",
@@ -199,7 +199,7 @@ private struct OnboardingFlowCopy {
                 pressureAlertTitle: vocabulary.pressureSwingLabel,
                 aqiAlertTitle: vocabulary.aqiLabel,
                 temperatureAlertTitle: vocabulary.temperatureSwingLabel,
-                symptomFollowUpTitle: "Symptom Follow-up Prompts",
+                symptomFollowUpTitle: "Follow-up Check-ins",
                 symptomFollowUpBody: tone.resolveCopy(
                     balanced: "Gaia can send a check-in after you log a symptom so it can learn the arc, not just the spike.",
                     humorous: "Gaia can send a check-in after you log a symptom so it learns the arc, not just the plot twist."
@@ -781,9 +781,9 @@ struct OnboardingFlowView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle(isOn: $profile.lunarSensitivityDeclared) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Add lunar overlay tracking")
+                        Text("Track moon phases")
                             .font(.headline)
-                        Text("Show moon phase context and let Gaia watch whether full or new moon windows overlap with sleep, cycle, pain, or energy changes.")
+                        Text("Compare full and new moon phases with sleep, cycle, pain, and energy patterns over time.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -791,7 +791,7 @@ struct OnboardingFlowView: View {
                 }
                 .toggleStyle(.switch)
 
-                Text("Observational only. You can turn this off later in Settings.")
+                Text("Pattern tracking only. You can turn this off later in Settings.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -896,7 +896,7 @@ struct OnboardingFlowView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Text("These checkboxes choose what Gaia asks iOS for. Apple Health still controls the final read toggles.")
+                Text("Choose what Gaia Eyes can import from Apple Health. You can leave anything private turned off.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -988,8 +988,8 @@ struct OnboardingFlowView: View {
                     .foregroundStyle(.secondary)
 
                 Text(healthImportAvailable
-                     ? "Gaia will try to import every HealthKit signal you allowed."
-                     : "You can keep going without a backfill. Gaia will still show useful live conditions today.")
+                     ? "Gaia Eyes will import the Apple Health data you allowed."
+                     : "You can keep going without importing history. Gaia Eyes will still show useful live conditions today.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -998,7 +998,7 @@ struct OnboardingFlowView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else if healthReadAccessUnavailable {
-                    Text("Health reads still look off in Apple Health. You can still try the import now, or continue and retry later from Settings.")
+                    Text("Apple Health data is not available yet. You can try the import now, or continue and retry later from Settings.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -1034,7 +1034,7 @@ struct OnboardingFlowView: View {
                                 ProgressView()
                                     .scaleEffect(0.9)
                             }
-                            Text(backfillInFlight ? "Importing..." : "Sync Last 30 Days")
+                            Text(backfillInFlight ? "Importing..." : "Import Last 30 Days")
                         }
                     }
                     .buttonStyle(.borderedProminent)
