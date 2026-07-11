@@ -152,8 +152,7 @@ async def _refresh_stale_drivers(user_id: str, target_day: date) -> None:
             return
         started = time.perf_counter()
         try:
-            async with _acquire_drivers_conn() as conn:
-                payload = await _build_and_cache_drivers(conn, user_id, target_day)
+            payload = await _build_and_cache_drivers(None, user_id, target_day)
             elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
             logger.info(
                 "[drivers] stale refresh built user=%s day=%s ms=%s drivers=%s timings=%s",
@@ -223,8 +222,7 @@ async def user_drivers(
                     **cached_payload,
                 }
         try:
-            async with _acquire_drivers_conn() as conn:
-                payload = await _build_and_cache_drivers(conn, user_id, target_day)
+            payload = await _build_and_cache_drivers(None, user_id, target_day)
         except Exception as exc:
             return {"ok": False, "error": f"all drivers build failed: {exc}"}
 

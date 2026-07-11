@@ -86,6 +86,7 @@ async def test_user_drivers_endpoint_returns_snapshot(monkeypatch, client: Async
     }
 
     async def _payload(conn, *, user_id: str, day: date):  # noqa: ARG001
+        assert conn is None
         assert day == date(2026, 3, 26)
         return {
             "generated_at": "2026-03-26T12:00:00Z",
@@ -169,6 +170,7 @@ async def test_user_drivers_endpoint_uses_app_day_when_day_is_omitted(monkeypatc
     monkeypatch.setattr(drivers_router, "_default_driver_day", lambda: date(2026, 3, 27))
 
     async def _payload(conn, *, user_id: str, day: date):  # noqa: ARG001
+        assert conn is None
         assert day == date(2026, 3, 27)
         return {
             "generated_at": "2026-03-27T12:00:00Z",
@@ -205,6 +207,7 @@ async def test_user_drivers_endpoint_reuses_short_cache(monkeypatch, client: Asy
     calls = 0
 
     async def _payload(conn, *, user_id: str, day: date):  # noqa: ARG001
+        assert conn is None
         nonlocal calls
         calls += 1
         return {

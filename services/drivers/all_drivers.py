@@ -10,6 +10,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - local unit tests can run without psycopg installed.
     dict_row = None
 
+from app.db import get_pool
 from bots.notifications.push_logic import flare_class_rank
 from bots.patterns.pattern_engine_job import OUTCOME_SYMPTOM_CODES
 from services.drivers.driver_normalize import normalize_environmental_drivers, signal_bar_driver_candidates
@@ -1563,7 +1564,7 @@ async def build_all_drivers_payload(
     from app.db import ulf as ulf_db
     from bots.definitions.load_definition_base import load_definition_base
     from bots.gauges.gauge_scorer import fetch_exposure_summary, fetch_health_status_context, fetch_user_tags
-    from services.forecast_outlook import build_user_outlook_payload
+    from services.forecast_outlook import build_user_outlook_payload, build_user_outlook_payload_via_pool
     from services.personalization.health_context import build_personalization_profile
 
     generated_at = datetime.now(UTC).isoformat()
@@ -1611,18 +1612,35 @@ async def build_all_drivers_payload(
     user_tags_task = asyncio.create_task(asyncio.to_thread(fetch_user_tags, user_id))
     health_status_task = asyncio.create_task(asyncio.to_thread(fetch_health_status_context, user_id, day))
 
-    pattern_rows = await fetch_best_pattern_rows(conn, user_id)
-    mark_step("patterns")
-    recent_outcomes = await fetch_recent_outcome_summary(conn, user_id, day)
-    mark_step("recent_outcomes")
-    current_symptom_rows = await _fetch_current_symptom_rows(conn, user_id)
-    mark_step("current_symptoms")
-    latest_ulf = await ulf_db.get_latest_ulf_context(conn)
-    mark_step("ulf")
-    outlook_payload = await build_user_outlook_payload(conn, user_id)
-    mark_step("outlook")
-    space_context = await _fetch_space_context(conn, day)
-    mark_step("space_context")
+    if conn is None:
+        pool = await get_pool()
+        async with pool.connection() as db_conn:
+            pattern_rows = await fetch_best_pattern_rows(db_conn, user_id)
+            mark_step("patterns")
+            recent_outcomes = await fetch_recent_outcome_summary(db_conn, user_id, day)
+            mark_step("recent_outcomes")
+            current_symptom_rows = await _fetch_current_symptom_rows(db_conn, user_id)
+            mark_step("current_symptoms")
+            latest_ulf = await ulf_db.get_latest_ulf_context(db_conn)
+            mark_step("ulf")
+        outlook_payload = await build_user_outlook_payload_via_pool(user_id)
+        mark_step("outlook")
+        async with pool.connection() as db_conn:
+            space_context = await _fetch_space_context(db_conn, day)
+        mark_step("space_context")
+    else:
+        pattern_rows = await fetch_best_pattern_rows(conn, user_id)
+        mark_step("patterns")
+        recent_outcomes = await fetch_recent_outcome_summary(conn, user_id, day)
+        mark_step("recent_outcomes")
+        current_symptom_rows = await _fetch_current_symptom_rows(conn, user_id)
+        mark_step("current_symptoms")
+        latest_ulf = await ulf_db.get_latest_ulf_context(conn)
+        mark_step("ulf")
+        outlook_payload = await build_user_outlook_payload(conn, user_id)
+        mark_step("outlook")
+        space_context = await _fetch_space_context(conn, day)
+        mark_step("space_context")
 
     user_tags = await user_tags_task
     mark_step("user_tags")
