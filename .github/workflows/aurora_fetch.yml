@@ -83,6 +83,42 @@ jobs:
       - name: Basic assertions (fail if no TS)
         run: |
           set -euo pipefail
+          TS_FILTER='(.ts // (.data.ts // .payload.ts // .result.ts)) | select(. != null) | (type=="string" or type=="number")'
+
+          refetch_nowcast() {
+            local hemi="$1" out_json="$2" out_code="$3"
+            local url="$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=$hemi"
+            local i=0 code=000
+            : > "$out_json"
+            while [ $i -lt 3 ]; do
+              code=$(curl -sS -o "$out_json" -w "%{http_code}" "$url" -H "Accept: application/json" || true)
+              if [ "${code:0:1}" = "2" ] && [ -s "$out_json" ] && jq . "$out_json" >/dev/null 2>&1; then
+                break
+              fi
+              i=$((i+1))
+              sleep 2
+            done
+            echo -n "$code" > "$out_code"
+            echo "[retry] $hemi HTTP: $code"
+          }
+
+          force_refresh() {
+            local code=000 alt_code=000
+            code=$(curl -sS -o out/fetch_now_retry.json -w "%{http_code}" -X POST \
+              "$AURORA_BASE/wp-json/gaia/v1/aurora/fetch-now?hemi=both" \
+              -H "Accept: application/json" || true)
+            echo "fetch-now retry HTTP: $code"
+            if [ "${code:0:1}" != "2" ]; then
+              alt_code=$(curl -sS -o out/cron_run_retry.json -w "%{http_code}" -X POST \
+                "$AURORA_BASE/wp-json/gaia/v1/aurora/cron-run" \
+                -H "Accept: application/json" || true)
+              echo "cron-run retry HTTP: $alt_code"
+            fi
+            sleep 2
+            refetch_nowcast "north" out/nowcast_north.json out/http_north.txt
+            refetch_nowcast "south" out/nowcast_south.json out/http_south.txt
+          }
+
           N_CODE=$(cat out/http_north.txt 2>/dev/null || echo 000)
           S_CODE=$(cat out/http_south.txt 2>/dev/null || echo 000)
           if [ "${N_CODE:0:1}" != "2" ]; then
@@ -93,10 +129,23 @@ jobs:
             echo "[fail] north nowcast is not valid JSON"; exit 1; fi
           if ! jq . out/nowcast_south.json >/dev/null 2>&1; then
             echo "[fail] south nowcast is not valid JSON"; exit 1; fi
-          if ! jq -e '(.ts // (.data.ts // .payload.ts // .result.ts)) | select(. != null) | (type=="string" or type=="number")' out/nowcast_north.json >/dev/null; then
-            echo "north nowcast missing .ts — backend likely not writing cache"; exit 1; fi
-          if ! jq -e '(.ts // (.data.ts // .payload.ts // .result.ts)) | select(. != null) | (type=="string" or type=="number")' out/nowcast_south.json >/dev/null; then
-            echo "south nowcast missing .ts — backend likely not writing cache"; exit 1; fi
+          NEED_REFRESH=0
+          if ! jq -e "$TS_FILTER" out/nowcast_north.json >/dev/null; then
+            echo "[warn] north nowcast missing .ts before retry"
+            NEED_REFRESH=1
+          fi
+          if ! jq -e "$TS_FILTER" out/nowcast_south.json >/dev/null; then
+            echo "[warn] south nowcast missing .ts before retry"
+            NEED_REFRESH=1
+          fi
+          if [ "$NEED_REFRESH" -eq 1 ]; then
+            echo "[warn] forcing aurora refresh and refetch before failing"
+            force_refresh
+          fi
+          if ! jq -e "$TS_FILTER" out/nowcast_north.json >/dev/null; then
+            echo "north nowcast missing .ts after retry — backend likely not writing cache"; exit 1; fi
+          if ! jq -e "$TS_FILTER" out/nowcast_south.json >/dev/null; then
+            echo "south nowcast missing .ts after retry — backend likely not writing cache"; exit 1; fi
 
       - name: (Optional) Verify viewline static images (tonight/tomorrow)
         run: |

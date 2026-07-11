@@ -225,6 +225,8 @@ def check_local_forecast() -> CheckResult:
 def check_features_today() -> CheckResult:
     if not AUTH_BEARER:
         return _result("features_today", "skip", "set GAIA_MONITOR_AUTH_BEARER for user-scoped features check")
+    if not DEV_USER_ID:
+        return _result("features_today", "skip", "set GAIA_MONITOR_DEV_USER_ID for user-scoped features check")
     try:
         payload = _get_json("/v1/features/today", params={"diag": 1, "tz": TIMEZONE}, bearer=AUTH_BEARER)
     except Exception as exc:
@@ -244,6 +246,8 @@ def check_features_today() -> CheckResult:
 def check_user_outlook() -> CheckResult:
     if not AUTH_BEARER:
         return _result("user_outlook", "skip", "set GAIA_MONITOR_AUTH_BEARER for user-scoped Outlook check")
+    if not DEV_USER_ID:
+        return _result("user_outlook", "skip", "set GAIA_MONITOR_DEV_USER_ID for user-scoped Outlook check")
     try:
         payload = _get_json("/v1/users/me/outlook", bearer=AUTH_BEARER)
     except Exception as exc:

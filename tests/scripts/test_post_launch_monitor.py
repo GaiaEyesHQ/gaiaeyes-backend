@@ -60,3 +60,23 @@ def test_backend_health_warns_when_queue_status_missing(monkeypatch):
 
     assert result.status == "warn"
     assert "ingest_queue missing" in result.detail
+
+
+def test_features_today_skips_without_dev_user_id(monkeypatch):
+    monkeypatch.setattr(monitor, "AUTH_BEARER", "token")
+    monkeypatch.setattr(monitor, "DEV_USER_ID", "")
+
+    result = monitor.check_features_today()
+
+    assert result.status == "skip"
+    assert "GAIA_MONITOR_DEV_USER_ID" in result.detail
+
+
+def test_user_outlook_skips_without_dev_user_id(monkeypatch):
+    monkeypatch.setattr(monitor, "AUTH_BEARER", "token")
+    monkeypatch.setattr(monitor, "DEV_USER_ID", "")
+
+    result = monitor.check_user_outlook()
+
+    assert result.status == "skip"
+    assert "GAIA_MONITOR_DEV_USER_ID" in result.detail
