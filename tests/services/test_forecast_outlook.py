@@ -13,9 +13,11 @@ if str(ROOT) not in sys.path:
 from services.forecast_outlook import (  # noqa: E402
     LOCAL_FORECAST_DAYS,
     POLLEN_FORECAST_DAYS,
+    USER_OUTLOOK_INPUT_DAYS,
     build_daily_outlook,
     build_location_key,
     build_user_outlook_payload,
+    build_user_outlook_payload_via_pool,
     build_window_outlook,
     ensure_local_forecast_daily,
     parse_swpc_range_forecast,
@@ -25,6 +27,27 @@ from services.forecast_outlook import (  # noqa: E402
     summarize_local_forecast_days,
 )
 from services.external import nws  # noqa: E402
+
+
+class _FakePoolConnCtx:
+    def __init__(self, conn):
+        self._conn = conn
+
+    async def __aenter__(self):
+        return self._conn
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakePool:
+    def __init__(self, *conns):
+        self._conns = list(conns)
+
+    def connection(self):
+        if not self._conns:
+            raise AssertionError("no fake connections left")
+        return _FakePoolConnCtx(self._conns.pop(0))
 
 
 class ForecastOutlookTests(unittest.TestCase):
@@ -795,6 +818,41 @@ class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["lat"], 30.2672)
         self.assertEqual(kwargs["lon"], -97.7431)
         self.assertTrue(kwargs["prefer_geo"])
+
+    async def test_build_user_outlook_payload_via_pool_uses_short_lived_connections(self) -> None:
+        conn_location = object()
+        conn_data = object()
+        pool = _FakePool(conn_location, conn_data)
+        location = {
+            "zip": "78209",
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "use_gps": True,
+            "local_insights_enabled": True,
+        }
+
+        with (
+            patch("services.forecast_outlook.get_pool", AsyncMock(return_value=pool)),
+            patch("services.forecast_outlook.fetch_user_location_context", AsyncMock(return_value=location)) as fetch_location,
+            patch("services.forecast_outlook.ensure_local_forecast_daily_via_pool", AsyncMock(return_value=[])) as ensure_local,
+            patch("services.forecast_outlook.ensure_space_forecast_daily", AsyncMock(return_value=[])) as ensure_space,
+            patch("services.forecast_outlook.fetch_best_pattern_rows", AsyncMock(return_value=[])) as fetch_patterns,
+            patch("services.forecast_outlook.fetch_latest_gauges", AsyncMock(return_value={})) as fetch_gauges,
+        ):
+            payload = await build_user_outlook_payload_via_pool("user-123")
+
+        fetch_location.assert_awaited_once_with(conn_location, "user-123")
+        ensure_local.assert_awaited_once_with(
+            zip_code="78209",
+            lat=30.2672,
+            lon=-97.7431,
+            prefer_geo=True,
+            days=USER_OUTLOOK_INPUT_DAYS,
+        )
+        ensure_space.assert_awaited_once_with(conn_data, days=USER_OUTLOOK_INPUT_DAYS)
+        fetch_patterns.assert_awaited_once_with(conn_data, "user-123")
+        fetch_gauges.assert_awaited_once_with(conn_data, "user-123")
+        self.assertEqual(payload["forecast_data_ready"]["local_forecast_days"], 0)
 
     async def test_ensure_local_forecast_daily_refreshes_fresh_rows_when_pollen_is_missing(self) -> None:
         now = datetime.now(UTC)

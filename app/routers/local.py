@@ -3,8 +3,7 @@ import os
 
 from fastapi import APIRouter, Query
 
-from app.db import get_pool
-from services.forecast_outlook import ensure_local_forecast_daily, serialize_local_forecast_rows
+from services.forecast_outlook import ensure_local_forecast_daily_via_pool, serialize_local_forecast_rows
 from services.local_signals.aggregator import assemble_for_zip, ensure_weather_fields
 from services.local_signals.cache import latest_for_zip, upsert_zip_payload
 
@@ -82,10 +81,10 @@ async def _attach_forecast_daily_best_effort(zip_code: str, payload: dict) -> di
         return payload
 
     try:
-        pool = await get_pool()
         async with asyncio.timeout(LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS):
-            async with pool.connection() as conn:
-                return await _attach_forecast_daily(conn, zip_code, payload)
+            rows = await ensure_local_forecast_daily_via_pool(zip_code=zip_code, lat=None, lon=None)
+            payload["forecast_daily"] = serialize_local_forecast_rows(rows)
+            return payload
     except Exception:
         return payload
 

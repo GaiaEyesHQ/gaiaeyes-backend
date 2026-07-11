@@ -269,12 +269,12 @@ async def test_local_check_returns_current_payload_when_forecast_attachment_fail
     async def _fake_assemble_for_zip(zip_code: str):  # noqa: ARG001
         return payload
 
-    async def _fake_get_pool():
+    async def _fake_ensure_local_forecast_daily_via_pool(**kwargs):  # noqa: ARG001
         raise RuntimeError("db unavailable")
 
     monkeypatch.setattr(local, "latest_for_zip", lambda zip_code: None)  # noqa: ARG005
     monkeypatch.setattr(local, "assemble_for_zip", _fake_assemble_for_zip)
-    monkeypatch.setattr(local, "get_pool", _fake_get_pool)
+    monkeypatch.setattr(local, "ensure_local_forecast_daily_via_pool", _fake_ensure_local_forecast_daily_via_pool)
     monkeypatch.setattr(local, "ensure_weather_fields", lambda zip_code, incoming: dict(incoming))  # noqa: ARG005
     monkeypatch.setattr(local, "upsert_zip_payload", lambda zip_code, stored: None)  # noqa: ARG005,ARG001
 

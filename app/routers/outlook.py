@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.db import get_db
 from app.security.auth import require_read_auth
-from services.forecast_outlook import build_user_outlook_payload
+from services.forecast_outlook import build_user_outlook_payload_via_pool
 
 
 router = APIRouter(prefix="/v1/users/me", tags=["outlook"])
@@ -18,10 +17,10 @@ def _require_user_id(request: Request) -> str:
 
 
 @router.get("/outlook", dependencies=[Depends(require_read_auth)])
-async def user_outlook(request: Request, conn=Depends(get_db)):
+async def user_outlook(request: Request):
     user_id = _require_user_id(request)
     try:
-        payload = await build_user_outlook_payload(conn, user_id)
+        payload = await build_user_outlook_payload_via_pool(user_id)
     except Exception as exc:
         return {"ok": False, "error": f"outlook build failed: {exc}"}
     return {"ok": True, **payload}

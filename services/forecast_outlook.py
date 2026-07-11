@@ -15,6 +15,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - unit tests can run without psycopg installed.
     dict_row = None
 
+from app.db import get_pool
 from services.patterns.personal_relevance import (
     OUTCOME_LABELS,
     confidence_rank,
@@ -1317,6 +1318,85 @@ async def ensure_local_forecast_daily(
     return existing
 
 
+async def ensure_local_forecast_daily_via_pool(
+    *,
+    zip_code: str | None,
+    lat: float | None,
+    lon: float | None,
+    prefer_geo: bool = False,
+    days: int = LOCAL_FORECAST_DAYS,
+) -> list[dict[str, Any]]:
+    location_key = build_location_key(zip_code, lat, lon, prefer_geo=prefer_geo)
+    if not location_key:
+        return []
+
+    pool = await get_pool()
+    now_utc = datetime.now(UTC)
+    today = now_utc.date() - timedelta(days=1)
+
+    async with pool.connection() as conn:
+        existing = await _fetch_local_forecast_rows(conn, location_key, today, days=days)
+
+    if existing:
+        newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)
+        pollen_window = existing[: min(len(existing), POLLEN_FORECAST_DAYS)]
+        missing_pollen = bool(pollen_window) and not any(
+            _row_has_pollen_data(row)
+            for row in pollen_window
+        )
+        if len(existing) >= days and newest and newest >= now_utc - timedelta(hours=LOCAL_REFRESH_HOURS) and not missing_pollen:
+            return existing
+
+    resolved_lat = lat
+    resolved_lon = lon
+    if (resolved_lat is None or resolved_lon is None) and zip_code:
+        try:
+            from services.geo.zip_lookup import zip_to_latlon
+
+            resolved_lat, resolved_lon = await asyncio.to_thread(zip_to_latlon, zip_code)
+        except Exception:
+            resolved_lat = resolved_lon = None
+    if resolved_lat is None or resolved_lon is None:
+        return existing
+
+    try:
+        from services.external import nws
+
+        hourly_payload, grid_payload, allergen_payload = await asyncio.gather(
+            nws.forecast_hourly_by_latlon(float(resolved_lat), float(resolved_lon)),
+            nws.gridpoints_by_latlon(float(resolved_lat), float(resolved_lon)),
+            _fetch_local_pollen_forecast(
+                zip_code,
+                float(resolved_lat),
+                float(resolved_lon),
+                days=POLLEN_FORECAST_DAYS,
+            ),
+        )
+        rows = summarize_local_forecast_days(
+            hourly_payload,
+            grid_payload,
+            allergen_payload=allergen_payload,
+            location_key=location_key,
+            zip_code=zip_code,
+            lat=float(resolved_lat),
+            lon=float(resolved_lon),
+            max_days=days,
+        )
+    except Exception:
+        return existing
+
+    if rows:
+        rows = _preserve_existing_pollen_rows(existing, rows)
+        async with pool.connection() as conn:
+            await _upsert_local_forecast_rows(conn, rows)
+            try:
+                await conn.commit()
+            except Exception:
+                pass
+            return await _fetch_local_forecast_rows(conn, location_key, today, days=days)
+    return existing
+
+
 async def _fetch_space_forecast_rows(conn, start_day: date, *, days: int = SPACE_FORECAST_DAYS) -> list[dict[str, Any]]:
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(
@@ -2369,6 +2449,110 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
     merged_rows = _enrich_forecast_input_rows(merge_daily_forecast_inputs(local_rows, space_rows))
     pattern_rows = await fetch_best_pattern_rows(conn, user_id)
     gauges = await fetch_latest_gauges(conn, user_id)
+    daily_outlook = build_daily_outlook(
+        merged_rows,
+        pattern_rows=pattern_rows,
+        gauges=gauges,
+        days=7,
+    )
+
+    next_24h = None
+    if local_rows and space_rows:
+        next_24h = build_window_outlook(
+            merged_rows,
+            pattern_rows=pattern_rows,
+            gauges=gauges,
+            window_hours=24,
+        )
+
+    next_72h = None
+    if len(local_rows) >= 3 and len(space_rows) >= 3:
+        next_72h = build_window_outlook(
+            merged_rows,
+            pattern_rows=pattern_rows,
+            gauges=gauges,
+            window_hours=72,
+        )
+
+    next_7d = None
+    if len(local_rows) >= LOCAL_FORECAST_DAYS and len(space_rows) >= SPACE_FORECAST_DAYS:
+        next_7d = build_window_outlook(
+            merged_rows,
+            pattern_rows=pattern_rows,
+            gauges=gauges,
+            window_hours=168,
+        )
+
+    available_windows: list[str] = []
+    if next_24h:
+        available_windows.append("next_24h")
+    if next_72h:
+        available_windows.append("next_72h")
+    if next_7d:
+        available_windows.append("next_7d")
+
+    generated_at = datetime.now(UTC).isoformat()
+    overview_semantic = build_user_outlook_overview_semantic(
+        day=_app_today(),
+        available_windows=available_windows,
+        forecast_data_ready={
+            "location_found": bool(location),
+            "local_forecast_daily": bool(local_rows),
+            "local_forecast_days": len(local_rows),
+            "space_forecast_daily": bool(space_rows),
+            "space_forecast_days": len(space_rows),
+            "next_24h": bool(next_24h),
+            "next_72h": bool(next_72h),
+            "next_7d": bool(next_7d),
+        },
+        windows=[next_24h, next_72h, next_7d],
+    )
+
+    return {
+        "generated_at": generated_at,
+        "available_windows": available_windows,
+        "daily_outlook": daily_outlook,
+        "forecast_data_ready": {
+            "location_found": bool(location),
+            "local_forecast_daily": bool(local_rows),
+            "local_forecast_days": len(local_rows),
+            "space_forecast_daily": bool(space_rows),
+            "space_forecast_days": len(space_rows),
+            "next_24h": bool(next_24h),
+            "next_72h": bool(next_72h),
+            "next_7d": bool(next_7d),
+        },
+        "next_24h": next_24h,
+        "next_72h": next_72h,
+        "next_7d": next_7d,
+        "voice_semantics": {
+            "overview": overview_semantic.to_dict(),
+        },
+    }
+
+
+async def build_user_outlook_payload_via_pool(user_id: str) -> dict[str, Any]:
+    pool = await get_pool()
+    async with pool.connection() as conn:
+        location = await fetch_user_location_context(conn, user_id)
+
+    local_rows: list[dict[str, Any]] = []
+    if location and bool(location.get("local_insights_enabled", True)):
+        prefer_geo = bool(location.get("use_gps"))
+        local_rows = await ensure_local_forecast_daily_via_pool(
+            zip_code=str(location.get("zip") or "").strip() or None,
+            lat=_safe_float(location.get("lat")),
+            lon=_safe_float(location.get("lon")),
+            prefer_geo=prefer_geo,
+            days=USER_OUTLOOK_INPUT_DAYS,
+        )
+
+    async with pool.connection() as conn:
+        space_rows = await ensure_space_forecast_daily(conn, days=USER_OUTLOOK_INPUT_DAYS)
+        pattern_rows = await fetch_best_pattern_rows(conn, user_id)
+        gauges = await fetch_latest_gauges(conn, user_id)
+
+    merged_rows = _enrich_forecast_input_rows(merge_daily_forecast_inputs(local_rows, space_rows))
     daily_outlook = build_daily_outlook(
         merged_rows,
         pattern_rows=pattern_rows,
