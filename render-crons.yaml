@@ -1,0 +1,115 @@
+services:
+  - type: cron
+    name: gaiaeyes-critical-ingestion
+    runtime: python
+    region: oregon
+    plan: starter
+    branch: main
+    autoDeployTrigger: checksPass
+    schedule: "*/15 * * * *"
+    buildCommand: pip install -r requirements.txt && pip install ./bots/schumann
+    startCommand: python scripts/run_render_cron.py critical
+    envVars:
+      - key: SUPABASE_DB_URL
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: SUPABASE_DB_URL
+      - key: AIRNOW_API_KEY
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: AIRNOW_API_KEY
+      - key: WEATHER_UA
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: WEATHER_UA
+      - key: GAIA_LOG_LEVEL
+        value: INFO
+      - key: GAIA_TIMEZONE
+        value: America/Chicago
+      - key: GAIA_GAUGE_RECENT_ACTIVITY_DAYS
+        value: "7"
+      - key: LOCAL_SIGNALS_TTL_MINUTES
+        value: "60"
+      - key: LOCAL_SIGNALS_AIRNOW_RADIUS_MI
+        value: "25"
+      - key: HTTP_USER_AGENT
+        value: "GaiaEyes/1.0 (+https://gaiaeyes.com; help@gaiaeyes.com)"
+
+  - type: cron
+    name: gaiaeyes-event-ingestion
+    runtime: python
+    region: oregon
+    plan: starter
+    branch: main
+    autoDeployTrigger: checksPass
+    schedule: "13 */2 * * *"
+    buildCommand: pip install -r requirements.txt && pip install -r bots/hazards/requirements.txt
+    startCommand: python scripts/run_render_cron.py events
+    envVars:
+      - key: SUPABASE_DB_URL
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: SUPABASE_DB_URL
+      - key: SUPABASE_REST_URL
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: SUPABASE_REST_URL
+      - key: SUPABASE_SERVICE_KEY
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: SUPABASE_SERVICE_KEY
+      - key: NASA_API_KEY
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: NASA_API_KEY
+      - key: GAIA_LOG_LEVEL
+        value: INFO
+      - key: HAZARDS_SKIP_WP
+        value: "1"
+
+  - type: cron
+    name: gaiaeyes-daily-derivations
+    runtime: python
+    region: oregon
+    plan: starter
+    branch: main
+    autoDeployTrigger: checksPass
+    schedule: "35 10 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scripts/run_render_cron.py daily
+    envVars:
+      - key: SUPABASE_DB_URL
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: SUPABASE_DB_URL
+      - key: AIRNOW_API_KEY
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: AIRNOW_API_KEY
+      - key: WEATHER_UA
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: WEATHER_UA
+      - key: NASA_API_KEY
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: NASA_API_KEY
+      - key: GAIA_LOG_LEVEL
+        value: INFO
+      - key: GAIA_TIMEZONE
+        value: America/Chicago
+      - key: USER_TZ
+        value: America/Chicago
+      - key: LOCAL_SIGNALS_TTL_MINUTES
+        value: "60"

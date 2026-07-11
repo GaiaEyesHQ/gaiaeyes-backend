@@ -19,7 +19,11 @@ import os, sys, json, asyncio
 from datetime import datetime, timezone
 import asyncpg, httpx
 
-RAW_JSON = "https://raw.githubusercontent.com/GaiaEyesHQ/gaiaeyes-media/main/data/schumann_latest.json"
+RAW_JSON = os.getenv(
+    "SCHUMANN_JSON_URL",
+    "https://raw.githubusercontent.com/GaiaEyesHQ/gaiaeyes-media/main/data/schumann_latest.json",
+)
+LOCAL_JSON_PATH = os.getenv("SCHUMANN_JSON_PATH", "").strip()
 RAW_IMG_BASE = "https://raw.githubusercontent.com/GaiaEyesHQ/gaiaeyes-media/main/images/"
 
 DB = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
@@ -73,11 +77,18 @@ async def fetch_json(client: httpx.AsyncClient, url: str) -> dict:
     r.raise_for_status()
     return r.json()
 
+
+async def load_document(client: httpx.AsyncClient) -> dict:
+    if LOCAL_JSON_PATH:
+        with open(LOCAL_JSON_PATH, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    return await fetch_json(client, RAW_JSON)
+
 async def main():
     conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)
     try:
         async with httpx.AsyncClient() as client:
-            doc = await fetch_json(client, RAW_JSON)
+            doc = await load_document(client)
 
         sources = doc.get("sources", {}) or {}
         global_ts = parse_ts(doc.get("timestamp_utc"))
@@ -142,6 +153,8 @@ async def main():
         if rows:
             await conn.executemany(UPSERT_ROW, rows)
             print(f"Upserted {len(rows)} schumann rows")
+        else:
+            raise RuntimeError("Schumann document contained no usable station rows")
 
         # Upsert overlay assets
         if assets:

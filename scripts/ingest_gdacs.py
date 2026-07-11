@@ -95,7 +95,12 @@ def main():
             }
         )
 
-    supabase_upsert("ext.gdacs_alerts", rows, on_conflict="hash")
+    ok = supabase_upsert("ext.gdacs_alerts", rows, on_conflict="hash")
+    rest_configured = bool(os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_REST_URL")) and bool(
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+    )
+    if rows and rest_configured and not ok:
+        raise RuntimeError("GDACS database upsert failed")
 
 
 if __name__ == "__main__":

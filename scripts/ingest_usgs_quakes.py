@@ -198,6 +198,7 @@ def main():
     # --- Optional DB upserts (ext + marts) via PostgREST ---
     try:
         if REST and KEY:
+            failed_tables = []
             # Upsert raw events into ext.earthquakes_events (dedup by usgs_id)
             events_rows_map = {}
             for f in all_features:
@@ -218,8 +219,8 @@ def main():
                     "source": "usgs",
                 }
             events_rows = list(events_rows_map.values())
-            if events_rows:
-                rest_upsert("ext", "earthquakes_events", events_rows)
+            if events_rows and not rest_upsert("ext", "earthquakes_events", events_rows):
+                failed_tables.append("ext.earthquakes_events")
 
             # Upsert into ext.earthquakes for API consumers (/v1/quakes/events)
             quakes_rows_map = {}
@@ -244,8 +245,8 @@ def main():
                     },
                 }
             quakes_rows = list(quakes_rows_map.values())
-            if quakes_rows:
-                rest_upsert("ext", "earthquakes", quakes_rows)
+            if quakes_rows and not rest_upsert("ext", "earthquakes", quakes_rows):
+                failed_tables.append("ext.earthquakes")
 
             # Upsert day snapshot into ext.earthquakes_day
             day_row = {
@@ -253,7 +254,8 @@ def main():
                 "total_all": total_all,
                 "buckets_day": buckets_day
             }
-            rest_upsert("ext", "earthquakes_day", [day_row])
+            if not rest_upsert("ext", "earthquakes_day", [day_row]):
+                failed_tables.append("ext.earthquakes_day")
 
             # Compute and upsert daily aggregate into marts.quakes_daily for today
             # Derive all_quakes/m4p/m5p/m6p/m7p from the day_features list
@@ -276,9 +278,13 @@ def main():
                 "m6p": m6,
                 "m7p": m7
             }
-            rest_upsert("marts", "quakes_daily", [marts_daily])
+            if not rest_upsert("marts", "quakes_daily", [marts_daily]):
+                failed_tables.append("marts.quakes_daily")
+            if failed_tables:
+                raise RuntimeError(f"database upsert failed for {', '.join(failed_tables)}")
     except Exception as e:
-        print(f"[postgrest] upserts skipped: {e}", file=sys.stderr)
+        print(f"[postgrest] upserts failed: {e}", file=sys.stderr)
+        raise
 
 if __name__ == "__main__":
     main()

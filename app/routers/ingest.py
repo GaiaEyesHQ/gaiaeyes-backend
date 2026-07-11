@@ -97,6 +97,28 @@ async def _execute_refresh(
 ) -> None:
     await _summary_module._execute_mart_refresh(user_id, day_local, tz_name)
 
+    def _score_gauges() -> Dict[str, Any]:
+        from bots.gauges.gauge_scorer import score_user_day
+
+        return score_user_day(user_id, day_local, force=False)
+
+    try:
+        result = await asyncio.to_thread(_score_gauges)
+        logger.info(
+            "[MART] gauge refresh user=%s day=%s ok=%s skipped=%s",
+            user_id,
+            day_local,
+            result.get("ok"),
+            result.get("skipped"),
+        )
+    except Exception as exc:
+        logger.warning(
+            "[MART] gauge refresh failed user=%s day=%s error=%s",
+            user_id,
+            day_local,
+            exc,
+        )
+
 
 def _pool_connection(pool, timeout: float = _POOL_ACQUIRE_TIMEOUT_SECONDS):
     try:

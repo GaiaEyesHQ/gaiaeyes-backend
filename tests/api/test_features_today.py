@@ -51,6 +51,29 @@ def client():
     return AsyncClient(transport=transport, base_url="http://test")
 
 
+@pytest.mark.anyio
+async def test_ingest_refresh_chains_targeted_gauge_scoring(monkeypatch):
+    calls = []
+
+    async def fake_mart_refresh(user_id, day_local, tz_name):
+        calls.append(("mart", user_id, day_local, tz_name))
+
+    async def fake_to_thread(callback):  # noqa: ARG001
+        calls.append(("gauges",))
+        return {"ok": True, "skipped": False}
+
+    monkeypatch.setattr(ingest._summary_module, "_execute_mart_refresh", fake_mart_refresh)
+    monkeypatch.setattr(ingest.asyncio, "to_thread", fake_to_thread)
+
+    target_day = date(2026, 7, 11)
+    await ingest._execute_refresh("user-1", target_day, "America/Chicago")
+
+    assert calls == [
+        ("mart", "user-1", target_day, "America/Chicago"),
+        ("gauges",),
+    ]
+
+
 class _FakeCursor:
     async def __aenter__(self):
         return self

@@ -902,7 +902,12 @@ def run_once() -> None:
             }
         )
 
-    supabase_upsert("ext.global_hazards", rows, on_conflict="hash")
+    ok = supabase_upsert("ext.global_hazards", rows, on_conflict="hash")
+    rest_configured = bool(os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_REST_URL")) and bool(
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+    )
+    if rest_configured and not ok:
+        raise RuntimeError("global hazards database upsert failed")
 
 
 def main() -> None:

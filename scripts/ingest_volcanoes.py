@@ -182,7 +182,12 @@ def main():
         sys.exit(0)
 
     print(f"[gvp] upserting {len(rows)} rows into ext.global_hazards", flush=True)
-    supabase_upsert("ext.global_hazards", rows, on_conflict="hash")
+    ok = supabase_upsert("ext.global_hazards", rows, on_conflict="hash")
+    rest_configured = bool(os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_REST_URL")) and bool(
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+    )
+    if rest_configured and not ok:
+        raise RuntimeError("volcano database upsert failed")
 
 
 if __name__ == "__main__":

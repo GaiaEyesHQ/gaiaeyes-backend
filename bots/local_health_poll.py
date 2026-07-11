@@ -1,4 +1,5 @@
 import asyncio
+import argparse
 import json
 import logging
 import os
@@ -24,6 +25,9 @@ from services.local_signals.cache import upsert_zip_payload
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
+# httpx logs full request URLs at INFO, including provider API-key query params.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def _safe_float(value):
@@ -174,7 +178,24 @@ async def _refresh_local_forecast(zip_code: str | None, lat: float | None, lon: 
     return len(rows)
 
 
-async def main() -> None:
+def _dedupe_locations(rows: list[dict]) -> list[dict]:
+    unique: dict[tuple, dict] = {}
+    for row in rows:
+        zip_code = str(row.get("zip") or "").strip()
+        if zip_code:
+            key = ("zip", zip_code)
+        else:
+            lat = _safe_float(row.get("lat"))
+            lon = _safe_float(row.get("lon"))
+            key = ("coords", round(lat, 4) if lat is not None else None, round(lon, 4) if lon is not None else None)
+        unique.setdefault(key, row)
+    return list(unique.values())
+
+
+async def run(mode: str = "both") -> dict[str, int]:
+    if mode not in {"current", "forecast", "both"}:
+        raise ValueError(f"unsupported local poll mode: {mode}")
+
     rows = pg.fetch(
         """
         select distinct zip, lat, lon
@@ -183,20 +204,48 @@ async def main() -> None:
             or (lat is not null and lon is not null)
         """
     )
+    rows = _dedupe_locations(rows)
+    stats = {
+        "locations": len(rows),
+        "current_updated": 0,
+        "forecast_updated": 0,
+        "failures": 0,
+    }
     for row in rows:
         zip_code = row.get("zip")
         lat = _safe_float(row.get("lat"))
         lon = _safe_float(row.get("lon"))
         try:
-            if zip_code:
+            if mode in {"current", "both"} and zip_code:
                 payload = await assemble_for_zip(zip_code)
                 upsert_zip_payload(zip_code, payload)
+                stats["current_updated"] += 1
                 logger.info("[poll] cached local snapshot zip=%s", zip_code)
-            forecast_rows = await _refresh_local_forecast(zip_code, lat, lon)
-            if forecast_rows:
-                logger.info("[poll] upserted %s local forecast rows for %s", forecast_rows, zip_code or f"{lat},{lon}")
+            if mode in {"forecast", "both"}:
+                forecast_rows = await _refresh_local_forecast(zip_code, lat, lon)
+                stats["forecast_updated"] += forecast_rows
+                if forecast_rows:
+                    logger.info("[poll] upserted %s local forecast rows for %s", forecast_rows, zip_code or f"{lat},{lon}")
         except Exception as exc:
+            stats["failures"] += 1
             logger.exception("[poll] %s failed: %s", zip_code or f"{lat},{lon}", exc)
+
+    logger.info("[poll] done mode=%s stats=%s", mode, stats)
+    if stats["failures"]:
+        raise RuntimeError(f"local poll completed with {stats['failures']} location failure(s)")
+    return stats
+
+
+async def main() -> None:
+    parser = argparse.ArgumentParser(description="Refresh Gaia Eyes local conditions and forecasts.")
+    parser.add_argument(
+        "--mode",
+        choices=("current", "forecast", "both"),
+        default="both",
+        help="Refresh current conditions, multi-day forecast, or both (default).",
+    )
+    args = parser.parse_args()
+    await run(args.mode)
 
 
 if __name__ == "__main__":

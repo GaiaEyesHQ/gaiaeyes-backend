@@ -4,15 +4,24 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+if not SUPABASE_URL:
+    SUPABASE_URL = os.getenv("SUPABASE_REST_URL", "").rstrip("/")
+    if SUPABASE_URL.endswith("/rest/v1"):
+        SUPABASE_URL = SUPABASE_URL[: -len("/rest/v1")]
+SUPABASE_SERVICE_ROLE_KEY = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    or os.getenv("SUPABASE_SERVICE_KEY", "")
+)
 
 def supabase_upsert(table, rows, on_conflict=None):
     """
     Upsert rows into a Supabase table via the REST API.
     Supports "table" (public schema) or "schema.table" (e.g., "ext.global_hazards").
     """
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not rows:
-        return
+    if not rows:
+        return True
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return False
 
     # Parse schema.table if provided
     schema = "public"
@@ -51,6 +60,7 @@ def supabase_upsert(table, rows, on_conflict=None):
     try:
         with urlopen(req, timeout=30) as resp:
             _ = resp.read()
+        return True
     except HTTPError as e:
         body = ""
         try:
@@ -58,7 +68,10 @@ def supabase_upsert(table, rows, on_conflict=None):
         except Exception:
             pass
         print(f"[supabase_upsert] HTTP {e.code} for table={schema}.{table_name}: {body}", flush=True)
+        return False
     except URLError as e:
         print(f"[supabase_upsert] URL error for table={schema}.{table_name}: {e}", flush=True)
+        return False
     except Exception as e:
         print(f"[supabase_upsert] unexpected error for table={schema}.{table_name}: {e}", flush=True)
+        return False
