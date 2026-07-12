@@ -3105,7 +3105,7 @@ def render_earthscope_summary(
         label = str(primary_driver.get("label") or primary_driver.get("key") or "This signal").strip()
         short_reason = str(primary_driver.get("personal_reason_short") or "").strip()
         if short_reason:
-            sentences.append(f"Right now, {label.lower()} looks most relevant for you. {short_reason}")
+            sentences.append(f"Right now, {label.lower()} looks most relevant. {short_reason}")
         else:
             sentences.append(f"Right now, {label.lower()} looks like the clearest current factor in your mix.")
     elif top_drivers:
@@ -3159,7 +3159,7 @@ def render_earthscope_summary(
     if supporting_driver:
         support_label = str(supporting_driver.get("label") or supporting_driver.get("key") or "").strip()
         if support_label and support_label.lower() not in daily_brief.lower():
-            sentences.append(f"{support_label} is also in the mix right now.")
+            sentences.append(f"{support_label} is also contributing.")
 
     if theme_sentence:
         sentences.append(theme_sentence)

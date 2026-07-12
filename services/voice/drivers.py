@@ -101,18 +101,18 @@ def render_driver_daily_brief(
     primary_short = _clean_text(primary_driver.get("personal_reason_short"))
     normalized_label = label.lower()
     if normalized_label in {"current symptoms", "symptoms logged"}:
-        daily_brief = "Right now, your current symptoms look most relevant for you."
+        daily_brief = "Right now, your current symptoms look most relevant."
         if primary_short:
             daily_brief += f" {primary_short}"
     elif primary_short:
-        daily_brief = f"Right now, {label.lower()} looks most relevant for you. {primary_short}"
+        daily_brief = f"Right now, {label.lower()} looks most relevant. {primary_short}"
     else:
         daily_brief = f"Right now, {label.lower()} looks like the clearest current driver in your mix."
 
     if supporting_drivers:
         support_label = _clean_text(supporting_drivers[0].get("label") or supporting_drivers[0].get("key"))
         if support_label:
-            daily_brief += f" {support_label} is also in the mix."
+            daily_brief += f" {support_label} is also contributing."
     return daily_brief
 
 

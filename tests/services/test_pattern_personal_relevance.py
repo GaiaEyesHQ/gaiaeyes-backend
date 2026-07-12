@@ -55,7 +55,9 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
         self.assertEqual(primary["key"], "pressure")
         self.assertIn("pain flare", primary["personal_reason"].lower())
         self.assertEqual(primary["role_label"], "Leading now")
-        self.assertIn("matters more for you right now", relevance["today_relevance_explanations"]["daily_brief"])
+        daily_brief = relevance["today_relevance_explanations"]["daily_brief"]
+        self.assertIn("matters more right now", daily_brief)
+        self.assertEqual(daily_brief.count("for you"), 1)
         self.assertEqual(relevance["driver_summary_semantic"]["kind"], "driver_summary")
         self.assertEqual(relevance["driver_summary_semantic"]["schema_version"], "1.0")
 
@@ -368,12 +370,12 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
             user_tags=["fibromyalgia"],
             personal_relevance={
                 "today_relevance_explanations": {
-                    "daily_brief": "Right now, pressure swing looks most relevant for you. Pressure swings are a known repeating pattern in your pain flare history. Air quality is also in the mix."
+                    "daily_brief": "Right now, pressure swing looks most relevant. Pressure swings are a known repeating pattern in your pain flare history. Air quality is also contributing."
                 }
             },
         )
 
-        self.assertTrue(summary.startswith("Right now, pressure swing looks most relevant for you."))
+        self.assertTrue(summary.startswith("Right now, pressure swing looks most relevant."))
         self.assertIn("pain flare history", summary.lower())
 
 

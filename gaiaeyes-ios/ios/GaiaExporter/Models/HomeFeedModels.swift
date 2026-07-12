@@ -21,11 +21,11 @@ enum HomePossibleSymptomLabels {
         case "FOCUS_FOG_DAY":
             return ["Brain fog", "Focus shifts"]
         case "HRV_DIP_DAY":
-            return ["Low energy", "Tired"]
+            return ["Low energy"]
         case "HIGH_HR_DAY":
             return ["Heart awareness", "Body strain"]
         case "SHORT_SLEEP_DAY":
-            return ["Tired", "Low energy"]
+            return ["Low energy"]
         default:
             return []
         }
@@ -42,7 +42,7 @@ enum HomePossibleSymptomLabels {
         var unmatched: [HomePossibleSymptomMatch] = []
 
         for raw in candidates {
-            let label = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let label = canonicalDisplayLabel(raw)
             let key = normalizedKey(label)
             guard !label.isEmpty, !seen.contains(key) else { continue }
             seen.insert(key)
@@ -58,7 +58,13 @@ enum HomePossibleSymptomLabels {
     }
 
     private static func normalizedKey(_ raw: String) -> String {
-        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let key = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return key == "tired" ? "low energy" : key
+    }
+
+    private static func canonicalDisplayLabel(_ raw: String) -> String {
+        let label = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedKey(label) == "low energy" ? "Low energy" : label
     }
 }
 

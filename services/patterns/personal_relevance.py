@@ -728,7 +728,7 @@ def _compact_driver_line(driver: Mapping[str, Any]) -> str:
     reason = str(driver.get("personal_reason_short") or driver.get("personal_reason") or "").strip()
     clause = str(driver.get("personal_reason_clause") or "").strip().rstrip(".")
     if str(driver.get("role") or "").strip() == "primary" and driver.get("override_active") and clause:
-        reason = f"More relevant for you right now because {clause}."
+        reason = f"More relevant right now because {clause}."
     if role_label and reason:
         return f"{role_label}: {label} — {reason}"
     if role_label:
@@ -850,10 +850,10 @@ def compute_personal_relevance(
             primary_label = str(primary_driver.get("label") or primary_key.replace("_", " ").title())
             if clause:
                 override_note = (
-                    f"{raw_label} is active, but {primary_label} matters more for you right now because {clause}."
+                    f"{raw_label} is active, but {primary_label} matters more right now because {clause}."
                 )
             else:
-                override_note = f"{raw_label} is active, but {primary_label} looks more relevant for you right now."
+                override_note = f"{raw_label} is active, but {primary_label} looks more relevant right now."
     active_pattern_refs = _dedupe_pattern_refs(
         ref
         for row in scored_rows[:3]

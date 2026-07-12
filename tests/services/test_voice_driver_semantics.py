@@ -30,8 +30,31 @@ def test_render_driver_daily_brief_uses_primary_and_supporting() -> None:
     )
 
     rendered = render_driver_daily_brief(payload)
-    assert rendered.startswith("Right now, pressure swing looks most relevant for you.")
-    assert rendered.endswith("Air Quality is also in the mix.")
+    assert rendered == (
+        "Right now, pressure swing looks most relevant. "
+        "Pressure often matches your pain pattern. "
+        "Air Quality is also contributing."
+    )
+
+
+def test_render_driver_daily_brief_uses_for_you_once() -> None:
+    payload = build_driver_summary_semantic(
+        day=date(2026, 3, 17),
+        raw_top_drivers=[{"key": "schumann", "label": "Schumann Resonance"}],
+        primary_driver={
+            "key": "schumann",
+            "label": "Schumann Resonance",
+            "personal_reason_short": "Schumann variability has lined up with more HRV dip days for you.",
+            "confidence": "Moderate",
+        },
+        supporting_drivers=[{"key": "ulf", "label": "ULF Activity"}],
+        today_personal_themes=[],
+        override_note="",
+    )
+
+    rendered = render_driver_daily_brief(payload)
+    assert rendered.count("for you") == 1
+    assert rendered.endswith("ULF Activity is also contributing.")
 
 
 def test_render_driver_reason_prefers_seed_text() -> None:
