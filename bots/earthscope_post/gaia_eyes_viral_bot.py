@@ -1432,7 +1432,9 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
         (
             ("hrv", "heart-rate variability", "autonomic", "baseline"),
             ["Ready for a calmer day?", "Body feeling steadier?", "Less static today?"] if calm_context else [
-                "Body signals running loud?",
+                "Body buzzing today?",
+                "Feeling jittery?",
+                "Feeling squirrely?",
                 "Feeling wired for no reason?",
                 "Restless and tired?",
             ],
@@ -1472,11 +1474,14 @@ def _public_card_title(title: Any, *, fallback: str) -> str:
     if not cleaned:
         return fallback
     lowered = cleaned.lower()
+    generic_key = lowered.rstrip("?! .")
     generic_titles = {
         "active geomagnetics",
+        "body signals running loud",
         "clear runway",
         "earthscope",
         "daily earthscope",
+        "is your body running loud",
         "magnetic calm",
         "quiet skies",
         "space weather update",
@@ -1485,7 +1490,7 @@ def _public_card_title(title: Any, *, fallback: str) -> str:
         "today's earthscope",
         "todays earthscope",
     }
-    if lowered in generic_titles or lowered.startswith("daily earthscope"):
+    if generic_key in generic_titles or lowered.startswith("daily earthscope"):
         return fallback
     if re.search(r"\b(jan|feb|mar|apr|may|jun|june|jul|aug|sep|oct|nov|dec)\b|\d{4}|#", lowered):
         return fallback

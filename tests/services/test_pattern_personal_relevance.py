@@ -99,6 +99,35 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
         self.assertIn("pain flare history", why_blob.lower())
         self.assertIn("pain flare history", pressure_driver["why"][0].lower())
 
+    def test_hrv_pattern_is_relevant_to_heart_energy_and_recovery(self) -> None:
+        relevance = compute_personal_relevance(
+            day=date(2026, 7, 12),
+            drivers=[
+                {
+                    "key": "schumann",
+                    "label": "Schumann",
+                    "severity": "watch",
+                    "state": "Watch",
+                    "signal_strength": 0.72,
+                    "show_driver": True,
+                }
+            ],
+            pattern_rows=[
+                {
+                    "signal_key": "schumann_exposed",
+                    "outcome_key": "hrv_dip_day",
+                    "confidence": "Strong",
+                    "lag_hours": 48,
+                    "relative_lift": 2.8,
+                }
+            ],
+            user_tags=[],
+            recent_outcomes={},
+        )
+
+        gauge_keys = {item["gauge_key"] for item in relevance["pattern_relevant_gauges"]}
+        self.assertTrue({"heart", "stamina", "energy", "health_status"}.issubset(gauge_keys))
+
     def test_high_signal_stays_visible_when_personal_relevance_is_low(self) -> None:
         relevance = compute_personal_relevance(
             day=date(2026, 3, 17),

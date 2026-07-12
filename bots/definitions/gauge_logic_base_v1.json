@@ -80,7 +80,7 @@
         "support_effect_tags": ["autonomic_load", "inflammation_sensitivity"],
         "zone_labels": {
           "low": "Fresh",
-          "mild": "Okay",
+          "mild": "Less steady",
           "elevated": "Heavy",
           "high": "Drained"
         }
@@ -94,7 +94,7 @@
         "support_effect_tags": ["anxiety", "autonomic_load"],
         "zone_labels": {
           "low": "High",
-          "mild": "Normal",
+          "mild": "Variable",
           "elevated": "Variable",
           "high": "Low"
         }

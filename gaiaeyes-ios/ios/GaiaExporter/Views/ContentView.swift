@@ -630,6 +630,9 @@ private struct DashboardModalEntry: Codable, Hashable {
     let quickLog: DashboardQuickLog?
     let cta: DashboardModalCTA?
     let voiceSemantic: DashboardModalVoiceSemantic?
+    let delta: Int?
+    let deltaExplanation: String?
+    let relatedDriverKeys: [String]?
 
     var semanticHeaderSummary: String? {
         voiceSemantic?.interpretation?.headerSummary?.nilIfTrimmedEmpty ?? body?.nilIfTrimmedEmpty
@@ -3745,7 +3748,22 @@ struct ContentView: View {
     }
 
     private func missionDashboardDriverItem(from detail: DriverDetailItem) -> DashboardDriverItem {
-        DashboardDriverItem(
+        let patternRefs = detail.patternRefs.map { ref in
+            DashboardPatternRef(
+                id: ref.id,
+                driverKey: ref.driverKey ?? detail.key,
+                signalKey: ref.signalKey,
+                signal: ref.signal,
+                outcomeKey: ref.outcomeKey,
+                outcome: ref.outcome,
+                confidence: ref.confidence,
+                usedToday: nil,
+                usedTodayLabel: nil,
+                relevanceScore: ref.relevanceScore,
+                explanation: ref.explanation
+            )
+        }
+        return DashboardDriverItem(
             key: detail.key,
             label: detail.label,
             severity: detail.severity ?? detail.state,
@@ -3758,7 +3776,7 @@ struct ContentView: View {
             rawSeverityScore: detail.displayScore,
             personalRelevanceScore: detail.personalRelevanceScore,
             personalReason: detail.semanticPersonalReason ?? detail.personalReason ?? detail.semanticShortReason ?? detail.shortReason,
-            activePatternRefs: nil
+            activePatternRefs: patternRefs.isEmpty ? nil : patternRefs
         )
     }
 
@@ -10753,7 +10771,7 @@ struct ContentView: View {
         }
 
         private var deltaText: String? {
-            guard item.value != nil, item.delta != 0 else { return nil }
+            guard item.value != nil else { return nil }
             return item.delta > 0 ? "+\(item.delta)" : "\(item.delta)"
         }
 
@@ -11358,6 +11376,7 @@ struct ContentView: View {
             let onOpenAllDrivers: (String?) -> Void
             @Environment(\.dismiss) private var dismiss
             @State private var selectedQuickLogs: Set<DashboardQuickLogOption> = []
+            @State private var showsDeltaExplanation = false
 
             private var vocabulary: CopyVocabulary {
                 experienceMode.copyVocabulary
@@ -11590,8 +11609,54 @@ struct ContentView: View {
                 }
             }
 
+            private func isActiveInfluencer(_ driver: DashboardDriverItem) -> Bool {
+                let tokens = [driver.severity, driver.state]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                let activeTokens: Set<String> = [
+                    "active", "elevated", "high", "strong", "watch", "mild", "moderate",
+                    "usg", "unhealthy", "very high", "storm"
+                ]
+                return tokens.contains { token in
+                    activeTokens.contains(token) || activeTokens.contains(where: { token.hasPrefix($0) })
+                }
+            }
+
+            private func patternOutcomeKeys(for gaugeKey: String) -> Set<String> {
+                switch normalizedGaugePopupKey(gaugeKey) {
+                case "pain":
+                    return ["pain_flare_day", "headache_day"]
+                case "focus":
+                    return ["focus_fog_day", "headache_day"]
+                case "heart":
+                    return ["high_hr_day", "resting_hr_elevated_day", "anxiety_day", "hrv_dip_day"]
+                case "recoveryLoad":
+                    return ["fatigue_day", "short_sleep_day", "poor_sleep_day", "hrv_dip_day", "resting_hr_elevated_day"]
+                case "energy":
+                    return ["fatigue_day", "anxiety_day", "short_sleep_day", "poor_sleep_day", "hrv_dip_day"]
+                case "sleep":
+                    return ["poor_sleep_day", "short_sleep_day"]
+                case "mood":
+                    return ["anxiety_day", "restlessness_day", "poor_sleep_day"]
+                case "healthStatus":
+                    return ["fatigue_day", "short_sleep_day", "high_hr_day", "resting_hr_elevated_day", "hrv_dip_day"]
+                default:
+                    return []
+                }
+            }
+
+            private func hasGaugePattern(_ driver: DashboardDriverItem, gaugeKey: String) -> Bool {
+                let outcomes = patternOutcomeKeys(for: gaugeKey)
+                guard !outcomes.isEmpty else { return false }
+                return (driver.activePatternRefs ?? []).contains { ref in
+                    guard let outcome = ref.outcomeKey?.trimmingCharacters(in: .whitespacesAndNewlines), !outcome.isEmpty else {
+                        return false
+                    }
+                    return outcomes.contains(outcome)
+                }
+            }
+
             func gaugePopupCurrentInfluencers(for gaugeKey: String) -> [DashboardDriverItem] {
-                let availableDrivers = dedupedDrivers(drivers)
+                let availableDrivers = dedupedDrivers(drivers).filter(isActiveInfluencer)
                 let normalizedGaugeKey = normalizedGaugePopupKey(gaugeKey)
 
                 if normalizedGaugeKey == "healthStatus" {
@@ -11614,23 +11679,43 @@ struct ContentView: View {
                 case "pain":
                     priorityMap = [["allergen_exposure"], ["overexertion"], ["allergens"], ["pressure"], ["temp", "temperature"], ["aqi"]]
                 case "focus":
-                    priorityMap = [["allergen_exposure"], ["allergens"], ["pressure"], ["aqi"], ["schumann", "resonance"]]
+                    priorityMap = [["allergen_exposure"], ["allergens"], ["pressure"], ["aqi"], ["ulf"], ["schumann", "resonance"]]
                 case "energy":
-                    priorityMap = [["overexertion"], ["allergen_exposure"], ["temp", "temperature"], ["aqi"], ["allergens"]]
+                    priorityMap = [["overexertion"], ["allergen_exposure"], ["temp", "temperature"], ["aqi"], ["allergens"], ["schumann", "resonance"], ["ulf"]]
                 case "recoveryLoad":
-                    priorityMap = [["overexertion"], ["temp", "temperature"], ["pressure"], ["aqi"]]
+                    priorityMap = [["overexertion"], ["temp", "temperature"], ["pressure"], ["aqi"], ["schumann", "resonance"], ["ulf"]]
                 case "sleep":
                     priorityMap = [["overexertion"], ["allergen_exposure"], ["pressure"], ["temp", "temperature"], ["schumann", "resonance"]]
                 case "mood":
                     priorityMap = [["pressure"], ["schumann", "resonance"], ["aqi"]]
                 case "heart":
-                    priorityMap = [["overexertion"], ["allergen_exposure"], ["kp", "geomagnetic"], ["bz"], ["sw", "solar_wind"], ["pressure"]]
+                    priorityMap = [["overexertion"], ["allergen_exposure"], ["kp", "geomagnetic"], ["bz"], ["sw", "solar_wind"], ["pressure"], ["schumann", "resonance"], ["ulf"]]
                 default:
                     priorityMap = []
                 }
 
                 var selected: [DashboardDriverItem] = []
                 var seen: Set<String> = []
+                let explicitKeys = entry.relatedDriverKeys ?? []
+                let patternMatches = availableDrivers
+                    .filter { hasGaugePattern($0, gaugeKey: gaugeKey) }
+                    .sorted { gaugePopupInfluencerScore(for: $0) > gaugePopupInfluencerScore(for: $1) }
+                for driver in patternMatches {
+                    let normalized = normalizedDriverPopupKey(driver.key)
+                    guard !seen.contains(normalized) else { continue }
+                    seen.insert(normalized)
+                    selected.append(driver)
+                    if selected.count == 4 { return selected }
+                }
+                for key in explicitKeys {
+                    guard let match = availableDrivers.first(where: {
+                        let normalized = normalizedDriverPopupKey($0.key)
+                        return !seen.contains(normalized) && normalized == normalizedDriverPopupKey(key)
+                    }) else { continue }
+                    seen.insert(normalizedDriverPopupKey(match.key))
+                    selected.append(match)
+                    if selected.count == 4 { return selected }
+                }
                 for candidates in priorityMap {
                     guard let match = availableDrivers.first(where: {
                         let normalized = normalizedDriverPopupKey($0.key)
@@ -11643,6 +11728,16 @@ struct ContentView: View {
                     }
                 }
                 return selected
+            }
+
+            private var deltaValueText: String? {
+                guard isGaugeContext, let delta = entry.delta else { return nil }
+                return delta > 0 ? "+\(delta)" : "\(delta)"
+            }
+
+            private var deltaHelpText: String {
+                entry.deltaExplanation
+                    ?? "This compares today’s gauge score with yesterday. Higher scores mean more estimated load; lower scores mean less."
             }
 
             func gaugePopupHelpfulTips(for gaugeKey: String) -> [String] {
@@ -11748,6 +11843,8 @@ struct ContentView: View {
                     return "Recent heavy activity is in the mix"
                 case "schumann":
                     return "Earth Resonance is \(state)"
+                case "ulf":
+                    return "ULF activity is \(state)"
                 case "kp":
                     return "Geomagnetic conditions are \(state)"
                 case "bz":
@@ -12024,6 +12121,29 @@ struct ContentView: View {
                             .foregroundColor(.white.opacity(0.94))
                     }
 
+                    if let deltaValueText {
+                        modalSectionCard("Change from yesterday") {
+                            HStack(spacing: 10) {
+                                Text(deltaValueText)
+                                    .font(.title3.weight(.bold))
+                                    .foregroundColor(modalAccent)
+                                Text("points")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Button {
+                                    showsDeltaExplanation = true
+                                } label: {
+                                    Image(systemName: "info.circle")
+                                        .font(.headline)
+                                        .foregroundColor(modalAccent)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("What this change means")
+                            }
+                        }
+                    }
+
                     if !symptoms.isEmpty {
                         modalSectionCard("Active Symptoms", action: dismissAndOpenCurrentSymptoms) {
                             ForEach(symptoms, id: \.self) { symptom in
@@ -12209,6 +12329,11 @@ struct ContentView: View {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Close") { dismiss() }
                         }
+                    }
+                    .alert("What this change means", isPresented: $showsDeltaExplanation) {
+                        Button("Got it", role: .cancel) {}
+                    } message: {
+                        Text(deltaHelpText)
                     }
                 }
             }
@@ -13072,7 +13197,10 @@ struct ContentView: View {
                 ],
                 quickLog: nil,
                 cta: DashboardModalCTA(label: "Log symptoms", action: "open_symptom_log", prefill: ["OTHER"]),
-                voiceSemantic: nil
+                voiceSemantic: nil,
+                delta: row.delta,
+                deltaExplanation: "This compares today’s gauge score with yesterday. Higher scores mean more estimated load; lower scores mean less.",
+                relatedDriverKeys: nil
             )
         }
 
@@ -13573,7 +13701,7 @@ struct ContentView: View {
                     gaugeRecentLogBoosts: gaugeRecentLogBoosts,
                     lastSymptomUpdateAt: lastSymptomUpdateAt,
                     currentSymptomsSnapshot: currentSymptomsSnapshot,
-                    drivers: drivers,
+                    drivers: dedupedDrivers(drivers + previewDrivers),
                     onQuickLog: onQuickLog,
                     onOpenCustomLog: { event in
                         selectedModal = nil

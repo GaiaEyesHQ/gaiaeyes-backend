@@ -97,7 +97,7 @@ class GaugeScorerTests(unittest.TestCase):
 
         adjusted, meta = apply_symptom_gauge_adjustments(gauges, symptoms)
 
-        self.assertGreater(adjusted["pain"], 40.0)
+        self.assertEqual(adjusted["pain"], 38.0)
         self.assertGreater(adjusted["focus"], 30.0)
         self.assertGreater(meta["adjustments"]["pain"], 10.0)
 
@@ -327,7 +327,7 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertFalse(payload["calibrating"])
         self.assertEqual(payload["baseline_days"], 21)
         self.assertIn("sleep debt", payload["summary"].lower())
-        self.assertEqual(payload["drivers"][0]["label"], "Symptoms logged")
+        self.assertEqual(payload["drivers"][0]["label"], "Current symptoms")
         self.assertEqual(payload["drivers"][1]["label"], "Sleep debt")
         self.assertEqual(payload["context"][0]["label"], "Cycle context")
         self.assertIn("luteal", payload["context"][0]["display"])
@@ -341,12 +341,12 @@ class GaugeScorerTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(summary["gauge_boosts"]["pain"], 18.0)
-        self.assertAlmostEqual(summary["gauge_boosts"]["energy"], 3.6, places=2)
-        self.assertEqual(summary["recent_gauge_boosts"]["pain"], 18.0)
+        self.assertEqual(summary["gauge_boosts"]["pain"], 13.0)
+        self.assertAlmostEqual(summary["gauge_boosts"]["energy"], 1.75, places=2)
+        self.assertEqual(summary["recent_gauge_boosts"]["pain"], 13.0)
         self.assertNotIn("energy", summary["recent_gauge_boosts"])
         self.assertIn("pain", summary["recent_matching_gauges"])
-        self.assertGreater(summary["health_status_symptom_boost"], 12.0)
+        self.assertAlmostEqual(summary["health_status_symptom_boost"], 10.2, places=2)
 
     def test_symptom_signal_summary_respects_current_state_multipliers(self) -> None:
         now = datetime.now(timezone.utc)

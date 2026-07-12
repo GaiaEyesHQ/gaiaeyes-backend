@@ -178,6 +178,21 @@ def test_fallback_social_title_replaces_generic_report_label():
     assert _clean_llm_title(title, {"clear runway", "magnetic calm", "quiet skies"}) == title
 
 
+def test_title_cleaner_rejects_vague_running_loud_hook():
+    assert _clean_llm_title("Is Your Body Running Loud?", set()) is None
+
+
+def test_fallback_social_title_replaces_running_loud_default():
+    title = _fallback_social_title(
+        {"day": "2026-07-11", "platform": "default", "kp_max_24h": 4.3},
+        "Is Your Body Running Loud?",
+        {"is your body running loud"},
+    )
+
+    assert "running loud" not in title.lower()
+    assert _clean_llm_title(title, {"is your body running loud"}) == title
+
+
 def test_fallback_social_title_uses_symptom_pattern_language():
     title = _fallback_social_title(
         {"day": "2026-07-04", "platform": "default", "kp_max_24h": 5.7},
@@ -451,13 +466,35 @@ def test_reel_voiceover_fallback_starts_with_emotional_title_not_action_caption(
     voiceover = _build_reel_voiceover_text(
         ctx={"kp_max_24h": 4.5, "bz_min": -7},
         title="Body Buzzing For No Reason?",
-        caption="Take short movement breaks and sip water today.",
+        caption="Take short movement breaks and sip water today. Keep the day simple when your body feels keyed up.",
         playbook="- Do 3 minutes of easy movement\n- Sip water",
         rewrite=None,
     )
 
     assert voiceover.startswith("Body Buzzing For No Reason?")
+    assert "Take short movement breaks" in voiceover
     assert "Try this today: Do 3 minutes of easy movement." in voiceover
+    assert "Follow Gaia Eyes for daily updates" in voiceover
+
+
+def test_reel_voiceover_uses_long_explicit_script_when_available():
+    voiceover = _build_reel_voiceover_text(
+        ctx={"kp_max_24h": 4.5, "bz_min": -7},
+        title="Body Buzzing For No Reason?",
+        caption="Take short movement breaks and sip water today.",
+        playbook="- Do 3 minutes of easy movement",
+        rewrite={
+            "voiceover": (
+                "Body buzzing for no clear reason? The signal mix is restless today. "
+                "Try slow breathing before you push harder."
+            )
+        },
+    )
+
+    assert voiceover == (
+        "Body buzzing for no clear reason? The signal mix is restless today. "
+        "Try slow breathing before you push harder."
+    )
 
 
 def test_facebook_caption_profile_is_longer_than_instagram():

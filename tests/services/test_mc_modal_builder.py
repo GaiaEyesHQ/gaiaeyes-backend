@@ -172,7 +172,7 @@ def test_energy_modal_uses_daily_checkin_and_dedupes_effects() -> None:
     payload = build_modal_models(
         day=date(2026, 3, 27),
         gauges={"energy": 82},
-        gauges_meta={"energy": {"zone": "high", "label": "Variable"}},
+        gauges_meta={"energy": {"zone": "high", "label": "Low"}},
         gauge_labels={"energy": "Energy"},
         drivers=[
             {
@@ -216,7 +216,7 @@ def test_energy_modal_uses_daily_checkin_and_dedupes_effects() -> None:
     )
 
     energy = payload["gauges"]["energy"]
-    assert energy["title"] == "Energy \u2014 Low capacity"
+    assert energy["title"] == "Energy \u2014 Low"
     assert energy["causal_callout"] == "You reported limited usable energy earlier, so your capacity is reduced."
     assert energy["what_you_may_notice"][0] == "When pollen and air quality both stack up, fatigue or brain fog may show up faster."
     assert len(energy["what_you_may_notice"]) <= 3
@@ -249,6 +249,51 @@ def test_low_driver_modal_includes_short_semantic_summary() -> None:
     assert aqi["voice_semantic"]["kind"] == "driver_modal"
     assert aqi["voice_semantic"]["interpretation"]["header_summary"] == aqi["body"]
     assert aqi["voice_semantic"]["interpretation"]["tip_summary"] == aqi["tip"]
+
+
+def test_gauge_modal_exposes_zero_delta_and_pattern_linked_driver() -> None:
+    payload = build_modal_models(
+        day=date(2026, 7, 12),
+        gauges={"heart": 22},
+        gauges_meta={"heart": {"zone": "low", "label": "Steady"}},
+        gauge_labels={"heart": "Heart"},
+        gauges_delta={"heart": 0},
+        drivers=[
+            {
+                "key": "ulf",
+                "label": "ULF Activity",
+                "severity": "watch",
+                "state": "Elevated",
+                "active_pattern_refs": [
+                    {
+                        "id": "ulf_exposed|resting_hr_elevated_day|0",
+                        "driver_key": "ulf",
+                        "outcome_key": "resting_hr_elevated_day",
+                    }
+                ],
+            }
+        ],
+        personal_relevance={
+            "pattern_relevant_gauges": [
+                {
+                    "gauge_key": "heart",
+                    "summary": "ULF activity has lined up with more resting-HR shifts for you.",
+                    "active_pattern_refs": [
+                        {
+                            "driver_key": "ulf",
+                            "outcome_key": "resting_hr_elevated_day",
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    heart = payload["gauges"]["heart"]
+    assert heart["delta"] == 0
+    assert "unchanged" in heart["delta_explanation"].lower()
+    assert heart["related_driver_keys"] == ["ulf"]
+    assert heart["voice_semantic"]["facts"]["related_keys"] == ["ulf"]
 
 
 def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:

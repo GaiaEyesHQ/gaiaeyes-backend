@@ -160,7 +160,9 @@ def test_earthscope_hook_title_avoids_hrv_recovery_jargon():
     )
 
     assert title in {
-        "Body signals running loud?",
+        "Body buzzing today?",
+        "Feeling jittery?",
+        "Feeling squirrely?",
         "Feeling wired for no reason?",
         "Restless and tired?",
     }
@@ -180,6 +182,8 @@ def test_public_card_title_uses_fallback_for_generic_or_dated_titles():
     assert _public_card_title("Daily EarthScope", fallback="Ready to focus?") == "Ready to focus?"
     assert _public_card_title("Daily EarthScope - Jun 21, 2026", fallback="Ready to focus?") == "Ready to focus?"
     assert _public_card_title("Magnetic Calm", fallback="Ready to focus?") == "Ready to focus?"
+    assert _public_card_title("Is your body running loud?", fallback="Feeling jittery?") == "Feeling jittery?"
+    assert _public_card_title("Body signals running loud?", fallback="Feeling squirrely?") == "Feeling squirrely?"
 
 
 def test_public_card_text_removes_clinician_and_vibes_language():

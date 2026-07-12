@@ -870,6 +870,7 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
         _dbg("title: rejected empty")
         return None
     lowered = cleaned.lower()
+    generic_key = lowered.rstrip("?! .")
     recent_lower = {str(item or "").strip().lower() for item in (recent_titles or set()) if str(item or "").strip()}
     generic = {
         "active geomagnetics",
@@ -879,6 +880,7 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
         "earthscope",
         "geomagnetic storm watch",
         "high-speed solar wind",
+        "is your body running loud",
         "magnetic calm",
         "mood sleep pressure check",
         "quiet skies",
@@ -891,7 +893,7 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
         "wearable trends need context",
         "your earthscope",
     }
-    if lowered in generic:
+    if generic_key in generic:
         _dbg(f"title: rejected generic='{cleaned}'")
         return None
     if lowered in recent_lower:
@@ -928,7 +930,9 @@ def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_title
         ],
         "unsettled": [
             "Feeling Wired And Worn Out?",
-            "Is Your Body Running Loud?",
+            "Body Buzzing Today?",
+            "Feeling Jittery Today?",
+            "Feeling Squirrely Today?",
             "Brain Fog On A Loop?",
             "Restless For No Clear Reason?",
             "Head Pressure Asking For Space?",
@@ -989,8 +993,8 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "Do not default to sleep just because a previous sleep post performed well; use sleep only when it is the best lane for today's facts. "
         "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
-        "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note. "
-        "Good shapes: 'Feeling Wired And Worn Out?', 'Brain Fog On A Loop?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
+        "Avoid these fallback labels and vague metaphors: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note, Is Your Body Running Loud. "
+        "Good shapes: 'Body Buzzing Today?', 'Feeling Jittery Today?', 'Feeling Squirrely Today?', 'Brain Fog On A Loop?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
     )
@@ -1654,7 +1658,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
-        "Voiceover should be one or two short spoken sentences that start with the same emotional hook lane as the caption, then one practical cue. "
+        "Voiceover should read like a short reel script: the caption's opening paragraph, one practical tip from playbook, then an optional soft line such as 'Follow Gaia Eyes for daily updates, or download the app for your personalized patterns.' "
         f"Aim for: caption {caption_profile['caption_instruction']} Snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
         "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. Respect style.template_id and style.template_map to decide sentence order for caption only; rearrange the same facts without adding new claims. "
     )
@@ -1904,7 +1908,7 @@ def _rewrite_json_candidates(
             "affects": "2-4 sentences about possible felt patterns without certainty.",
             "playbook": "3-5 short bullets.",
             "hashtags": "6-10 hashtags as one string.",
-            "voiceover": "1-2 spoken sentences, starts with an emotional hook, then one practical cue. No metrics, no hashtags.",
+            "voiceover": "3-5 spoken sentences. Use the caption's opening paragraph, one practical tip from playbook, then optionally add: Follow Gaia Eyes for daily updates, or download the app for your personalized patterns. No metrics, no hashtags.",
         },
         "ban_phrases": BAN_PHRASES,
     }
@@ -2840,6 +2844,31 @@ def _first_playbook_action(playbook: str) -> str:
     return ""
 
 
+def _caption_voiceover_lead(caption: str, title: str) -> str:
+    raw = str(caption or "").strip()
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", raw) if part.strip()]
+    lead = paragraphs[0] if paragraphs else raw
+    if not lead:
+        lead = str(title or "").strip()
+    lead = _sanitize_caption(lead)
+    if len(lead) > 460:
+        sentences = _split_text_sentences(lead)
+        shortened = " ".join(sentences[:3]).strip()
+        lead = shortened if shortened else lead[:460].rsplit(" ", 1)[0].rstrip(" ,;:-") + "."
+
+    first = _first_sentence(lead)
+    if first and _hook_lane_for_text(first):
+        return lead
+    title_clean = _sanitize_caption(str(title or ""))
+    if title_clean:
+        if not title_clean.endswith((".", "?", "!")):
+            title_clean = f"{title_clean}."
+        if lead and not lead.lower().startswith(title_clean.lower()):
+            return f"{title_clean} {lead}".strip()
+        return title_clean
+    return lead
+
+
 def _build_reel_voiceover_text(
     *,
     ctx: Dict[str, Any],
@@ -2849,20 +2878,20 @@ def _build_reel_voiceover_text(
     rewrite: Optional[Dict[str, str]] = None,
 ) -> str:
     explicit = _sanitize_caption(str((rewrite or {}).get("voiceover") or ""))
-    if explicit:
+    if explicit and len(_split_text_sentences(explicit)) >= 3:
         return _scrub_banned_phrases(explicit)
 
-    first = _first_sentence(caption)
-    first_lane = _hook_lane_for_text(first)
-    lead = first if first_lane else str(title or "").strip()
+    lead = _caption_voiceover_lead(caption, title)
     if not lead:
         preferred = _preferred_hook_lanes(ctx, limit=1)
         if preferred:
             lead = HOOK_LANES[preferred[0]]["examples"][0]
     action = _first_playbook_action(playbook)
+    parts = [lead] if lead else []
     if action:
-        return _scrub_banned_phrases(_sanitize_caption(f"{lead} Try this today: {action}."))
-    return _scrub_banned_phrases(_sanitize_caption(lead))
+        parts.append(f"Try this today: {action}.")
+    parts.append("Follow Gaia Eyes for daily updates, or download the app for your personalized patterns.")
+    return _scrub_banned_phrases(_sanitize_caption(" ".join(parts)))
 
 
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):

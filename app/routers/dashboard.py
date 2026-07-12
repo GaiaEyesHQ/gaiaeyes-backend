@@ -8,7 +8,7 @@ import os
 import re
 import time
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
@@ -29,7 +29,7 @@ from bots.gauges.gauge_scorer import (
 )
 from bots.gauges.local_payload import get_local_payload
 from bots.gauges.signal_resolver import resolve_signals
-from services.drivers.all_drivers import build_exposure_driver_rows
+from services.drivers.all_drivers import build_exposure_driver_rows, build_ulf_driver_row
 from services.drivers.driver_normalize import normalize_environmental_drivers
 from services.gauges.alerts import dedupe_alert_pills
 from services.gauges.zones import decorate_gauge
@@ -552,18 +552,22 @@ async def _compute_gauges_delta_fallback(conn, user_id: str, day: date) -> Dict[
                 select day, pain, focus, heart, stamina, energy, sleep, mood, health_status
                   from marts.user_gauges_day
                  where user_id = %s
-                   and day <= %s
+                   and day in (%s, %s)
                  order by day desc
-                 limit 2
                 """,
-                (user_id, day),
+                (user_id, day, day - timedelta(days=1)),
                 prepare=False,
             )
             rows = await cur.fetchall()
     except Exception:
         return {key: 0 for key in _GAUGE_DELTA_KEYS}
 
-    if not rows or len(rows) < 2:
+    if (
+        not rows
+        or len(rows) < 2
+        or rows[0].get("day") != day
+        or rows[1].get("day") != day - timedelta(days=1)
+    ):
         return {key: 0 for key in _GAUGE_DELTA_KEYS}
 
     today_row = rows[0] or {}
@@ -587,8 +591,7 @@ async def _fetch_gauges_delta(conn, user_id: str, day: date) -> Dict[str, int]:
                 select day, deltas_json
                   from marts.user_gauges_delta_day
                  where user_id = %s
-                   and day <= %s
-                 order by day desc
+                   and day = %s
                  limit 1
                 """,
                 (user_id, day),
@@ -862,6 +865,7 @@ async def _build_dashboard_payload(
     out["member_post"] = resolved_member
     out["public_post"] = public_post
 
+    latest_ulf = None
     try:
         latest_ulf = await ulf_db.get_latest_ulf_context(conn)
         out.update(build_ulf_payload(latest_ulf, include_empty=True))
@@ -938,7 +942,8 @@ async def _build_dashboard_payload(
     exposure_summary = await asyncio.to_thread(fetch_exposure_summary, user_id, day, profile=profile)
     exposure_summary = exposure_summary if isinstance(exposure_summary, dict) else {}
     exposure_drivers = build_exposure_driver_rows(exposure_summary, generated_at=datetime.now(timezone.utc).isoformat())
-    ranked_input_drivers = [*drivers, *exposure_drivers]
+    ulf_driver = build_ulf_driver_row(latest_ulf)
+    ranked_input_drivers = [*drivers, *([ulf_driver] if ulf_driver else []), *exposure_drivers]
     personal_relevance = compute_personal_relevance(
         day=day,
         drivers=ranked_input_drivers,

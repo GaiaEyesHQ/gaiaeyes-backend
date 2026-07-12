@@ -93,8 +93,8 @@ Scoring rules:
   - `pain`: Quiet / Elevated / Active / Flare
   - `focus`: Clear / Patchy / Foggy / Scattered
   - `heart`: Steady / Reactive / Loaded / Strained
-  - `stamina` (`Recovery Load`): Fresh / Okay / Heavy / Drained
-  - `energy`: Smooth / Variable / Wired/tired / Volatile
+  - `stamina` (`Recovery Load`): Fresh / Less steady / Heavy / Drained
+  - `energy`: High / Variable / Variable / Low
   - `sleep`: Rest-friendly / Light / Disrupted / Fragile
   - `mood`: Stable / Sensitive / Reactive / Volatile
   - `health_status`: Low strain / Mild strain / Moderate strain / High strain
@@ -209,7 +209,7 @@ When trigger events are detected for paid users, the engine appends a “Trigger
     - `gauge_recent_log_boosts`: recent same-day symptom boosts keyed by gauge for client-side debug or label suppression
     - `last_symptom_update_at`: latest same-day symptom timestamp used for the current gauge weighting
     - `modal_models`: deterministic modal content for gauges and drivers
-      - gauge entries now expose `state_line`, optional `causal_callout`, `why`, `what_you_may_notice`, `suggested_actions`, and `quick_log`
+      - gauge entries now expose `state_line`, optional `causal_callout`, `why`, `what_you_may_notice`, `suggested_actions`, `quick_log`, `delta`, `delta_explanation`, and `related_driver_keys`
       - gauge explanations prioritize daily check-in input, recent symptom logs, active body-state signals, then environmental drivers and patterns
       - effect/help bullets are deduplicated into at most 3 distinct items so repeated driver wording does not surface multiple near-identical outcomes
     - `earthscope_summary`: short deterministic summary paragraph for home cards

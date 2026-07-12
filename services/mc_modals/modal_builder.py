@@ -789,27 +789,6 @@ _EXPOSURE_HELP_BUCKETS = {
     **{key: {"steadier_effort", "hydration_pacing"} for key in EVERYDAY_EXPOSURE_KEYS},
 }
 
-_GAUGE_MODAL_STATE_LABELS = {
-    "energy": {
-        "low": "Steady",
-        "mild": "Variable",
-        "elevated": "Reduced",
-        "high": "Low capacity",
-    },
-    "sleep": {
-        "low": "Steady",
-        "mild": "Lighter",
-        "elevated": "Reduced",
-        "high": "Reduced",
-    },
-    "stamina": {
-        "low": "Steady",
-        "mild": "Less steady",
-        "elevated": "Reduced",
-        "high": "Reduced",
-    },
-}
-
 _GAUGE_STATE_LINES = {
     "pain": {
         "active": "Pain load looks elevated right now.",
@@ -1068,6 +1047,22 @@ def _delta_line(delta: int) -> Optional[str]:
     return f"This gauge moved {abs(delta)} points {direction} from the prior reading."
 
 
+def _delta_explanation(delta: int) -> str:
+    if delta == 0:
+        return (
+            "Compared with yesterday, this gauge is unchanged. "
+            "Higher gauge scores mean more estimated load; lower scores mean less."
+        )
+    if delta > 0:
+        change = "more estimated load"
+    else:
+        change = "less estimated load"
+    return (
+        f"Compared with yesterday, this is {abs(delta)} points of {change}. "
+        "Higher gauge scores mean more estimated load; lower scores mean less."
+    )
+
+
 def _normalize_token(value: Any) -> str:
     return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
 
@@ -1107,10 +1102,6 @@ def _symptom_display_text(code: Any) -> str:
 
 
 def _gauge_modal_status_label(gauge_key: str, meta: Dict[str, Any]) -> str:
-    zone = _normalized_zone_key(meta)
-    override = (_GAUGE_MODAL_STATE_LABELS.get(gauge_key) or {}).get(zone)
-    if override:
-        return override
     return _normalized_zone_label(meta)
 
 
@@ -1753,6 +1744,23 @@ def _personal_relevance_gauge_summary(personal_relevance: Optional[Dict[str, Any
         if summary:
             return summary
     return None
+
+
+def _personal_relevance_gauge_driver_keys(
+    personal_relevance: Optional[Dict[str, Any]],
+    gauge_key: str,
+) -> List[str]:
+    if not isinstance(personal_relevance, dict):
+        return []
+    keys: List[str] = []
+    for item in personal_relevance.get("pattern_relevant_gauges") or []:
+        if str((item or {}).get("gauge_key") or "").strip() != gauge_key:
+            continue
+        for ref in (item or {}).get("active_pattern_refs") or []:
+            key = str((ref or {}).get("driver_key") or "").strip()
+            if key and key not in keys:
+                keys.append(key)
+    return keys
 
 
 def _driver_role_rank(driver: Dict[str, Any]) -> int:
@@ -2495,7 +2503,10 @@ def build_modal_models(
         meta = gauges_meta.get(gauge_key) or {}
         zone = _normalized_zone_key(meta)
         delta = int(gauges_delta.get(gauge_key) or 0)
-        related_keys = _GAUGE_DRIVER_MAP.get(gauge_key) or []
+        related_keys = list(_GAUGE_DRIVER_MAP.get(gauge_key) or [])
+        for key in _personal_relevance_gauge_driver_keys(personal_relevance, gauge_key):
+            if key not in related_keys:
+                related_keys.append(key)
         related = _sorted_related_drivers([drivers_by_key[k] for k in related_keys if k in drivers_by_key])
         personal_summary = _personal_relevance_gauge_summary(personal_relevance, gauge_key)
         entry = _gauge_explanation_entry(
@@ -2512,6 +2523,13 @@ def build_modal_models(
             health_status_explainer=health_status_explainer,
             personal_summary=personal_summary,
         )
+        entry["delta"] = delta
+        entry["delta_explanation"] = _delta_explanation(delta)
+        entry["related_driver_keys"] = [
+            str(driver.get("key") or "").strip()
+            for driver in related
+            if str(driver.get("key") or "").strip()
+        ]
         entry["voice_semantic"] = _build_modal_semantic(
             day=day,
             context_type="gauge",

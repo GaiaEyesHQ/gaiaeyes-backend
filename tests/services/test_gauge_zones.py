@@ -29,6 +29,8 @@ def test_zone_for_value_boundaries() -> None:
 def test_label_for_gauge_reads_definition_zone_labels() -> None:
     definition = _definition()
     assert label_for_gauge("pain", "mild", definition) == "Elevated"
+    assert label_for_gauge("energy", "mild", definition) == "Variable"
+    assert label_for_gauge("stamina", "mild", definition) == "Less steady"
     assert label_for_gauge("stamina", "high", definition) == "Drained"
     assert label_for_gauge("health_status", "low", definition) == "Low strain"
 

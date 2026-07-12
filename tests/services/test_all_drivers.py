@@ -11,8 +11,28 @@ if str(ROOT) not in sys.path:
 
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
 
-from services.drivers.all_drivers import _seed_space_context_drivers, compose_all_drivers_payload
+from services.drivers.all_drivers import _seed_space_context_drivers, build_ulf_driver_row, compose_all_drivers_payload
 from services.drivers.driver_normalize import normalize_environmental_drivers
+
+
+def test_build_ulf_driver_row_returns_active_canonical_driver() -> None:
+    driver = build_ulf_driver_row(
+        {
+            "ts_utc": "2026-07-12T17:35:00+00:00",
+            "context_class": "Elevated (coherent)",
+            "confidence_score": 0.78,
+            "regional_intensity": 72.0,
+            "regional_coherence": 0.78,
+            "regional_persistence": 66.0,
+            "stations_used": ["CMO", "FRD", "BOU"],
+            "quality_flags": [],
+        }
+    )
+
+    assert driver is not None
+    assert driver["key"] == "ulf"
+    assert driver["severity"] == "watch"
+    assert driver["state"] == "Elevated"
 
 
 def test_compose_all_drivers_payload_keeps_high_signal_and_links_patterns() -> None:

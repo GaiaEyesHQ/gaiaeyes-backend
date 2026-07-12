@@ -91,11 +91,11 @@ GAUGE_OUTCOME_KEYS = {
     "pain": ("pain_flare_day", "headache_day"),
     "focus": ("focus_fog_day", "headache_day"),
     "heart": ("high_hr_day", "resting_hr_elevated_day", "anxiety_day", "hrv_dip_day"),
-    "stamina": ("fatigue_day", "short_sleep_day"),
-    "energy": ("fatigue_day", "anxiety_day"),
+    "stamina": ("fatigue_day", "short_sleep_day", "poor_sleep_day", "hrv_dip_day", "resting_hr_elevated_day"),
+    "energy": ("fatigue_day", "anxiety_day", "short_sleep_day", "poor_sleep_day", "hrv_dip_day"),
     "sleep": ("poor_sleep_day", "short_sleep_day"),
     "mood": ("anxiety_day", "restlessness_day", "poor_sleep_day"),
-    "health_status": ("fatigue_day", "short_sleep_day", "high_hr_day", "resting_hr_elevated_day"),
+    "health_status": ("fatigue_day", "short_sleep_day", "high_hr_day", "resting_hr_elevated_day", "hrv_dip_day"),
 }
 
 GAUGE_LABELS = {

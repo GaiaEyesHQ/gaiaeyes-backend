@@ -723,6 +723,11 @@ def _seed_ulf_driver(raw_context: Mapping[str, Any] | None) -> Optional[Dict[str
     )
 
 
+def build_ulf_driver_row(raw_context: Mapping[str, Any] | None) -> Optional[Dict[str, Any]]:
+    """Return the canonical active ULF driver row used by dashboard surfaces."""
+    return _seed_ulf_driver(raw_context)
+
+
 def _space_driver_reading_from_time(arrival_iso: str | None) -> Optional[str]:
     if not arrival_iso:
         return None

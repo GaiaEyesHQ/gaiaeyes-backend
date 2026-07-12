@@ -55,3 +55,7 @@
 14. **iOS heart-rate raw ingest gap vs statistics repair**
    - **Why needed**: `hr_min` and `hr_max` only populate when same-day `heart_rate` rows land in `gaia.samples`, but the test account showed `resting_heart_rate` continuing while raw `heart_rate` stopped after April 22, 2026. A short statistics-based repair now mitigates the gap, but the original reason raw `heart_rate` observer/delta ingest missed April 23, 2026 is still unknown.
    - **Where to fill**: Inspect iOS HealthKit observer execution, anchors, and same-day `HKQuantitySample` availability for `.heartRate` on device logs vs `gaia.samples` writes.
+
+15. **HRV baseline contract for Body and recovery-oriented gauges**
+   - **Why needed**: The Body page currently receives `hrv_avg` but no user-baseline delta, while HRV contributes internally to Health Status only. Product intent is for a below-usual HRV day to inform Heart, Energy, and Recovery Load, but the bounded weights and minimum baseline requirements are not yet defined. Adding those score effects without an explicit rule would turn a historical association into an unreviewed causal adjustment.
+   - **Where to fill**: Product/science decision in `bots/definitions/gauge_logic_base_v1.json`, followed by a shared baseline field in `/v1/features/today`, focused scorer tests, and matching iOS Body copy.
