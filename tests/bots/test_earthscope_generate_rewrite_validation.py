@@ -474,7 +474,8 @@ def test_reel_voiceover_fallback_starts_with_emotional_title_not_action_caption(
     assert voiceover.startswith("Body Buzzing For No Reason?")
     assert "Take short movement breaks" in voiceover
     assert "Try this today: Do 3 minutes of easy movement." in voiceover
-    assert "Follow Gaia Eyes for daily updates" in voiceover
+    assert "Follow Gaia Eyes" not in voiceover
+    assert "download the app" not in voiceover
 
 
 def test_reel_voiceover_uses_long_explicit_script_when_available():

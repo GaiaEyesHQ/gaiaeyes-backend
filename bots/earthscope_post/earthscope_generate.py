@@ -1658,7 +1658,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
-        "Voiceover should read like a short reel script: the caption's opening paragraph, one practical tip from playbook, then an optional soft line such as 'Follow Gaia Eyes for daily updates, or download the app for your personalized patterns.' "
+        "Voiceover should read like a short reel script: the caption's opening paragraph, then one practical tip from playbook. Do not add a follow/download CTA. "
         f"Aim for: caption {caption_profile['caption_instruction']} Snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
         "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. Respect style.template_id and style.template_map to decide sentence order for caption only; rearrange the same facts without adding new claims. "
     )
@@ -1908,7 +1908,7 @@ def _rewrite_json_candidates(
             "affects": "2-4 sentences about possible felt patterns without certainty.",
             "playbook": "3-5 short bullets.",
             "hashtags": "6-10 hashtags as one string.",
-            "voiceover": "3-5 spoken sentences. Use the caption's opening paragraph, one practical tip from playbook, then optionally add: Follow Gaia Eyes for daily updates, or download the app for your personalized patterns. No metrics, no hashtags.",
+            "voiceover": "2-4 spoken sentences. Use the caption's opening paragraph, then one practical tip from playbook. Do not add a follow/download CTA. No metrics, no hashtags.",
         },
         "ban_phrases": BAN_PHRASES,
     }
@@ -2890,7 +2890,6 @@ def _build_reel_voiceover_text(
     parts = [lead] if lead else []
     if action:
         parts.append(f"Try this today: {action}.")
-    parts.append("Follow Gaia Eyes for daily updates, or download the app for your personalized patterns.")
     return _scrub_banned_phrases(_sanitize_caption(" ".join(parts)))
 
 
