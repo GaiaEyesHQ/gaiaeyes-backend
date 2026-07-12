@@ -195,6 +195,25 @@ social/earthscope/latest/cumiana_share_latest.jpg
 
 The raw `*_latest.png` station images are also mirrored to the same folder as fallbacks. They are wide format and will crop heavily in square cards, so prefer the share-ready JPGs for live Schumann posts.
 
+### Schumann Daily History
+
+The Schumann workflow also stores one source-dated PNG and extractor JSON per
+station in Supabase Storage:
+
+```text
+schumann/history/tomsk/YYYY/MM/DD.png
+schumann/history/tomsk/YYYY/MM/DD.json
+schumann/history/cumiana/YYYY/MM/DD.png
+schumann/history/cumiana/YYYY/MM/DD.json
+```
+
+The date comes from each source payload's `last_modified` value. The scheduled
+15-minute runs update the current source day's objects in place, leaving the
+final successful snapshot for completed days. If `last_modified` is missing or
+invalid, the workflow skips the archive write rather than assigning stale data
+to a new date. Existing `schumann/latest/*` and `social/earthscope/latest/*`
+aliases remain the live consumer paths.
+
 ## Rotation Rules
 
 The app rotates only when variant files exist. It does not randomly choose from every matching file.
