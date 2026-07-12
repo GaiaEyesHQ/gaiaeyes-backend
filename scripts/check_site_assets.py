@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HEAD-check the external assets listed in docs/web/ASSET_INVENTORY.json."""
+"""HEAD-check the canonical site asset monitor list."""
 
 from __future__ import annotations
 
@@ -50,6 +50,8 @@ def head_request(url: str) -> Tuple[int, float]:
             last_exc = exc
             continue
         else:
+            if method == "HEAD" and resp.status_code in {403, 405}:
+                continue
             return resp.status_code, elapsed
     raise RuntimeError(f"{url}: request failed ({last_exc})")
 
@@ -58,8 +60,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "inventory",
-        default="docs/web/ASSET_INVENTORY.json",
-        help="Path to the asset inventory JSON (default: %(default)s)",
+        nargs="?",
+        default="docs/web/ASSET_MONITOR.json",
+        help="Path to the asset monitor JSON (default: %(default)s)",
     )
     args = parser.parse_args()
 

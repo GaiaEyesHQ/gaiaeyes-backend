@@ -602,6 +602,140 @@ def _first_nonempty_line(txt: str) -> str:
             return s
     return ""
 
+
+HOOK_LANES: Dict[str, Dict[str, Any]] = {
+    "sleep": {
+        "label": "sleep or bedtime friction",
+        "terms": ("sleep", "bed", "bedtime", "night", "tired", "rest", "wake", "waking", "evening"),
+        "examples": ["Can't settle even when you're tired?", "Sleep feeling hard to land?"],
+    },
+    "wired_tired": {
+        "label": "wired/tired body stress",
+        "terms": ("wired", "jittery", "buzz", "shaky", "overdrive", "on edge", "body stress"),
+        "examples": ["Wired and worn out?", "Body buzzing for no clear reason?"],
+    },
+    "brain_fog": {
+        "label": "brain fog or mental noise",
+        "terms": ("brain fog", "fog", "mental", "scattered", "focus", "attention", "mind"),
+        "examples": ["Brain fog on a loop?", "Mind tabs everywhere?"],
+    },
+    "head_pressure": {
+        "label": "head pressure or sinus pressure",
+        "terms": ("head pressure", "sinus", "pressure", "tightness"),
+        "examples": ["Head pressure asking for space?", "Sinus pressure louder today?"],
+    },
+    "migraine_headache": {
+        "label": "headache or migraine sensitivity",
+        "terms": ("headache", "migraine", "migraine-prone", "head pain", "head pounding"),
+        "examples": ["Headache threshold lower today?", "Migraine-prone today?"],
+    },
+    "pain": {
+        "label": "pain flare or sensitivity",
+        "terms": ("pain", "ache", "aches", "sensitivity", "sensitive", "nerve", "muscle"),
+        "examples": ["Pain feeling extra loud?", "Tiny aches getting louder?"],
+    },
+    "chronic_flare": {
+        "label": "chronic illness flare day",
+        "terms": ("flare", "flares", "flaring", "chronic illness", "chronic", "symptom flare", "health condition"),
+        "examples": ["Flare day brewing?", "Chronic symptoms running louder?"],
+    },
+    "mood": {
+        "label": "mood, patience, or restlessness",
+        "terms": ("mood", "patience", "frustration", "restless", "restlessness", "irritable", "emotion"),
+        "examples": ["Mood hard to place?", "Restless for no clear reason?"],
+    },
+    "energy": {
+        "label": "low energy or drained",
+        "terms": ("energy", "drained", "fatigue", "stamina", "low energy", "battery"),
+        "examples": ["Energy hard to hold?", "Battery dipping early?"],
+    },
+}
+
+
+def _hook_lane_for_text(text: str) -> Optional[str]:
+    lowered = str(text or "").lower()
+    if not lowered:
+        return None
+    for lane, spec in HOOK_LANES.items():
+        if any(term in lowered for term in spec["terms"]):
+            return lane
+    return None
+
+
+def _recent_hook_lanes(ctx: Dict[str, Any]) -> List[str]:
+    lanes: List[str] = []
+    for value in list(ctx.get("banned_openers") or []) + list(ctx.get("recent_captions") or []):
+        lane = _hook_lane_for_text(_first_sentence(str(value or "")))
+        if lane:
+            lanes.append(lane)
+    return lanes
+
+
+def _preferred_hook_lanes(ctx: Dict[str, Any], *, limit: int = 3) -> List[str]:
+    tone = _tone_from_ctx(ctx)
+    scores = {lane: 0.0 for lane in HOOK_LANES}
+    affects = str(ctx.get("affects") or "")
+    caption = str(ctx.get("caption") or "")
+    playbook = str(ctx.get("playbook") or "")
+    recent_lanes = _recent_hook_lanes(ctx)
+
+    for text in (affects, caption, playbook):
+        lowered = text.lower()
+        for lane, spec in HOOK_LANES.items():
+            if any(term in lowered for term in spec["terms"]):
+                scores[lane] += 1.2
+
+    if tone == "stormy":
+        for lane in ("pain", "migraine_headache", "chronic_flare", "head_pressure", "wired_tired", "energy"):
+            scores[lane] += 1.5
+    elif tone == "unsettled":
+        for lane in ("wired_tired", "brain_fog", "mood", "head_pressure", "migraine_headache", "chronic_flare"):
+            scores[lane] += 1.4
+    elif tone == "calm":
+        for lane in ("pain", "energy", "brain_fog", "sleep", "migraine_headache"):
+            scores[lane] += 0.9
+    else:
+        for lane in ("mood", "energy", "wired_tired", "pain", "chronic_flare"):
+            scores[lane] += 1.0
+
+    if to_float(ctx.get("flares_24h")):
+        scores["brain_fog"] += 0.8
+        scores["wired_tired"] += 0.6
+        scores["chronic_flare"] += 1.0
+        scores["migraine_headache"] += 0.5
+    if to_float(ctx.get("cmes_24h")):
+        scores["energy"] += 0.7
+        scores["pain"] += 0.5
+    if to_float(ctx.get("bz_min")) is not None and (to_float(ctx.get("bz_min")) or 0) <= -6:
+        scores["wired_tired"] += 0.9
+        scores["head_pressure"] += 0.6
+        scores["migraine_headache"] += 0.7
+    if to_float(ctx.get("solar_wind_kms")) is not None and (to_float(ctx.get("solar_wind_kms")) or 0) >= 500:
+        scores["wired_tired"] += 0.6
+        scores["energy"] += 0.4
+
+    for lane in recent_lanes:
+        scores[lane] -= 1.6
+
+    ranked = sorted(scores, key=lambda lane: (scores[lane], lane), reverse=True)
+    return ranked[:limit]
+
+
+def _hook_lane_brief(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    preferred = _preferred_hook_lanes(ctx)
+    recent = _recent_hook_lanes(ctx)
+    return {
+        "preferred_lanes": [
+            {"key": lane, "label": HOOK_LANES[lane]["label"], "examples": HOOK_LANES[lane]["examples"]}
+            for lane in preferred
+        ],
+        "recent_lanes": recent[-6:],
+        "instruction": (
+            "Choose one preferred lane for the opening hook. Sleep can win when it fits, "
+            "but do not keep using sleep just because a previous sleep post performed well."
+        ),
+    }
+
 def _recent_openers(days_back: int = 7) -> set:
     try:
         since = (datetime.utcnow() - timedelta(days=days_back)).date().isoformat()
@@ -848,10 +982,11 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
     }
     sections = rewrite or {}
     sys = (
-        "You write Gaia Eyes daily social hook titles for people noticing sleep trouble, pain, mood shifts, headaches, brain fog, restlessness, focus shifts, and low energy. "
+        "You write Gaia Eyes daily social hook titles for people noticing sleep trouble, pain, mood shifts, headaches, migraine patterns, brain fog, chronic illness flares, restlessness, focus shifts, and low energy. "
         "Write one fresh, human, emotionally relatable 2–7 word title that matches the day’s actual caption. "
         "It should feel like the top line of a social post, not a report label, dashboard label, category name, or instruction. "
-        "Vary the doorway: sometimes sleep, focus, mood, pain, headaches, brain fog, restlessness, low energy, or pacing. "
+        "Use hook_lane_brief to choose the doorway. Vary across sleep, wired/tired, mood, pain, headache, migraine, chronic illness flare, brain fog, restlessness, low energy, and pacing over time. "
+        "Do not default to sleep just because a previous sleep post performed well; use sleep only when it is the best lane for today's facts. "
         "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
         "Avoid these fallback labels: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note. "
@@ -861,6 +996,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
     )
     usr = {
         "facts": facts,
+        "hook_lane_brief": _hook_lane_brief(ctx),
         "recent_titles": recent[:20],
         "sections_excerpt": {k: (v[:220] if isinstance(v,str) else v) for k,v in sections.items() if k in ("caption","snapshot","affects")}
     }
@@ -1128,6 +1264,7 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "recent_analogies": ctx.get("recent_analogies") or [],
         "template_id": ctx.get("template_id"),
         "platform": _ctx_platform(ctx),
+        "hook_lane_brief": _hook_lane_brief(ctx),
     }
 
 
@@ -1363,6 +1500,8 @@ def _finalize_rewrite_payload(obj: Dict[str, str]) -> Dict[str, str]:
     out["snapshot"] = _strip_section_labels(_scrub_banned_phrases(out["snapshot"]))
     out["affects"] = _strip_section_labels(_scrub_banned_phrases(out["affects"]))
     out["playbook"] = _normalize_playbook_bullets(_scrub_banned_phrases(out["playbook"]))
+    if isinstance(out.get("voiceover"), str):
+        out["voiceover"] = _scrub_banned_phrases(_sanitize_caption(out["voiceover"]))
     return out
 
 
@@ -1381,6 +1520,9 @@ def _caption_creativity_score(caption: str, ctx: Dict[str, Any], recent_caps: Li
     text = _sanitize_caption(caption)
     first = _first_sentence(text).strip()
     first_l = first.lower()
+    lane = _hook_lane_for_text(first)
+    preferred_lanes = _preferred_hook_lanes(ctx)
+    recent_lanes = set(_recent_hook_lanes(ctx))
     banned = {
         _first_sentence(x).strip().lower()
         for x in list(ctx.get("banned_openers") or []) + recent_caps
@@ -1393,6 +1535,14 @@ def _caption_creativity_score(caption: str, ctx: Dict[str, Any], recent_caps: Li
         score += 1.0
     if re.search(r"\b(body|sleep|hrv|heart|mood|pain|migraine|headache|sinus|pressure|nervous system|wired|foggy|scattered|reset|restless|recovery|symptoms?|wearable|sensitive systems?)\b", first_l):
         score += 3.0
+    if lane in preferred_lanes:
+        score += 3.0 - preferred_lanes.index(lane) * 0.5
+    elif lane:
+        score += 0.6
+    if lane in recent_lanes:
+        score -= 3.0
+    if lane == "sleep" and "sleep" not in preferred_lanes[:2]:
+        score -= 2.0
     if "?" in first:
         score += 1.0
     if re.search(r"\b(focused? work blocks?|work blocks?|deep-work|tasks?|productiv(e|ity)|catch up|clear runway|focus day)\b", first_l):
@@ -1483,7 +1633,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "You are Gaia Eyes’ daily weather desk: viral, practical, and lightly funny. "
         "Interpret today’s space/earth conditions for humans. "
         "Write for a wide social audience at about a 3rd-grade reading level: short words, short sentences, no medical/science lecture voice. "
-        "The first sentence must not start with or center on HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. Lead with an everyday feeling instead: trouble sleeping, wired/tired, brain fog, head pressure, pain flare, low energy, restless body, or scattered focus. "
+        "The first sentence must not start with or center on HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. Lead with an everyday feeling instead. Use hook_lane_brief to choose the opening lane. "
+        "Sleep is allowed when it is the best lane, but do not default to sleep because a previous sleep post performed well. "
         "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes, e.g. 'Plain English: HRV = small changes between heartbeats that can reflect body stress.' "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
@@ -1492,17 +1643,18 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Humor is optional. If you use an analogy, keep it to one sentence max and do not use the phrase 'Think of it like'. Vary phrasing. Never start a sentence with 'Think of it like'. You may use metaphor_pool as guidance or invent a fresh analogy. Do not reuse any recent_analogies. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
-        "No emojis. No questions. "
+        "No emojis. A natural opening question is allowed when it fits the hook lane; do not turn statements into fake questions. "
         "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
         "Use natural everyday grammar: when two feelings happen together, use 'and' instead of a contrast word like 'but' unless there is a real contrast. "
         "Say 'slow breaths' or 'slow breathing', not 'slow breath'. "
         "Never claim deterministic health effects; use 'some may', 'can', 'for some'. "
-        "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags. "
+        "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags, voiceover. "
         "No markdown, no extra keys, no code fences. "
         "If aurora_headline exists, include one sentence about aurora chances (no numbers). "
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
+        "Voiceover should be one or two short spoken sentences that start with the same emotional hook lane as the caption, then one practical cue. "
         f"Aim for: caption {caption_profile['caption_instruction']} Snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
         "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. Respect style.template_id and style.template_map to decide sentence order for caption only; rearrange the same facts without adding new claims. "
     )
@@ -1513,7 +1665,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "draft": draft,
         "style": {
             "persona": "researcher-coach-comedian",
-            "audience": "people noticing sleep, pain, mood, headaches, low energy, brain fog, and body-pattern changes",
+            "audience": "people noticing sleep, pain, mood, headaches, migraine patterns, chronic illness flares, low energy, brain fog, and body-pattern changes",
             "opener_palette": HOOKS.get(facts.get("tone") or "neutral", HOOKS["neutral"]),
             "ban_phrases": BAN_PHRASES,
             "bullet_style": "short",
@@ -1539,10 +1691,11 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             "recent_analogies": facts.get("recent_analogies") or [],
             "template_id": template_id if template_id is not None else facts.get("template_id"),
             "template_map": CAPTION_STRUCTURE_TEMPLATES,
+            "hook_lane_brief": facts.get("hook_lane_brief"),
         },
         "constraints": {
             "omit_numbers": True,
-            "no_questions": True,
+            "questions": "opening hook questions are allowed when natural",
             "no_emojis": True,
             "max_caption_chars": caption_profile["max_caption_chars"],
         }
@@ -1692,7 +1845,9 @@ def _rewrite_json_candidates(
         "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
-        "Lead with a felt human hook before explaining the signal context. Rotate the doorway across trouble sleeping, wired/tired, brain fog, head pressure, pain flare, low energy, restless body, and scattered focus; do not make focus/productivity the default. "
+        "Lead with a felt human hook before explaining the signal context. Use hook_lane_brief to choose the doorway across trouble sleeping, wired/tired, brain fog, headache, migraine, chronic illness flare, head pressure, pain flare, low energy, restless body, mood, and scattered focus. "
+        "Do not make sleep the default just because a sleep hook performed well before; sleep must earn its place from today's facts and recent lane history. "
+        "Do not make focus/productivity the default. "
         "Do not open with HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. "
         "Write for a wide social audience at about a 3rd-grade reading level: short words, short sentences, no medical/science lecture voice. "
         "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes. "
@@ -1704,7 +1859,7 @@ def _rewrite_json_candidates(
         "Use natural everyday grammar: when two feelings happen together, use 'and' instead of a contrast word like 'but' unless there is a real contrast. "
         "Say 'slow breaths' or 'slow breathing', not 'slow breath'. "
         "Use evidence-scaled language: may, can, for some, tends to. No diagnosis, certainty, detox, cure, or treatment claims. "
-        "Return only JSON with a candidates array. Each candidate must include caption, snapshot, affects, playbook, and hashtags."
+        "Return only JSON with a candidates array. Each candidate must include caption, snapshot, affects, playbook, hashtags, and voiceover."
     )
     payload = {
         "task": f"Write {count} distinct Gaia Eyes daily social post candidates.",
@@ -1714,15 +1869,19 @@ def _rewrite_json_candidates(
         "recent_caption_excerpts": [cap[:220] for cap in recent_caps[:8]],
         "draft_reference": draft,
         "voice": {
-            "audience": "people noticing sleep, pain, mood, headaches, low energy, brain fog, and body-pattern changes",
+            "audience": "people noticing sleep, pain, mood, headaches, migraine patterns, chronic illness flares, low energy, brain fog, and body-pattern changes",
             "style": "human, emotionally relatable, curious, practical, sometimes funny",
             "target_platform": caption_profile["platform"],
+            "hook_lane_brief": facts.get("hook_lane_brief"),
             "hook_doorways_to_rotate": [
+                "follow hook_lane_brief.preferred_lanes first",
                 "sleep or bedtime routine",
                 "wired/tired or body stress",
                 "mood or restlessness",
                 "headache or sinus pressure",
+                "migraine sensitivity",
                 "pain or sensitivity",
+                "chronic illness flare day",
                 "low energy or drained",
                 "brain fog or mental noise",
                 "scattered focus",
@@ -1745,6 +1904,7 @@ def _rewrite_json_candidates(
             "affects": "2-4 sentences about possible felt patterns without certainty.",
             "playbook": "3-5 short bullets.",
             "hashtags": "6-10 hashtags as one string.",
+            "voiceover": "1-2 spoken sentences, starts with an emotional hook, then one practical cue. No metrics, no hashtags.",
         },
         "ban_phrases": BAN_PHRASES,
     }
@@ -2672,6 +2832,39 @@ def _build_social_caption_variants(
     return variants
 
 
+def _first_playbook_action(playbook: str) -> str:
+    for raw in str(playbook or "").splitlines():
+        line = re.sub(r"^(?:[-*•]|\d+[.)])\s*", "", raw.strip()).strip()
+        if line:
+            return line.rstrip(".")
+    return ""
+
+
+def _build_reel_voiceover_text(
+    *,
+    ctx: Dict[str, Any],
+    title: str,
+    caption: str,
+    playbook: str,
+    rewrite: Optional[Dict[str, str]] = None,
+) -> str:
+    explicit = _sanitize_caption(str((rewrite or {}).get("voiceover") or ""))
+    if explicit:
+        return _scrub_banned_phrases(explicit)
+
+    first = _first_sentence(caption)
+    first_lane = _hook_lane_for_text(first)
+    lead = first if first_lane else str(title or "").strip()
+    if not lead:
+        preferred = _preferred_hook_lanes(ctx, limit=1)
+        if preferred:
+            lead = HOOK_LANES[preferred[0]]["examples"][0]
+    action = _first_playbook_action(playbook)
+    if action:
+        return _scrub_banned_phrases(_sanitize_caption(f"{lead} Try this today: {action}."))
+    return _scrub_banned_phrases(_sanitize_caption(lead))
+
+
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     client = openai_client()
     if EARTHSCOPE_FORCE_RULES or not client:
@@ -2854,13 +3047,14 @@ def _rewrite_shadow_caption_minimal(
     system_msg = (
         "You are editing only the public Gaia Eyes caption in the founder's voice. "
         "Sound authored, human, slightly playful, and useful. This is not a bulletin, not app copy, and not a technical report. "
-        "Prefer a first sentence that starts with the felt shape of the day, a pacing line, or one fitting image. "
+        "Prefer a first sentence that starts with the felt shape of the day, one fitting image, or a direct emotional hook from hook_lane_brief. "
+        "Sleep is allowed when it fits, but do not default to sleep just because a previous sleep hook performed well. "
         "Do not open with technical phrases like 'Geomagnetic conditions', 'Unsettled geomagnetic conditions', "
         "'Near-Earth space', 'Recent solar eruptions', or 'Unsettled space weather'. "
         "Use at most one analogy. Keep the science grounded, but do not lead with it. "
         "Do not mention clinicians or professional audiences. Do not open with HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. Lead with everyday feeling words instead. If HRV or Schumann must appear, define it in a short final Plain English note. Write around a 3rd-grade reading level: short words, short sentences, and no science lecture voice. "
         "Do not copy phrases directly from the context bullets. "
-        "No emojis. No questions. No fear language. No deterministic medical claims. "
+        "No emojis. A natural opening question is allowed when it fits. No fear language. No deterministic medical claims. "
         "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
         "Use natural everyday grammar: when two feelings happen together, use 'and' instead of a contrast word like 'but' unless there is a real contrast. "
         "Say 'slow breaths' or 'slow breathing', not 'slow breath'. "
@@ -2877,6 +3071,7 @@ def _rewrite_shadow_caption_minimal(
             "felt_effects": affects_parts[:2],
             "pacing_actions": playbook_lines[:2],
         },
+        "hook_lane_brief": facts.get("hook_lane_brief"),
         "good_examples": good_examples,
         "anti_examples": anti_examples,
         "constraints": {
@@ -3249,6 +3444,9 @@ def main():
     _reset_runtime_trace()
     snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
     playbook = _normalize_playbook_bullets(playbook)
+    ctx["snapshot"] = snapshot
+    ctx["affects"] = affects
+    ctx["playbook"] = playbook
     short_caption, short_tags = generate_short_caption(
         ctx,
         live_sections={
@@ -3294,6 +3492,16 @@ def main():
         title = llm_title
     else:
         title = _fallback_social_title(ctx, public_voice_render["title"], _recent_titles(21))
+    rewrite_for_vo = _REWRITE_CACHE.get(_rewrite_cache_key(ctx)[0])
+    voiceover = _build_reel_voiceover_text(
+        ctx=ctx,
+        title=title,
+        caption=short_caption,
+        playbook=playbook,
+        rewrite=rewrite_for_vo,
+    )
+    if voiceover:
+        sections_struct["voiceover"] = voiceover
 
     # 3) Prepare payloads
     metrics_json = {

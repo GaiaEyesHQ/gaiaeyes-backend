@@ -7,9 +7,9 @@ This guide maps the Gaia Eyes WordPress front-end (staging: https://staging2.gai
 | Item | Value |
 | --- | --- |
 | Sections covered | 11 major dashboards & widgets (new Hazards Brief) |
-| External assets tracked | 86 unique URLs (see `ASSET_INVENTORY.json`) |
+| External assets tracked | 86 inventory URLs plus a canonical monitor list (see `ASSET_INVENTORY.json` and `ASSET_MONITOR.json`) |
 | Sparkline helper adoption | Space Dashboard & Space Weather sections now use `GaiaSpark.renderSpark` |
-| Nightly asset audit | `.github/workflows/site-assets-check.yml` runs HEAD checks for every URL in the inventory |
+| Nightly asset audit | `.github/workflows/site-assets-check.yml` runs HEAD checks for the canonical live URLs in `ASSET_MONITOR.json` |
 
 ## Site Map
 
@@ -68,7 +68,7 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 1. Place the asset in `gaiaeyes-media` (or confirm the upstream JSON references it).
 2. Update the relevant JSON feed (`space_live.json`, `space_weather.json`, etc.) so the shortcode picks it up.
 3. Adjust the mu-plugin markup to add a `<figure>`/`<img>` block. Reuse the existing `ov-grid`/`ge-card` classes for spacing.
-4. Add the new URL to `docs/web/ASSET_INVENTORY.json` (run the Playwright asset gatherer) so the nightly workflow monitors it.
+4. Add the canonical live URL to `docs/web/ASSET_MONITOR.json` so the nightly workflow monitors it, then refresh `docs/web/ASSET_INVENTORY.json` with the Playwright asset gatherer if the page audit snapshot also changed.
 5. For heavy media (>2 MB), provide a static JPEG fallback or gated download link.
 
 ---
@@ -449,7 +449,8 @@ This section focuses on the spark helper usage inside the Space Dashboard.
 
 ## Operations & Monitoring
 
-* `docs/web/ASSET_INVENTORY.json` – generated inventory with status, size, and timing for every external asset per section. Update after adding/removing assets.
-* `.github/workflows/site-assets-check.yml` – nightly (07:00 UTC) HEAD check over inventory; fails on 404/5xx so broken feeds surface quickly.
+* `docs/web/ASSET_MONITOR.json` – canonical live URLs for the nightly availability check. Keep this list stable and limited to real production endpoints.
+* `docs/web/ASSET_INVENTORY.json` – generated inventory with status, size, and timing for every external asset per section. Refresh it after page-level asset changes.
+* `.github/workflows/site-assets-check.yml` – nightly (07:00 UTC) HEAD check over `ASSET_MONITOR.json`; fails on 404/5xx so broken feeds surface quickly without depending on historical audit snapshots.
 * `.github/workflows/hazards.yml` – builds the Global Hazards snapshot every 10 minutes and publishes to the media repo for the homepage brief.
 * Use the asset inventory to flag new oversized downloads (>2 MB) and annotate them in the TODO table above.

@@ -56,6 +56,20 @@ def test_reel_vo_prefers_explicit_short_caption():
     assert reel_builder.build_vo_text_from_post(row) == "Start softer today."
 
 
+def test_reel_vo_prefers_generated_sections_voiceover():
+    row = {
+        "caption": "Take short movement breaks and sip water today.",
+        "metrics_json": {
+            "sections": {
+                "voiceover": "Body buzzing for no clear reason? Try slow breathing first.",
+                "playbook": "- Take a reset",
+            }
+        },
+    }
+
+    assert reel_builder.build_vo_text_from_post(row).startswith("Body buzzing")
+
+
 def test_reel_audio_db_helper_normalizes_gain():
     assert reel_builder._audio_db("-8dB") == "-8dB"
     assert reel_builder._audio_db("-7") == "-7dB"

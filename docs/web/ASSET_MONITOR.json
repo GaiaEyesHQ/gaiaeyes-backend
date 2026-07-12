@@ -1,0 +1,97 @@
+{
+  "space-dashboard-live": {
+    "assets": [
+      {
+        "url": "https://gaiaeyes-backend.onrender.com/v1/space/visuals/public",
+        "type": "json",
+        "notes": ["Canonical public visuals payload used by app and web surfaces"]
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json",
+        "type": "json",
+        "notes": ["Shared website space weather fallback"]
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
+        "type": "json",
+        "notes": ["Upstream solar wind feed"]
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json",
+        "type": "json",
+        "notes": ["Upstream magnetic field feed"]
+      }
+    ]
+  },
+  "aurora-live": {
+    "assets": [
+      {
+        "url": "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg",
+        "type": "image",
+        "notes": ["Canonical OVATION north image"]
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/images/animations/ovation/south/latest.jpg",
+        "type": "image",
+        "notes": ["Canonical OVATION south image"]
+      }
+    ]
+  },
+  "earthscope-live": {
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json",
+        "type": "json",
+        "notes": ["Shared EarthScope fallback payload"]
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope_daily.json",
+        "type": "json",
+        "notes": ["Daily EarthScope fallback payload"]
+      },
+      {
+        "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_caption.jpg",
+        "type": "image",
+        "notes": ["Current EarthScope social caption card"]
+      },
+      {
+        "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4",
+        "type": "video",
+        "notes": ["Current EarthScope social reel"]
+      }
+    ]
+  },
+  "schumann-live": {
+    "assets": [
+      {
+        "url": "https://gaiaeyes-backend.onrender.com/v1/earth/schumann/latest",
+        "type": "json",
+        "notes": ["Public Schumann API payload"]
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/tomsk_latest.png",
+        "type": "image",
+        "notes": ["Latest Tomsk Schumann image"]
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/cumiana_latest.png",
+        "type": "image",
+        "notes": ["Latest Cumiana Schumann image"]
+      }
+    ]
+  },
+  "hazards-live": {
+    "assets": [
+      {
+        "url": "https://gaiaeyes-backend.onrender.com/v1/hazards/brief",
+        "type": "json",
+        "notes": ["Homepage hazards brief API"]
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/public/hazards/latest.json",
+        "type": "json",
+        "notes": ["Homepage hazards fallback payload"]
+      }
+    ]
+  }
+}

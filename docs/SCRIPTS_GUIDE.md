@@ -56,14 +56,14 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 | --- | --- | --- |
 | `audit_workflows.py` | Audits GitHub Actions workflows for configured repos, reporting latest runs, failures, and secret references. | `GITHUB_TOKEN` (repo + workflow scopes) |
 | `load_test_ingest.py` | Sends synthetic multi-user `/v1/samples/batch` traffic with optional app read fan-out. Defaults to localhost and requires `--allow-non-local-write` before writing to staging/production. | `GAIA_LOAD_BASE_URL`, `GAIA_LOAD_AUTH_BEARER` or `DEV_BEARER`/`WRITE_TOKENS`; optional `GAIA_LOAD_TZ` |
-| `check_site_assets.py` | HEAD/GET checks third-party assets listed in `docs/web/ASSET_INVENTORY.json` and reports failures. | `inventory` CLI arg (defaults internally) |
+| `check_site_assets.py` | HEAD/GET checks the canonical live URLs listed in `docs/web/ASSET_MONITOR.json` and reports failures. | `inventory` CLI arg (defaults internally) |
 | `scan-secrets.sh` | Greps workflow files (or supplied paths) for `${{ secrets.* }}`/`${{ vars.* }}` references using `rg`. | None (requires `rg` in PATH) |
 
 ## Scheduling notes
 
 * Long-running ingestion jobs (DONKI, SWPC, Schumann, USGS) are designed to be idempotent and tolerate reruns; set `DAYS_BACK`/`SINCE_HOURS` conservatively when backfilling.
 * Publishing scripts expect the latest ingestion JSON files in `gaiaeyes-media/data`. Run ingestors first or point `MEDIA_DIR` to a directory containing fresh source files.
-* Shell out `scan-secrets.sh` as part of workflow reviews, and run `check_site_assets.py` periodically to catch stale vendor URLs.
+* Shell out `scan-secrets.sh` as part of workflow reviews, and run `check_site_assets.py` periodically to catch stale canonical feed or media URLs.
 * **Step 1 Cron** – schedule `ingest_space_forecasts_step1.py` every 30 minutes with staggered retries. Recommended flags: `--days 3` for routine operation, and `--only enlil solar` for ad-hoc backfills. Ensure Supabase write credentials are scoped to the new schemas.
 
 > SuperMAG magnetometer data are provided courtesy of SuperMAG, Johns Hopkins University Applied Physics Laboratory. Cite their contribution on dashboards or downstream artifacts that surface the indices.

@@ -14,10 +14,12 @@ os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 
 from bots.earthscope_post.earthscope_generate import (
+    _build_reel_voiceover_text,
     _caption_context_lead,
     _clean_llm_title,
     _fallback_social_title,
     _finalize_rewrite_payload,
+    _preferred_hook_lanes,
     _normalize_rewrite_payload,
     _platform_caption_profile,
     _polish_public_caption,
@@ -355,6 +357,107 @@ def test_select_best_rewrite_candidate_prefers_wearable_symptom_hook_over_catchu
 
     assert selected is not None
     assert selected["caption"].startswith("Wearable trends")
+
+
+def test_preferred_hook_lanes_do_not_overlearn_recent_sleep_hook():
+    lanes = _preferred_hook_lanes(
+        {
+            "day": "2026-07-12",
+            "platform": "fb",
+            "kp_max_24h": 4.7,
+            "bz_min": -7.2,
+            "solar_wind_kms": 560,
+            "flares_24h": 2,
+            "cmes_24h": 3,
+            "recent_captions": [
+                "Can't sleep even when your bed is perfect? Keep the evening softer.",
+                "Can't sleep but your mind is oddly jumpy? Try a slower night.",
+            ],
+        }
+    )
+
+    assert lanes[0] != "sleep"
+    assert any(lane in lanes[:2] for lane in ("wired_tired", "brain_fog", "head_pressure", "energy"))
+
+
+def test_hook_lanes_include_migraine_and_chronic_flare_days():
+    migraine_lanes = _preferred_hook_lanes(
+        {
+            "day": "2026-07-12",
+            "platform": "default",
+            "kp_max_24h": 4.8,
+            "bz_min": -8.0,
+            "affects": "Migraine and headache thresholds may feel lower for some people.",
+            "recent_captions": [],
+        }
+    )
+    flare_lanes = _preferred_hook_lanes(
+        {
+            "day": "2026-07-12",
+            "platform": "default",
+            "kp_max_24h": 4.8,
+            "bz_min": -7.0,
+            "flares_24h": 3,
+            "affects": "Chronic illness flare patterns and symptom flares may run louder.",
+            "recent_captions": [],
+        }
+    )
+
+    assert "migraine_headache" in migraine_lanes[:2]
+    assert "chronic_flare" in flare_lanes[:2]
+
+
+def test_select_best_rewrite_candidate_uses_non_sleep_lane_when_sleep_recent():
+    obj = {
+        "candidates": [
+            {
+                "caption": "Can't sleep even when your body is tired? Keep the night simple.",
+                "snapshot": "The field feels a little unsettled today.",
+                "affects": "Some people may notice jittery energy.",
+                "playbook": "- Take slow breaths\n- Keep the day simple",
+                "hashtags": "#GaiaEyes #SpaceWeather",
+                "voiceover": "Can't sleep even when your body is tired? Take slow breaths.",
+            },
+            {
+                "caption": "Body buzzing for no clear reason? The signal mix is a little restless, so keep your pace gentle.",
+                "snapshot": "The field feels a little unsettled today.",
+                "affects": "Some people may notice jittery energy.",
+                "playbook": "- Take slow breaths\n- Keep the day simple",
+                "hashtags": "#GaiaEyes #SpaceWeather",
+                "voiceover": "Body buzzing for no clear reason? Take slow breaths.",
+            },
+        ]
+    }
+
+    selected = _select_best_rewrite_candidate(
+        obj,
+        {"cmes_24h": 1, "flares_24h": 1, "kp_max_24h": 4.5, "bz_min": -7},
+        {
+            "kp_max_24h": 4.5,
+            "bz_min": -7,
+            "flares_24h": 1,
+            "cmes_24h": 1,
+            "recent_captions": ["Can't sleep even when your bed is perfect? Keep the evening softer."],
+            "banned_openers": [],
+        },
+    )
+
+    assert selected is not None
+    assert selected["caption"].startswith("Body buzzing")
+    assert selected["voiceover"].startswith("Body buzzing")
+
+
+def test_reel_voiceover_fallback_starts_with_emotional_title_not_action_caption():
+    voiceover = _build_reel_voiceover_text(
+        ctx={"kp_max_24h": 4.5, "bz_min": -7},
+        title="Body Buzzing For No Reason?",
+        caption="Take short movement breaks and sip water today.",
+        playbook="- Do 3 minutes of easy movement\n- Sip water",
+        rewrite=None,
+    )
+
+    assert voiceover.startswith("Body Buzzing For No Reason?")
+    assert "Try this today: Do 3 minutes of easy movement." in voiceover
 
 
 def test_facebook_caption_profile_is_longer_than_instagram():
