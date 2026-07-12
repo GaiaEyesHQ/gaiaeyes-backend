@@ -25,6 +25,7 @@ from bots.earthscope_post.earthscope_generate import (
     _polish_public_caption,
     _select_best_rewrite_candidate,
     _validate_rewrite,
+    _voiceover_caption_from_variants,
 )
 
 
@@ -191,6 +192,20 @@ def test_fallback_social_title_replaces_running_loud_default():
 
     assert "running loud" not in title.lower()
     assert _clean_llm_title(title, {"is your body running loud"}) == title
+
+
+def test_fallback_social_title_follows_caption_hook_lane():
+    title = _fallback_social_title(
+        {"day": "2026-07-12", "platform": "default", "kp_max_24h": 3.8},
+        "Magnetic Calm",
+        {"magnetic calm", "head pressure asking for space"},
+        hook_text="Body buzzed and wired for no reason? Like an over-caffeinated squirrel.",
+    )
+
+    lowered = title.lower()
+    assert any(term in lowered for term in ("buzz", "jittery", "squirrely", "wired"))
+    assert "head pressure" not in lowered
+    assert "asking for space" not in lowered
 
 
 def test_fallback_social_title_uses_symptom_pattern_language():
@@ -476,6 +491,18 @@ def test_reel_voiceover_fallback_starts_with_emotional_title_not_action_caption(
     assert "Try this today: Do 3 minutes of easy movement." in voiceover
     assert "Follow Gaia Eyes" not in voiceover
     assert "download the app" not in voiceover
+
+
+def test_voiceover_caption_source_prefers_facebook_variant():
+    caption = _voiceover_caption_from_variants(
+        {
+            "default": {"caption": "IG caption first paragraph."},
+            "fb": {"caption": "Facebook caption first paragraph.\n\nMore Facebook context."},
+        },
+        "Default caption first paragraph.",
+    )
+
+    assert caption == "Facebook caption first paragraph.\n\nMore Facebook context."
 
 
 def test_reel_voiceover_uses_long_explicit_script_when_available():

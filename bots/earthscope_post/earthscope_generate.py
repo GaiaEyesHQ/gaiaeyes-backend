@@ -612,7 +612,7 @@ HOOK_LANES: Dict[str, Dict[str, Any]] = {
     "wired_tired": {
         "label": "wired/tired body stress",
         "terms": ("wired", "jittery", "buzz", "shaky", "overdrive", "on edge", "body stress"),
-        "examples": ["Wired and worn out?", "Body buzzing for no clear reason?"],
+        "examples": ["Body buzzing for no clear reason?", "Feeling jittery today?", "Feeling squirrely today?"],
     },
     "brain_fog": {
         "label": "brain fog or mental noise",
@@ -622,7 +622,7 @@ HOOK_LANES: Dict[str, Dict[str, Any]] = {
     "head_pressure": {
         "label": "head pressure or sinus pressure",
         "terms": ("head pressure", "sinus", "pressure", "tightness"),
-        "examples": ["Head pressure asking for space?", "Sinus pressure louder today?"],
+        "examples": ["Head pressure building?", "Sinus pressure louder today?"],
     },
     "migraine_headache": {
         "label": "headache or migraine sensitivity",
@@ -880,6 +880,7 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
         "earthscope",
         "geomagnetic storm watch",
         "high-speed solar wind",
+        "head pressure asking for space",
         "is your body running loud",
         "magnetic calm",
         "mood sleep pressure check",
@@ -915,11 +916,23 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
     return cleaned
 
 
-def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_titles: Optional[set] = None) -> str:
+def _fallback_social_title(
+    ctx: Dict[str, Any],
+    default_title: str,
+    recent_titles: Optional[set] = None,
+    hook_text: str = "",
+) -> str:
     if _clean_llm_title(default_title, recent_titles):
         return default_title
 
     tone = _tone_from_ctx(ctx)
+    hook_lane = _hook_lane_for_text(_first_sentence(hook_text) or hook_text)
+    if hook_lane:
+        recent_lower = {str(item or "").strip().lower() for item in (recent_titles or set()) if str(item or "").strip()}
+        for candidate in HOOK_LANES.get(hook_lane, {}).get("examples", []):
+            if _clean_llm_title(candidate, recent_lower):
+                return candidate
+
     pools = {
         "calm": [
             "Can Your Body Exhale Today?",
@@ -935,7 +948,7 @@ def _fallback_social_title(ctx: Dict[str, Any], default_title: str, recent_title
             "Feeling Squirrely Today?",
             "Brain Fog On A Loop?",
             "Restless For No Clear Reason?",
-            "Head Pressure Asking For Space?",
+            "Head Pressure Building?",
         ],
         "stormy": [
             "Pain Feeling Extra Loud?",
@@ -993,7 +1006,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "Do not default to sleep just because a previous sleep post performed well; use sleep only when it is the best lane for today's facts. "
         "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
-        "Avoid these fallback labels and vague metaphors: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note, Is Your Body Running Loud. "
+        "Avoid these fallback labels and vague metaphors: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note, Is Your Body Running Loud, Head Pressure Asking For Space. "
         "Good shapes: 'Body Buzzing Today?', 'Feeling Jittery Today?', 'Feeling Squirrely Today?', 'Brain Fog On A Loop?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
@@ -2836,6 +2849,11 @@ def _build_social_caption_variants(
     return variants
 
 
+def _voiceover_caption_from_variants(social_variants: Dict[str, Dict[str, str]], default_caption: str) -> str:
+    fb_caption = str((social_variants.get("fb") or {}).get("caption") or "").strip()
+    return fb_caption or str(default_caption or "").strip()
+
+
 def _first_playbook_action(playbook: str) -> str:
     for raw in str(playbook or "").splitlines():
         line = re.sub(r"^(?:[-*•]|\d+[.)])\s*", "", raw.strip()).strip()
@@ -3519,14 +3537,14 @@ def main():
     if llm_title:
         title = llm_title
     else:
-        title = _fallback_social_title(ctx, public_voice_render["title"], _recent_titles(21))
-    rewrite_for_vo = _REWRITE_CACHE.get(_rewrite_cache_key(ctx)[0])
+        title = _fallback_social_title(ctx, public_voice_render["title"], _recent_titles(21), hook_text=short_caption)
+    vo_caption = _voiceover_caption_from_variants(social_variants, short_caption)
     voiceover = _build_reel_voiceover_text(
         ctx=ctx,
         title=title,
-        caption=short_caption,
+        caption=vo_caption,
         playbook=playbook,
-        rewrite=rewrite_for_vo,
+        rewrite=None,
     )
     if voiceover:
         sections_struct["voiceover"] = voiceover

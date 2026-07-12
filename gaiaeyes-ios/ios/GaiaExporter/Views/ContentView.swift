@@ -12686,6 +12686,7 @@ struct ContentView: View {
             let id: String
             let label: String
             let tint: Color
+            let isMatched: Bool
         }
 
         private struct HomeTriggerRow: Identifiable {
@@ -12702,13 +12703,27 @@ struct ContentView: View {
 
             var body: some View {
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(chip.tint)
-                        .frame(width: 7, height: 7)
-                    Text(chip.label)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.white.opacity(0.90))
-                        .lineLimit(2)
+                    if chip.isMatched {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(chip.tint)
+                            .accessibilityLabel("Matched")
+                    } else {
+                        Circle()
+                            .fill(chip.tint)
+                            .frame(width: 7, height: 7)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(chip.label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.90))
+                            .lineLimit(2)
+                        if chip.isMatched {
+                            Text("Matched")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(chip.tint)
+                        }
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 12)
@@ -12918,52 +12933,41 @@ struct ContentView: View {
         }
 
         private func bodySignalLabels(for ref: DashboardPatternRef) -> [String] {
-            switch normalize(ref.outcomeKey ?? "") {
-            case "HEADACHE_DAY":
-                return ["Migraine", "Head / sinus pressure", "Headache"]
-            case "PAIN_FLARE_DAY":
-                return ["Pain flare", "Body aches"]
-            case "FATIGUE_DAY":
-                return ["Fatigue", "Energy dip"]
-            case "ANXIETY_DAY", "RESTLESSNESS_DAY":
-                return ["Restlessness", "Wired"]
-            case "POOR_SLEEP_DAY":
-                return ["Poor sleep", "Restless sleep"]
-            case "FOCUS_FOG_DAY":
-                return ["Brain fog", "Focus shifts"]
-            case "HRV_DIP_DAY":
-                return ["HRV dips", "Recovery strain"]
-            case "HIGH_HR_DAY":
-                return ["Heart rate shifts", "Body strain"]
-            case "SHORT_SLEEP_DAY":
-                return ["Short sleep", "Sleep debt"]
-            default:
-                return []
+            HomePossibleSymptomLabels.labels(forOutcomeKey: ref.outcomeKey ?? "")
+        }
+
+        private func activeSymptomChips() -> [HomeSymptomChip] {
+            guard let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 else { return [] }
+            var seen: Set<String> = []
+            return snapshot.semanticActiveLabelPreview.compactMap { raw in
+                let label = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = label.lowercased()
+                guard !label.isEmpty, !seen.contains(key) else { return nil }
+                seen.insert(key)
+                return HomeSymptomChip(
+                    id: "active-symptom-\(key)",
+                    label: label,
+                    tint: GaugePalette.rose,
+                    isMatched: false
+                )
             }
         }
 
         private func possibleSymptomChips(from rows: [GaugeRow]) -> [HomeSymptomChip] {
             var seen: Set<String> = []
-            var output: [HomeSymptomChip] = []
+            var candidates: [String] = []
 
-            func append(_ label: String, tint: Color) {
+            func append(_ label: String) {
                 let clean = label.trimmingCharacters(in: .whitespacesAndNewlines)
                 let key = clean.lowercased()
-                guard !clean.isEmpty, !seen.contains(key), output.count < 6 else { return }
+                guard !clean.isEmpty, !seen.contains(key) else { return }
                 seen.insert(key)
-                output.append(HomeSymptomChip(id: "symptom-\(key)", label: clean, tint: tint))
-            }
-
-            if let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 {
-                for label in snapshot.semanticActiveLabelPreview {
-                    append(label, tint: GaugePalette.rose)
-                }
+                candidates.append(clean)
             }
 
             for ref in activePatternRefs {
-                let tint = GaugePalette.contextAccent(ref.signal ?? ref.driverKey ?? ref.signalKey ?? ref.outcomeKey ?? "pattern")
                 for label in bodySignalLabels(for: ref) {
-                    append(label, tint: tint)
+                    append(label)
                 }
             }
 
@@ -12971,34 +12975,33 @@ struct ContentView: View {
                 let driver = combinedWhatMattersDrivers().first { normalizedDriverKey($0.key) == normalizedDriverKey(trigger.driverKey) }
                 guard let driver else { continue }
                 for label in symptomLabels(for: driver) {
-                    append(label, tint: trigger.tint)
+                    append(label)
                 }
             }
 
             for driver in combinedWhatMattersDrivers() {
-                let tint = GaugePalette.contextAccent("\(driver.key) \(driver.label ?? "")")
                 for label in symptomLabels(for: driver) {
-                    append(label, tint: tint)
+                    append(label)
                 }
             }
 
             for row in rows {
                 for label in symptomLabels(for: row) {
-                    append(label, tint: GaugePalette.contextAccent(row.label))
+                    append(label)
                 }
             }
 
-            return output
-        }
-
-        private func possibleSymptomsLead(chips: [HomeSymptomChip]) -> String {
-            if let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 {
-                return "You have active symptoms logged. Compare them with the signals below."
+            return HomePossibleSymptomLabels.ranked(
+                candidates: candidates,
+                activeLabels: activeSymptomChips().map(\.label)
+            ).map { item in
+                HomeSymptomChip(
+                    id: "possible-symptom-\(item.label.lowercased())",
+                    label: item.label,
+                    tint: GaugePalette.sky,
+                    isMatched: item.isMatched
+                )
             }
-            if !chips.isEmpty {
-                return ""
-            }
-            return "No strong symptom pattern is leading right now. Log anything new so Gaia can learn your baseline."
         }
 
         private func supportNudge(for triggers: [HomeTriggerRow]) -> String {
@@ -13044,23 +13047,6 @@ struct ContentView: View {
             )
         }
 
-        private var currentSymptomsSummaryLine: String {
-            guard let snapshot = currentSymptomsSnapshot else {
-                return "Open the live view for updates, notes, and the timeline."
-            }
-            let count = snapshot.summary.activeCount
-            if count <= 0 {
-                return snapshot.semanticEmptyStateSummary ?? "No symptoms active right now. Log anything new here."
-            }
-            if let semanticSummary = snapshot.semanticActiveSummary {
-                return semanticSummary
-            }
-            if let labelSummary = snapshot.semanticActiveLabelSummary {
-                return "\(count) active right now: \(labelSummary)"
-            }
-            return "\(count) active right now."
-        }
-
         private var dailyCheckInSummaryLine: String {
             guard let status = dailyCheckInStatus else {
                 return "A short daily check-in helps this view stay current."
@@ -13100,39 +13086,6 @@ struct ContentView: View {
                 return GaugePalette.aqua
             }
             return GaugePalette.contextAccent("\(item.driver.key) \(item.driver.label ?? "") \(item.driver.state ?? "")")
-        }
-
-        @ViewBuilder
-        private var currentSymptomsButton: some View {
-            Button(action: onOpenCurrentSymptoms) {
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Current Symptoms")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
-                        Text(currentSymptomsSummaryLine)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    if let count = currentSymptomsSnapshot?.summary.activeCount, count > 0 {
-                        StatusPill("\(count) Active", severity: count >= 3 ? .warn : .ok)
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.white.opacity(0.45))
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
         }
 
         @ViewBuilder
@@ -13402,9 +13355,10 @@ struct ContentView: View {
         }
 
         private func possibleSymptomsCard(rows: [GaugeRow]) -> some View {
-            let chips = possibleSymptomChips(from: rows)
+            let possibleChips = possibleSymptomChips(from: rows)
+            let activeChips = activeSymptomChips()
             let triggers = priorityTriggerRows()
-            let accent = chips.first?.tint ?? triggers.first?.tint ?? GaugePalette.aqua
+            let accent = possibleChips.first?.tint ?? activeChips.first?.tint ?? triggers.first?.tint ?? GaugePalette.aqua
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
             return VStack(alignment: .leading, spacing: 12) {
@@ -13425,16 +13379,8 @@ struct ContentView: View {
                     Spacer(minLength: 0)
                 }
 
-                let leadText = possibleSymptomsLead(chips: chips)
-                if !leadText.isEmpty {
-                    Text(leadText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if chips.isEmpty {
-                    Text("Nothing obvious is leading yet.")
+                if possibleChips.isEmpty {
+                    Text("No additional possible symptoms are standing out right now.")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.white.opacity(0.72))
                         .padding(12)
@@ -13442,13 +13388,46 @@ struct ContentView: View {
                         .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 } else {
                     LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(chips) { chip in
+                        ForEach(possibleChips) { chip in
                             HomeSymptomChipView(chip: chip)
                         }
                     }
                 }
 
-                currentSymptomsButton
+                Divider()
+                    .overlay(Color.white.opacity(0.08))
+
+                Button(action: onOpenCurrentSymptoms) {
+                    HStack(spacing: 8) {
+                        Text("Active Symptoms")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                        Spacer()
+                        if let activeCount = currentSymptomsSnapshot?.summary.activeCount, activeCount > 0 {
+                            StatusPill("\(activeCount) Active", severity: activeCount >= 3 ? .warn : .ok)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                }
+                .buttonStyle(.plain)
+
+                if activeChips.isEmpty {
+                    Text("Nothing active is logged right now.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else {
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(activeChips) { chip in
+                            HomeSymptomChipView(chip: chip)
+                        }
+                    }
+                }
+
                 dailyCheckInButton
             }
             .padding(14)

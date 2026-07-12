@@ -12,6 +12,27 @@ import Testing
 struct SymptomEnvelopeTests {
 
     @Test
+    func possibleSymptomsTranslateShortSleepIntoNoticeableOutcomes() {
+        #expect(HomePossibleSymptomLabels.labels(forOutcomeKey: "short_sleep_day") == ["Tired", "Low energy"])
+        #expect(HomePossibleSymptomLabels.labels(forOutcomeKey: "hrv_dip_day") == ["Low energy", "Tired"])
+        #expect(!HomePossibleSymptomLabels.labels(forOutcomeKey: "short_sleep_day").contains("Sleep debt"))
+    }
+
+    @Test
+    func possibleSymptomsKeepAndPrioritizeActiveMatches() {
+        let ranked = HomePossibleSymptomLabels.ranked(
+            candidates: ["Low energy", "Restless sleep", "Brain fog", "restless sleep"],
+            activeLabels: [" Restless Sleep "]
+        )
+
+        #expect(ranked == [
+            HomePossibleSymptomMatch(label: "Restless sleep", isMatched: true),
+            HomePossibleSymptomMatch(label: "Low energy", isMatched: false),
+            HomePossibleSymptomMatch(label: "Brain fog", isMatched: false),
+        ])
+    }
+
+    @Test
     func decodesSymptomEnvelope() throws {
         let payload = """
         {
