@@ -10,6 +10,8 @@ services:
     buildCommand: pip install -r requirements.txt && pip install ./bots/schumann
     startCommand: python scripts/run_render_cron.py critical
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: SUPABASE_DB_URL
         fromService:
           name: gaiaeyes-backend
@@ -49,6 +51,8 @@ services:
     buildCommand: pip install -r requirements.txt && pip install -r bots/hazards/requirements.txt
     startCommand: python scripts/run_render_cron.py events
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: SUPABASE_DB_URL
         fromService:
           name: gaiaeyes-backend
@@ -85,6 +89,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python scripts/run_render_cron.py daily
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: SUPABASE_DB_URL
         fromService:
           name: gaiaeyes-backend
