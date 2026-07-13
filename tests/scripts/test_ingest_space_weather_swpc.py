@@ -9,6 +9,7 @@ def test_merge_metric_uses_only_swpc_active_spacecraft_rows():
             "time_tag": "2026-07-10T03:55:00",
             "active": False,
             "source": "ACE",
+            "proton_density": 3.1,
             "proton_speed": 510.0,
             "overall_quality": 0,
         },
@@ -16,6 +17,7 @@ def test_merge_metric_uses_only_swpc_active_spacecraft_rows():
             "time_tag": "2026-07-10T03:55:00",
             "active": True,
             "source": "SOLAR1",
+            "proton_density": 4.7,
             "proton_speed": 590.5,
             "overall_quality": 0,
         },
@@ -33,10 +35,19 @@ def test_merge_metric_uses_only_swpc_active_spacecraft_rows():
         merged,
         active_only=True,
     )
+    ingest.merge_metric(
+        records,
+        ["proton_density"],
+        "sw_density_cm3",
+        merged,
+        active_only=True,
+    )
 
     ts = datetime(2026, 7, 10, 3, 55, tzinfo=timezone.utc)
     assert merged[ts]["sw_speed_kms"] == 590.5
+    assert merged[ts]["sw_density_cm3"] == 4.7
     assert merged[ts]["_provenance"]["sw_speed_kms"]["spacecraft"] == "SOLAR1"
+    assert merged[ts]["_provenance"]["sw_density_cm3"]["spacecraft"] == "SOLAR1"
     assert merged[ts]["_provenance"]["sw_speed_kms"]["active"] is True
 
 

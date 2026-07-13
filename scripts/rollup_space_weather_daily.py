@@ -25,10 +25,17 @@ with sw as (
     max(kp_index)              as kp_max,
     min(bz_nt)                 as bz_min,
     avg(sw_speed_kms)          as sw_speed_avg,
+    max(sw_density_cm3)        as sw_density_max_cm3,
     (array_agg(kp_index order by ts_utc desc) filter (where kp_index is not null))[1] as kp_now,
     (array_agg(bz_nt order by ts_utc desc) filter (where bz_nt is not null))[1] as bz_now,
     (array_agg(sw_speed_kms order by ts_utc desc) filter (where sw_speed_kms is not null))[1] as sw_speed_now_kms,
-    max(ts_utc) filter (where kp_index is not null or bz_nt is not null or sw_speed_kms is not null) as now_ts,
+    (array_agg(sw_density_cm3 order by ts_utc desc) filter (where sw_density_cm3 is not null))[1] as sw_density_now_cm3,
+    max(ts_utc) filter (
+      where kp_index is not null
+         or bz_nt is not null
+         or sw_speed_kms is not null
+         or sw_density_cm3 is not null
+    ) as now_ts,
     count(*)                   as row_count
   from ext.space_weather
   where ts_utc >= date_trunc('day', now() - interval '{DAYS_BACK} days')
@@ -65,6 +72,7 @@ ap as (
 )
 insert into marts.space_weather_daily
   (day, kp_max, bz_min, sw_speed_avg, kp_now, bz_now, sw_speed_now, sw_speed_now_kms, now_ts,
+   sw_density_max_cm3, sw_density_now_cm3,
    row_count, flares_count, cmes_count, aurora_hp_north_gw, aurora_hp_south_gw, updated_at)
 select
   sw.day,
@@ -76,6 +84,8 @@ select
   sw.sw_speed_now_kms,
   sw.sw_speed_now_kms,
   sw.now_ts,
+  sw.sw_density_max_cm3,
+  sw.sw_density_now_cm3,
   sw.row_count,
   coalesce(dk.flares_count, 0),
   coalesce(dk.cmes_count, 0),
@@ -94,6 +104,8 @@ set kp_max       = excluded.kp_max,
     sw_speed_now = excluded.sw_speed_now,
     sw_speed_now_kms = excluded.sw_speed_now_kms,
     now_ts       = excluded.now_ts,
+    sw_density_max_cm3 = excluded.sw_density_max_cm3,
+    sw_density_now_cm3 = excluded.sw_density_now_cm3,
     row_count    = excluded.row_count,
     flares_count = excluded.flares_count,
     cmes_count   = excluded.cmes_count,

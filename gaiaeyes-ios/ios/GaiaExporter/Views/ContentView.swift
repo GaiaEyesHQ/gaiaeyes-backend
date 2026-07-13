@@ -14108,7 +14108,7 @@ struct ContentView: View {
                 (magnetosphereTs, magnetosphere?.sw?.nCm3),
                 (outlookIssuedTs, outlook?.swDensityNowCm3)
             ])
-            swDensityNow = liveSpace != nil ? liveSpace?.swDensityNowCm3 : fallbackSwDensityNow
+            swDensityNow = liveSpace?.swDensityNowCm3 ?? fallbackSwDensityNow
             sScale = outlook?.data?.sep?.sScale
                 ?? sepScaleIndex.map { "S\(Int($0.rounded()))" }
                 ?? Self.sScale(for: sepFlux)

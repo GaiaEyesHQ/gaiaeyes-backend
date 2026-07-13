@@ -11,7 +11,8 @@ Fetches from these SWPC endpoints (JSON):
   https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json
 
 Merges by timestamp (UTC), then upserts into ext.space_weather:
-  ts_utc (PK), kp_index, bz_nt, sw_speed_kms, src='noaa-swpc', meta jsonb
+  ts_utc (PK), kp_index, bz_nt, sw_speed_kms, sw_density_cm3,
+  src='noaa-swpc', meta jsonb
 
 ENV:
   SUPABASE_DB_URL  (required)  -- use the pooler url with ?pgbouncer=true
@@ -199,6 +200,7 @@ def emit_space_weather_json(now_ts: datetime, now_vals: dict, next_headline: str
         "now": {
             "kp": now_vals.get("kp_index"),
             "solar_wind_kms": now_vals.get("sw_speed_kms"),
+            "solar_wind_density_cm3": now_vals.get("sw_density_cm3"),
             "bz_nt": now_vals.get("bz_nt"),
         },
         "next_72h": {
@@ -367,7 +369,7 @@ def rows_to_records(arr, wanted_cols):
     wanted_cols: dict of {logical_name: [candidate_column_names...]}
 
     Returns list of dicts with:
-      ts (datetime), maybe kp_index / bz_nt / sw_speed_kms (floats)
+      ts (datetime), maybe kp_index / bz_nt / sw_speed_kms / sw_density_cm3 (floats)
     """
     header = arr[0]
     rows = arr[1:]
@@ -524,12 +526,14 @@ def parse_alert_rows(arr):
     return []
 
 UPSERT_SQL = """
-insert into ext.space_weather as existing (ts_utc, kp_index, bz_nt, sw_speed_kms, src, meta)
-values ($1, $2, $3, $4, $5, $6::jsonb)
+insert into ext.space_weather as existing
+  (ts_utc, kp_index, bz_nt, sw_speed_kms, sw_density_cm3, src, meta)
+values ($1, $2, $3, $4, $5, $6, $7::jsonb)
 on conflict (ts_utc) do update
 set kp_index     = coalesce(excluded.kp_index, existing.kp_index),
     bz_nt        = coalesce(excluded.bz_nt, existing.bz_nt),
     sw_speed_kms = coalesce(excluded.sw_speed_kms, existing.sw_speed_kms),
+    sw_density_cm3 = coalesce(excluded.sw_density_cm3, existing.sw_density_cm3),
     src          = excluded.src,
     meta         = (coalesce(existing.meta, '{}'::jsonb) || excluded.meta)
                    || jsonb_build_object(
@@ -607,6 +611,14 @@ async def main():
         merged,
         active_only=True,
     )
+    # Proton density (cm^-3) comes from the same active SOLAR-1/ACE plasma row.
+    merge_metric(
+        spd_recs,
+        ["proton_density", "plasma_density", "density", "n_cm3"],
+        "sw_density_cm3",
+        merged,
+        active_only=True,
+    )
     # Bz (nT) appears as: 'bz_gsm', 'Bz', 'bz', 'bz_nt'
     merge_metric(mag_recs, ["bz_gsm","Bz","bz","bz_nt"], "bz_nt", merged, active_only=True)
 
@@ -622,6 +634,8 @@ async def main():
         latest_vals["kp_index"] = latest_field_value(merged, "kp_index")
     if latest_vals.get("sw_speed_kms") is None:
         latest_vals["sw_speed_kms"] = latest_field_value(merged, "sw_speed_kms")
+    if latest_vals.get("sw_density_cm3") is None:
+        latest_vals["sw_density_cm3"] = latest_field_value(merged, "sw_density_cm3")
     if latest_vals.get("bz_nt") is None:
         latest_vals["bz_nt"] = latest_field_value(merged, "bz_nt")
     # Coerce types / rounding for clean JSON
@@ -629,6 +643,8 @@ async def main():
         latest_vals["kp_index"] = round(_to_float_or_none(latest_vals["kp_index"]) or 0.0, 1)
     if latest_vals.get("sw_speed_kms") is not None:
         latest_vals["sw_speed_kms"] = int(round(_to_float_or_none(latest_vals["sw_speed_kms"]) or 0.0))
+    if latest_vals.get("sw_density_cm3") is not None:
+        latest_vals["sw_density_cm3"] = round(_to_float_or_none(latest_vals["sw_density_cm3"]) or 0.0, 2)
     if latest_vals.get("bz_nt") is not None:
         latest_vals["bz_nt"] = round(_to_float_or_none(latest_vals["bz_nt"]) or 0.0, 1)
 
@@ -667,6 +683,7 @@ async def main():
             v.get("kp_index"),
             v.get("bz_nt"),
             v.get("sw_speed_kms"),
+            v.get("sw_density_cm3"),
             SRC,
             json.dumps(meta),
         ))

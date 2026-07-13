@@ -32,7 +32,7 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 
 | Script | Purpose & Outputs | Key environment variables |
 | --- | --- | --- |
-| `rollup_space_weather_daily.py` | Aggregates `ext.space_weather` telemetry and DONKI counts into `marts.space_weather_daily`, including the latest current Kp, Bz, solar-wind speed, and source timestamp for each day. | `SUPABASE_DB_URL`; `DAYS_BACK` |
+| `rollup_space_weather_daily.py` | Aggregates `ext.space_weather` telemetry and DONKI counts into `marts.space_weather_daily`, including the latest current Kp, Bz, solar-wind speed/density, and source timestamp for each day. | `SUPABASE_DB_URL`; `DAYS_BACK` |
 | `rollup_health_daily.py` | Summarizes Gaia health samples into `gaia.daily_summary` using a configurable timezone. | `SUPABASE_DB_URL`; `DAYS_BACK`; `USER_TZ` |
 | `rollup_daily_features.py` | Joins `gaia.daily_summary` health metrics and derived body-context signals with space-weather and Schumann mart data into `marts.daily_features`. | `SUPABASE_DB_URL`; `DAYS_BACK` |
 | `run_render_cron.py` | Runs the bounded `critical`, `events`, or `daily` Render cron lane sequentially; `--dry-run` prints the ordered plan without writes. | See `docs/RENDER_CRON_INGESTION.md` and `render-crons.yaml` |

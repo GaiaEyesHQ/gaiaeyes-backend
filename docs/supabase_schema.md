@@ -837,6 +837,7 @@ CREATE TABLE ext.space_weather (
   kp_index numeric,
   bz_nt numeric,
   sw_speed_kms numeric,
+  sw_density_cm3 numeric,
   src text DEFAULT 'noaa'::text,
   meta jsonb,
   CONSTRAINT space_weather_pkey PRIMARY KEY (ts_utc)

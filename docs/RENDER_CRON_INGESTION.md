@@ -11,7 +11,7 @@ manually managed web service, worker, and Valkey instance:
 
 | Service | UTC schedule | Responsibility |
 | --- | --- | --- |
-| `gaiaeyes-critical-ingestion` | every 15 minutes | Current Kp/wind/Bz, live space context, ULF, direct Schumann extraction + DB write, local current conditions, current space rollup, gauge-only scoring |
+| `gaiaeyes-critical-ingestion` | every 15 minutes | Current Kp/wind/Bz/density, live space context, ULF, direct Schumann extraction + DB write, local current conditions, current space rollup, gauge-only scoring |
 | `gaiaeyes-event-ingestion` | every 2 hours at minute 13 | Earthquakes, global hazards, flare/CME events |
 | `gaiaeyes-daily-derivations` | daily at 10:35 UTC | Local and space forecasts, health reconciliation, daily features, location context, gauges, patterns |
 | `gaiaeyes-ingest-worker` | continuous/event-driven | HealthKit sample queue; refreshes the affected user's daily marts and gauges after ingestion |
