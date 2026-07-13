@@ -3456,7 +3456,18 @@
     const bpSys = asNumber(featureValue(features, "bp_sys_avg", "bpSysAvg"));
     const bpDia = asNumber(featureValue(features, "bp_dia_avg", "bpDiaAvg"));
 
-    if (Number.isFinite(restingHrDelta)) {
+    const restingHrAvg = asNumber(featureValue(features, "resting_hr_avg", "restingHrAvg"));
+    if (Number.isFinite(restingHrAvg)) {
+      cards.push({
+        key: "resting_hr",
+        label: "Resting HR",
+        value: `${Math.round(restingHrAvg)} bpm`,
+        detail: Number.isFinite(restingHrDelta)
+          ? `${restingHrDelta > 0 ? "+" : ""}${restingHrDelta.toFixed(1)} bpm ${restingHrDelta > 0.15 ? "above usual" : restingHrDelta < -0.15 ? "below usual" : "near usual"}`
+          : "daily average",
+        salience: Number.isFinite(restingHrDelta) ? Math.max(0, Math.min(1, Math.abs(restingHrDelta) / 8)) : 0.16,
+      });
+    } else if (Number.isFinite(restingHrDelta)) {
       cards.push({
         key: "resting_hr",
         label: "Resting HR Δ",
@@ -3464,28 +3475,33 @@
         detail: restingHrDelta > 0 ? "above usual" : "below usual",
         salience: Math.max(0, Math.min(1, Math.abs(restingHrDelta) / 8)),
       });
-    } else if (Number.isFinite(asNumber(featureValue(features, "resting_hr_avg", "restingHrAvg")))) {
-      const restingHrAvg = asNumber(featureValue(features, "resting_hr_avg", "restingHrAvg"));
-      cards.push({
-        key: "resting_hr",
-        label: "Resting HR",
-        value: `${Math.round(restingHrAvg)} bpm`,
-        detail: "daily average",
-        salience: 0.16,
-      });
     }
-    if (Number.isFinite(respiratoryDelta)) {
+    if (Number.isFinite(respiratoryAvg)) {
       cards.push({
         key: "respiratory",
-        label: "Respiratory Δ",
-        value: `${respiratoryDelta > 0 ? "+" : ""}${respiratoryDelta.toFixed(1)} br/min`,
-        detail: respiratoryDelta > 0 ? "above usual" : "below usual",
-        salience: Math.max(0, Math.min(1, Math.abs(respiratoryDelta) / 3)),
+        label: "Respiratory",
+        value: `${respiratoryAvg.toFixed(1)} br/min`,
+        detail: Number.isFinite(respiratoryDelta)
+          ? `${respiratoryDelta > 0 ? "+" : ""}${respiratoryDelta.toFixed(1)} br/min ${respiratoryDelta > 0.2 ? "above usual" : respiratoryDelta < -0.2 ? "below usual" : "near usual"}`
+          : "daily average",
+        salience: Number.isFinite(respiratoryDelta) ? Math.max(0, Math.min(1, Math.abs(respiratoryDelta) / 3)) : 0.16,
       });
-    } else if (Number.isFinite(respiratoryAvg)) {
-      cards.push({ key: "respiratory", label: "Respiratory", value: `${respiratoryAvg.toFixed(1)} br/min`, detail: "daily average", salience: 0.16 });
+    } else if (Number.isFinite(respiratoryDelta)) {
+      cards.push({ key: "respiratory", label: "Respiratory Δ", value: `${respiratoryDelta > 0 ? "+" : ""}${respiratoryDelta.toFixed(1)} br/min`, detail: respiratoryDelta > 0 ? "above usual" : "below usual", salience: Math.max(0, Math.min(1, Math.abs(respiratoryDelta) / 3)) });
     }
-    if (Number.isFinite(spo2Delta)) {
+    if (Number.isFinite(spo2)) {
+      cards.push({
+        key: "spo2",
+        label: "SpO₂",
+        value: `${Math.round(spo2)}%`,
+        detail: Number.isFinite(spo2Delta)
+          ? `${spo2Delta > 0 ? "+" : ""}${spo2Delta.toFixed(1)} pp ${spo2Delta > 0.2 ? "above usual" : spo2Delta < -0.2 ? "below usual" : "near usual"}`
+          : "daily average",
+        salience: Number.isFinite(spo2Delta)
+          ? Math.max(0, Math.min(1, Math.abs(spo2Delta) / 3))
+          : Math.max(0, Math.min(1, (96 - spo2) / 4)),
+      });
+    } else if (Number.isFinite(spo2Delta)) {
       cards.push({
         key: "spo2",
         label: "SpO₂ Δ",
@@ -3493,25 +3509,19 @@
         detail: spo2Delta > 0.2 ? "above usual" : spo2Delta < -0.2 ? "below usual" : "near usual",
         salience: Math.max(0, Math.min(1, Math.abs(spo2Delta) / 3)),
       });
-    } else if (Number.isFinite(spo2)) {
-      cards.push({
-        key: "spo2",
-        label: "SpO₂",
-        value: `${Math.round(spo2)}%`,
-        detail: "daily average",
-        salience: Math.max(0, Math.min(1, (96 - spo2) / 4)),
-      });
     }
-    if (Number.isFinite(hrvDelta)) {
+    if (Number.isFinite(hrv)) {
       cards.push({
         key: "hrv",
-        label: "HRV Δ",
-        value: `${hrvDelta > 0 ? "+" : ""}${hrvDelta.toFixed(1)} ms`,
-        detail: hrvDelta > 1 ? "above usual" : hrvDelta < -1 ? "below usual" : "near usual",
-        salience: Math.max(0, Math.min(1, Math.abs(hrvDelta) / 20)),
+        label: "HRV",
+        value: `${Math.round(hrv)} ms`,
+        detail: Number.isFinite(hrvDelta)
+          ? `${hrvDelta > 0 ? "+" : ""}${hrvDelta.toFixed(1)} ms ${hrvDelta > 1 ? "above usual" : hrvDelta < -1 ? "below usual" : "near usual"}`
+          : "daily average",
+        salience: Number.isFinite(hrvDelta) ? Math.max(0, Math.min(1, Math.abs(hrvDelta) / 20)) : 0.12,
       });
-    } else if (Number.isFinite(hrv)) {
-      cards.push({ key: "hrv", label: "HRV", value: `${Math.round(hrv)} ms`, detail: "daily average", salience: 0.12 });
+    } else if (Number.isFinite(hrvDelta)) {
+      cards.push({ key: "hrv", label: "HRV Δ", value: `${hrvDelta > 0 ? "+" : ""}${hrvDelta.toFixed(1)} ms`, detail: hrvDelta > 1 ? "above usual" : hrvDelta < -1 ? "below usual" : "near usual", salience: Math.max(0, Math.min(1, Math.abs(hrvDelta) / 20)) });
     }
     if (Number.isFinite(tempDeviation)) {
       cards.push({

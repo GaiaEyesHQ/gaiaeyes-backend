@@ -17696,7 +17696,8 @@ struct ContentView: View {
                     Text(stat.detail)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .frame(minHeight: 30, alignment: .topLeading)
                     LocalConditionsBar(progress: stat.progress, tint: stat.tint)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -17738,6 +17739,14 @@ struct ContentView: View {
             if value > threshold { return positive }
             if value < -threshold { return negative }
             return neutral
+        }
+
+        private func readingBaselineDetail(
+            _ delta: Double,
+            suffix: String,
+            threshold: Double = 0.15
+        ) -> String {
+            "\(signedValue(delta, suffix: suffix)) \(deltaDetail(delta, threshold: threshold))"
         }
 
         private func deltaProgress(_ value: Double?, maxAbs: Double) -> Double {
@@ -17811,7 +17820,20 @@ struct ContentView: View {
             guard let current else { return [] }
             var items: [HighlightStat] = []
 
-            if let delta = current.restingHrBaselineDelta?.value {
+            if let resting = current.restingHrAvg?.value {
+                let delta = current.restingHrBaselineDelta?.value
+                items.append(
+                    HighlightStat(
+                        id: .restingHr,
+                        title: "Resting HR",
+                        value: "\(Int(resting.rounded())) bpm",
+                        detail: delta.map { readingBaselineDetail($0, suffix: " bpm") } ?? "daily average",
+                        progress: delta.map { deltaProgress($0, maxAbs: 8) } ?? absoluteProgress(resting, max: 90),
+                        tint: GaugePalette.mild,
+                        salience: delta.map { deltaProgress($0, maxAbs: 8) } ?? 0.16
+                    )
+                )
+            } else if let delta = current.restingHrBaselineDelta?.value {
                 items.append(
                     HighlightStat(
                         id: .restingHr,
@@ -17823,21 +17845,23 @@ struct ContentView: View {
                         salience: deltaProgress(delta, maxAbs: 8)
                     )
                 )
-            } else if let resting = current.restingHrAvg?.value {
-                items.append(
-                    HighlightStat(
-                        id: .restingHr,
-                        title: "Resting HR",
-                        value: "\(Int(resting.rounded())) bpm",
-                        detail: "daily average",
-                        progress: absoluteProgress(resting, max: 90),
-                        tint: GaugePalette.mild,
-                        salience: 0.16
-                    )
-                )
             }
 
-            if let delta = current.respiratoryRateBaselineDelta?.value {
+            if let rate = current.respiratoryRateSleepAvg?.value ?? current.respiratoryRateAvg?.value {
+                let delta = current.respiratoryRateBaselineDelta?.value
+                items.append(
+                    HighlightStat(
+                        id: .respiratory,
+                        title: "Respiratory",
+                        value: plainValue(rate, suffix: " br/min"),
+                        detail: delta.map { readingBaselineDetail($0, suffix: " br/min", threshold: 0.2) }
+                            ?? (current.respiratoryRateSleepAvg?.value != nil ? "sleep average" : "daily average"),
+                        progress: delta.map { deltaProgress($0, maxAbs: 3) } ?? absoluteProgress(rate, max: 20),
+                        tint: GaugePalette.low,
+                        salience: delta.map { deltaProgress($0, maxAbs: 3) } ?? 0.16
+                    )
+                )
+            } else if let delta = current.respiratoryRateBaselineDelta?.value {
                 items.append(
                     HighlightStat(
                         id: .respiratory,
@@ -17847,18 +17871,6 @@ struct ContentView: View {
                         progress: deltaProgress(delta, maxAbs: 3),
                         tint: GaugePalette.low,
                         salience: deltaProgress(delta, maxAbs: 3)
-                    )
-                )
-            } else if let rate = current.respiratoryRateSleepAvg?.value ?? current.respiratoryRateAvg?.value {
-                items.append(
-                    HighlightStat(
-                        id: .respiratory,
-                        title: "Respiratory",
-                        value: plainValue(rate, suffix: " br/min"),
-                        detail: current.respiratoryRateSleepAvg?.value != nil ? "sleep average" : "daily average",
-                        progress: absoluteProgress(rate, max: 20),
-                        tint: GaugePalette.low,
-                        salience: 0.16
                     )
                 )
             }
@@ -17878,7 +17890,20 @@ struct ContentView: View {
                 )
             }
 
-            if let delta = current.hrvBaselineDelta?.value {
+            if let hrv = current.hrvAvg?.value {
+                let delta = current.hrvBaselineDelta?.value
+                items.append(
+                    HighlightStat(
+                        id: .hrv,
+                        title: "HRV",
+                        value: "\(Int(hrv.rounded())) ms",
+                        detail: delta.map { readingBaselineDetail($0, suffix: " ms", threshold: 1.0) } ?? "daily average",
+                        progress: delta.map { deltaProgress($0, maxAbs: 20) } ?? absoluteProgress(hrv, max: 70),
+                        tint: GaugePalette.low,
+                        salience: delta.map { deltaProgress($0, maxAbs: 20) } ?? 0.12
+                    )
+                )
+            } else if let delta = current.hrvBaselineDelta?.value {
                 items.append(
                     HighlightStat(
                         id: .hrv,
@@ -17890,21 +17915,24 @@ struct ContentView: View {
                         salience: deltaProgress(delta, maxAbs: 20)
                     )
                 )
-            } else if let hrv = current.hrvAvg?.value {
-                items.append(
-                    HighlightStat(
-                        id: .hrv,
-                        title: "HRV",
-                        value: "\(Int(hrv.rounded()))",
-                        detail: "daily average",
-                        progress: absoluteProgress(hrv, max: 70),
-                        tint: GaugePalette.low,
-                        salience: 0.12
-                    )
-                )
             }
 
-            if let delta = current.spo2BaselineDelta?.value {
+            if let spo2 = current.spo2AvgDisplay {
+                let delta = current.spo2BaselineDelta?.value
+                items.append(
+                    HighlightStat(
+                        id: .spo2,
+                        title: "SpO₂",
+                        value: String(format: "%.0f%%", spo2),
+                        detail: delta.map { readingBaselineDetail($0, suffix: " pp", threshold: 0.2) } ?? "daily average",
+                        progress: delta.map { deltaProgress($0, maxAbs: 3) }
+                            ?? LocalConditionsFormatting.clamped((spo2 - 90.0) / 10.0),
+                        tint: GaugePalette.mild,
+                        salience: delta.map { deltaProgress($0, maxAbs: 3) }
+                            ?? LocalConditionsFormatting.clamped((96.0 - spo2) / 4.0)
+                    )
+                )
+            } else if let delta = current.spo2BaselineDelta?.value {
                 items.append(
                     HighlightStat(
                         id: .spo2,
@@ -17914,18 +17942,6 @@ struct ContentView: View {
                         progress: deltaProgress(delta, maxAbs: 3),
                         tint: GaugePalette.mild,
                         salience: deltaProgress(delta, maxAbs: 3)
-                    )
-                )
-            } else if let spo2 = current.spo2AvgDisplay {
-                items.append(
-                    HighlightStat(
-                        id: .spo2,
-                        title: "SpO₂",
-                        value: String(format: "%.0f%%", spo2),
-                        detail: "daily average",
-                        progress: LocalConditionsFormatting.clamped((spo2 - 90.0) / 10.0),
-                        tint: GaugePalette.mild,
-                        salience: LocalConditionsFormatting.clamped((96.0 - spo2) / 4.0)
                     )
                 )
             }
@@ -19554,7 +19570,12 @@ struct ContentView: View {
                                 _ = try await api.postAnalyticsEvents(events)
                             }
                             async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
-                            async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
+                            async let healthKick: Void = {
+                                await HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
+                                await HealthKitBackgroundSync.shared.retryPhase2RecentBackfillIfProtectedDataAvailable(
+                                    reason: "app became active"
+                                )
+                            }()
                             async let healthEvidenceRefresh: Void = state.refreshHealthReadAccessEvidence(reason: "became active")
                             async let homeFeedRefresh: Void = fetchHomeFeed()
                             async let pushRegistrationRefresh: Void = reconcilePushRegistration(reason: "became active")

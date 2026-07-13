@@ -8,6 +8,9 @@
 import Foundation
 import HealthKit
 import BackgroundTasks
+#if canImport(UIKit)
+import UIKit
+#endif
 
 extension Notification.Name {
     static let featuresShouldRefresh = Notification.Name("FeaturesShouldRefresh")
@@ -43,6 +46,19 @@ private struct HealthBackfillMetricResult: Sendable {
     let collectedCount: Int
     let uploadedRows: Int
     let failureDescription: String?
+    let protectedDataUnavailable: Bool
+
+    init(
+        collectedCount: Int,
+        uploadedRows: Int,
+        failureDescription: String?,
+        protectedDataUnavailable: Bool = false
+    ) {
+        self.collectedCount = collectedCount
+        self.uploadedRows = uploadedRows
+        self.failureDescription = failureDescription
+        self.protectedDataUnavailable = protectedDataUnavailable
+    }
 
     var didUploadAnyData: Bool { uploadedRows > 0 }
 }
@@ -213,7 +229,6 @@ private actor Phase2BackfillState {
     func beginIfNeeded() -> Bool {
         guard !inProgress else { return false }
         inProgress = true
-        scheduled = false
         return true
     }
 
@@ -244,6 +259,15 @@ final class HealthKitBackgroundSync {
     private static let initialDeltaLookbackDays = 2
     private static let initialSleepDeltaLookbackDays = 30
     private static let deferredPhase2BackfillDelayNanoseconds: UInt64 = 30 * 60 * 1_000_000_000
+
+    private static func isProtectedHealthDataUnavailable(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == HKErrorDomain,
+           nsError.code == HKError.Code.errorDatabaseInaccessible.rawValue {
+            return true
+        }
+        return nsError.localizedDescription.localizedCaseInsensitiveContains("protected health data")
+    }
 
     private static func isoString(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
@@ -1209,13 +1233,37 @@ final class HealthKitBackgroundSync {
             sleepResult?.failureDescription,
             temperatureResult?.failureDescription,
         ].compactMap { $0 }
+        let protectedDataUnavailable = [heartResult, stepResult, sleepResult, temperatureResult]
+            .compactMap { $0 }
+            .contains(where: \.protectedDataUnavailable)
         if failures.isEmpty {
             defaults.set(Self.phase2BackfillVersion, forKey: markerKey)
             defaults.removeObject(forKey: Self.phase2BackfillMarkerKey)
+        } else if protectedDataUnavailable {
+            appLog("[Backfill] phase2 recent backfill deferred until protected Health data is available")
         } else {
             appLog("[Backfill] phase2 recent backfill incomplete: \(failures.joined(separator: " | "))")
         }
         await phase2BackfillState.end()
+        if protectedDataUnavailable {
+            await scheduleDeferredPhase2RecentBackfill(reason: "protected Health data unavailable")
+        }
+    }
+
+    /// Retry one-time repair work only when iOS reports protected data is available.
+    /// HealthKit can reject reads while the device is locked even when authorization is valid.
+    func retryPhase2RecentBackfillIfProtectedDataAvailable(reason: String) async {
+#if canImport(UIKit)
+        let protectedDataAvailable = await MainActor.run {
+            UIApplication.shared.isProtectedDataAvailable
+        }
+        guard protectedDataAvailable else {
+            appLog("[Backfill] phase2 recent backfill waiting for device unlock after \(reason)")
+            await scheduleDeferredPhase2RecentBackfill(reason: reason)
+            return
+        }
+#endif
+        await ensurePhase2RecentBackfillIfNeeded()
     }
 
     private func scheduleDeferredPhase2RecentBackfill(reason: String) async {
@@ -1666,8 +1714,18 @@ final class HealthKitBackgroundSync {
                     appLog("[Backfill] \(anchorKey) collected \(collected.count) raw samples after page \(page)")
                 }
             } catch {
-                appLog("[Backfill] anchoredQuery error \(anchorKey): \(error.localizedDescription)")
-                return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
+                let protectedDataUnavailable = Self.isProtectedHealthDataUnavailable(error)
+                if protectedDataUnavailable {
+                    appLog("[Backfill] anchoredQuery deferred \(anchorKey): protected Health data is unavailable")
+                } else {
+                    appLog("[Backfill] anchoredQuery error \(anchorKey): \(error.localizedDescription)")
+                }
+                return HealthBackfillMetricResult(
+                    collectedCount: collected.count,
+                    uploadedRows: 0,
+                    failureDescription: error.localizedDescription,
+                    protectedDataUnavailable: protectedDataUnavailable
+                )
             }
         }
         return await uploadBackfillSamples(
