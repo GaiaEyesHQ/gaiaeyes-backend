@@ -2814,11 +2814,85 @@ def _platform_variant_context(ctx: Dict[str, Any], platform: str) -> Dict[str, A
     return variant_ctx
 
 
+def _rewrite_facebook_caption_from_spine(
+    client: "OpenAI",
+    *,
+    ctx: Dict[str, Any],
+    title: str,
+    default_caption: str,
+    default_hashtags: str,
+    sections: Dict[str, str],
+) -> Optional[Dict[str, str]]:
+    profile = _platform_caption_profile("fb")
+    system_msg = (
+        "You are adapting one approved Gaia Eyes daily message for Facebook. "
+        "The editorial read of the day is already selected in the content spine. Preserve its dominant felt-effect lane, "
+        "emotional hook, intensity, symptom scope, and practical advice. Do not reinterpret the signals, choose a different "
+        "hook lane, introduce new symptoms, or make the day sound calmer or more active than the spine. "
+        "Expand only for Facebook: add useful context, natural paragraphing, at most one fitting analogy, a practical pacing "
+        "note, and a soft Gaia Eyes bridge. Keep the founder voice human, lightly playful, grounded, and non-fearful. "
+        "Do not include measurements, a metric footer, a download/follow CTA, or hashtags inside the caption. "
+        "Return ONLY a compact JSON object with the string keys caption and hashtags."
+    )
+    user_msg = {
+        "task": "Expand the approved content spine into a Facebook caption without changing its message.",
+        "facebook_brief": profile["caption_instruction"],
+        "content_spine": {
+            "title": str(title or "").strip(),
+            "caption": str(default_caption or "").strip(),
+            "snapshot": str(sections.get("snapshot") or "").strip(),
+            "felt_effects": str(sections.get("affects") or "").strip(),
+            "care_notes": str(sections.get("playbook") or "").strip(),
+        },
+        "constraints": {
+            "preserve_content_spine": True,
+            "preserve_hook_lane": True,
+            "preserve_day_intensity": True,
+            "new_symptoms_allowed": False,
+            "caption_sentences": profile["caption_sentences"],
+            "caption_words": profile["caption_words"],
+        },
+    }
+    try:
+        resp = _chat_create_compat(
+            client,
+            model=_writer_model(),
+            temperature=0.8,
+            top_p=0.95,
+            presence_penalty=0.1,
+            frequency_penalty=0.1,
+            reasoning_effort="low",
+            max_completion_tokens=900,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": json.dumps(user_msg, ensure_ascii=False)},
+            ],
+        )
+        raw = _extract_first_json_object(_chat_text(resp).strip())
+        if not raw:
+            return None
+        obj = json.loads(raw)
+        if not isinstance(obj, dict):
+            return None
+        caption = _sanitize_caption(str(obj.get("caption") or ""))
+        if not caption:
+            return None
+        return {
+            "caption": caption,
+            "hashtags": str(obj.get("hashtags") or default_hashtags or "").strip(),
+        }
+    except Exception:
+        return None
+
+
 def _build_social_caption_variants(
     ctx: Dict[str, Any],
     *,
+    title: str,
     default_caption: str,
     default_hashtags: str,
+    sections: Dict[str, str],
 ) -> Dict[str, Dict[str, str]]:
     variants: Dict[str, Dict[str, str]] = {
         "default": {
@@ -2838,7 +2912,14 @@ def _build_social_caption_variants(
         return variants
 
     fb_ctx = _platform_variant_context(ctx, "fb")
-    fb_out = _get_cached_rewrite(client, fb_ctx)
+    fb_out = _rewrite_facebook_caption_from_spine(
+        client,
+        ctx=fb_ctx,
+        title=title,
+        default_caption=default_caption,
+        default_hashtags=default_hashtags,
+        sections=sections,
+    )
     if fb_out and fb_out.get("caption"):
         fb_caption = _scrub_banned_phrases(_polish_public_caption(str(fb_out["caption"]), fb_ctx))
         if fb_caption:
@@ -3502,11 +3583,6 @@ def main():
         },
         hashtags_seed=long_tags,
     )
-    social_variants = _build_social_caption_variants(
-        ctx,
-        default_caption=short_caption,
-        default_hashtags=(long_tags or short_tags),
-    )
     _, dbg_key_short = _rewrite_cache_key(ctx)
     opener = _first_nonempty_line(short_caption)
     _dbg(f"opener={opener[:120]} day={day} platform={args.platform} cache_key={dbg_key_short}")
@@ -3538,6 +3614,13 @@ def main():
         title = llm_title
     else:
         title = _fallback_social_title(ctx, public_voice_render["title"], _recent_titles(21), hook_text=short_caption)
+    social_variants = _build_social_caption_variants(
+        ctx,
+        title=title,
+        default_caption=short_caption,
+        default_hashtags=(long_tags or short_tags),
+        sections=sections_struct,
+    )
     vo_caption = _voiceover_caption_from_variants(social_variants, short_caption)
     voiceover = _build_reel_voiceover_text(
         ctx=ctx,

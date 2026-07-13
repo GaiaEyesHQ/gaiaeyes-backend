@@ -1,6 +1,7 @@
 import sys
 import types
 import os
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -13,7 +14,9 @@ sys.modules.setdefault("supabase", supabase_stub)
 os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 
+from bots.earthscope_post import earthscope_generate
 from bots.earthscope_post.earthscope_generate import (
+    _build_social_caption_variants,
     _build_reel_voiceover_text,
     _caption_context_lead,
     _clean_llm_title,
@@ -26,6 +29,7 @@ from bots.earthscope_post.earthscope_generate import (
     _select_best_rewrite_candidate,
     _validate_rewrite,
     _voiceover_caption_from_variants,
+    _rewrite_facebook_caption_from_spine,
 )
 
 
@@ -532,3 +536,87 @@ def test_facebook_caption_profile_is_longer_than_instagram():
     assert fb["caption_words"][1] > ig["caption_words"][1]
     assert "Facebook-style mini post" in fb["caption_instruction"]
     assert "compact for Instagram" in ig["caption_instruction"]
+
+
+def test_facebook_caption_rewrite_receives_finished_content_spine(monkeypatch):
+    captured = {}
+
+    def fake_chat_create(_client, **kwargs):
+        captured.update(kwargs)
+        message = types.SimpleNamespace(
+            content=json.dumps(
+                {
+                    "caption": (
+                        "Body buzzing for no clear reason? Some people may feel jumpy and drained today. "
+                        "The signal mix is quiet overall with a faint jitter underneath it. "
+                        "That can make focus skate between sharp and foggy without turning the whole day into a wash. "
+                        "Try three minutes of slow breathing when the squirrel energy shows up. "
+                        "Gaia Eyes keeps watching how these signals overlap with your patterns."
+                    ),
+                    "hashtags": "#GaiaEyes #WiredTired",
+                }
+            )
+        )
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    monkeypatch.setattr(earthscope_generate, "_chat_create_compat", fake_chat_create)
+    monkeypatch.setattr(earthscope_generate, "_writer_model", lambda: "test-model")
+
+    result = _rewrite_facebook_caption_from_spine(
+        object(),
+        ctx={"day": "2026-07-13", "platform": "fb"},
+        title="Body Buzzing For No Clear Reason?",
+        default_caption="Body buzzing for no clear reason? Keep your pace gentle when you feel squirrely.",
+        default_hashtags="#GaiaEyes",
+        sections={
+            "snapshot": "The field is quiet overall with a faint jitter.",
+            "affects": "You may feel jumpy and drained, with focus that skates between sharp and foggy.",
+            "playbook": "- Pause for three minutes of slow breathing",
+        },
+    )
+
+    prompt = json.loads(captured["messages"][1]["content"])
+    assert prompt["content_spine"]["title"] == "Body Buzzing For No Clear Reason?"
+    assert prompt["content_spine"]["felt_effects"].startswith("You may feel jumpy and drained")
+    assert prompt["constraints"]["preserve_hook_lane"] is True
+    assert prompt["constraints"]["new_symptoms_allowed"] is False
+    assert result is not None
+    assert result["caption"].startswith("Body buzzing for no clear reason?")
+
+
+def test_social_variants_expand_spine_instead_of_starting_second_interpretation(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(earthscope_generate, "EARTHSCOPE_FORCE_RULES", False)
+    monkeypatch.setattr(earthscope_generate, "_hybrid_rewrite_enabled", lambda: True)
+    monkeypatch.setattr(earthscope_generate, "openai_client", lambda: object())
+
+    def fake_spine_rewrite(_client, **kwargs):
+        captured.update(kwargs)
+        return {
+            "caption": "Body buzzing for no clear reason? Facebook expansion stays in the wired-tired lane.",
+            "hashtags": "#GaiaEyes #WiredTired",
+        }
+
+    def fail_full_rewrite(*_args, **_kwargs):
+        raise AssertionError("Facebook variants must not start a second full interpretation")
+
+    monkeypatch.setattr(earthscope_generate, "_rewrite_facebook_caption_from_spine", fake_spine_rewrite)
+    monkeypatch.setattr(earthscope_generate, "_get_cached_rewrite", fail_full_rewrite)
+
+    sections = {
+        "snapshot": "Quiet overall with a faint jitter.",
+        "affects": "Jumpy and drained, with focus moving between sharp and foggy.",
+        "playbook": "- Pause for slow breathing",
+    }
+    variants = _build_social_caption_variants(
+        {"day": "2026-07-13", "platform": "default"},
+        title="Body Buzzing For No Clear Reason?",
+        default_caption="Body buzzing for no clear reason? Keep your pace gentle.",
+        default_hashtags="#GaiaEyes",
+        sections=sections,
+    )
+
+    assert captured["title"] == "Body Buzzing For No Clear Reason?"
+    assert captured["sections"] == sections
+    assert variants["fb"]["caption"].startswith("Body buzzing for no clear reason?")
