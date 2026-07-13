@@ -12,7 +12,7 @@ ENV it uses (all optional, sane defaults applied when possible):
 - OPENAI_API_KEY            : your OpenAI API key (for TTS). If missing, VO is skipped.
 - REEL_TTS_VOICE            : e.g., "marin" (default), any supported TTS voice
 - REEL_TTS_MODEL            : OpenAI TTS model, default gpt-4o-mini-tts
-- REEL_VO_LEAD_PAD_SEC      : optional leading silence before VO (default 0.45)
+- REEL_VO_LEAD_PAD_SEC      : optional leading silence before VO (default 0.15)
 - REEL_MUSIC_VOLUME_DB      : music bed gain before ducking (default -9dB)
 - REEL_DURATION_SEC         : total output duration target (if set, otherwise inferred)
 - SUPABASE_URL              : e.g., https://<project>.supabase.co (for audio manifest default)
@@ -23,11 +23,11 @@ ENV it uses (all optional, sane defaults applied when possible):
 
 Runtime deps:
 - ffmpeg (installed via apt in the job)
-- Python: requests (pip install requests)
+- Python: requests, Pillow (pip install requests pillow)
 
 Basic flow:
-1) Pick three IG cards: daily_affects.jpg, daily_playbook.jpg, daily_stats.jpg (fallback: any 3 images).
-2) Build still clips (6.5s each) and crossfade (0.3s) into one 1080x1920 video.
+1) Build a large hook-only opener, then use the care-notes and stats cards.
+2) Add immediate subtle motion and crossfade the short clips into one 1080x1920 video.
 3) Build VO via OpenAI TTS (optional); pull a music bed WAV from Supabase (tracks.json -> wav).
 4) Sidechain-compress bed under VO; export MP4 with AAC audio and H.264 video.
 """
@@ -39,10 +39,11 @@ import re
 import subprocess
 import shlex
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence
 import requests
 from requests.adapters import HTTPAdapter, Retry
 import datetime as dt
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 # ------------ Utilities ------------
 
@@ -139,7 +140,7 @@ OPENAI_API_KEY = env_get("OPENAI_API_KEY")
 REEL_TTS_VOICE = env_get("REEL_TTS_VOICE", "marin")
 REEL_TTS_MODEL = env_get("REEL_TTS_MODEL", "gpt-4o-mini-tts")
 REEL_TTS_FALLBACK_MODEL = env_get("REEL_TTS_FALLBACK_MODEL", "gpt-4o-mini-tts")
-REEL_VO_LEAD_PAD_SEC = env_get("REEL_VO_LEAD_PAD_SEC", "0.45")
+REEL_VO_LEAD_PAD_SEC = env_get("REEL_VO_LEAD_PAD_SEC", "0.15")
 REEL_MUSIC_VOLUME_DB = env_get("REEL_MUSIC_VOLUME_DB", "-9")
 REEL_REQUIRE_VO = env_get("REEL_REQUIRE_VO", "0") == "1"
 REEL_MOOD = env_get("REEL_MOOD", None)
@@ -297,7 +298,7 @@ def _vo_lead_filter() -> str:
     try:
         lead = max(0.0, float(str(REEL_VO_LEAD_PAD_SEC or "").strip()))
     except Exception:
-        lead = 0.45
+        lead = 0.15
     delay_ms = int(round(lead * 1000))
     if delay_ms <= 0:
         return ""
@@ -361,9 +362,77 @@ def resolve_vo_text(platform: str = "default", target_day: Optional[str] = None)
     return resolve_caption(platform=platform, target_day=day)
 
 # Visual timing
-CLIP_DUR = 6.5   # seconds per still
-XFADE = 0.3      # seconds
+HOOK_CLIP_DUR = 2.2
+DETAIL_CLIP_DUR = 5.4
+XFADE = 0.25
 FPS = 30
+
+
+def hook_text_from_post(row: Optional[dict]) -> str:
+    if not isinstance(row, dict):
+        return "Today, in your body"
+    title = _clean_vo_sentence(row.get("title"))
+    if title:
+        return title
+    sections = _metrics_sections(row)
+    caption = row.get("caption") or sections.get("caption") or ""
+    first = _first_sentences(caption, max_sentences=1, max_chars=90)
+    return first or "Today, in your body"
+
+
+def _fit_hook_font(draw: ImageDraw.ImageDraw, text: str, font_path: Path, max_width: int) -> ImageFont.FreeTypeFont:
+    for size in range(132, 71, -4):
+        font = ImageFont.truetype(str(font_path), size=size)
+        if draw.textbbox((0, 0), text, font=font)[2] <= max_width:
+            return font
+    return ImageFont.truetype(str(font_path), size=72)
+
+
+def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
+    with Image.open(source) as raw:
+        background = raw.convert("RGB")
+    background = background.resize((1080, 1920), Image.Resampling.LANCZOS)
+    background = background.filter(ImageFilter.GaussianBlur(radius=14))
+    background = ImageEnhance.Brightness(background).enhance(0.46)
+
+    canvas = background.convert("RGBA")
+    overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 70))
+    canvas = Image.alpha_composite(canvas, overlay)
+    draw = ImageDraw.Draw(canvas)
+
+    font_path = Path(__file__).resolve().parent / "fonts" / "BebasNeue.ttf"
+    label_font = ImageFont.truetype(str(font_path), size=42)
+    measure_font = ImageFont.truetype(str(font_path), size=112)
+    words = str(hook_text or "Today, in your body").strip().upper().split()
+    lines: List[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if current and draw.textbbox((0, 0), candidate, font=measure_font)[2] > 880:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    if len(lines) > 3:
+        lines = [" ".join(lines[:-1]), lines[-1]]
+
+    longest = max(lines, key=len) if lines else "TODAY, IN YOUR BODY"
+    hook_font = _fit_hook_font(draw, longest, font_path, 880)
+    line_height = hook_font.size + 18
+    block_height = line_height * len(lines)
+    top = max(520, (1920 - block_height) // 2 - 70)
+
+    draw.text((100, top - 92), "EARTHSCOPE  •  TODAY", font=label_font, fill=(84, 224, 225, 255))
+    for index, line in enumerate(lines):
+        draw.text((100, top + index * line_height), line, font=hook_font, fill=(255, 255, 255, 255))
+    draw.text((100, 1690), "GAIA EYES", font=label_font, fill=(255, 255, 255, 225))
+    draw.text((100, 1744), "Decode the unseen.", font=label_font, fill=(210, 220, 224, 225))
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(out_path, "JPEG", quality=92)
+    return out_path
 
 # ------------ Image selection ------------
 
@@ -398,22 +467,36 @@ def pick_card_images(images_dir: Path, max_count: int = 3) -> List[Path]:
 
 # ------------ Build video from stills ------------
 
-def build_still_clip(image: Path, out_mp4: Path, duration: float, fps: int = FPS) -> None:
+def build_still_clip(
+    image: Path,
+    out_mp4: Path,
+    duration: float,
+    fps: int = FPS,
+    *,
+    motion: bool = False,
+) -> None:
     """
     Create a simple 1080x1920 clip from a still image with minimal letterbox/pad.
     """
-    vf = (
-        f"scale=1080:-2,"  # scale width to 1080, keep aspect
-        f"pad=1080:1920:(ow-iw)/2:(oh-ih)/2,"
-        f"format=yuv420p"
-    )
+    if motion:
+        vf = (
+            "scale=1080:1920:force_original_aspect_ratio=increase,"
+            "crop=1080:1920,"
+            f"zoompan=z='min(zoom+0.0007,1.055)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"d=1:s=1080x1920:fps={fps},format=yuv420p"
+        )
+    else:
+        vf = (
+            "scale=1080:1920:force_original_aspect_ratio=decrease,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,"
+            "format=yuv420p"
+        )
     cmd = [
         "ffmpeg", "-y",
+        "-framerate", str(fps),
         "-loop", "1",
-        "-t", f"{duration:.3f}",
         "-i", str(image),
-        "-vsync", "cfr",
-        "-r", str(fps),
+        "-t", f"{duration:.3f}",
         "-vf", vf,
         "-an",
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
@@ -422,50 +505,36 @@ def build_still_clip(image: Path, out_mp4: Path, duration: float, fps: int = FPS
     ]
     run(cmd)
 
-def xfade_concat(clips: List[Path], out_mp4: Path, clip_dur: float, xfade: float, fps: int = FPS) -> None:
-    """
-    Crossfade 3 clips with xfade. Assumes exactly 3 inputs for now.
-    """
+def xfade_concat(
+    clips: List[Path],
+    out_mp4: Path,
+    clip_durations: Sequence[float],
+    xfade: float,
+    fps: int = FPS,
+) -> None:
+    """Crossfade clips with per-clip durations."""
+    if len(clips) != len(clip_durations):
+        raise ValueError("clips and clip_durations must have the same length")
     if len(clips) < 2:
         # Single clip case: just copy it
         run(["cp", str(clips[0]), str(out_mp4)])
         return
-    if len(clips) == 2:
-        # Two-clip chain
-        off1 = clip_dur - xfade
-        fc = (
-            f"[0:v][1:v]xfade=transition=fade:duration={xfade}:offset={off1}[vout]"
+    filters: List[str] = []
+    cumulative = float(clip_durations[0])
+    previous = "0:v"
+    for index in range(1, len(clips)):
+        offset = cumulative - xfade
+        output = "vout" if index == len(clips) - 1 else f"v{index:02d}"
+        filters.append(
+            f"[{previous}][{index}:v]xfade=transition=fade:duration={xfade}:offset={offset:.3f}[{output}]"
         )
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(clips[0]),
-            "-i", str(clips[1]),
-            "-filter_complex", fc,
-            "-map", "[vout]",
-            "-an",
-            "-r", str(fps),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            str(out_mp4)
-        ]
-        run(cmd)
-        return
+        previous = output
+        cumulative += float(clip_durations[index]) - xfade
 
-    # Three-clip chain
-    off1 = clip_dur - xfade                             # ~6.2
-    length_after_1 = 2 * clip_dur - xfade               # ~12.7
-    off2 = length_after_1 - xfade                       # ~12.4
-
-    fc = (
-        f"[0:v][1:v]xfade=transition=fade:duration={xfade}:offset={off1}[v01];"
-        f"[v01][2:v]xfade=transition=fade:duration={xfade}:offset={off2}[vout]"
-    )
     cmd = [
         "ffmpeg", "-y",
-        "-i", str(clips[0]),
-        "-i", str(clips[1]),
-        "-i", str(clips[2]),
-        "-filter_complex", fc,
+        *[part for clip in clips for part in ("-i", str(clip))],
+        "-filter_complex", ";".join(filters),
         "-map", "[vout]",
         "-an",
         "-r", str(fps),
@@ -658,32 +727,44 @@ def main():
     which_ffmpeg()
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     REEL_OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    platform = env_get("REEL_PLATFORM", "default")
+    target_day = env_get("TARGET_DAY")
+    resolved_day = target_day or _latest_day_from_content(platform)
+    post_row = fetch_post_for_day(resolved_day, platform)
 
-    # 1) Pick images
-    cards = pick_card_images(IMAGES_DIR, 3)
-    if not cards:
+    # 1) Build a hook-only opener, then keep the detailed cards for later beats.
+    detail_cards = pick_card_images(IMAGES_DIR, 3)
+    if not detail_cards:
         raise SystemExit("No images found to build reel. Expected JPG/PNG cards in MEDIA_REPO_PATH/images")
-    log(f"Using cards: {', '.join(p.name for p in cards)}")
-
-    # 2) Build still clips
     tmp_dir = Path("tmp_reel")
     tmp_dir.mkdir(exist_ok=True, parents=True)
+    hook_card = build_hook_card(
+        detail_cards[0],
+        tmp_dir / "hook.jpg",
+        hook_text_from_post(post_row),
+    )
+    later_cards = [card for card in detail_cards if card.name != "daily_affects.jpg"]
+    if not later_cards:
+        later_cards = detail_cards
+    cards = [hook_card, *later_cards[:2]]
+    clip_durations = [HOOK_CLIP_DUR, *([DETAIL_CLIP_DUR] * (len(cards) - 1))]
+    log(f"Using cards: {', '.join(p.name for p in cards)}")
+
+    # 2) Build short clips. Motion starts on frame one.
     clips = []
-    for i, img in enumerate(cards):
+    for i, (img, duration) in enumerate(zip(cards, clip_durations)):
         outc = tmp_dir / f"clip_{i}.mp4"
-        build_still_clip(img, outc, CLIP_DUR, FPS)
+        build_still_clip(img, outc, duration, FPS, motion=(i == 0))
         clips.append(outc)
 
     # 3) Crossfade chain
     vid_no_audio = tmp_dir / "video_no_audio.mp4"
-    xfade_concat(clips, vid_no_audio, CLIP_DUR, XFADE, FPS)
+    xfade_concat(clips, vid_no_audio, clip_durations, XFADE, FPS)
 
-    total_duration = max(0.0, CLIP_DUR * len(clips) - XFADE * (len(clips) - 1))
+    total_duration = max(0.0, sum(clip_durations) - XFADE * (len(clips) - 1))
     log(f"Total visual duration: {total_duration:.3f}s")
 
     # 4) VO (best-effort) and bed
-    platform = env_get("REEL_PLATFORM", "default")
-    target_day = env_get("TARGET_DAY")
     caption_text = resolve_caption(platform=platform, target_day=target_day)
     post_caption = " ".join((caption_text or "").split())
     vo_text_raw = resolve_vo_text(platform=platform, target_day=target_day) or caption_text or ""
@@ -738,9 +819,9 @@ def main():
     else:
         log("No tracks.json manifest available; skipping bed.")
 
-    # --- If the VO is longer than the visual chain, rebuild clips proportionally ---
+    # --- If the VO is longer than the visual chain, extend detail beats but keep the hook fast. ---
     # Optional padding after VO to avoid abrupt cut
-    vo_tail_pad = float(env_get("REEL_VO_TAIL_PAD_SEC", "1.2") or "1.2")
+    vo_tail_pad = float(env_get("REEL_VO_TAIL_PAD_SEC", "0.8") or "0.8")
 
     # Optional hard target duration override (seconds). If provided and larger than current, prefer it.
     target_total_env = env_get("REEL_DURATION_SEC")
@@ -763,21 +844,27 @@ def main():
         required_total = max(required_total, target_total)
 
     if required_total > total_duration + 0.05:
-        n = len(clips)
-        # Solve for per-clip duration so that: n * d - (n-1) * XFADE = required_total
-        new_clip_dur = (required_total + XFADE * (n - 1)) / n
-        log(f"VO ~{(vo_secs or 0.0):.2f}s, extending per-clip duration to {new_clip_dur:.2f}s for total ~{required_total:.2f}s")
+        detail_count = max(1, len(clip_durations) - 1)
+        extra_per_detail = (required_total - total_duration) / detail_count
+        clip_durations = [
+            duration if index == 0 else duration + extra_per_detail
+            for index, duration in enumerate(clip_durations)
+        ]
+        log(
+            f"VO ~{(vo_secs or 0.0):.2f}s, keeping hook at {clip_durations[0]:.2f}s "
+            f"and extending detail beats for total ~{required_total:.2f}s"
+        )
 
         # Rebuild clips with the new per-clip duration
         clips = []
-        for i, img in enumerate(cards):
+        for i, (img, duration) in enumerate(zip(cards, clip_durations)):
             outc = tmp_dir / f"clip_{i}.mp4"
-            build_still_clip(img, outc, new_clip_dur, FPS)
+            build_still_clip(img, outc, duration, FPS, motion=(i == 0))
             clips.append(outc)
 
         # Rebuild crossfade chain and recalc total
-        xfade_concat(clips, vid_no_audio, new_clip_dur, XFADE, FPS)
-        total_duration = max(0.0, new_clip_dur * n - XFADE * (n - 1))
+        xfade_concat(clips, vid_no_audio, clip_durations, XFADE, FPS)
+        total_duration = max(0.0, sum(clip_durations) - XFADE * (len(clips) - 1))
         log(f"Adjusted visual duration: {total_duration:.3f}s")
 
     # 5) Mix and mux

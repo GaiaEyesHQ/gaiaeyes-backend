@@ -11,10 +11,6 @@ on:
       date:
         description: "YYYY-MM-DD (optional; defaults to GAIA_TIMEZONE today)"
         required: false
-      platform:
-        description: "daily_posts.platform"
-        required: false
-        default: "default"
       public_shadow:
         description: "Generate a public EarthScope shadow-review artifact"
         required: false
@@ -47,7 +43,7 @@ jobs:
       SUPABASE_SW_TABLE: space_weather_daily
       SUPABASE_SR_TABLE: schumann_daily
       SUPABASE_DAY_COLUMN: day
-      EARTHSCOPE_PLATFORM: ${{ github.event.inputs.platform || 'default' }}
+      EARTHSCOPE_PLATFORM: default
       GAIAEYES_API_BASE: https://gaiaeyes-backend.onrender.com
       EARTHSCOPE_HYBRID_REWRITE: "true"
       EARTHSCOPE_FORCE_RULES: "false"
@@ -505,7 +501,8 @@ jobs:
         working-directory: bots/earthscope_post
         env:
           REEL_MEDIA_BASE: ${{ env.MEDIA_CDN_BASE }}
-          REEL_VO_TAIL_PAD_SEC: "2.5"
+          REEL_VO_LEAD_PAD_SEC: "0.15"
+          REEL_VO_TAIL_PAD_SEC: "0.8"
           REEL_BED_URL: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/music/bed01.wav
           REEL_OUT: ${{ github.workspace }}/reel.mp4
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

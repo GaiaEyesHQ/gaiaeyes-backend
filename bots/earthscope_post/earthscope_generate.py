@@ -503,12 +503,13 @@ def _platform_caption_profile(platform: str) -> Dict[str, Any]:
     if plat in {"fb", "facebook"}:
         return {
             "platform": "facebook",
-            "caption_sentences": [5, 8],
-            "caption_words": [110, 220],
+            "caption_sentences": [4, 6],
+            "caption_words": [70, 120],
             "caption_instruction": (
-                "5-8 sentences, about 110-220 words. Write a richer Facebook-style mini post: "
+                "4-6 sentences, about 70-120 words. Write a concise Facebook-style mini post: "
                 "lead with a human body/mood/sleep/focus hook instead of a space-weather label, add one plain-language "
-                "why-it-matters paragraph, give a practical pacing note, and end with a soft Gaia Eyes bridge. "
+                "why-it-matters paragraph, give one practical pacing note, and end with one simple audience question "
+                "using only the felt effects already present in the content spine. "
                 "Do not open with 'Neutral energy', 'near-Earth field', or metric-report language. "
                 "For calm or neutral days, keep CME counts on the stats card unless explicit Earth-directed/arrival context exists. "
                 "It can be reflective or lightly funny, but should not feel like a report."
@@ -2830,7 +2831,8 @@ def _rewrite_facebook_caption_from_spine(
         "emotional hook, intensity, symptom scope, and practical advice. Do not reinterpret the signals, choose a different "
         "hook lane, introduce new symptoms, or make the day sound calmer or more active than the spine. "
         "Expand only for Facebook: add useful context, natural paragraphing, at most one fitting analogy, a practical pacing "
-        "note, and a soft Gaia Eyes bridge. Keep the founder voice human, lightly playful, grounded, and non-fearful. "
+        "note, and one low-friction audience question tied to the existing felt effects. Keep the founder voice human, lightly "
+        "playful, grounded, and non-fearful. "
         "Do not include measurements, a metric footer, a download/follow CTA, or hashtags inside the caption. "
         "Return ONLY a compact JSON object with the string keys caption and hashtags."
     )
@@ -2950,10 +2952,16 @@ def _caption_voiceover_lead(caption: str, title: str) -> str:
     if not lead:
         lead = str(title or "").strip()
     lead = _sanitize_caption(lead)
-    if len(lead) > 460:
-        sentences = _split_text_sentences(lead)
-        shortened = " ".join(sentences[:3]).strip()
-        lead = shortened if shortened else lead[:460].rsplit(" ", 1)[0].rstrip(" ,;:-") + "."
+    sentences = _split_text_sentences(lead)
+    if sentences:
+        lead = " ".join(sentences[:2]).strip()
+    words = lead.split()
+    if len(words) > 28:
+        first_sentence = sentences[0] if sentences else ""
+        if first_sentence and len(first_sentence.split()) <= 28:
+            lead = first_sentence
+        else:
+            lead = " ".join(words[:28]).rstrip(" ,;:-") + "."
 
     first = _first_sentence(lead)
     if first and _hook_lane_for_text(first):
@@ -3479,11 +3487,22 @@ def upsert_supabase_post(values: Dict[str, Any]) -> None:
 # Main
 # ============================================================
 
+def _canonical_public_platform(requested: str) -> str:
+    platform = str(requested or "default").strip().lower()
+    if platform not in {"", "default"}:
+        print(
+            f"[WARN] Ignoring --platform={platform!r}; public EarthScope generates one canonical default row "
+            "and mirrors it to channel variants."
+        )
+    return "default"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=today_iso_local(), help="YYYY-MM-DD (default: today)")
     ap.add_argument("--platform", default=PLATFORM)
     args = ap.parse_args()
+    args.platform = _canonical_public_platform(args.platform)
 
     day = args.date
 

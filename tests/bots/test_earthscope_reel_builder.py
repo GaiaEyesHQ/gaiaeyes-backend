@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -74,3 +75,64 @@ def test_reel_audio_db_helper_normalizes_gain():
     assert reel_builder._audio_db("-8dB") == "-8dB"
     assert reel_builder._audio_db("-7") == "-7dB"
     assert reel_builder._audio_db("nope") == "-9dB"
+
+
+def test_reel_hook_prefers_stored_title():
+    row = {
+        "title": "Body buzzing for no clear reason?",
+        "caption": "A different caption opening should not replace the selected title.",
+    }
+
+    assert reel_builder.hook_text_from_post(row) == "Body buzzing for no clear reason?"
+
+
+def test_reel_hook_card_is_vertical_and_hides_dense_source_copy(tmp_path):
+    source = tmp_path / "daily_affects.jpg"
+    Image.new("RGB", (1080, 1920), (35, 110, 85)).save(source)
+
+    output = reel_builder.build_hook_card(
+        source,
+        tmp_path / "hook.jpg",
+        "Body buzzing for no clear reason?",
+    )
+
+    with Image.open(output) as rendered:
+        assert rendered.size == (1080, 1920)
+        assert rendered.getbbox() is not None
+
+
+def test_reel_opening_clip_uses_motion_from_frame_one(monkeypatch, tmp_path):
+    captured = []
+    monkeypatch.setattr(reel_builder, "run", captured.append)
+
+    reel_builder.build_still_clip(
+        tmp_path / "hook.jpg",
+        tmp_path / "hook.mp4",
+        reel_builder.HOOK_CLIP_DUR,
+        motion=True,
+    )
+
+    command = captured[0]
+    video_filter = command[command.index("-vf") + 1]
+    assert "zoompan" in video_filter
+    assert "d=1" in video_filter
+    assert command[command.index("-framerate") + 1] == "30"
+    assert command[command.index("-t") + 1] == "2.200"
+
+
+def test_reel_crossfade_respects_short_hook_duration(monkeypatch, tmp_path):
+    captured = []
+    monkeypatch.setattr(reel_builder, "run", captured.append)
+    clips = [tmp_path / f"clip-{index}.mp4" for index in range(3)]
+
+    reel_builder.xfade_concat(
+        clips,
+        tmp_path / "out.mp4",
+        [2.2, 5.4, 5.4],
+        0.25,
+    )
+
+    command = captured[0]
+    filters = command[command.index("-filter_complex") + 1]
+    assert "offset=1.950" in filters
+    assert "offset=7.100" in filters

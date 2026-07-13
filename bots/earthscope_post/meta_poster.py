@@ -1107,6 +1107,9 @@ def derive_caption_and_hashtags(post: dict, target_platform: Optional[str] = Non
       metrics = None
   target = target_platform or post.get("platform") or "default"
   variant = _caption_variant_for_platform(metrics, target)
+  writer_owned_facebook_caption = bool(
+    variant and str(target).strip().lower() in ("fb", "facebook")
+  )
   if variant:
     cap, variant_tags = variant
     if variant_tags:
@@ -1149,8 +1152,11 @@ def derive_caption_and_hashtags(post: dict, target_platform: Optional[str] = Non
         cap = parsed
 
   cap = _format_caption_body_for_platform(cap, str(target))
-  seed = f"{post.get('day') or ''}|{post.get('platform') or ''}|{cap[:80]}"
-  cap = append_caption_cta(cap.strip(), seed=seed, context=metrics if isinstance(metrics, dict) else None)
+  if writer_owned_facebook_caption:
+    cap = cap.strip()
+  else:
+    seed = f"{post.get('day') or ''}|{post.get('platform') or ''}|{cap[:80]}"
+    cap = append_caption_cta(cap.strip(), seed=seed, context=metrics if isinstance(metrics, dict) else None)
   if tags:
     return cap + "\n\n" + tags, tags
   return cap, tags

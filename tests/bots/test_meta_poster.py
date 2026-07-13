@@ -234,6 +234,7 @@ def test_derive_caption_uses_facebook_social_variant():
 
     assert "Longer Facebook caption with a warmer story arc." in caption
     assert "Short IG caption." not in caption
+    assert "gaiaeyes.com/app" not in caption
     assert caption.endswith("#GaiaEyes #HealthPatterns")
     assert tags == "#GaiaEyes #HealthPatterns"
 

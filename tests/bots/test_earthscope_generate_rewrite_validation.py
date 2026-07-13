@@ -19,6 +19,7 @@ from bots.earthscope_post.earthscope_generate import (
     _build_social_caption_variants,
     _build_reel_voiceover_text,
     _caption_context_lead,
+    _canonical_public_platform,
     _clean_llm_title,
     _fallback_social_title,
     _finalize_rewrite_payload,
@@ -536,6 +537,30 @@ def test_facebook_caption_profile_is_longer_than_instagram():
     assert fb["caption_words"][1] > ig["caption_words"][1]
     assert "Facebook-style mini post" in fb["caption_instruction"]
     assert "compact for Instagram" in ig["caption_instruction"]
+    assert fb["caption_words"] == [70, 120]
+    assert "audience question" in fb["caption_instruction"]
+
+
+def test_public_generation_uses_one_canonical_platform():
+    assert _canonical_public_platform("default") == "default"
+    assert _canonical_public_platform("ig") == "default"
+
+
+def test_reel_voiceover_keeps_hook_effect_and_tip_compact():
+    voiceover = _build_reel_voiceover_text(
+        ctx={"kp_max_24h": 2.0, "bz_min": -4.8},
+        title="Body Buzzing For No Clear Reason?",
+        caption=(
+            "Body buzzing for no clear reason? That jittery wired-but-tired feeling can make small tasks feel draining. "
+            "This extra sentence should not make the reel drag into a long Facebook-style read."
+        ),
+        playbook="- Take three slow breaths before pushing through\n- Lower screen brightness",
+        rewrite=None,
+    )
+
+    assert voiceover.startswith("Body buzzing for no clear reason?")
+    assert "Try this today: Take three slow breaths before pushing through." in voiceover
+    assert len(voiceover.split()) <= 48
 
 
 def test_facebook_caption_rewrite_receives_finished_content_spine(monkeypatch):
