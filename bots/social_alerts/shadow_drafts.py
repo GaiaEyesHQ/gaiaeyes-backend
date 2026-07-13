@@ -20,6 +20,13 @@ CTA_BY_CATEGORY = {
     "schumann": "Open Gaia Eyes: compare today's Earth signal with your body patterns. https://GaiaEyes.com/app",
 }
 DEFAULT_HASHTAGS = "#GaiaEyes #SpaceWeather #EarthSignals"
+SOCIAL_ALERT_TRUST_LINE = "Gaia Eyes is a pattern recognition app and is not giving medical advice."
+SOCIAL_ALERT_CLOSING = (
+    "Gaia Eyes brings together your wearable data, personal observations, and multiple environmental signals "
+    "to find your personal patterns.\n\n"
+    "Download for free: https://gaiaeyes.com/app"
+)
+SOCIAL_ALERT_DEFAULT_HASHTAGS = "#GaiaEyes #SelfCare #Wellness #ChronicIllness #Energy"
 SEVERITY_RANK = {"high": 0, "watch": 1, "info": 2}
 SOCIAL_BACKGROUND_PREFIX = "social/share/backgrounds"
 MAX_CONTEXT_CHIPS = 5
@@ -113,9 +120,9 @@ SIGNAL_SUBTITLES = {
     "cme": "Solar activity is active. If sleep, HRV, pain, mood, or energy feel unusual, log it so patterns are easier to compare later.",
 }
 SIGNAL_CAPTIONS = {
-    "geomagnetic": "{title}\n\nGeomagnetic activity is elevated right now while solar activity is stirring up Earth's magnetic field.\n\nResearchers have studied links between geomagnetic activity, HRV, nervous-system regulation, headaches, mood, sleep, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?\n\nIf your body feels louder than normal today, it may not be random. Sleep changes, HRV dips, headaches, pain, focus shifts, restless energy, mood changes, exposures, and health conditions are the kinds of patterns Gaia Eyes can help you compare with Earth signals.\n\nUse Gaia Eyes as a pattern log: note what you feel, your conditions, and the signal window, then compare what repeats over time.\n\n{cta}\n\nGaia Eyes is a pattern recognition app and is not giving medical advice.\n\n{hashtags}",
-    "solar_flare": "{title}\n\nSolar flare activity is elevated right now. Most official alerts focus on radio noise, satellites, and navigation, but people often want to know what it could mean for their body day.\n\nResearchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?\n\nIf focus, energy, sleep, headaches, pain, mood, exposures, or health conditions feel louder than normal, log it. One day is a note. Repeated overlaps become a pattern.\n\nUse Gaia Eyes as an energy and focus log: note the signal window, what changed in your body, and what repeats over time.\n\n{cta}\n\nGaia Eyes is a pattern recognition app and is not giving medical advice.\n\n{hashtags}",
-    "cme": "{title}\n\nA CME is a huge cloud from the Sun. If it heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree.\n\nResearchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?\n\nIf sleep, HRV, pain, mood, energy, symptoms, exposures, or health conditions feel unusual, log it. One day is a note. Repeated overlaps become a pattern.\n\nUse Gaia Eyes as a recovery log: note what you feel, any wearable shifts, and the signal window, then compare what repeats over time.\n\n{cta}\n\nGaia Eyes is a pattern recognition app and is not giving medical advice.\n\n{hashtags}",
+    "geomagnetic": "{title}\n\nGeomagnetic activity is elevated right now while solar activity is stirring up Earth's magnetic field.\n\nResearchers have studied links between geomagnetic activity, HRV, nervous-system regulation, headaches, mood, sleep, and cardiovascular timing.\n\nIf your body feels louder than normal today, it may not be random.\n\n{closing}\n\n{trust_line}\n\n{hashtags}",
+    "solar_flare": "{title}\n\nSolar flare activity is elevated right now. Most official alerts focus on radio noise, satellites, and navigation, but people often want to know what it could mean for their body day.\n\nResearchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing.\n\nIf focus, energy, sleep, headaches, pain, mood, exposures, or health conditions feel louder than normal, log it.\n\n{closing}\n\n{trust_line}\n\n{hashtags}",
+    "cme": "{title}\n\nA CME is a huge cloud from the Sun. If it heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree.\n\nResearchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing.\n\nIf sleep, HRV, pain, mood, energy, symptoms, exposures, or health conditions feel unusual, log it.\n\n{closing}\n\n{trust_line}\n\n{hashtags}",
 }
 SIGNAL_EXPLAINERS = {
     "geomagnetic": "Researchers have studied geomagnetic activity alongside HRV, cardiovascular timing, headaches, mood, and sleep. Gaia Eyes turns that research question into a personal pattern check.",
@@ -141,9 +148,9 @@ SCHUMANN_SUBTITLES = [
     "Earth's resonance is moving. Gaia Eyes helps compare it with body patterns over time.",
 ]
 SCHUMANN_CAPTION_TEMPLATES = [
-    "{hook}\n\nSchumann resonance is part of Earth's natural electromagnetic background. Think of it like a very low rhythm around the planet.\n\nHeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?\n\nIf sleep, HRV, focus, headaches, sinus pressure, nerve pain, wired/tired energy, exposures, or health conditions feel louder than normal, log it. One day is a note. Repeated overlaps become a pattern.\n\nUse Gaia Eyes as a body-pattern log: note sleep, HRV, symptoms, and the signal window, then compare what repeats over time.\n\n{cta}\n\nGaia Eyes is a pattern recognition app and is not giving medical advice.\n\n#GaiaEyes #SchumannResonance #HRV #SleepPatterns",
-    "{hook}\n\nThe Schumann signal is elevated compared with its recent baseline. That does not explain a body day by itself, but it can be worth comparing over time.\n\nHeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?\n\nIf sleep quality, HRV dips, brain fog, headaches, nerve-pain flares, mood, exposures, or health conditions feel louder than normal, log it. One day is a note. Repeated overlaps become a pattern.\n\nUse Gaia Eyes as a body-pattern log: note sleep, HRV, symptoms, and the signal window, then compare what repeats over time.\n\n{cta}\n\nGaia Eyes is a pattern recognition app and is not giving medical advice.\n\n#GaiaEyes #SchumannResonance #BodyPatterns #HRV",
-    "{hook}\n\nCurrent Schumann activity is running higher than its recent baseline. That does not mean it explains symptoms, but it is a useful signal to compare.\n\nHeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?\n\nIf sleep, HRV, focus, pain, symptoms, exposures, or health conditions feel louder than normal, log it. One day is a note. Repeated overlaps become a pattern.\n\nUse Gaia Eyes as a body-pattern log: note sleep, HRV, symptoms, and the signal window, then compare what repeats over time.\n\n{cta}\n\nGaia Eyes is a pattern recognition app and is not giving medical advice.\n\n#GaiaEyes #EarthSignals #SleepPatterns #HRV",
+    "{hook}\n\nSchumann resonance is part of Earth's natural electromagnetic background. Think of it like a very low rhythm around the planet.\n\nHeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns.\n\nIf sleep, HRV, focus, headaches, sinus pressure, nerve pain, wired/tired energy, exposures, or health conditions feel louder than normal, log it.\n\n{closing}\n\n{trust_line}\n\n{hashtags}",
+    "{hook}\n\nThe Schumann signal is elevated compared with its recent baseline. That does not explain a body day by itself, but it can be worth comparing over time.\n\nHeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns.\n\nIf sleep quality, HRV dips, brain fog, headaches, nerve-pain flares, mood, exposures, or health conditions feel louder than normal, log it.\n\n{closing}\n\n{trust_line}\n\n{hashtags}",
+    "{hook}\n\nCurrent Schumann activity is running higher than its recent baseline. That does not mean it explains symptoms, but it is a useful signal to compare.\n\nHeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns.\n\nIf sleep, HRV, focus, pain, symptoms, exposures, or health conditions feel louder than normal, log it.\n\n{closing}\n\n{trust_line}\n\n{hashtags}",
 ]
 
 
@@ -377,15 +384,22 @@ def _cta_for_category(category: str) -> str:
     return CTA_BY_CATEGORY.get(category, CTA)
 
 
-def _signal_caption(category: str, title: str, *, hashtags: str = DEFAULT_HASHTAGS) -> str:
+def _signal_caption(category: str, title: str, *, hashtags: str = SOCIAL_ALERT_DEFAULT_HASHTAGS) -> str:
     template = SIGNAL_CAPTIONS.get(category)
     cta = _cta_for_category(category)
     if not template:
         lead = _clean_text(title)
         if lead and lead[-1] not in ".?!":
             lead = f"{lead}."
-        return f"{lead} {SIGNAL_SUBTITLES.get(category, '')} {cta}\n\n{hashtags}"
-    return template.format(title=title, explainer=SIGNAL_EXPLAINERS.get(category, ""), cta=cta, hashtags=hashtags)
+        return f"{lead} {SIGNAL_SUBTITLES.get(category, '')}\n\n{SOCIAL_ALERT_CLOSING}\n\n{SOCIAL_ALERT_TRUST_LINE}\n\n{hashtags}"
+    return template.format(
+        title=title,
+        explainer=SIGNAL_EXPLAINERS.get(category, ""),
+        cta=cta,
+        closing=SOCIAL_ALERT_CLOSING,
+        trust_line=SOCIAL_ALERT_TRUST_LINE,
+        hashtags=hashtags,
+    )
 
 
 def _pick_hook(hooks: Mapping[str, Sequence[str]], severity: str, seed: str) -> str:
@@ -760,6 +774,9 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
             hook=hook,
             explainer=SIGNAL_EXPLAINERS["schumann"],
             cta=_cta_for_category("schumann"),
+            closing=SOCIAL_ALERT_CLOSING,
+            trust_line=SOCIAL_ALERT_TRUST_LINE,
+            hashtags=SOCIAL_ALERT_DEFAULT_HASHTAGS,
         ),
     )
 

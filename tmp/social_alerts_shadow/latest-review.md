@@ -2,7 +2,7 @@
 
 - Mode: `shadow`
 - Auto publish: `False`
-- Generated at: `2026-07-10T15:00:00Z`
+- Generated at: `2026-07-12T15:00:00Z`
 - Draft count: `4`
 
 ## 1. Nervous system on alert?
@@ -10,7 +10,7 @@
 - Category: `geomagnetic`
 - Severity: `high`
 - Review status: `needs_human_review`
-- As of: `2026-07-10T15:00:00Z`
+- As of: `2026-07-12T15:00:00Z`
 
 Post caption copy:
 
@@ -19,17 +19,17 @@ Nervous system on alert?
 
 Geomagnetic activity is elevated right now while solar activity is stirring up Earth's magnetic field.
 
-Researchers have studied links between geomagnetic activity, HRV, nervous-system regulation, headaches, mood, sleep, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
+Researchers have studied links between geomagnetic activity, HRV, nervous-system regulation, headaches, mood, sleep, and cardiovascular timing.
 
-If your body feels louder than normal today, it may not be random. Sleep changes, HRV dips, headaches, pain, focus shifts, restless energy, mood changes, exposures, and health conditions are the kinds of patterns Gaia Eyes can help you compare with Earth signals.
+If your body feels louder than normal today, it may not be random.
 
-Use Gaia Eyes as a pattern log: note what you feel, your conditions, and the signal window, then compare what repeats over time.
+Gaia Eyes brings together your wearable data, personal observations, and multiple environmental signals to find your personal patterns.
 
-Open Gaia Eyes: compare today's signal with your body patterns. https://GaiaEyes.com/app
+Download for free: https://gaiaeyes.com/app
 
 Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
-#GaiaEyes #SpaceWeather #EarthSignals
+#GaiaEyes #SelfCare #Wellness #ChronicIllness #Energy
 ```
 
 Metrics:
@@ -69,31 +69,31 @@ Sources:
 - SWPC space weather: `space_weather.now`
 - Space daily mart: `marts.space_weather_daily`
 
-## 2. Wired but tired?
+## 2. Headache or sinus pressure?
 
 - Category: `schumann`
 - Severity: `high`
 - Review status: `needs_human_review`
-- As of: `2026-07-10T15:00:00Z`
+- As of: `2026-07-12T15:00:00Z`
 
 Post caption copy:
 
 ```text
-Wired but tired?
+Headache or sinus pressure?
 
 Current Schumann activity is running higher than its recent baseline. That does not mean it explains symptoms, but it is a useful signal to compare.
 
-HeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
+HeartMath and other researchers have studied Schumann resonance, magnetic-field activity, HRV, brain rhythms, sleep, mood, and nervous-system patterns.
 
-If sleep, HRV, focus, pain, symptoms, exposures, or health conditions feel louder than normal, log it. One day is a note. Repeated overlaps become a pattern.
+If sleep, HRV, focus, pain, symptoms, exposures, or health conditions feel louder than normal, log it.
 
-Use Gaia Eyes as a body-pattern log: note sleep, HRV, symptoms, and the signal window, then compare what repeats over time.
+Gaia Eyes brings together your wearable data, personal observations, and multiple environmental signals to find your personal patterns.
 
-Open Gaia Eyes: compare today's Earth signal with your body patterns. https://GaiaEyes.com/app
+Download for free: https://gaiaeyes.com/app
 
 Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
-#GaiaEyes #EarthSignals #SleepPatterns #HRV
+#GaiaEyes #SelfCare #Wellness #ChronicIllness #Energy
 ```
 
 Metrics:
@@ -133,7 +133,7 @@ Sources:
 - Category: `cme`
 - Severity: `watch`
 - Review status: `needs_human_review`
-- As of: `2026-07-10T15:00:00Z`
+- As of: `2026-07-12T15:00:00Z`
 
 Post caption copy:
 
@@ -142,17 +142,17 @@ Moving in slow motion today?
 
 A CME is a huge cloud from the Sun. If it heads toward Earth, it can shake Earth's magnetic field a little, kind of like wind shaking a tree.
 
-Researchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
+Researchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing.
 
-If sleep, HRV, pain, mood, energy, symptoms, exposures, or health conditions feel unusual, log it. One day is a note. Repeated overlaps become a pattern.
+If sleep, HRV, pain, mood, energy, symptoms, exposures, or health conditions feel unusual, log it.
 
-Use Gaia Eyes as a recovery log: note what you feel, any wearable shifts, and the signal window, then compare what repeats over time.
+Gaia Eyes brings together your wearable data, personal observations, and multiple environmental signals to find your personal patterns.
 
-Open Gaia Eyes: compare this solar signal with your recovery patterns. https://GaiaEyes.com/app
+Download for free: https://gaiaeyes.com/app
 
 Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
-#GaiaEyes #SpaceWeather #EarthSignals
+#GaiaEyes #SelfCare #Wellness #ChronicIllness #Energy
 ```
 
 Metrics:
@@ -195,7 +195,7 @@ Sources:
 - Category: `solar_flare`
 - Severity: `watch`
 - Review status: `needs_human_review`
-- As of: `2026-07-10T15:00:00Z`
+- As of: `2026-07-12T15:00:00Z`
 
 Post caption copy:
 
@@ -204,17 +204,17 @@ Focus feeling patchy?
 
 Solar flare activity is elevated right now. Most official alerts focus on radio noise, satellites, and navigation, but people often want to know what it could mean for their body day.
 
-Researchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing. The science is still developing, but the question is exactly why Gaia Eyes exists: what changes in the environment might line up with what changes in your body?
+Researchers have studied solar and geomagnetic activity alongside HRV, nervous-system regulation, headaches, sleep, mood, and cardiovascular timing.
 
-If focus, energy, sleep, headaches, pain, mood, exposures, or health conditions feel louder than normal, log it. One day is a note. Repeated overlaps become a pattern.
+If focus, energy, sleep, headaches, pain, mood, exposures, or health conditions feel louder than normal, log it.
 
-Use Gaia Eyes as an energy and focus log: note the signal window, what changed in your body, and what repeats over time.
+Gaia Eyes brings together your wearable data, personal observations, and multiple environmental signals to find your personal patterns.
 
-Open Gaia Eyes: compare today's solar signal with your body patterns. https://GaiaEyes.com/app
+Download for free: https://gaiaeyes.com/app
 
 Gaia Eyes is a pattern recognition app and is not giving medical advice.
 
-#GaiaEyes #SpaceWeather #EarthSignals
+#GaiaEyes #SelfCare #Wellness #ChronicIllness #Energy
 ```
 
 Metrics:

@@ -3435,12 +3435,21 @@
     const cards = [];
     const restingHrDelta = asNumber(featureValue(features, "resting_hr_baseline_delta", "restingHrBaselineDelta"));
     const respiratoryDelta = asNumber(featureValue(features, "respiratory_rate_baseline_delta", "respiratoryRateBaselineDelta"));
+    const hrvDelta = asNumber(featureValue(features, "hrv_baseline_delta", "hrvBaselineDelta"));
+    const spo2Delta = asNumber(featureValue(features, "spo2_baseline_delta", "spo2BaselineDelta"));
     const spo2 =
       asNumber(featureValue(features, "spo2_avg", "spo2Avg", "health.spo2_avg", "health.spo2Avg")) ||
       asNumber(featureValue(features, "spo2_avg_pct", "spo2AvgPct", "spo2_avg_percent", "spo2AvgPercent", "spo2_mean", "spo2Mean"));
     const steps = asNumber(featureValue(features, "steps_total", "stepsTotal"));
     const hrv = asNumber(featureValue(features, "hrv_avg", "hrvAvg", "hrv_sdnn", "hrvSdnn"));
-    const tempDeviation = asNumber(featureValue(features, "temperature_deviation_baseline_delta", "temperatureDeviationBaselineDelta", "temperature_deviation", "temperatureDeviation"));
+    const temperatureSource = textOrEmpty(featureValue(features, "temperature_source", "temperatureSource"));
+    const temperatureBaselineDelta = asNumber(featureValue(features, "temperature_deviation_baseline_delta", "temperatureDeviationBaselineDelta"));
+    const legacyTemperatureDelta = asNumber(featureValue(features, "temperature_deviation", "temperatureDeviation"));
+    const tempDeviation = Number.isFinite(temperatureBaselineDelta)
+      ? temperatureBaselineDelta
+      : temperatureSource !== "apple_sleeping_wrist_temperature"
+        ? legacyTemperatureDelta
+        : null;
     const hrMin = asNumber(featureValue(features, "hr_min", "hrMin"));
     const hrMax = asNumber(featureValue(features, "hr_max", "hrMax"));
     const respiratoryAvg = asNumber(featureValue(features, "respiratory_rate_avg", "respiratoryRateAvg", "respiratory_rate_sleep_avg", "respiratoryRateSleepAvg"));
@@ -3476,7 +3485,15 @@
     } else if (Number.isFinite(respiratoryAvg)) {
       cards.push({ key: "respiratory", label: "Respiratory", value: `${respiratoryAvg.toFixed(1)} br/min`, detail: "daily average", salience: 0.16 });
     }
-    if (Number.isFinite(spo2)) {
+    if (Number.isFinite(spo2Delta)) {
+      cards.push({
+        key: "spo2",
+        label: "SpO₂ Δ",
+        value: `${spo2Delta > 0 ? "+" : ""}${spo2Delta.toFixed(1)} pp`,
+        detail: spo2Delta > 0.2 ? "above usual" : spo2Delta < -0.2 ? "below usual" : "near usual",
+        salience: Math.max(0, Math.min(1, Math.abs(spo2Delta) / 3)),
+      });
+    } else if (Number.isFinite(spo2)) {
       cards.push({
         key: "spo2",
         label: "SpO₂",
@@ -3485,7 +3502,15 @@
         salience: Math.max(0, Math.min(1, (96 - spo2) / 4)),
       });
     }
-    if (Number.isFinite(hrv)) {
+    if (Number.isFinite(hrvDelta)) {
+      cards.push({
+        key: "hrv",
+        label: "HRV Δ",
+        value: `${hrvDelta > 0 ? "+" : ""}${hrvDelta.toFixed(1)} ms`,
+        detail: hrvDelta > 1 ? "above usual" : hrvDelta < -1 ? "below usual" : "near usual",
+        salience: Math.max(0, Math.min(1, Math.abs(hrvDelta) / 20)),
+      });
+    } else if (Number.isFinite(hrv)) {
       cards.push({ key: "hrv", label: "HRV", value: `${Math.round(hrv)} ms`, detail: "daily average", salience: 0.12 });
     }
     if (Number.isFinite(tempDeviation)) {

@@ -277,7 +277,7 @@ enum HealthPermissionOption: String, CaseIterable, Codable, Identifiable {
         case .bloodPressure:
             return "Blood-pressure changes when your device supports it."
         case .wristTemperature:
-            return "Wrist temperature deviation when supported."
+            return "Nightly wrist-temperature shifts from your usual baseline."
         case .cycleTracking:
             return "Menstrual-flow timing only if you want Gaia to use it."
         case .stepCount:

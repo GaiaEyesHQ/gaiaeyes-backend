@@ -72,7 +72,9 @@ struct FeaturesToday: Codable {
     let stepsTotal: Num?
     let hrMin: Num?
     let hrvAvg: Num?
+    let hrvBaselineDelta: Num?
     let spo2Avg: Num?
+    let spo2BaselineDelta: Num?
     // Tolerant alternate SpO₂ keys (backend variants)
     let spo2AvgPct: Num?
     let spo2AvgPercent: Num?

@@ -92,6 +92,9 @@ def test_shadow_copy_stays_conservative_and_contextual() -> None:
     assert "treat" not in joined
     assert "guarantee" not in joined
     assert "guessing" not in joined
+    assert "wearable data, personal observations, and multiple environmental signals" in joined
+    assert "download for free: https://gaiaeyes.com/app" in joined
+    assert "#selfcare #wellness #chronicillness #energy" in joined
 
 
 def test_space_alerts_keep_health_pattern_context() -> None:
@@ -134,14 +137,15 @@ def test_space_alerts_keep_health_pattern_context() -> None:
     assert "A CME is a huge cloud from the Sun." in cme_caption
     assert "kind of like wind shaking a tree" in cme_caption
     assert "Researchers have studied solar and geomagnetic activity alongside HRV" in cme_caption
-    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" in cme_caption
-    assert "One day is a note. Repeated overlaps become a pattern." in cme_caption
-    assert "Use Gaia Eyes as a recovery log:" in cme_caption
+    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" not in cme_caption
+    assert "One day is a note. Repeated overlaps become a pattern." not in cme_caption
+    assert "Use Gaia Eyes as a recovery log:" not in cme_caption
     assert "health conditions feel unusual" in cme_caption
+    assert "Gaia Eyes brings together your wearable data, personal observations, and multiple environmental signals" in cme_caption
+    assert "Download for free: https://gaiaeyes.com/app" in cme_caption
     assert "Gaia Eyes is a pattern recognition app and is not giving medical advice." in cme_caption
     assert "alongside the CME signal" not in cme_caption
-    assert CTA_BY_CATEGORY["cme"] in cme_caption
-    assert "https://GaiaEyes.com/app" in cme_caption
+    assert "https://gaiaeyes.com/app" in cme_caption
     assert "Gaia Eyes compares symptoms, wearables, exposures, and environmental signals over time." not in cme_caption
     assert "CME activity is elevated" not in cme_caption
     assert "CME activity is present" not in cme_caption
@@ -152,9 +156,10 @@ def test_space_alerts_keep_health_pattern_context() -> None:
 
     geomagnetic_caption = drafts["geomagnetic"]["caption"]
     assert geomagnetic_caption.startswith(f"{drafts['geomagnetic']['title']}\n\nGeomagnetic activity is elevated right now")
-    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" in geomagnetic_caption
+    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" not in geomagnetic_caption
     assert "If your body feels louder than normal today" in geomagnetic_caption
-    assert "health conditions are the kinds of patterns Gaia Eyes can help you compare" in geomagnetic_caption
+    assert "health conditions are the kinds of patterns Gaia Eyes can help you compare" not in geomagnetic_caption
+    assert "Sleep changes, HRV dips" not in geomagnetic_caption
     assert geomagnetic_caption.count("sleep") == 1
 
 
@@ -164,11 +169,12 @@ def test_schumann_caption_includes_brief_public_explainer_and_app_cta() -> None:
 
     assert "Schumann resonance is part of Earth's natural electromagnetic background." in schumann["caption"]
     assert "HeartMath and other researchers have studied Schumann resonance" in schumann["caption"]
-    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" in schumann["caption"]
-    assert "Use Gaia Eyes as a body-pattern log:" in schumann["caption"]
+    assert "The science is still developing, but the question is exactly why Gaia Eyes exists" not in schumann["caption"]
+    assert "Use Gaia Eyes as a body-pattern log:" not in schumann["caption"]
     assert "health conditions" in schumann["caption"]
+    assert "Gaia Eyes brings together your wearable data, personal observations, and multiple environmental signals" in schumann["caption"]
     assert "Gaia Eyes is a pattern recognition app and is not giving medical advice." in schumann["caption"]
-    assert CTA_BY_CATEGORY["schumann"] in schumann["caption"]
+    assert "Download for free: https://gaiaeyes.com/app" in schumann["caption"]
 
 
 def test_space_alert_ctas_vary_by_category_without_changing_app_link() -> None:
@@ -189,7 +195,7 @@ def test_space_alert_ctas_vary_by_category_without_changing_app_link() -> None:
         cta = next(frame["text"] for frame in frames if frame["role"] == "cta")
         ctas.append(cta)
         assert "https://GaiaEyes.com/app" in cta
-        assert cta in draft["caption"]
+        assert "Download for free: https://gaiaeyes.com/app" in draft["caption"]
 
     assert len(set(ctas)) >= 3
 

@@ -470,6 +470,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         if let d = readISODate(forKey: "gaia.upload.spo2") { bgRows.append("SpO₂ upload: \(fmt(d))") }
         if let d = readISODate(forKey: "gaia.upload.sleep") { bgRows.append("Sleep upload: \(fmt(d))") }
         if let d = readISODate(forKey: "gaia.upload.hrv_sdnn") { bgRows.append("HRV upload: \(fmt(d))") }
+        if let d = readISODate(forKey: "gaia.upload.resting_heart_rate") { bgRows.append("Resting HR upload: \(fmt(d))") }
+        if let d = readISODate(forKey: "gaia.upload.temperature_deviation") { bgRows.append("Wrist temperature upload: \(fmt(d))") }
         if !bgRows.isEmpty {
             rows.append(contentsOf: bgRows)
         }

@@ -2,8 +2,8 @@
   "schema_version": "social_alerts_preview_v1",
   "mode": "shadow",
   "auto_publish": false,
-  "generated_at": "2026-07-10T14:33:56Z",
-  "source_payload_generated_at": "2026-07-10T15:00:00Z",
+  "generated_at": "2026-07-13T01:27:35Z",
+  "source_payload_generated_at": "2026-07-12T15:00:00Z",
   "rendered_count": 4,
   "rendered": [
     {
@@ -66,7 +66,7 @@
       "draft_id": "social_alert.schumann.high.f895c4f3cb50",
       "category": "schumann",
       "severity": "high",
-      "title": "Wired but tired?",
+      "title": "Headache or sinus pressure?",
       "outputs": [
         {
           "format": "square_image",

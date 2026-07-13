@@ -529,6 +529,9 @@ def _validate_sample(s: SampleIn) -> tuple[bool, str | None]:
     if t == "temperature_deviation" and v is not None:
         if v < -10 or v > 10:
             return False, "temperature_deviation out of range"
+    if t == "apple_sleeping_wrist_temperature" and v is not None:
+        if v < 20 or v > 45:
+            return False, "apple_sleeping_wrist_temperature out of range"
     return True, None
 
 

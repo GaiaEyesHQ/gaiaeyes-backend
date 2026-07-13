@@ -274,8 +274,43 @@ def test_mart_select_falls_back_to_daily_summary_body_fields():
     assert "coalesce(df.steps_total, ds.steps_total) as steps_total" in summary._MART_SELECT
     assert "coalesce(df.sleep_total_minutes, ds.sleep_total_minutes) as sleep_total_minutes" in summary._MART_SELECT
     assert "coalesce(df.spo2_avg, ds.spo2_avg) as spo2_avg" in summary._MART_SELECT
+    assert "ds.hrv_baseline_delta as hrv_baseline_delta" in summary._MART_SELECT
+    assert "ds.spo2_baseline_delta as spo2_baseline_delta" in summary._MART_SELECT
     assert "coalesce(df.respiratory_rate_avg, ds.respiratory_rate_avg) as respiratory_rate_avg" in summary._MART_SELECT
     assert "coalesce(df.resting_hr_avg, ds.resting_hr_avg) as resting_hr_avg" in summary._MART_SELECT
+
+
+def test_sleeping_wrist_temperature_validation_accepts_absolute_celsius():
+    sample = ingest.SampleIn(
+        user_id=str(uuid4()),
+        device_os="ios",
+        source="healthkit",
+        type="apple_sleeping_wrist_temperature",
+        start_time=datetime(2026, 7, 12, 6, 0, tzinfo=timezone.utc),
+        end_time=datetime(2026, 7, 12, 6, 1, tzinfo=timezone.utc),
+        value=35.6,
+        unit="degC",
+    )
+
+    assert ingest._validate_sample(sample) == (True, None)
+
+
+def test_sleeping_wrist_temperature_validation_rejects_implausible_value():
+    sample = ingest.SampleIn(
+        user_id=str(uuid4()),
+        device_os="ios",
+        source="healthkit",
+        type="apple_sleeping_wrist_temperature",
+        start_time=datetime(2026, 7, 12, 6, 0, tzinfo=timezone.utc),
+        end_time=datetime(2026, 7, 12, 6, 1, tzinfo=timezone.utc),
+        value=7.0,
+        unit="degC",
+    )
+
+    assert ingest._validate_sample(sample) == (
+        False,
+        "apple_sleeping_wrist_temperature out of range",
+    )
 
 
 @pytest.mark.anyio

@@ -462,6 +462,12 @@ def _metrics_line(chips: Sequence[Mapping[str, Any]]) -> str:
     return " | ".join(parts)
 
 
+def _metrics_heading(category: str) -> str:
+    if category == "schumann":
+        return "Earth Signal Snapshot"
+    return "Space Weather Snapshot"
+
+
 def _category_accent(category: str) -> Tuple[int, int, int]:
     if category in {"cme", "solar_flare"}:
         return ACCENTS["amber"]
@@ -685,7 +691,11 @@ def _render_alert_card(
     metrics = spec.get("metric_chips") if isinstance(spec.get("metric_chips"), list) else []
     metric_text = _metrics_line(metrics)
     if metric_text:
+        metric_heading_font = _font(18 if height <= 1100 else 22, bold=True)
         metric_font = _font(26 if height <= 1100 else 30, bold=True)
+        metric_heading = _metrics_heading(category)
+        draw.text((inner_x, y), metric_heading, font=metric_heading_font, fill=(*accent, 236))
+        y += _text_size(draw, metric_heading, metric_heading_font)[1] + 7
         draw.text((inner_x, y), metric_text, font=metric_font, fill=(255, 220, 148, 245))
         y += _text_size(draw, metric_text, metric_font)[1] + body_gap
 

@@ -238,7 +238,7 @@ private actor Phase2BackfillState {
 
 final class HealthKitBackgroundSync {
     static let shared = HealthKitBackgroundSync()
-    private static let phase2BackfillVersion = 4
+    private static let phase2BackfillVersion = 5
     private static let phase2BackfillMarkerKey = "gaia.hk.phase2BackfillVersion"
     private static let recentRepairLookbackDays = 30
     private static let initialDeltaLookbackDays = 2
@@ -636,9 +636,11 @@ final class HealthKitBackgroundSync {
                     guard bpm.isFinite, bpm >= 20, bpm <= 180 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "resting_heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: bpm, unit: "bpm", value_text: nil))
                 } else if matchesQuantityType(q, type: temperatureDeviationType) {
-                    let deltaC = q.quantity.doubleValue(for: HKUnit.degreeCelsius())
-                    guard deltaC.isFinite, deltaC >= -10, deltaC <= 10 else { continue }
-                    samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "temperature_deviation", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: deltaC, unit: "degC", value_text: "apple_sleeping_wrist_temperature"))
+                    // HealthKit stores an absolute nightly wrist temperature. Gaia
+                    // derives the relative change from the user's rolling baseline.
+                    let temperatureC = q.quantity.doubleValue(for: HKUnit.degreeCelsius())
+                    guard temperatureC.isFinite, temperatureC >= 20, temperatureC <= 45 else { continue }
+                    samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "apple_sleeping_wrist_temperature", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: temperatureC, unit: "degC", value_text: nil))
                 }
             } else if let c = s as? HKCorrelation, c.correlationType == bpType {
                 let systolicType  = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic)!
@@ -1133,11 +1135,12 @@ final class HealthKitBackgroundSync {
         let markerKey = scopedPhase2BackfillMarkerKey(for: uid)
         let appliedVersion = defaults.integer(forKey: markerKey)
         guard appliedVersion < Self.phase2BackfillVersion else { return }
+        let needsCoreRepair = appliedVersion < 4
         let started = await phase2BackfillState.beginIfNeeded()
         guard started else { return }
 
-        let keys = ["heart_rate", "step_count", "sleep_stage"]
-        if await healthAuthorizationShouldRequest(read: Set([hrType, stepsType])) {
+        let keys = needsCoreRepair ? ["heart_rate", "step_count", "sleep_stage"] : []
+        if needsCoreRepair, await healthAuthorizationShouldRequest(read: Set([hrType, stepsType])) {
             appLog("[Backfill] phase2 recent backfill skipped: Health authorization not requested on this device")
             await phase2BackfillState.end()
             return
@@ -1150,33 +1153,62 @@ final class HealthKitBackgroundSync {
             ?? Date(timeIntervalSinceNow: -Double(Self.recentRepairLookbackDays) * 24 * 60 * 60)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
-        let heartResult = await backfillHeartRateStatistics(
-            anchorKey: "heart_rate",
-            start: recentRepairStart,
-            end: now,
-            windowDays: 5,
-            intervalMinutes: 15
-        )
-        let stepResult = await backfillOneWindowedSampleQuery(
-            type: stepsType,
-            anchorKey: "step_count",
-            start: recentRepairStart,
-            end: now,
-            sort: sort,
-            windowDays: 7
-        )
-        let sleepSelected = (defaults.string(forKey: "gaia.healthkit.selected_permission_keys") ?? HealthPermissionOption.defaultStorageValue)
+        let heartResult: HealthBackfillMetricResult?
+        let stepResult: HealthBackfillMetricResult?
+        if needsCoreRepair {
+            heartResult = await backfillHeartRateStatistics(
+                anchorKey: "heart_rate",
+                start: recentRepairStart,
+                end: now,
+                windowDays: 5,
+                intervalMinutes: 15
+            )
+            stepResult = await backfillOneWindowedSampleQuery(
+                type: stepsType,
+                anchorKey: "step_count",
+                start: recentRepairStart,
+                end: now,
+                sort: sort,
+                windowDays: 7
+            )
+        } else {
+            heartResult = nil
+            stepResult = nil
+        }
+        let selectedPermissionKeys = (defaults.string(forKey: "gaia.healthkit.selected_permission_keys") ?? HealthPermissionOption.defaultStorageValue)
             .split(separator: ",")
-            .contains { $0.trimmingCharacters(in: .whitespacesAndNewlines) == HealthPermissionOption.sleep.rawValue }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let sleepSelected = selectedPermissionKeys.contains(HealthPermissionOption.sleep.rawValue)
+        let wristTemperatureSelected = selectedPermissionKeys.contains(HealthPermissionOption.wristTemperature.rawValue)
         let sleepResult: HealthBackfillMetricResult?
-        if sleepSelected {
+        if needsCoreRepair, sleepSelected {
             let pred = HKQuery.predicateForSamples(withStart: recentRepairStart, end: now, options: [])
             sleepResult = await backfillSleep(pred: pred, sort: sort, chunkSize: 200, maxRetries: 3)
         } else {
             sleepResult = nil
         }
 
-        let failures = [heartResult.failureDescription, stepResult.failureDescription, sleepResult?.failureDescription].compactMap { $0 }
+        let temperatureResult: HealthBackfillMetricResult?
+        if wristTemperatureSelected, let temperatureDeviationType {
+            let pred = HKQuery.predicateForSamples(withStart: recentRepairStart, end: now, options: [])
+            temperatureResult = await backfillOne(
+                type: temperatureDeviationType,
+                anchorKey: InteractiveBackfillMetric.temperatureDeviation.key,
+                pred: pred,
+                sort: sort,
+                chunkSize: 80,
+                maxRetries: 3
+            )
+        } else {
+            temperatureResult = nil
+        }
+
+        let failures = [
+            heartResult?.failureDescription,
+            stepResult?.failureDescription,
+            sleepResult?.failureDescription,
+            temperatureResult?.failureDescription,
+        ].compactMap { $0 }
         if failures.isEmpty {
             defaults.set(Self.phase2BackfillVersion, forKey: markerKey)
             defaults.removeObject(forKey: Self.phase2BackfillMarkerKey)
@@ -2171,11 +2203,11 @@ final class HealthKitBackgroundSync {
                           type: "resting_heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: bpm, unit: "bpm", value_text: nil)
         } else if matchesQuantityType(q, type: temperatureDeviationType) {
-            let deltaC = q.quantity.doubleValue(for: HKUnit.degreeCelsius())
-            guard deltaC.isFinite, deltaC >= -10, deltaC <= 10 else { return nil }
+            let temperatureC = q.quantity.doubleValue(for: HKUnit.degreeCelsius())
+            guard temperatureC.isFinite, temperatureC >= 20, temperatureC <= 45 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
-                          type: "temperature_deviation", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
-                          value: deltaC, unit: "degC", value_text: "apple_sleeping_wrist_temperature")
+                          type: "apple_sleeping_wrist_temperature", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
+                          value: temperatureC, unit: "degC", value_text: nil)
         }
         return nil
     }

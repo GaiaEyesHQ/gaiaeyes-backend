@@ -14,6 +14,7 @@ from bots.social_alerts.preview_renderer import (
     DEFAULT_CTA,
     _context_chips,
     _cta_text,
+    _metrics_heading,
     _metrics_line,
     _split_cta_text,
     render_shadow_previews,
@@ -202,3 +203,6 @@ def test_renderer_uses_draft_cta_and_public_fallback_chips() -> None:
 
 def test_metrics_line_reads_like_public_copy() -> None:
     assert _metrics_line([{"label": "CMEs", "value": "3"}]) == "CMEs: 3"
+    assert _metrics_heading("geomagnetic") == "Space Weather Snapshot"
+    assert _metrics_heading("solar_flare") == "Space Weather Snapshot"
+    assert _metrics_heading("schumann") == "Earth Signal Snapshot"

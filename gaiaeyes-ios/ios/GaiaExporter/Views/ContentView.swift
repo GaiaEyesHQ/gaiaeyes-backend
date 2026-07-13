@@ -5460,6 +5460,8 @@ struct ContentView: View {
             ("hrv_sdnn", "HRV", .heartRateVariability),
             ("spo2", "SpO2", .spo2),
             ("respiratory_rate", "Respiratory rate", .respiratoryRate),
+            ("resting_heart_rate", "Resting heart rate", .restingHeartRate),
+            ("temperature_deviation", "Wrist temperature", .wristTemperature),
         ]
         return specs.map { metric, title, option in
             let sourceHint = healthDiagnosticsValue(prefix: "last_source", metric: metric)
@@ -5486,6 +5488,8 @@ struct ContentView: View {
             StatusStore.shared.lastUpload(for: "hrv_sdnn"),
             StatusStore.shared.lastUpload(for: "spo2"),
             StatusStore.shared.lastUpload(for: "respiratory_rate"),
+            StatusStore.shared.lastUpload(for: "resting_heart_rate"),
+            StatusStore.shared.lastUpload(for: "temperature_deviation"),
             parseDebugDate(state.lastHealthBackfillAtISO)
         ].compactMap { $0 }
         return dates.max()
@@ -5532,15 +5536,25 @@ struct ContentView: View {
                 features.sleepVs14dBaselineDelta,
             ].contains { $0?.value != nil }
         case "hrv_sdnn":
-            return features.hrvAvg?.value != nil
+            return features.hrvAvg?.value != nil || features.hrvBaselineDelta?.value != nil
         case "spo2":
-            return features.spo2AvgDisplay != nil
+            return features.spo2AvgDisplay != nil || features.spo2BaselineDelta?.value != nil
         case "respiratory_rate":
             return [
                 features.respiratoryRateAvg,
                 features.respiratoryRateSleepAvg,
                 features.respiratoryRateBaselineDelta,
             ].contains { $0?.value != nil }
+        case "resting_heart_rate":
+            return [
+                features.restingHrAvg,
+                features.restingHrBaselineDelta,
+            ].contains { $0?.value != nil }
+        case "temperature_deviation":
+            return [
+                features.temperatureDeviation,
+                features.temperatureDeviationBaselineDelta,
+            ].contains { $0?.value != nil } || !(features.temperatureSource ?? "").isEmpty
         default:
             return false
         }
@@ -6346,6 +6360,8 @@ struct ContentView: View {
             score += 1
         }
         let numericFields: [Num?] = [
+            features.hrvBaselineDelta,
+            features.spo2BaselineDelta,
             features.respiratoryRateBaselineDelta,
             features.temperatureDeviation,
             features.temperatureDeviationBaselineDelta,
@@ -17734,6 +17750,17 @@ struct ContentView: View {
             return LocalConditionsFormatting.clamped(value / max)
         }
 
+        private var currentTemperatureDelta: Double? {
+            guard let current else { return nil }
+            if let baselineDelta = current.temperatureDeviationBaselineDelta?.value {
+                return baselineDelta
+            }
+            // Legacy temperature_deviation samples were already relative values.
+            // Absolute Apple wrist temperatures must wait for Gaia's baseline.
+            guard current.temperatureSource != "apple_sleeping_wrist_temperature" else { return nil }
+            return current.temperatureDeviation?.value
+        }
+
         private var heartRateRangeText: String? {
             guard let min = current?.hrMin?.value, let max = current?.hrMax?.value else { return nil }
             return "\(Int(min.rounded()))-\(Int(max.rounded())) bpm"
@@ -17836,7 +17863,7 @@ struct ContentView: View {
                 )
             }
 
-            if let rawDelta = current.temperatureDeviationBaselineDelta?.value ?? current.temperatureDeviation?.value {
+            if let rawDelta = currentTemperatureDelta {
                 let converted = LocalConditionsFormatting.convertTempDelta(rawDelta, unit: tempUnit)
                 items.append(
                     HighlightStat(
@@ -17851,7 +17878,19 @@ struct ContentView: View {
                 )
             }
 
-            if let hrv = current.hrvAvg?.value {
+            if let delta = current.hrvBaselineDelta?.value {
+                items.append(
+                    HighlightStat(
+                        id: .hrv,
+                        title: "HRV Δ",
+                        value: signedValue(delta, suffix: " ms"),
+                        detail: deltaDetail(delta, threshold: 1.0),
+                        progress: deltaProgress(delta, maxAbs: 20),
+                        tint: GaugePalette.low,
+                        salience: deltaProgress(delta, maxAbs: 20)
+                    )
+                )
+            } else if let hrv = current.hrvAvg?.value {
                 items.append(
                     HighlightStat(
                         id: .hrv,
@@ -17865,7 +17904,19 @@ struct ContentView: View {
                 )
             }
 
-            if let spo2 = current.spo2AvgDisplay {
+            if let delta = current.spo2BaselineDelta?.value {
+                items.append(
+                    HighlightStat(
+                        id: .spo2,
+                        title: "SpO₂ Δ",
+                        value: signedValue(delta, suffix: " pp"),
+                        detail: deltaDetail(delta, threshold: 0.2),
+                        progress: deltaProgress(delta, maxAbs: 3),
+                        tint: GaugePalette.mild,
+                        salience: deltaProgress(delta, maxAbs: 3)
+                    )
+                )
+            } else if let spo2 = current.spo2AvgDisplay {
                 items.append(
                     HighlightStat(
                         id: .spo2,
@@ -18005,7 +18056,7 @@ struct ContentView: View {
                 items.append(SupportingStat(id: .restingHr, label: "Resting HR", value: "\(Int(resting.rounded())) bpm", tint: GaugePalette.mild))
             }
             if !usedIDs.contains(.temperature),
-               let rawDelta = current.temperatureDeviationBaselineDelta?.value ?? current.temperatureDeviation?.value {
+               let rawDelta = currentTemperatureDelta {
                 items.append(
                     SupportingStat(
                         id: .temperature,
@@ -20831,6 +20882,27 @@ struct ContentView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 Text("Health read access is managed in Apple Health, not the normal iPhone app settings page. If a category is off or the request sheet does not appear, open Apple Health > Sharing > Apps > Gaia Eyes and enable the categories there.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Toggle(
+                    "Use sleeping wrist temperature",
+                    isOn: Binding(
+                        get: {
+                            state.selectedHealthPermissionKeys.contains(HealthPermissionOption.wristTemperature.rawValue)
+                        },
+                        set: { enabled in
+                            if enabled {
+                                state.selectedHealthPermissionKeys.insert(HealthPermissionOption.wristTemperature.rawValue)
+                            } else {
+                                state.selectedHealthPermissionKeys.remove(HealthPermissionOption.wristTemperature.rawValue)
+                            }
+                        }
+                    )
+                )
+                .font(.subheadline.weight(.semibold))
+
+                Text("After enabling this, update Health permissions and import the last 30 days once so Gaia can build your personal temperature baseline.")
                     .font(.caption)
                     .foregroundColor(.secondary)
 

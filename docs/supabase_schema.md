@@ -237,9 +237,11 @@ External landing tables populated by ingestion scripts and referenced by marts.
   | `hr_min` | `numeric` | Minimum heart rate. |
   | `hr_max` | `numeric` | Maximum heart rate. |
   | `hrv_avg` | `numeric` | Average heart rate variability. |
+  | `hrv_baseline_delta` | `numeric` | HRV average minus the preceding 14-day personal average. |
   | `steps_total` | `numeric` | Total steps. |
   | `sleep_total_minutes` | `numeric` | Total sleep duration. |
   | `spo2_avg` | `numeric` | Average blood oxygen saturation. |
+  | `spo2_baseline_delta` | `numeric` | SpO₂ average minus the preceding 14-day personal average in percentage points. |
   | `updated_at` | `timestamptz` | Timestamp of last update (default `now()`). |
   | `sleep_rem_minutes` | `numeric` | REM sleep duration. |
   | `sleep_core_minutes` | `numeric` | Core sleep duration. |
