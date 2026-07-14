@@ -1,9 +1,7 @@
 name: Ingest Space Weather Forecasts
 
 on:
-  schedule:
-    # Run every 15 minutes (adjust as needed)
-    - cron: "*/15 * * * *"
+  # Scheduled ingestion moved to the Render critical and daily cron lanes.
   workflow_dispatch:
     inputs:
       mode:

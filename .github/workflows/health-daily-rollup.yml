@@ -4,8 +4,7 @@ permissions:
   issues: write
 
 on:
-  schedule:
-    - cron: "25 */3 * * *"   # run every 3 hours; user-level refreshes still happen on demand
+  # Scheduled reconciliation moved to the Render daily cron lane.
   workflow_dispatch: {}     # allow manual run from Actions tab
 
 jobs:

@@ -1,10 +1,7 @@
 name: quakes-ingest
 
 on:
-  # Run every 30 minutes (tweak as you like)
-  schedule:
-    - cron: "*/30 * * * *"
-  # Allow manual runs from the Actions tab
+  # Scheduled ingestion moved to the Render event cron lane.
   workflow_dispatch: {}
 
 permissions:

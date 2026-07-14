@@ -1,8 +1,7 @@
 name: Local Health Signals
 
 on:
-  schedule:
-    - cron: "*/15 * * * *" 
+  # Scheduled polling moved to the Render critical and daily cron lanes.
   workflow_dispatch: {}
 
 jobs:

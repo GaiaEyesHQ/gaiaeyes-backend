@@ -49,6 +49,23 @@ shared environment group) if Google Pollen coverage is required.
    JSON and imagery still depend on `gaiaeyes-media`; switch their database
    writes off rather than removing media publication.
 
+## GitHub schedule cutover
+
+After the first automatic daily run and the post-cutover observation window
+completed on 2026-07-13, scheduled execution moved to Render for these
+database-only workflows. Each workflow retains `workflow_dispatch` as a manual
+fallback:
+
+- `ingest_space_forecasts.yml`
+- `quakes_ingest.yml`
+- `local_health_signals.yml`
+- `health-daily-rollup.yml`
+- `daily-features-rollup.yml`
+- `space-weather-daily-rollup.yml`
+
+GitHub schedules that still publish media, run monitoring, send notifications,
+or generate member/social content remain enabled.
+
 Render guarantees at most one active run for a given cron service. The runner
 also executes steps sequentially and reports a non-zero lane exit if any step
 fails, while allowing independent later steps to complete.

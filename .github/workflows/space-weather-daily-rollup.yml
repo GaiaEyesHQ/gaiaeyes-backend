@@ -4,8 +4,7 @@ permissions:
   issues: write
 
 on:
-  schedule:
-    - cron: "35 */6 * * *"   # every 6 hours; enough for daily aggregate refresh
+  # Scheduled rollup moved to the Render critical cron lane.
   workflow_dispatch: {}
 
 jobs:

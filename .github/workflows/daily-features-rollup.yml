@@ -4,8 +4,7 @@ permissions:
   issues: write
 
 on:
-  schedule:
-    - cron: "17 * * * *"   # hourly; app endpoints can still refresh user-level marts on demand
+  # Scheduled rollup moved to the Render daily cron lane.
   workflow_dispatch: {}
 
 jobs:
