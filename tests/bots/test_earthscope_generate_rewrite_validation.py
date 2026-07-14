@@ -17,6 +17,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 from bots.earthscope_post import earthscope_generate
 from bots.earthscope_post.earthscope_generate import (
     _build_social_caption_variants,
+    _build_facts,
     _build_reel_story,
     _build_reel_voiceover_text,
     _caption_context_lead,
@@ -29,6 +30,7 @@ from bots.earthscope_post.earthscope_generate import (
     _platform_caption_profile,
     _polish_public_caption,
     _select_best_rewrite_candidate,
+    _summarize_context,
     _validate_rewrite,
     _voiceover_caption_from_variants,
     _rewrite_facebook_caption_from_spine,
@@ -534,6 +536,47 @@ def test_reel_voiceover_uses_long_explicit_script_when_available():
         "Body buzzing for no clear reason? Solar wind is elevated today, and magnetic conditions have been shifting. "
         "Some sensitive people notice days like this as restless energy, trouble settling, or energy that spikes and dips before easing again."
     )
+
+
+def test_reel_voiceover_accepts_complete_writer_script_below_old_word_floor():
+    script = (
+        "Feeling off for no clear reason? Today's signals are mostly steady, so this is a better day "
+        "to notice your own pattern than to expect a shared reaction."
+    )
+
+    voiceover = _build_reel_voiceover_text(
+        ctx={"kp_max_24h": 2.3, "bz_min": -5.6},
+        title="Feeling Off For No Reason?",
+        caption="A different Facebook caption that should not replace the writer script.",
+        snapshot="Mostly quiet space conditions.",
+        affects="Some people may notice changes.",
+        playbook="- Keep notes",
+        rewrite={"voiceover": script},
+    )
+
+    assert voiceover == script
+
+
+def test_quiet_neutral_facts_keep_count_only_cme_in_background():
+    facts = _build_facts(
+        {
+            "kp_max_24h": 2.33,
+            "bz_min": -5.64,
+            "solar_wind_kms": 383.65,
+            "flares_24h": 0,
+            "cmes_24h": 1,
+        }
+    )
+
+    summary = _summarize_context(facts)
+
+    assert facts["tone"] == "neutral"
+    assert facts["public_signal_strength"] == "low"
+    assert "not a prediction that people will be reactive" in facts["public_positioning"]
+    assert "mostly steady environmental signals" in summary
+    assert "background context only" in summary
+    assert "recent CME activity" not in summary
+    assert "lively Schumann" not in summary
 
 
 def test_facebook_caption_profile_is_longer_than_instagram():

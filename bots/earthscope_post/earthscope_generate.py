@@ -1256,7 +1256,7 @@ def _scrub_banned_phrases(text: str) -> str:
 
 def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Extract the subset of facts we pass to the LLM. These are context, not for citation."""
-    return {
+    facts = {
         "kp_max_24h": ctx.get("kp_max_24h"),
         "bz_min": ctx.get("bz_min"),
         "solar_wind_kms": ctx.get("solar_wind_kms"),
@@ -1284,6 +1284,39 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "platform": _ctx_platform(ctx),
         "hook_lane_brief": _hook_lane_brief(ctx),
     }
+    for key in (
+        "earth_directed_cme_count_24h",
+        "earth_directed_cme_count_72h",
+        "cme_arrivals_count",
+        "earth_cme_arrivals_count",
+        "cme_earth_directed",
+        "earth_directed_cme",
+        "cme_arrival_expected",
+        "cme_arrival_window",
+        "cme_eta",
+        "earth_directed_cme_eta",
+    ):
+        if ctx.get(key) is not None:
+            facts[key] = ctx.get(key)
+
+    tone = str(facts.get("tone") or "neutral")
+    signal_strength = "high" if tone == "stormy" else "moderate" if tone == "unsettled" else "low"
+    facts["public_signal_strength"] = signal_strength
+    if signal_strength == "low":
+        facts["public_positioning"] = (
+            "Mostly steady conditions. Lead with observation or personal pattern-checking, not a prediction that "
+            "people will be reactive or symptomatic. Do not assign specific mood, headache, pressure, flare, pain, "
+            "or sleep effects unless another supported driver is genuinely unsettled."
+        )
+    elif signal_strength == "moderate":
+        facts["public_positioning"] = (
+            "A noticeable but limited signal. Name only effects that fit the active driver and keep uncertainty clear."
+        )
+    else:
+        facts["public_positioning"] = (
+            "A strong environmental signal. Explain the active driver clearly while keeping health effects possible, not certain."
+        )
+    return facts
 
 
 def _summarize_context(facts: Dict[str, Any]) -> str:
@@ -1291,24 +1324,24 @@ def _summarize_context(facts: Dict[str, Any]) -> str:
     kp = facts.get("kp_max_24h")
     cmes = facts.get("cmes_24h")
     flr = facts.get("flares_24h")
-    sr = facts.get("schumann_value_hz")
     tone = facts.get("tone") or "neutral"
+    signal_strength = facts.get("public_signal_strength") or "low"
 
     parts: List[str] = []
-    if cmes and (cmes or 0) > 0:
-        parts.append("recent CME activity")
+    if cmes and (cmes or 0) > 0 and _has_explicit_earth_directed_cme_context(facts):
+        parts.append("CME activity with explicit Earth-directed or arrival context")
     if flr and (flr or 0) > 0:
-        parts.append("fresh solar flare effects")
+        parts.append("recent observed solar flare activity")
     if isinstance(kp, (int, float)) and kp >= 5:
         parts.append("geomagnetic storm period")
     elif isinstance(kp, (int, float)) and kp >= 4:
         parts.append("active geomagnetics")
-    if isinstance(sr, (int, float)) and sr:
-        parts.append("lively Schumann resonance")
 
     if not parts:
-        parts.append("steady background field")
-    return ", ".join(parts) + f"; tone {tone}."
+        parts.append("mostly steady environmental signals")
+    if cmes and (cmes or 0) > 0 and not _has_explicit_earth_directed_cme_context(facts):
+        parts.append("CME observations are background context only, with no Earth-directed or arrival evidence")
+    return ", ".join(parts) + f"; public signal strength {signal_strength}; tone {tone}."
 
 
 
@@ -1665,6 +1698,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin or press release). Avoid sterile or overly technical phrasing (e.g., 'inward-pointing field component'). Prefer plain equivalents like 'southward field orientation' or 'field leaning south'. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
+        "Follow public_signal_strength and public_positioning. On low-signal calm or neutral days, do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. Frame the day as mostly steady and invite people to compare their own patterns. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
         "Humor is optional. If you use an analogy, keep it to one sentence max and do not use the phrase 'Think of it like'. Vary phrasing. Never start a sentence with 'Think of it like'. You may use metaphor_pool as guidance or invent a fresh analogy. Do not reuse any recent_analogies. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
@@ -1679,7 +1713,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
-        "Voiceover should be a 40-60 word reel script: open with the caption hook, explain the strongest factual environmental change in plain English, then connect it to possible felt effects already present in affects. Do not include wellness advice, metrics, or a follow/download CTA. "
+        "Voiceover should be a 40-60 word reel script: open with the caption hook, then use a complete conversational bridge into the strongest factual environmental change, then connect it to possible felt effects already present in affects. Do not begin the second sentence with 'Mostly', 'And', 'But', 'So', or 'Because'. Do not include wellness advice, metrics, or a follow/download CTA. "
         "For reel_signal, write one short factual environmental sentence, maximum 8 words. For reel_effects, write two short possible felt effects separated by a newline, maximum 6 words each. For reel_pattern, write one human takeaway, maximum 7 words. Do not invent a signal or symptom for these fields. "
         f"Aim for: caption {caption_profile['caption_instruction']} Snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
         "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. Respect style.template_id and style.template_map to decide sentence order for caption only; rearrange the same facts without adding new claims. "
@@ -1871,6 +1905,7 @@ def _rewrite_json_candidates(
         "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
+        "Follow public_signal_strength and public_positioning. On low-signal calm or neutral days, do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. Frame the day as mostly steady and invite people to compare their own patterns. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
         "Lead with a felt human hook before explaining the signal context. Use hook_lane_brief to choose the doorway across trouble sleeping, wired/tired, brain fog, headache, migraine, chronic illness flare, head pressure, pain flare, low energy, restless body, mood, and scattered focus. "
         "Do not make sleep the default just because a sleep hook performed well before; sleep must earn its place from today's facts and recent lane history. "
         "Do not make focus/productivity the default. "
@@ -1930,7 +1965,7 @@ def _rewrite_json_candidates(
             "affects": "2-4 sentences about possible felt patterns without certainty.",
             "playbook": "3-5 short bullets.",
             "hashtags": "6-10 hashtags as one string.",
-            "voiceover": "40-60 spoken words. Open with the caption hook, explain the strongest factual environmental change, then connect it to possible felt effects already in affects. No advice, CTA, metrics, or hashtags.",
+            "voiceover": "40-60 spoken words. Open with the caption hook, then use a complete conversational second sentence to explain the strongest factual environmental change. Do not start sentence two with Mostly, And, But, So, or Because. Connect only to felt effects already in affects. No advice, CTA, metrics, or hashtags.",
             "reel_signal": "One factual environmental sentence, maximum 8 words, based only on today's facts.",
             "reel_effects": "Two short possible felt effects separated by a newline, maximum 6 words each, already supported by affects.",
             "reel_pattern": "One human takeaway, maximum 7 words, supported by the same content spine.",
@@ -2998,7 +3033,7 @@ def _build_reel_voiceover_text(
     rewrite: Optional[Dict[str, str]] = None,
 ) -> str:
     explicit = _sanitize_caption(str((rewrite or {}).get("voiceover") or ""))
-    if explicit and len(explicit.split()) >= 32:
+    if explicit and len(explicit.split()) >= 24 and len(_split_text_sentences(explicit)) >= 2:
         return _scrub_banned_phrases(explicit)
 
     lead = _first_sentence(_caption_voiceover_lead(caption, title))

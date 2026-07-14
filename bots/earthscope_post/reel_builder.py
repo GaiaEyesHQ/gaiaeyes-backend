@@ -422,11 +422,11 @@ def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
     with Image.open(source) as raw:
         background = raw.convert("RGB")
     background = background.resize((1080, 1920), Image.Resampling.LANCZOS)
-    background = background.filter(ImageFilter.GaussianBlur(radius=14))
-    background = ImageEnhance.Brightness(background).enhance(0.46)
+    background = background.filter(ImageFilter.GaussianBlur(radius=9))
+    background = ImageEnhance.Brightness(background).enhance(0.58)
 
     canvas = background.convert("RGBA")
-    overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 70))
+    overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 45))
     canvas = Image.alpha_composite(canvas, overlay)
     draw = ImageDraw.Draw(canvas)
 
@@ -468,11 +468,11 @@ def build_story_card(source: Path, out_path: Path, label: str, text: str) -> Pat
     with Image.open(source) as raw:
         background = raw.convert("RGB")
     background = background.resize((1080, 1920), Image.Resampling.LANCZOS)
-    background = background.filter(ImageFilter.GaussianBlur(radius=14))
-    background = ImageEnhance.Brightness(background).enhance(0.40)
+    background = background.filter(ImageFilter.GaussianBlur(radius=9))
+    background = ImageEnhance.Brightness(background).enhance(0.54)
 
     canvas = background.convert("RGBA")
-    canvas = Image.alpha_composite(canvas, Image.new("RGBA", canvas.size, (0, 0, 0, 88)))
+    canvas = Image.alpha_composite(canvas, Image.new("RGBA", canvas.size, (0, 0, 0, 58)))
     draw = ImageDraw.Draw(canvas)
     font_path = Path(__file__).resolve().parent / "fonts" / "BebasNeue.ttf"
     label_font = ImageFont.truetype(str(font_path), size=64)
