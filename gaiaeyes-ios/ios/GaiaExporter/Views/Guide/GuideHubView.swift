@@ -79,7 +79,7 @@ struct GuideHubView: View {
 
     private var followUpMessage: String {
         if let followUpItem {
-            return "You have a follow-up waiting for \(followUpItem.label.lowercased()). Open Body to respond in the real symptom workflow."
+            return "\(followUpItem.label) has a quick follow-up ready. Open Body to share how it feels now."
         }
         if let summary = currentSymptomsSnapshot?.semanticFollowUpSummary {
             return summary
@@ -119,7 +119,7 @@ struct GuideHubView: View {
             return error
         }
         if dailyCheckInLoading {
-            return "I’m checking whether today’s feedback prompt is ready."
+            return "Checking today’s check-in."
         }
         if isDailyCheckInCompleted {
             if let exposureSummary = dailyCheckInStatus?.latestEntry?.summaryExposureText {
@@ -131,9 +131,9 @@ struct GuideHubView: View {
             return prompt.questionText
         }
         if dailyCheckInStatus?.settings.enabled == true {
-            return "Your daily check-in will surface here as soon as Gaia Eyes has the right moment to ask."
+            return "Today’s check-in will appear here when it’s ready."
         }
-        return "Daily check-ins are off right now. You can turn them on in notification settings."
+        return "Daily check-ins are off. You can turn them on in Settings."
     }
 
     private var earthscopeBody: String {
@@ -225,12 +225,12 @@ struct GuideHubView: View {
 
     private var supportIntroText: String {
         if let summary = guideText(currentSymptomsSnapshot?.semanticActiveLabelSummary).nilIfGuideEmpty {
-            return "Current body context: \(summary). Take it easy while this mix is doing the tango."
+            return "You logged: \(summary). A gentler pace may help while these symptoms are active."
         }
         if let primary = curatedSupportItems.first {
             return primary.message
         }
-        return "Slow and Steady. Your body may need more buffer today."
+        return "Your body may benefit from a little more buffer today."
     }
 
     private var localSymptomSupportBullets: [String] {
@@ -260,32 +260,35 @@ struct GuideHubView: View {
 
     private var supportSuggestionBullets: [String] {
         var lines: [String] = []
+        var seenLines: Set<String> = []
+        var seenThemes: Set<String> = []
+
+        func appendUnique(_ value: String) {
+            let cleaned = guideText(value)
+            guard !cleaned.isEmpty else { return }
+            let normalized = normalizedSupportLine(cleaned)
+            guard !seenLines.contains(normalized) else { return }
+            if let theme = supportTheme(for: cleaned), seenThemes.contains(theme) {
+                return
+            }
+            seenLines.insert(normalized)
+            if let theme = supportTheme(for: cleaned) {
+                seenThemes.insert(theme)
+            }
+            lines.append(cleaned)
+        }
 
         for action in localSymptomSupportBullets {
-            let normalized = normalizedSupportLine(action)
-            if lines.contains(where: { normalizedSupportLine($0) == normalized }) {
-                continue
-            }
-            lines.append(action)
+            appendUnique(action)
         }
 
         if supportNeedsGrounding {
-            let grounding = "Use a grounding reset before adding more input if your system feels buzzy or overloaded."
-            let normalized = normalizedSupportLine(grounding)
-            if !lines.contains(where: { normalizedSupportLine($0) == normalized }) {
-                lines.append(grounding)
-            }
+            appendUnique("Use a grounding reset before adding more input if your system feels buzzy or overloaded.")
         }
 
         for item in curatedSupportItems {
             for action in item.actions ?? [] {
-                let cleaned = guideText(action)
-                guard !cleaned.isEmpty else { continue }
-                let normalized = normalizedSupportLine(cleaned)
-                if lines.contains(where: { normalizedSupportLine($0) == normalized }) {
-                    continue
-                }
-                lines.append(cleaned)
+                appendUnique(action)
                 if lines.count >= 5 {
                     return lines
                 }
@@ -294,13 +297,7 @@ struct GuideHubView: View {
 
         if lines.count < 4 {
             for item in curatedSupportItems {
-                let cleaned = guideText(item.message)
-                guard !cleaned.isEmpty else { continue }
-                let normalized = normalizedSupportLine(cleaned)
-                if lines.contains(where: { normalizedSupportLine($0) == normalized }) {
-                    continue
-                }
-                lines.append(cleaned)
+                appendUnique(item.message)
                 if lines.count >= 5 {
                     break
                 }
@@ -439,7 +436,7 @@ struct GuideHubView: View {
                         case .dailyPoll:
                             proxy.scrollTo(GuideHubFocus.dailyPoll, anchor: .top)
                         case .earthScope:
-                            proxy.scrollTo(GuideHubFocus.earthScope, anchor: .top)
+                            proxy.scrollTo(GuideHubFocus.overview, anchor: .top)
                         case .understanding:
                             proxy.scrollTo(GuideHubFocus.understanding, anchor: .top)
                         case .overview:
@@ -453,18 +450,11 @@ struct GuideHubView: View {
 
     private var contentStack: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if let guideNotice {
-                guideNoticeCard(guideNotice)
-            }
-
-            headerCard
+            supportCard
                 .id(GuideHubFocus.overview)
 
-            earthscopeCard
-                .id(GuideHubFocus.earthScope)
-
-            if !curatedSupportItems.isEmpty {
-                supportCard
+            if let guideNotice {
+                guideNoticeCard(guideNotice)
             }
 
             dailyCheckInCard
@@ -507,7 +497,7 @@ struct GuideHubView: View {
             expression: .followUp,
             emphasis: .elevated,
             eyebrow: "Daily Poll",
-            title: "A faster pulse question",
+            title: "A quick question",
             message: todayPollPrompt.question,
             badgeText: hasPollResponseForToday ? "Saved" : "Quick",
             content: {
@@ -609,10 +599,10 @@ struct GuideHubView: View {
             expression: .helpful,
             emphasis: .elevated,
             eyebrow: "Follow-Ups",
-            title: followUpItem == nil ? "Nothing is waiting right now" : "A symptom follow-up is waiting",
+            title: followUpItem == nil ? "Nothing is waiting right now" : "A quick symptom update is ready",
             message: followUpMessage,
             badgeText: followUpItem == nil ? "Future-ready" : "Active",
-            primaryActionTitle: "Open Body context",
+            primaryActionTitle: "Update symptom",
             primaryAction: onOpenCurrentSymptoms
         )
     }
@@ -628,7 +618,7 @@ struct GuideHubView: View {
             title: primary?.title ?? "A steadier lane right now",
             message: supportIntroText,
             badgeText: primary?.badge,
-            primaryActionTitle: "Open Body context",
+            primaryActionTitle: "View Body",
             primaryAction: onOpenCurrentSymptoms,
             secondaryActionTitle: "All drivers",
             secondaryAction: onOpenAllDrivers
@@ -645,11 +635,11 @@ struct GuideHubView: View {
             expression: .guide,
             emphasis: .elevated,
             eyebrow: "Help and Understanding",
-            title: "Start with the basics",
+            title: "How Gaia Eyes works",
             message: GuidePromptStyle.understandingCardMessage(for: profile),
             primaryActionTitle: "Open help center",
             primaryAction: { navigationPath.append(.helpCenter) },
-            secondaryActionTitle: "Deep dive",
+            secondaryActionTitle: "Research & limits",
             secondaryAction: { navigationPath.append(.understanding) }
         )
     }
@@ -879,6 +869,27 @@ struct GuideHubView: View {
             .lowercased()
             .replacingOccurrences(of: "’", with: "'")
             .replacingOccurrences(of: ".", with: "")
+    }
+
+    private func supportTheme(for value: String) -> String? {
+        let text = normalizedSupportLine(value)
+        if ["grounding", "slower breathing", "buzzy", "overloaded", "calm nerves"]
+            .contains(where: { text.contains($0) }) {
+            return "regulation"
+        }
+        if ["task blocks", "tasks in blocks", "recovery space", "heavier tasks", "lighter task load"]
+            .contains(where: { text.contains($0) }) {
+            return "pacing"
+        }
+        if ["reduce light", "sound", "fragrance", "sensory"]
+            .contains(where: { text.contains($0) }) {
+            return "sensory"
+        }
+        if ["hydrate", "filter the air", "sinus support"]
+            .contains(where: { text.contains($0) }) {
+            return "physical_support"
+        }
+        return nil
     }
 
     private func supportActionPrefix(for item: DashboardSupportItem) -> String? {

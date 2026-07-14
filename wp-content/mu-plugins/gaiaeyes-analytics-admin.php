@@ -300,6 +300,7 @@ function gaiaeyes_analytics_render_admin_page() {
                 <?php gaiaeyes_analytics_render_metric('Lunar enabled', gaiaeyes_analytics_event_count($feature_adoption, 'lunar_tracking_enabled')); ?>
                 <?php gaiaeyes_analytics_render_metric('Notifications enabled', gaiaeyes_analytics_event_count($feature_adoption, 'notifications_enabled')); ?>
                 <?php gaiaeyes_analytics_render_metric('Explore tab views', gaiaeyes_analytics_event_count($tab_usage, 'explore')); ?>
+                <?php gaiaeyes_analytics_render_metric('Guide opens', gaiaeyes_analytics_event_count($navigation, 'guide_opened')); ?>
             </div>
 
             <div class="gaia-analytics-panels">

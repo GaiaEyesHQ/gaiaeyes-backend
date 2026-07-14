@@ -4104,6 +4104,13 @@ struct ContentView: View {
 
     private func openGuideHub(focus: GuideHubFocus = .overview) {
         markGuideStateSeen()
+        AppAnalytics.track(
+            "guide_opened",
+            properties: [
+                "focus": focus.rawValue,
+                "surface": selectedTab.analyticsValue,
+            ]
+        )
         guideHubFocus = focus
         showGuideSheet = true
     }

@@ -117,6 +117,10 @@ def test_safe_properties_allowlists_expected_keys_only():
     }
 
 
+def test_guide_opened_is_reported_as_navigation():
+    assert "guide_opened" in analytics._NAVIGATION_EVENTS
+
+
 @pytest.mark.anyio
 async def test_ingest_analytics_uses_authenticated_user_and_sanitizes_properties(
     client: AsyncClient,

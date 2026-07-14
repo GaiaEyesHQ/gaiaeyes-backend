@@ -102,6 +102,7 @@ _FEATURE_ADOPTION_EVENTS = [
 ]
 _NAVIGATION_EVENTS = [
     "tab_viewed",
+    "guide_opened",
 ]
 _ACTIVATION_EVENTS = [
     "onboarding_started",

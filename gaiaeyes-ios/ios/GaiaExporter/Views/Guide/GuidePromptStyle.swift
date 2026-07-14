@@ -126,17 +126,17 @@ struct GuidePromptStyle {
     static func followUpFallbackMessage(for profile: GuideProfile) -> String {
         switch profile.tone {
         case .straight:
-            return "Follow-up prompts appear here and in Body when Gaia needs another symptom update."
+            return "Follow-up questions appear here and in Body when a symptom is ready for an update."
         case .balanced:
-            return "When Gaia needs one more body detail, the follow-up lands here and in Body instead of scattering around the app."
+            return "When a symptom is ready for an update, you can answer here or in Body."
         case .humorous:
             switch profile.guideType {
             case .cat:
-                return "If Gaia wants one more body clue, it parks the follow-up here instead of batting it around the app."
+                return "When a symptom needs a quick update, the question waits here—no chasing required."
             case .dog:
-                return "If Gaia needs one more body detail, it brings the follow-up here instead of letting it run loose."
+                return "When a symptom needs a quick update, the question waits here and in Body."
             case .robot:
-                return "If Gaia needs another body datapoint, the follow-up queues here instead of free-roaming across the app."
+                return "When a symptom needs a quick update, the question is ready here and in Body."
             }
         }
     }
@@ -144,17 +144,17 @@ struct GuidePromptStyle {
     static func understandingCardMessage(for profile: GuideProfile) -> String {
         switch (profile.mode, profile.tone) {
         case (.scientific, .straight):
-            return "See what Gaia watches, how it compares signals with feedback, and where the limits are."
+            return "Learn what Gaia Eyes watches, how it connects patterns, and what its guidance can—and cannot—tell you."
         case (.scientific, .balanced):
-            return "See what Gaia watches, how it compares signals with feedback, and where it keeps its limits visible."
+            return "Learn what Gaia Eyes watches, how it connects patterns, and where its guidance has limits."
         case (.scientific, .humorous):
-            return "See what Gaia watches, how the loop works, and where the app refuses to cosplay as certainty."
+            return "See how Gaia Eyes connects patterns without pretending every signal is a certainty."
         case (.mystical, .straight):
-            return "See what Gaia watches, how it turns patterns into guidance, and where that guidance stops."
+            return "Learn what Gaia Eyes watches, how it turns patterns into guidance, and where that guidance stops."
         case (.mystical, .balanced):
-            return "See what Gaia watches, how it turns patterns into guidance, and where the edges of that guidance stay honest."
+            return "Learn how Gaia Eyes connects patterns while keeping the limits of its guidance clear."
         case (.mystical, .humorous):
-            return "See what Gaia watches, how it learns, and where it politely declines to pretend it knows everything."
+            return "See how Gaia Eyes connects patterns while politely declining to know everything."
         }
     }
 
@@ -169,36 +169,36 @@ struct GuidePromptStyle {
         case .followUp:
             switch profile.tone {
             case .straight:
-                return "A quick pulse keeps the guide loop current without opening the full symptom workflow."
+                return "One quick answer helps compare this symptom with today’s signals."
             case .balanced:
-                return "A quick pulse keeps the guide loop current without making you do the full symptom routine."
+                return "A quick answer adds context without asking you to complete the full check-in."
             case .humorous:
                 switch profile.guideType {
                 case .cat:
-                    return "One small answer keeps the guide loop fed without opening the full symptom circus."
+                    return "One small answer adds context—no full symptom circus required."
                 case .dog:
-                    return "One small answer keeps the guide loop current without launching the whole symptom parade."
+                    return "One small answer adds context without the whole check-in."
                 case .robot:
-                    return "One tiny datapoint keeps the loop current without booting the full symptom console."
+                    return "One quick input adds context without opening the full check-in."
                 }
             }
         case .symptomPulse:
             switch profile.tone {
             case .straight:
-                return "A light answer keeps the guide current without turning this into a full check-in."
+                return "A quick answer adds context without opening the full check-in."
             case .balanced:
-                return "A light answer keeps the guide current and leaves the longer check-in optional."
+                return "A quick answer adds context while leaving the longer check-in optional."
             case .humorous:
-                return "A light answer keeps the guide current without summoning the whole check-in opera."
+                return "One quick answer adds context—no full check-in opera required."
             }
         case .compareDay:
             switch profile.tone {
             case .straight:
-                return "A fast compare keeps the guide current even when you skip the longer check-in."
+                return "A quick comparison helps Gaia Eyes understand how today differed from yesterday."
             case .balanced:
-                return "A fast compare keeps the guide current and gives the day a little extra context."
+                return "A quick comparison gives today a little more context."
             case .humorous:
-                return "A fast compare keeps the guide current without making you file a novel about the day."
+                return "A quick comparison adds context without asking for a novel about the day."
             }
         }
     }
