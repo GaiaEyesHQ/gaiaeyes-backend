@@ -24,11 +24,29 @@ def test_reel_fallback_accepts_uppercase_image_extensions(tmp_path):
     assert reel_builder.pick_card_images(tmp_path, 1) == [image]
 
 
-def test_reel_vo_uses_caption_and_playbook_before_affects():
+def test_reel_story_uses_a_different_generated_background_for_each_beat(tmp_path):
+    for name in reel_builder.STORY_BACKGROUND_NAMES:
+        (tmp_path / name).write_bytes(b"placeholder")
+
+    backgrounds = reel_builder.pick_story_backgrounds(tmp_path, 4)
+
+    assert [path.name for path in backgrounds] == reel_builder.STORY_BACKGROUND_NAMES
+    assert len(set(backgrounds)) == 4
+
+
+def test_reel_story_never_falls_back_to_finished_cards(tmp_path):
+    for name in ("daily_affects.jpg", "daily_caption.jpg", "daily_playbook.jpg", "daily_stats.jpg"):
+        (tmp_path / name).write_bytes(b"finished-card")
+
+    assert reel_builder.pick_story_backgrounds(tmp_path, 4) == []
+
+
+def test_reel_vo_uses_hook_signal_and_effects_without_playbook():
     row = {
         "caption": "Can't sleep even when your bed is perfect? Recovery may need a softer lane today.",
         "metrics_json": {
             "sections": {
+                "snapshot": "Solar wind is elevated today. Magnetic conditions are shifting.",
                 "affects": "Brain fog and lower HRV can show up when the background gets noisy.",
                 "playbook": "- Take a five minute breathing reset\n- Keep evening light low",
             }
@@ -38,8 +56,9 @@ def test_reel_vo_uses_caption_and_playbook_before_affects():
     vo_text = reel_builder.build_vo_text_from_post(row)
 
     assert "Can't sleep even when your bed is perfect?" in vo_text
-    assert "Brain fog and lower HRV" not in vo_text
-    assert "Try this today: Take a five minute breathing reset." in vo_text
+    assert "Solar wind is elevated today." in vo_text
+    assert "Brain fog and lower HRV" in vo_text
+    assert "five minute breathing reset" not in vo_text
 
 
 def test_reel_vo_prefers_explicit_short_caption():
@@ -86,6 +105,30 @@ def test_reel_hook_prefers_stored_title():
     assert reel_builder.hook_text_from_post(row) == "Body buzzing for no clear reason?"
 
 
+def test_reel_story_prefers_structured_writer_payload():
+    row = {
+        "title": "Fallback hook",
+        "metrics_json": {
+            "sections": {
+                "snapshot": "Fallback signal.",
+                "affects": "Fallback effects.",
+                "reel_story": {
+                    "hook": "Body buzzing for no clear reason?",
+                    "signal": "Solar wind is elevated",
+                    "effects": "Restless or jittery\nEnergy may spike, then dip",
+                    "pattern": "An uneven-energy day",
+                },
+            }
+        },
+    }
+
+    story = reel_builder.reel_story_from_post(row)
+
+    assert story["hook"] == "Body buzzing for no clear reason?"
+    assert story["signal"] == "Solar wind is elevated"
+    assert story["effects"].splitlines() == ["Restless or jittery", "Energy may spike, then dip"]
+
+
 def test_reel_hook_card_is_vertical_and_hides_dense_source_copy(tmp_path):
     source = tmp_path / "daily_affects.jpg"
     Image.new("RGB", (1080, 1920), (35, 110, 85)).save(source)
@@ -94,6 +137,22 @@ def test_reel_hook_card_is_vertical_and_hides_dense_source_copy(tmp_path):
         source,
         tmp_path / "hook.jpg",
         "Body buzzing for no clear reason?",
+    )
+
+    with Image.open(output) as rendered:
+        assert rendered.size == (1080, 1920)
+        assert rendered.getbbox() is not None
+
+
+def test_reel_story_card_is_vertical_and_readable(tmp_path):
+    source = tmp_path / "daily_affects.jpg"
+    Image.new("RGB", (1080, 1920), (35, 110, 85)).save(source)
+
+    output = reel_builder.build_story_card(
+        source,
+        tmp_path / "signal.jpg",
+        "What changed",
+        "Solar wind is elevated",
     )
 
     with Image.open(output) as rendered:
@@ -117,7 +176,7 @@ def test_reel_opening_clip_uses_motion_from_frame_one(monkeypatch, tmp_path):
     assert "zoompan" in video_filter
     assert "d=1" in video_filter
     assert command[command.index("-framerate") + 1] == "30"
-    assert command[command.index("-t") + 1] == "2.200"
+    assert command[command.index("-t") + 1] == "2.300"
 
 
 def test_reel_crossfade_respects_short_hook_duration(monkeypatch, tmp_path):

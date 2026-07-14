@@ -26,7 +26,7 @@ Runtime deps:
 - Python: requests, Pillow (pip install requests pillow)
 
 Basic flow:
-1) Build a large hook-only opener, then use the care-notes and stats cards.
+1) Build a hook plus short signal/effect/pattern beats, then finish on the stats card.
 2) Add immediate subtle motion and crossfade the short clips into one 1080x1920 video.
 3) Build VO via OpenAI TTS (optional); pull a music bed WAV from Supabase (tracks.json -> wav).
 4) Sidechain-compress bed under VO; export MP4 with AAC audio and H.264 video.
@@ -311,19 +311,22 @@ def build_vo_text_from_post(row: dict) -> str:
     if explicit:
         return strip_metric_tail(explicit)
 
-    caption = _first_sentences(row.get("caption") or sections.get("caption") or row.get("overview") or row.get("lead"))
-    action = _first_action(sections.get("playbook"))
+    caption = _first_sentences(
+        row.get("caption") or sections.get("caption") or row.get("overview") or row.get("lead"),
+        max_sentences=1,
+        max_chars=220,
+    )
+    snapshot = _first_sentences(sections.get("snapshot"), max_sentences=2, max_chars=260)
+    affects = _first_sentences(sections.get("affects"), max_sentences=1, max_chars=220)
 
     parts: List[str] = []
-    if caption:
-        parts.append(caption)
-    if action:
-        parts.append(f"Try this today: {action}.")
+    for value in (caption, snapshot, affects):
+        if value:
+            parts.append(value)
 
     text = " ".join(parts).strip()
     if text:
         return strip_metric_tail(text)
-    affects = _first_sentences(sections.get("affects"), max_sentences=1, max_chars=220)
     return strip_metric_tail(affects) if affects else ""
 
 
@@ -362,8 +365,9 @@ def resolve_vo_text(platform: str = "default", target_day: Optional[str] = None)
     return resolve_caption(platform=platform, target_day=day)
 
 # Visual timing
-HOOK_CLIP_DUR = 2.2
-DETAIL_CLIP_DUR = 5.4
+HOOK_CLIP_DUR = 2.3
+STORY_CLIP_DUR = 3.2
+STATS_CLIP_DUR = 4.2
 XFADE = 0.25
 FPS = 30
 
@@ -380,12 +384,38 @@ def hook_text_from_post(row: Optional[dict]) -> str:
     return first or "Today, in your body"
 
 
+def reel_story_from_post(row: Optional[dict]) -> dict:
+    if not isinstance(row, dict):
+        row = {}
+    sections = _metrics_sections(row)
+    stored = sections.get("reel_story")
+    stored = stored if isinstance(stored, dict) else {}
+    return {
+        "hook": str(stored.get("hook") or hook_text_from_post(row)).strip(),
+        "signal": str(stored.get("signal") or _first_sentences(sections.get("snapshot"), max_sentences=1, max_chars=90)).strip(),
+        "effects": str(stored.get("effects") or _first_sentences(sections.get("affects"), max_sentences=2, max_chars=120)).strip(),
+        "pattern": str(stored.get("pattern") or _first_sentences(sections.get("affects"), max_sentences=1, max_chars=75)).strip(),
+    }
+
+
 def _fit_hook_font(draw: ImageDraw.ImageDraw, text: str, font_path: Path, max_width: int) -> ImageFont.FreeTypeFont:
     for size in range(132, 71, -4):
         font = ImageFont.truetype(str(font_path), size=size)
         if draw.textbbox((0, 0), text, font=font)[2] <= max_width:
             return font
     return ImageFont.truetype(str(font_path), size=72)
+
+
+def _overlay_wordmark(canvas: Image.Image) -> None:
+    path = Path(__file__).resolve().parent / "Gaia Eyes Text Logo.png"
+    if not path.exists():
+        return
+    with Image.open(path) as raw:
+        logo = raw.convert("RGBA")
+    width = 190
+    height = max(1, int(logo.height * (width / logo.width)))
+    logo = logo.resize((width, height), Image.Resampling.LANCZOS)
+    canvas.alpha_composite(logo, (790, 330))
 
 
 def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
@@ -401,7 +431,7 @@ def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
     draw = ImageDraw.Draw(canvas)
 
     font_path = Path(__file__).resolve().parent / "fonts" / "BebasNeue.ttf"
-    label_font = ImageFont.truetype(str(font_path), size=42)
+    label_font = ImageFont.truetype(str(font_path), size=64)
     measure_font = ImageFont.truetype(str(font_path), size=112)
     words = str(hook_text or "Today, in your body").strip().upper().split()
     lines: List[str] = []
@@ -424,11 +454,55 @@ def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
     block_height = line_height * len(lines)
     top = max(520, (1920 - block_height) // 2 - 70)
 
-    draw.text((100, top - 92), "EARTHSCOPE  •  TODAY", font=label_font, fill=(84, 224, 225, 255))
+    _overlay_wordmark(canvas)
+    draw.text((100, top - 116), "YOUR BODY  •  TODAY", font=label_font, fill=(84, 224, 225, 255))
     for index, line in enumerate(lines):
         draw.text((100, top + index * line_height), line, font=hook_font, fill=(255, 255, 255, 255))
-    draw.text((100, 1690), "GAIA EYES", font=label_font, fill=(255, 255, 255, 225))
-    draw.text((100, 1744), "Decode the unseen.", font=label_font, fill=(210, 220, 224, 225))
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(out_path, "JPEG", quality=92)
+    return out_path
+
+
+def build_story_card(source: Path, out_path: Path, label: str, text: str) -> Path:
+    with Image.open(source) as raw:
+        background = raw.convert("RGB")
+    background = background.resize((1080, 1920), Image.Resampling.LANCZOS)
+    background = background.filter(ImageFilter.GaussianBlur(radius=14))
+    background = ImageEnhance.Brightness(background).enhance(0.40)
+
+    canvas = background.convert("RGBA")
+    canvas = Image.alpha_composite(canvas, Image.new("RGBA", canvas.size, (0, 0, 0, 88)))
+    draw = ImageDraw.Draw(canvas)
+    font_path = Path(__file__).resolve().parent / "fonts" / "BebasNeue.ttf"
+    label_font = ImageFont.truetype(str(font_path), size=64)
+    _overlay_wordmark(canvas)
+    draw.text((100, 520), label.upper(), font=label_font, fill=(84, 224, 225, 255))
+
+    lines = [line.strip().upper() for line in str(text or "").splitlines() if line.strip()]
+    if not lines:
+        lines = ["TODAY'S SIGNALS ARE MOSTLY STEADY"]
+    wrapped: List[str] = []
+    measure_font = ImageFont.truetype(str(font_path), size=112)
+    for source_line in lines[:2]:
+        current = ""
+        for word in source_line.split():
+            candidate = f"{current} {word}".strip()
+            if current and draw.textbbox((0, 0), candidate, font=measure_font)[2] > 860:
+                wrapped.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            wrapped.append(current)
+    longest = max(wrapped, key=len) if wrapped else lines[0]
+    body_font = _fit_hook_font(draw, longest, font_path, 860)
+    y = 660
+    for index, line in enumerate(wrapped[:4]):
+        if index and index == len(wrapped) // 2:
+            y += 36
+        draw.text((100, y), line, font=body_font, fill=(255, 255, 255, 255))
+        y += body_font.size + 22
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(out_path, "JPEG", quality=92)
@@ -440,6 +514,13 @@ PREFERRED_CARD_NAMES = [
     "daily_affects.jpg",
     "daily_playbook.jpg",
     "daily_stats.jpg",
+]
+
+STORY_BACKGROUND_NAMES = [
+    "reel_bg_1.jpg",
+    "reel_bg_2.jpg",
+    "reel_bg_3.jpg",
+    "reel_bg_4.jpg",
 ]
 
 def pick_card_images(images_dir: Path, max_count: int = 3) -> List[Path]:
@@ -464,6 +545,10 @@ def pick_card_images(images_dir: Path, max_count: int = 3) -> List[Path]:
                 break
             chosen.append(p)
     return chosen[:max_count]
+
+
+def pick_story_backgrounds(images_dir: Path, count: int = 4) -> List[Path]:
+    return [images_dir / name for name in STORY_BACKGROUND_NAMES[:count] if (images_dir / name).exists()]
 
 # ------------ Build video from stills ------------
 
@@ -732,29 +817,35 @@ def main():
     resolved_day = target_day or _latest_day_from_content(platform)
     post_row = fetch_post_for_day(resolved_day, platform)
 
-    # 1) Build a hook-only opener, then keep the detailed cards for later beats.
-    detail_cards = pick_card_images(IMAGES_DIR, 3)
-    if not detail_cards:
-        raise SystemExit("No images found to build reel. Expected JPG/PNG cards in MEDIA_REPO_PATH/images")
+    # 1) Build short story beats from the stable reel payload, then finish on metrics.
+    story_backgrounds = pick_story_backgrounds(IMAGES_DIR, 4)
+    if len(story_backgrounds) != 4:
+        missing = [name for name in STORY_BACKGROUND_NAMES if not (IMAGES_DIR / name).exists()]
+        raise SystemExit(
+            "Missing clean reel backgrounds: " + ", ".join(missing) + ". Refusing to reuse finished cards."
+        )
     tmp_dir = Path("tmp_reel")
     tmp_dir.mkdir(exist_ok=True, parents=True)
+    story = reel_story_from_post(post_row)
     hook_card = build_hook_card(
-        detail_cards[0],
+        story_backgrounds[0],
         tmp_dir / "hook.jpg",
-        hook_text_from_post(post_row),
+        story["hook"],
     )
-    later_cards = [card for card in detail_cards if card.name != "daily_affects.jpg"]
-    if not later_cards:
-        later_cards = detail_cards
-    cards = [hook_card, *later_cards[:2]]
-    clip_durations = [HOOK_CLIP_DUR, *([DETAIL_CLIP_DUR] * (len(cards) - 1))]
+    signal_card = build_story_card(story_backgrounds[1], tmp_dir / "signal.jpg", "What changed", story["signal"])
+    effects_card = build_story_card(story_backgrounds[2], tmp_dir / "effects.jpg", "How it may feel", story["effects"])
+    pattern_card = build_story_card(story_backgrounds[3], tmp_dir / "pattern.jpg", "Possible pattern", story["pattern"])
+    stats_path = IMAGES_DIR / "daily_stats.jpg"
+    stats_card = stats_path if stats_path.exists() else story_backgrounds[-1]
+    cards = [hook_card, signal_card, effects_card, pattern_card, stats_card]
+    clip_durations = [HOOK_CLIP_DUR, STORY_CLIP_DUR, STORY_CLIP_DUR, STORY_CLIP_DUR, STATS_CLIP_DUR]
     log(f"Using cards: {', '.join(p.name for p in cards)}")
 
     # 2) Build short clips. Motion starts on frame one.
     clips = []
     for i, (img, duration) in enumerate(zip(cards, clip_durations)):
         outc = tmp_dir / f"clip_{i}.mp4"
-        build_still_clip(img, outc, duration, FPS, motion=(i == 0))
+        build_still_clip(img, outc, duration, FPS, motion=(i < len(cards) - 1))
         clips.append(outc)
 
     # 3) Crossfade chain
@@ -773,7 +864,7 @@ def main():
     vo_text = strip_metric_tail(vo_text_raw) if STRIP_METRICS else vo_text_raw
     if len((vo_text or "").strip()) < 40:
         log("VO text too short after sanitize; using fallback blurb.")
-        vo_text = "Gaia Eyes daily highlights. Check today’s EarthScope and pacing tips."
+        vo_text = "Here is your body read for today, including what changed and what some people may notice."
     if vo_text != vo_text_raw:
         log("Sanitized VO: removed trailing metric lines.")
     log(f"VO: api_key_present={bool(OPENAI_API_KEY)} voice={REEL_TTS_VOICE} model={REEL_TTS_MODEL}")
@@ -859,7 +950,7 @@ def main():
         clips = []
         for i, (img, duration) in enumerate(zip(cards, clip_durations)):
             outc = tmp_dir / f"clip_{i}.mp4"
-            build_still_clip(img, outc, duration, FPS, motion=(i == 0))
+            build_still_clip(img, outc, duration, FPS, motion=(i < len(cards) - 1))
             clips.append(outc)
 
         # Rebuild crossfade chain and recalc total

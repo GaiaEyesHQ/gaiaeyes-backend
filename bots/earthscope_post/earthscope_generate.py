@@ -1518,8 +1518,15 @@ def _finalize_rewrite_payload(obj: Dict[str, str]) -> Dict[str, str]:
     out["snapshot"] = _strip_section_labels(_scrub_banned_phrases(out["snapshot"]))
     out["affects"] = _strip_section_labels(_scrub_banned_phrases(out["affects"]))
     out["playbook"] = _normalize_playbook_bullets(_scrub_banned_phrases(out["playbook"]))
-    if isinstance(out.get("voiceover"), str):
-        out["voiceover"] = _scrub_banned_phrases(_sanitize_caption(out["voiceover"]))
+    for key in ("voiceover", "reel_signal", "reel_pattern"):
+        if isinstance(out.get(key), str):
+            out[key] = _scrub_banned_phrases(_sanitize_caption(out[key]))
+    if isinstance(out.get("reel_effects"), str):
+        out["reel_effects"] = "\n".join(
+            _scrub_banned_phrases(_sanitize_caption(line))
+            for line in out["reel_effects"].splitlines()
+            if line.strip()
+        )
     return out
 
 
@@ -1666,13 +1673,14 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Use natural everyday grammar: when two feelings happen together, use 'and' instead of a contrast word like 'but' unless there is a real contrast. "
         "Say 'slow breaths' or 'slow breathing', not 'slow breath'. "
         "Never claim deterministic health effects; use 'some may', 'can', 'for some'. "
-        "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags, voiceover. "
+        "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags, voiceover, reel_signal, reel_effects, reel_pattern. "
         "No markdown, no extra keys, no code fences. "
         "If aurora_headline exists, include one sentence about aurora chances (no numbers). "
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
-        "Voiceover should read like a short reel script: the caption's opening paragraph, then one practical tip from playbook. Do not add a follow/download CTA. "
+        "Voiceover should be a 40-60 word reel script: open with the caption hook, explain the strongest factual environmental change in plain English, then connect it to possible felt effects already present in affects. Do not include wellness advice, metrics, or a follow/download CTA. "
+        "For reel_signal, write one short factual environmental sentence, maximum 8 words. For reel_effects, write two short possible felt effects separated by a newline, maximum 6 words each. For reel_pattern, write one human takeaway, maximum 7 words. Do not invent a signal or symptom for these fields. "
         f"Aim for: caption {caption_profile['caption_instruction']} Snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
         "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. Respect style.template_id and style.template_map to decide sentence order for caption only; rearrange the same facts without adding new claims. "
     )
@@ -1877,7 +1885,7 @@ def _rewrite_json_candidates(
         "Use natural everyday grammar: when two feelings happen together, use 'and' instead of a contrast word like 'but' unless there is a real contrast. "
         "Say 'slow breaths' or 'slow breathing', not 'slow breath'. "
         "Use evidence-scaled language: may, can, for some, tends to. No diagnosis, certainty, detox, cure, or treatment claims. "
-        "Return only JSON with a candidates array. Each candidate must include caption, snapshot, affects, playbook, hashtags, and voiceover."
+        "Return only JSON with a candidates array. Each candidate must include caption, snapshot, affects, playbook, hashtags, voiceover, reel_signal, reel_effects, and reel_pattern."
     )
     payload = {
         "task": f"Write {count} distinct Gaia Eyes daily social post candidates.",
@@ -1922,7 +1930,10 @@ def _rewrite_json_candidates(
             "affects": "2-4 sentences about possible felt patterns without certainty.",
             "playbook": "3-5 short bullets.",
             "hashtags": "6-10 hashtags as one string.",
-            "voiceover": "2-4 spoken sentences. Use the caption's opening paragraph, then one practical tip from playbook. Do not add a follow/download CTA. No metrics, no hashtags.",
+            "voiceover": "40-60 spoken words. Open with the caption hook, explain the strongest factual environmental change, then connect it to possible felt effects already in affects. No advice, CTA, metrics, or hashtags.",
+            "reel_signal": "One factual environmental sentence, maximum 8 words, based only on today's facts.",
+            "reel_effects": "Two short possible felt effects separated by a newline, maximum 6 words each, already supported by affects.",
+            "reel_pattern": "One human takeaway, maximum 7 words, supported by the same content spine.",
         },
         "ban_phrases": BAN_PHRASES,
     }
@@ -2981,23 +2992,61 @@ def _build_reel_voiceover_text(
     ctx: Dict[str, Any],
     title: str,
     caption: str,
+    snapshot: str,
+    affects: str,
     playbook: str,
     rewrite: Optional[Dict[str, str]] = None,
 ) -> str:
     explicit = _sanitize_caption(str((rewrite or {}).get("voiceover") or ""))
-    if explicit and len(_split_text_sentences(explicit)) >= 3:
+    if explicit and len(explicit.split()) >= 32:
         return _scrub_banned_phrases(explicit)
 
-    lead = _caption_voiceover_lead(caption, title)
+    lead = _first_sentence(_caption_voiceover_lead(caption, title))
     if not lead:
         preferred = _preferred_hook_lanes(ctx, limit=1)
         if preferred:
             lead = HOOK_LANES[preferred[0]]["examples"][0]
-    action = _first_playbook_action(playbook)
-    parts = [lead] if lead else []
-    if action:
-        parts.append(f"Try this today: {action}.")
-    return _scrub_banned_phrases(_sanitize_caption(" ".join(parts)))
+    context = " ".join(_split_text_sentences(snapshot)[:2]).strip()
+    felt = " ".join(_split_text_sentences(affects)[:1]).strip()
+    words = _sanitize_caption(" ".join(part for part in (lead, context, felt) if part)).split()
+    return _scrub_banned_phrases(" ".join(words[:60]).strip())
+
+
+def _compact_reel_text(text: str, *, max_words: int, max_lines: int = 1) -> str:
+    lines = [
+        re.sub(r"^(?:[-*•]|\d+[.)])\s*", "", line.strip()).strip()
+        for line in str(text or "").splitlines()
+        if line.strip()
+    ]
+    if not lines:
+        lines = _split_text_sentences(str(text or ""))
+    compact: List[str] = []
+    for line in lines[:max_lines]:
+        words = line.split()
+        if words:
+            compact.append(" ".join(words[:max_words]).rstrip(" ,;:-."))
+    return "\n".join(compact)
+
+
+def _build_reel_story(
+    *,
+    title: str,
+    snapshot: str,
+    affects: str,
+    voiceover: str,
+    rewrite: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    rewrite = rewrite or {}
+    signal = _compact_reel_text(str(rewrite.get("reel_signal") or snapshot), max_words=8)
+    effects = _compact_reel_text(str(rewrite.get("reel_effects") or affects), max_words=6, max_lines=2)
+    pattern = _compact_reel_text(str(rewrite.get("reel_pattern") or affects), max_words=7)
+    return {
+        "hook": _compact_reel_text(title, max_words=12),
+        "signal": signal,
+        "effects": effects,
+        "pattern": pattern,
+        "voiceover": voiceover,
+    }
 
 
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
@@ -3641,15 +3690,25 @@ def main():
         sections=sections_struct,
     )
     vo_caption = _voiceover_caption_from_variants(social_variants, short_caption)
+    rewrite_for_reel = _REWRITE_CACHE.get(_rewrite_cache_key(ctx)[0])
     voiceover = _build_reel_voiceover_text(
         ctx=ctx,
         title=title,
         caption=vo_caption,
+        snapshot=snapshot,
+        affects=affects,
         playbook=playbook,
-        rewrite=None,
+        rewrite=rewrite_for_reel,
     )
     if voiceover:
         sections_struct["voiceover"] = voiceover
+    sections_struct["reel_story"] = _build_reel_story(
+        title=title,
+        snapshot=snapshot,
+        affects=affects,
+        voiceover=voiceover,
+        rewrite=rewrite_for_reel,
+    )
 
     # 3) Prepare payloads
     metrics_json = {

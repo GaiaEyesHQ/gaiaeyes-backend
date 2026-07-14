@@ -835,7 +835,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     <section class="gaia-es" data-gaia-earthscope-live="1">
       <div class="gaia-es__head">
         <div class="gaia-es__head-left">
-          <h3 class="gaia-es__title">EarthScope</h3>
+          <h3 class="gaia-es__title">Your Body Today</h3>
           <?php if ( $title ): ?>
             <span class="gaia-es__badge"><?php echo esc_html($title); ?></span>
           <?php endif; ?>

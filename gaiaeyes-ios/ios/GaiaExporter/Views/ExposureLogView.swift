@@ -22,7 +22,7 @@ struct ExposureLogView: View {
         case .general:
             return "Log exposure"
         case .migraine:
-            return "Log migraine triggers"
+            return "Log migraine context"
         }
     }
 
@@ -31,7 +31,7 @@ struct ExposureLogView: View {
         case .general:
             return "Pick anything notable from today. Gaia Eyes will compare it with symptoms, wearables, and daily signals over time."
         case .migraine:
-            return "Migraine days can have layered triggers. Pick anything that stood out, or use the note for your own context."
+            return "Migraine days can have layered context. Pick anything that stood out before or around this migraine, or use the note for your own details."
         }
     }
 
@@ -40,7 +40,7 @@ struct ExposureLogView: View {
     }
 
     private var notePlaceholder: String {
-        focus == .migraine ? "Other possible trigger, timing, aura, food, cycle, weather..." : "Optional context"
+        focus == .migraine ? "Other context, timing, aura, food, cycle, weather..." : "Optional context"
     }
 
     private var analyticsFocus: String {

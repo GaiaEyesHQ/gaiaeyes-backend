@@ -166,6 +166,7 @@ struct SymptomSuggestionContext {
     let activeDriverKeys: [String]
     let activePatternDriverKeys: [String]
     let activePatternOutcomeKeys: [String]
+    let healthContextKeys: [String]
     let recentSymptomCodes: [String]
     let prefillTags: [String]
     let prefillSymptomCode: String?
@@ -174,6 +175,7 @@ struct SymptomSuggestionContext {
         activeDriverKeys: [],
         activePatternDriverKeys: [],
         activePatternOutcomeKeys: [],
+        healthContextKeys: [],
         recentSymptomCodes: [],
         prefillTags: [],
         prefillSymptomCode: nil
@@ -353,6 +355,29 @@ private enum SymptomSuggestionEngine {
             }
             if outcome.contains("FATIGUE") || outcome.contains("ENERGY") {
                 append(["FATIGUE", "DRAINED"])
+            }
+        }
+
+        for healthContext in context.healthContextKeys.map(normalize) {
+            switch healthContext {
+            case "MIGRAINE_HISTORY":
+                append(["MIGRAINE", "LIGHT_SENSITIVITY", "NAUSEA", "BRAIN_FOG", "HEADACHE"])
+            case "FIBROMYALGIA":
+                append(["FATIGUE", "PAIN", "BRAIN_FOG", "STIFFNESS", "RESTLESS_SLEEP"])
+            case "ARTHRITIS":
+                append(["JOINT_PAIN", "STIFFNESS", "PAIN"])
+            case "CHRONIC_PAIN", "HYPERMOBILITY_EDS", "AUTOIMMUNE_CONDITION":
+                append(["PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS", "FATIGUE"])
+            case "POTS_DYSAUTONOMIA", "NERVOUS_SYSTEM_DYSREGULATION", "HEART_RHYTHM_SENSITIVE":
+                append(["PALPITATIONS", "DRAINED", "BRAIN_FOG", "FATIGUE", "WIRED"])
+            case "ALLERGIES_SINUS", "MCAS_HISTAMINE":
+                append(["SINUS_PRESSURE", "HEADACHE", "BRAIN_FOG", "RESP_IRRITATION"])
+            case "ASTHMA_BREATHING_SENSITIVE":
+                append(["RESP_IRRITATION", "CHEST_TIGHTNESS", "FATIGUE"])
+            case "INSOMNIA_SLEEP_DISRUPTION":
+                append(["INSOMNIA", "RESTLESS_SLEEP", "FATIGUE"])
+            default:
+                break
             }
         }
 
@@ -693,7 +718,7 @@ struct SymptomsLogPage: View {
 
                 if !suggestedSymptoms.isEmpty {
                     SymptomSectionCard(title: "Suggested right now", icon: "sparkles") {
-                        Text("Suggested from today’s signals, your patterns, and recent logs.")
+                        Text("Suggested from today’s signals, your patterns, recent logs, and saved health context.")
                             .font(.caption)
                             .foregroundColor(.secondary)
 

@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -16,7 +17,10 @@ from bots.earthscope_post.gaia_eyes_viral_bot import (
     _trim_public_affects,
     build_stats_rows,
     StatRow,
+    STATS_CARD_FOOTER,
+    STATS_CARD_TITLE,
 )
+from bots.earthscope_post import gaia_eyes_viral_bot
 
 
 def _row_for_label(rows: list[StatRow], label: str) -> StatRow:
@@ -24,6 +28,29 @@ def _row_for_label(rows: list[StatRow], label: str) -> StatRow:
         if row.label == label:
             return row
     raise AssertionError(f"Missing row for {label}")
+
+
+def test_stats_card_uses_health_forward_title_and_plain_url_footer():
+    assert STATS_CARD_TITLE == "SIGNAL WATCH"
+    assert STATS_CARD_FOOTER == "gaiaeyes.com/app"
+    assert "EarthScope" not in STATS_CARD_TITLE
+    assert "Download" not in STATS_CARD_FOOTER
+
+
+def test_clean_reel_backgrounds_are_exported_without_card_overlays(monkeypatch, tmp_path):
+    colors = iter(((10, 30, 50, 255), (20, 50, 30, 255), (40, 20, 60, 255), (15, 45, 55, 255)))
+    monkeypatch.setattr(gaia_eyes_viral_bot, "MEDIA_REPO_PATH", tmp_path)
+    monkeypatch.setattr(gaia_eyes_viral_bot, "ensure_repo_paths", lambda: None)
+    monkeypatch.setattr(
+        gaia_eyes_viral_bot,
+        "_compose_bg",
+        lambda *_args, **_kwargs: Image.new("RGBA", (1080, 1920), next(colors)),
+    )
+
+    paths = gaia_eyes_viral_bot.save_reel_backgrounds("Calm")
+
+    assert [path.name for path in paths] == [f"reel_bg_{index}.jpg" for index in range(1, 5)]
+    assert all(path.exists() for path in paths)
 
 
 def test_bz_prefers_min_and_applies_severe_styling():

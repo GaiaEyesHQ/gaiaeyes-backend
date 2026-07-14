@@ -2878,6 +2878,7 @@
   const DAILY_CHECKIN_EXPOSURES = [
     ["overexertion", "Heavy activity"],
     ["allergen_exposure", "Allergen exposure"],
+    ["rapid_temperature_change", "Rapid temperature change"],
   ];
 
   const normalizeTabKey = (value) => {

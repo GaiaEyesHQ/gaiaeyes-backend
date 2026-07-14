@@ -1149,6 +1149,7 @@ CREATE TABLE storage.s3_multipart_uploads_parts (
 | `20251017123000_seed_nerve_pain_symptom_code.sql` | Seeds/updates `nerve_pain` symptom code across available schemas. |
 | `20251019140000_setup_symptom_domain.sql` | Establishes symptom domain tables, RLS, materialized views, and helper function. |
 | `20260708143000_add_migraine_pattern_outcome.sql` | Adds migraine as a distinct symptom and pattern-engine outcome. |
+| `20260713183000_add_rapid_temperature_change_exposure.sql` | Allows user-logged rapid temperature changes as exposure context. |
 
 ---
 

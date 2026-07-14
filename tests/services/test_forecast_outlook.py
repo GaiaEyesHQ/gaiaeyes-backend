@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import unittest
 from datetime import UTC, date, datetime, timedelta
@@ -20,6 +21,7 @@ from services.forecast_outlook import (  # noqa: E402
     build_user_outlook_payload_via_pool,
     build_window_outlook,
     ensure_local_forecast_daily,
+    ensure_space_forecast_daily,
     parse_swpc_range_forecast,
     parse_swpc_three_day_forecast,
     serialize_local_forecast_rows,
@@ -896,6 +898,59 @@ class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
         upsert_rows.assert_awaited_once()
         fetch_pollen.assert_awaited_once_with("78209", 29.49, -98.47, days=POLLEN_FORECAST_DAYS)
         self.assertEqual(payload[0]["pollen_overall_level"], "moderate")
+
+    def test_ensure_local_forecast_daily_uses_app_today_start_day(self) -> None:
+        async def _run() -> None:
+            start_day = date(2026, 7, 14)
+            fresh_rows = [
+                {
+                    "day": start_day + timedelta(days=index),
+                    "updated_at": datetime.now(UTC),
+                    "pollen_overall_level": "low",
+                }
+                for index in range(LOCAL_FORECAST_DAYS)
+            ]
+
+            fetch_rows = AsyncMock(return_value=fresh_rows)
+            with (
+                patch("services.forecast_outlook._app_today", return_value=start_day),
+                patch("services.forecast_outlook._fetch_local_forecast_rows", fetch_rows),
+            ):
+                payload = await ensure_local_forecast_daily(
+                    object(),
+                    zip_code="78754",
+                    lat=30.3,
+                    lon=-97.6,
+                    days=LOCAL_FORECAST_DAYS,
+                )
+
+            self.assertEqual(payload, fresh_rows)
+            self.assertEqual(fetch_rows.await_args.args[2], start_day)
+
+        asyncio.run(_run())
+
+    def test_ensure_space_forecast_daily_uses_app_today_start_day(self) -> None:
+        async def _run() -> None:
+            start_day = date(2026, 7, 14)
+            fresh_rows = [
+                {
+                    "forecast_day": start_day + timedelta(days=index),
+                    "updated_at": datetime.now(UTC),
+                }
+                for index in range(LOCAL_FORECAST_DAYS)
+            ]
+
+            fetch_rows = AsyncMock(return_value=fresh_rows)
+            with (
+                patch("services.forecast_outlook._app_today", return_value=start_day),
+                patch("services.forecast_outlook._fetch_space_forecast_rows", fetch_rows),
+            ):
+                payload = await ensure_space_forecast_daily(object(), days=LOCAL_FORECAST_DAYS)
+
+            self.assertEqual(payload, fresh_rows)
+            self.assertEqual(fetch_rows.await_args.args[1], start_day)
+
+        asyncio.run(_run())
 
     async def test_ensure_local_forecast_daily_keeps_type_specific_pollen_rows_without_refresh(self) -> None:
         now = datetime.now(UTC)

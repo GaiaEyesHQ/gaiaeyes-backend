@@ -25,6 +25,7 @@ EVERYDAY_EXPOSURE_KEYS = (
     "workplace_exposure",
     "heavy_traffic",
     "poor_air_quality",
+    "rapid_temperature_change",
     "new_supplement_medication",
 )
 
@@ -47,6 +48,7 @@ EXPOSURE_LABELS = {
     "workplace_exposure": "Workplace exposure",
     "heavy_traffic": "Heavy traffic",
     "poor_air_quality": "Poor air quality",
+    "rapid_temperature_change": "Rapid temperature change",
     "new_supplement_medication": "New supplement or medication",
 }
 

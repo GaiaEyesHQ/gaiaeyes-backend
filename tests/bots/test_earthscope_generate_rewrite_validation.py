@@ -17,6 +17,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-key")
 from bots.earthscope_post import earthscope_generate
 from bots.earthscope_post.earthscope_generate import (
     _build_social_caption_variants,
+    _build_reel_story,
     _build_reel_voiceover_text,
     _caption_context_lead,
     _canonical_public_platform,
@@ -487,13 +488,16 @@ def test_reel_voiceover_fallback_starts_with_emotional_title_not_action_caption(
         ctx={"kp_max_24h": 4.5, "bz_min": -7},
         title="Body Buzzing For No Reason?",
         caption="Take short movement breaks and sip water today. Keep the day simple when your body feels keyed up.",
+        snapshot="Solar wind is elevated today. Magnetic conditions are shifting.",
+        affects="Some people may notice restless energy or trouble settling.",
         playbook="- Do 3 minutes of easy movement\n- Sip water",
         rewrite=None,
     )
 
     assert voiceover.startswith("Body Buzzing For No Reason?")
-    assert "Take short movement breaks" in voiceover
-    assert "Try this today: Do 3 minutes of easy movement." in voiceover
+    assert "Solar wind is elevated today." in voiceover
+    assert "restless energy" in voiceover
+    assert "Do 3 minutes" not in voiceover
     assert "Follow Gaia Eyes" not in voiceover
     assert "download the app" not in voiceover
 
@@ -515,18 +519,20 @@ def test_reel_voiceover_uses_long_explicit_script_when_available():
         ctx={"kp_max_24h": 4.5, "bz_min": -7},
         title="Body Buzzing For No Reason?",
         caption="Take short movement breaks and sip water today.",
+        snapshot="Solar wind is elevated today.",
+        affects="Some people may notice restless energy.",
         playbook="- Do 3 minutes of easy movement",
         rewrite={
             "voiceover": (
-                "Body buzzing for no clear reason? The signal mix is restless today. "
-                "Try slow breathing before you push harder."
+                "Body buzzing for no clear reason? Solar wind is elevated today, and magnetic conditions have been shifting. "
+                "Some sensitive people notice days like this as restless energy, trouble settling, or energy that spikes and dips before easing again."
             )
         },
     )
 
     assert voiceover == (
-        "Body buzzing for no clear reason? The signal mix is restless today. "
-        "Try slow breathing before you push harder."
+        "Body buzzing for no clear reason? Solar wind is elevated today, and magnetic conditions have been shifting. "
+        "Some sensitive people notice days like this as restless energy, trouble settling, or energy that spikes and dips before easing again."
     )
 
 
@@ -546,7 +552,25 @@ def test_public_generation_uses_one_canonical_platform():
     assert _canonical_public_platform("ig") == "default"
 
 
-def test_reel_voiceover_keeps_hook_effect_and_tip_compact():
+def test_reel_story_uses_writer_fields_without_changing_web_sections():
+    story = _build_reel_story(
+        title="Body buzzing for no clear reason?",
+        snapshot="Solar wind is elevated today.",
+        affects="Some people may feel restless. Energy may spike and dip.",
+        voiceover="Body buzzing for no clear reason? Solar wind is elevated today.",
+        rewrite={
+            "reel_signal": "Solar wind is elevated",
+            "reel_effects": "Restless or jittery\nEnergy may spike, then dip",
+            "reel_pattern": "An uneven-energy day",
+        },
+    )
+
+    assert story["signal"] == "Solar wind is elevated"
+    assert story["effects"].splitlines() == ["Restless or jittery", "Energy may spike, then dip"]
+    assert story["pattern"] == "An uneven-energy day"
+
+
+def test_reel_voiceover_keeps_hook_signal_and_effect_without_tip():
     voiceover = _build_reel_voiceover_text(
         ctx={"kp_max_24h": 2.0, "bz_min": -4.8},
         title="Body Buzzing For No Clear Reason?",
@@ -554,13 +578,16 @@ def test_reel_voiceover_keeps_hook_effect_and_tip_compact():
             "Body buzzing for no clear reason? That jittery wired-but-tired feeling can make small tasks feel draining. "
             "This extra sentence should not make the reel drag into a long Facebook-style read."
         ),
+        snapshot="Solar wind is elevated today. Magnetic conditions are shifting.",
+        affects="Some people may notice restless energy or energy that spikes and dips.",
         playbook="- Take three slow breaths before pushing through\n- Lower screen brightness",
         rewrite=None,
     )
 
     assert voiceover.startswith("Body buzzing for no clear reason?")
-    assert "Try this today: Take three slow breaths before pushing through." in voiceover
-    assert len(voiceover.split()) <= 48
+    assert "Solar wind is elevated today." in voiceover
+    assert "slow breaths" not in voiceover
+    assert len(voiceover.split()) <= 60
 
 
 def test_facebook_caption_rewrite_receives_finished_content_spine(monkeypatch):

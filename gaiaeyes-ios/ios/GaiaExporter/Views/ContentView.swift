@@ -4858,10 +4858,15 @@ struct ContentView: View {
 
     private func currentSymptomSuggestionContext(prefill: SymptomQueuedEvent? = nil) -> SymptomSuggestionContext {
         let activePatternRefs = dashboardPayload?.activePatternRefs ?? []
+        let selectedHealthContextKeys = selectedTagKeys
+            .map(canonicalProfileTagKey)
+            .filter(healthContextTagKeys.contains)
+            .sorted()
         return SymptomSuggestionContext(
             activeDriverKeys: dashboardPayload?.drivers?.map(\.key) ?? [],
             activePatternDriverKeys: activePatternRefs.compactMap { $0.driverKey ?? $0.signalKey },
             activePatternOutcomeKeys: activePatternRefs.compactMap(\.outcomeKey),
+            healthContextKeys: selectedHealthContextKeys,
             recentSymptomCodes: symptomsToday.map(\.symptomCode),
             prefillTags: prefill?.tags ?? [],
             prefillSymptomCode: prefill?.symptomCode
@@ -20174,6 +20179,17 @@ struct ContentView: View {
             }
             .navigationDestination(for: InsightsRoute.self) { route in
                 shellDestinationView(for: route)
+                    .navigationBarBackButtonHidden(true)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                bodyPath = []
+                            } label: {
+                                Image(systemName: "xmark")
+                            }
+                            .accessibilityLabel("Close")
+                        }
+                    }
             }
             .task {
                 let api = state.apiWithAuth()
@@ -22124,13 +22140,13 @@ struct ContentView: View {
                 }
             }
         }
-        .alert("Log possible migraine triggers?", isPresented: $showMigraineExposurePrompt) {
+        .alert("Did anything stand out before or around this migraine?", isPresented: $showMigraineExposurePrompt) {
             Button("Add exposures") {
                 showMigraineExposureSheet = true
             }
             Button("Not now", role: .cancel) {}
         } message: {
-            Text("Gaia Eyes can watch whether fragrance, air quality, food, alcohol, medication changes, or your own notes line up with migraine days over time.")
+            Text("Gaia Eyes can watch whether fragrance, air quality, food, alcohol, medication changes, rapid temperature changes, or your own notes line up with migraine days over time.")
         }
         .sheet(isPresented: $showReauthenticationSheet) {
             NavigationStack {

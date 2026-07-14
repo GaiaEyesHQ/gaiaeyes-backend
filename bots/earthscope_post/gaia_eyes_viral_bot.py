@@ -47,10 +47,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from bots.earthscope_post.cta import APP_DOWNLOAD_LINE, select_earthscope_cta
+from bots.earthscope_post.cta import APP_URL, select_earthscope_cta
 
 HERE = Path(__file__).resolve().parent
 FONTS_DIR = HERE / "fonts"
+STATS_CARD_TITLE = "SIGNAL WATCH"
+STATS_CARD_FOOTER = APP_URL
 
 def _load_font(primary: Union[str, List[str]], size: int, fallback: Optional[ImageFont.ImageFont] = None) -> ImageFont.ImageFont:
     candidates: List[str] = []
@@ -1311,7 +1313,7 @@ def render_stats_card_from_features(
 
     # Header + date
     x0, y0 = 80, 88
-    header_txt = "EARTHSCOPE • TODAY’S METRICS"
+    header_txt = STATS_CARD_TITLE
     date_txt   = _format_date_title(day)
 
     header_w = draw.textlength(header_txt, font=font_h1)
@@ -1394,7 +1396,8 @@ def render_stats_card_from_features(
     y = _draw_wrapped_multilines(draw, cta, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
 
-    _overlay_logo_and_tagline(im, APP_DOWNLOAD_LINE)
+    footer_font = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 32)
+    draw.text((62, H - 88), STATS_CARD_FOOTER, fill=(190, 205, 230, 255), font=footer_font)
     return im.convert("RGB")
 
 
@@ -1685,6 +1688,21 @@ def save_all_cards(stats_im: Image.Image, caption_im: Image.Image, affects_im: I
     aff_p   = MEDIA_REPO_PATH / "images" / "daily_affects.jpg"; affects_im.save(aff_p, "JPEG", quality=90); out.append(aff_p)
     play_p  = MEDIA_REPO_PATH / "images" / "daily_playbook.jpg"; play_im.save(play_p, "JPEG", quality=90); out.append(play_p)
     logging.info("Saved 4 images into repo/images/")
+    return out
+
+
+def save_reel_backgrounds(energy: Optional[str], count: int = 4) -> List[Path]:
+    """Export clean, text-free tall backgrounds for the reel renderer."""
+    ensure_repo_paths()
+    output_dir = MEDIA_REPO_PATH / "images"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out: List[Path] = []
+    for index in range(1, count + 1):
+        background = _compose_bg(1080, 1920, energy, kind="tall")
+        path = output_dir / f"reel_bg_{index}.jpg"
+        background.convert("RGB").save(path, "JPEG", quality=92)
+        out.append(path)
+    logging.info("Saved %d clean reel backgrounds into repo/images/", len(out))
     return out
 
 
@@ -2043,6 +2061,7 @@ def main(args: Optional[argparse.Namespace] = None):
         save_stats_card(stats_im, outdir=args.outdir)
     else:
         repo_paths = save_all_cards(stats_im, caption_im, affects_im, play_im)
+        repo_paths.extend(save_reel_backgrounds(energy))
 
         if not args.dry_run:
             try:

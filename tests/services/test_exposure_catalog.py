@@ -19,7 +19,7 @@ def test_exposure_api_rejects_unknown_keys():
 
 
 def test_exposure_migration_matches_backend_allowlist():
-    migration = Path("supabase/migrations/20260610120000_expand_exposure_diary_v1.sql").read_text()
+    migration = Path("supabase/migrations/20260713183000_add_rapid_temperature_change_exposure.sql").read_text()
 
     for key in ALL_EXPOSURE_KEYS:
         assert f"'{key}'" in migration

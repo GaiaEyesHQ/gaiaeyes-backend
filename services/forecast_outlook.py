@@ -1255,7 +1255,7 @@ async def ensure_local_forecast_daily(
         return []
 
     now_utc = datetime.now(UTC)
-    today = now_utc.date() - timedelta(days=1)
+    today = _app_today()
     existing = await _fetch_local_forecast_rows(conn, location_key, today, days=days)
     if existing:
         newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)
@@ -1332,7 +1332,7 @@ async def ensure_local_forecast_daily_via_pool(
 
     pool = await get_pool()
     now_utc = datetime.now(UTC)
-    today = now_utc.date() - timedelta(days=1)
+    today = _app_today()
 
     async with pool.connection() as conn:
         existing = await _fetch_local_forecast_rows(conn, location_key, today, days=days)
@@ -1554,7 +1554,7 @@ async def _upsert_space_forecast_rows(conn, rows: Sequence[Mapping[str, Any]]) -
 
 
 async def ensure_space_forecast_daily(conn, *, days: int = SPACE_FORECAST_DAYS) -> list[dict[str, Any]]:
-    today = datetime.now(UTC).date() - timedelta(days=1)
+    today = _app_today()
     existing = await _fetch_space_forecast_rows(conn, today, days=days)
     if existing:
         newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)

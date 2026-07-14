@@ -23,6 +23,15 @@ This document covers the EarthScope Facebook/Instagram publishing path used by
    - Instagram reel publish
    - Facebook video publish
 
+## Public content contract
+
+`content.daily_posts.metrics_json.sections` keeps `caption`, `snapshot`,
+`affects`, and `playbook` as stable semantic fields for the website and legacy
+media JSON. Reel-only presentation belongs in the optional `reel_story` object
+alongside those fields. Website renderers must not parse slide text, timing, or
+visual labels from `reel_story`; reel formatting can then change without
+breaking the homepage.
+
 ## What changed
 
 The posting path now uses one shared Meta poster implementation instead of split

@@ -17,6 +17,7 @@ struct ExposureOption: Identifiable, Hashable {
         ExposureOption(id: "workplace_exposure", label: "Workplace exposure", systemImage: "building.2"),
         ExposureOption(id: "heavy_traffic", label: "Heavy traffic", systemImage: "car.2"),
         ExposureOption(id: "poor_air_quality", label: "Poor air quality", systemImage: "aqi.medium"),
+        ExposureOption(id: "rapid_temperature_change", label: "Rapid temperature change", systemImage: "thermometer"),
         ExposureOption(id: "new_supplement_medication", label: "New supplement or medication", systemImage: "pills"),
     ]
 
@@ -30,6 +31,7 @@ struct ExposureOption: Identifiable, Hashable {
         ExposureOption(id: "fragrance_scented_products", label: "Fragrance / scented products", systemImage: "sparkles"),
         ExposureOption(id: "cleaning_products", label: "Cleaning products", systemImage: "spray.sparkle"),
         ExposureOption(id: "poor_air_quality", label: "Poor air quality", systemImage: "aqi.medium"),
+        ExposureOption(id: "rapid_temperature_change", label: "Rapid temperature change", systemImage: "thermometer"),
         ExposureOption(id: "heavy_traffic", label: "Heavy traffic", systemImage: "car.2"),
         ExposureOption(id: "mold_damp_space", label: "Mold or damp space", systemImage: "drop.triangle"),
         ExposureOption(id: "alcohol", label: "Alcohol", systemImage: "wineglass"),
