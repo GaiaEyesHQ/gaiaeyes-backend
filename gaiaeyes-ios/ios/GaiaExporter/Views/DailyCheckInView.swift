@@ -263,15 +263,15 @@ struct DailyCheckInView: View {
     }
 
     private var energySubtitle: String {
-        mode == .mystical ? "A quick read on how steady your system felt." : "Keep this broad and quick."
+        mode == .mystical ? "Think about how steady or drained you felt." : "Think about how alert, steady, or drained you felt."
     }
 
     private var usableEnergySubtitle: String {
-        mode == .mystical ? "A simple read on how open or limited the day felt." : "A simple read on how much you could actually do."
+        mode == .mystical ? "Think about what your energy actually let you do." : "Think about your available capacity, not just how tired you felt."
     }
 
     private var predictionSubtitle: String {
-        mode == .mystical ? "This helps Gaia stay grounded over time." : "This helps Gaia stay calibrated over time."
+        "Your answer helps improve Gaia’s future reads."
     }
 
     private func exposureConfirmationText(for exposureIDs: [String]) -> String {
@@ -418,14 +418,14 @@ struct DailyCheckInView: View {
                 )
 
                 DailyCheckInChoiceGrid(
-                    title: "How was your energy?",
+                    title: "How did your energy feel today?",
                     subtitle: energySubtitle,
                     selection: $energyLevel,
                     choices: energyChoices
                 )
 
                 DailyCheckInChoiceGrid(
-                    title: "How much usable energy did you have today?",
+                    title: "How much could you comfortably do today?",
                     subtitle: usableEnergySubtitle,
                     selection: $usableEnergy,
                     choices: usableEnergyChoices
@@ -443,9 +443,14 @@ struct DailyCheckInView: View {
                         Text("Anything notable today?")
                             .font(.headline)
                             .foregroundColor(.white)
-                        Text(exposures.isEmpty ? "Optional. Add exposure context only if something stands out." : "\(exposures.count) exposure\(exposures.count == 1 ? "" : "s") selected.")
+                        Text("An exposure is something you encountered—such as weather, illness, food, or a rapid temperature change—that may have affected how you felt.")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.68))
+                        if !exposures.isEmpty {
+                            Text("\(exposures.count) exposure\(exposures.count == 1 ? "" : "s") selected.")
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.58))
+                        }
                     }
                     Spacer(minLength: 8)
                     Button(showExposureChoices ? "Hide" : "Add exposures") {
@@ -463,8 +468,8 @@ struct DailyCheckInView: View {
 
                 if showExposureChoices {
                     DailyCheckInMultiChoiceGrid(
-                        title: "Possible exposure context",
-                        subtitle: "Choose quick categories. Gaia Eyes uses these as possible trigger context, not diagnosis.",
+                        title: "Possible exposures",
+                        subtitle: "Select anything that may have shaped your day. These are possibilities, not confirmed triggers.",
                         selection: $exposures,
                         choices: exposureChoices
                     )
@@ -472,7 +477,7 @@ struct DailyCheckInView: View {
                     if exposures.contains("temporary_illness") {
                         DailyCheckInMultiChoiceGrid(
                             title: "What kind of illness?",
-                            subtitle: "Optional. This helps Gaia avoid building patterns from temporary sick days.",
+                            subtitle: "This helps keep temporary illness separate from your usual patterns.",
                             selection: $illnessDetails,
                             choices: illnessDetailChoices
                         )
@@ -617,7 +622,7 @@ struct DailyCheckInView: View {
             }
 
             if let summary = status?.calibrationSummary, summary.totalCheckins > 0 {
-                Text("Recent Gaia match rate: \(Int((summary.matchRate ?? 0) * 100))% across \(summary.totalCheckins) check-ins.")
+                Text("Your feedback is helping Gaia make future reads more personal.")
                     .font(.caption2)
                     .foregroundColor(.white.opacity(0.48))
             }
