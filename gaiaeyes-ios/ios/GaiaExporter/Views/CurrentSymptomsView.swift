@@ -28,11 +28,11 @@ private struct CurrentSymptomsCopy {
         case .scientific:
             return CurrentSymptomsCopy(
                 pageTitle: vocabulary.currentSymptomsLabel,
-                subtitle: "Recent logs and current conditions, in one place",
+                subtitle: "See what’s active and update it as things change.",
                 activeNowTitle: "Active Now",
                 logSymptomTitle: "Log symptom",
                 logSymptomsTitle: "Log symptoms",
-                timelineTitle: "Timeline",
+                timelineTitle: "Symptom history",
                 contributingTitle: "Signals around this right now",
                 contributingEmptyBody: "No nearby signals yet. When something is active, context will show up here.",
                 patternTitle: "What has appeared with this before",
@@ -49,16 +49,16 @@ private struct CurrentSymptomsCopy {
                 followUpSyncingBody: "Follow-up settings are still loading.",
                 viewAllDriversTitle: "View \(vocabulary.allDriversLabel)",
                 openAllDriversTitle: "Open \(vocabulary.allDriversLabel)",
-                editDetailsTitle: "Edit symptom details"
+                editDetailsTitle: "Add or edit details"
             )
         case .mystical:
             return CurrentSymptomsCopy(
                 pageTitle: vocabulary.currentSymptomsLabel,
-                subtitle: "Recent logs and current conditions, in one place",
+                subtitle: "See what’s active and update it as things change.",
                 activeNowTitle: "Active Right Now",
                 logSymptomTitle: "Log symptom",
                 logSymptomsTitle: "Log symptoms",
-                timelineTitle: "Timeline",
+                timelineTitle: "Symptom history",
                 contributingTitle: "What may be shaping this",
                 contributingEmptyBody: "No nearby signals yet. When something is active, context will show up here.",
                 patternTitle: "What has echoed with this before",
@@ -75,7 +75,7 @@ private struct CurrentSymptomsCopy {
                 followUpSyncingBody: "Check-in settings are still loading.",
                 viewAllDriversTitle: "View \(vocabulary.allDriversLabel)",
                 openAllDriversTitle: "Open \(vocabulary.allDriversLabel)",
-                editDetailsTitle: "Edit symptom details"
+                editDetailsTitle: "Add or edit details"
             )
         }
     }
@@ -1056,9 +1056,9 @@ struct CurrentSymptomsView: View {
                     indicatorChip("Notes \(item.noteCount)", tint: Color(red: 0.35, green: 0.58, blue: 0.92))
                 }
                 if !item.likelyDrivers.isEmpty {
-                    indicatorChip("\(item.likelyDrivers.count) drivers", tint: Color(red: 0.87, green: 0.63, blue: 0.27))
+                    indicatorChip(possibleInfluenceLabel(for: item.likelyDrivers.count), tint: Color(red: 0.87, green: 0.63, blue: 0.27))
                 }
-                if let badge = item.currentContextBadge, !badge.isEmpty {
+                if let badge = item.currentContextBadge, !badge.isEmpty, currentState != .new {
                     indicatorChip(badge, tint: Color(red: 0.43, green: 0.76, blue: 0.63))
                 }
             }
@@ -1070,7 +1070,7 @@ struct CurrentSymptomsView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                 actionButton(title: "Still active", state: .ongoing, item: item)
                 actionButton(title: "Improving", state: .improving, item: item)
-                actionButton(title: "Worse", state: .worse, item: item)
+                actionButton(title: "Getting worse", state: .worse, item: item)
                 actionButton(title: "Resolved", state: .resolved, item: item)
             }
 
@@ -1428,6 +1428,10 @@ struct CurrentSymptomsView: View {
                     .stroke(tint.opacity(0.7), lineWidth: 1)
             )
             .clipShape(Capsule())
+    }
+
+    private func possibleInfluenceLabel(for count: Int) -> String {
+        count == 1 ? "1 possible influence" : "\(count) possible influences"
     }
 
     private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -1895,7 +1899,7 @@ struct CurrentSymptomsTimelineView: View {
             )
             .ignoresSafeArea()
         )
-        .navigationTitle("Timeline")
+        .navigationTitle("Symptom history")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             appLog("[CurrentSymptoms] timeline_open")

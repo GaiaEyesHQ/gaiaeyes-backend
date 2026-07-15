@@ -36,6 +36,14 @@ def _join_labels(labels: Sequence[str]) -> str:
     return f"{', '.join(values[:-1])}, and {values[-1]}"
 
 
+def _join_symptom_labels(labels: Sequence[str]) -> str:
+    values = [item for item in labels if item]
+    if not values:
+        return ""
+    sentence_values = [values[0], *[f"{item[:1].lower()}{item[1:]}" for item in values[1:]]]
+    return _join_labels(sentence_values)
+
+
 def _header_summary(
     *,
     active_labels: Sequence[str],
@@ -47,15 +55,17 @@ def _header_summary(
         return "Nothing looks active right now. Log anything new here if it starts."
 
     active_count = len(active_labels)
-    summary = f"{active_count} symptom{' is' if active_count == 1 else 's are'} active right now."
+    summary = f"You have {active_count} active symptom{'s' if active_count != 1 else ''}."
     if worse_count > 0:
-        summary += " At least one looks worse and is worth another check-in."
+        summary += " At least one is getting worse and may be worth updating."
     elif contributing_driver_labels:
-        summary += f" {_join_labels(contributing_driver_labels[:2])} look closest to this window."
+        nearby_labels = list(contributing_driver_labels[:2])
+        nearby_subject = _join_labels(nearby_labels)
+        summary += f" {nearby_subject} {'is' if len(nearby_labels) == 1 else 'are'} also active right now."
     elif pattern_texts:
-        summary += " Your log also has a repeat pattern worth watching here."
+        summary += " One of your past patterns may be worth comparing here."
     else:
-        summary += " Keep the active list current as things shift."
+        summary += " Update the list as things change."
     return summary
 
 
@@ -70,22 +80,22 @@ def _active_summary(
         return "No symptoms are active right now."
 
     preview_labels = list(active_labels)[:2]
-    label_preview = _join_labels(preview_labels)
+    label_preview = _join_symptom_labels(preview_labels)
     label_subject = label_preview or "The active symptoms"
     subject_plural = len(preview_labels) != 1
     if worse_count > 0:
-        verb = "need" if subject_plural else "needs"
-        pronoun = "they are" if subject_plural else "it is"
-        summary = f"{label_subject} {verb} a fresh update if {pronoun} still ramping up."
+        summary = f"{label_subject} {'are' if subject_plural else 'is'} active, and at least one is getting worse."
     elif improving_count > 0:
-        verb = "may be" if subject_plural else "may be"
-        summary = f"{label_subject} {verb} settling, so it helps to mark what is improving."
+        summary = f"{label_subject} {'are' if subject_plural else 'is'} active, and at least one is improving."
     else:
-        verb = "are" if subject_plural else "is"
-        summary = f"{label_subject} {verb} the main {'items' if subject_plural else 'item'} to keep updated right now."
+        summary = f"{label_subject} {'are' if subject_plural else 'is'} active."
 
     if follow_up_enabled:
-        summary += " Follow-up check-ins can keep that timeline current."
+        summary += (
+            " Update them if they improve, worsen, or resolve."
+            if subject_plural
+            else " Update it if it improves, worsens, or resolves."
+        )
     return summary
 
 

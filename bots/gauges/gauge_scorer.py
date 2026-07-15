@@ -78,7 +78,14 @@ _RECENT_MATCH_WINDOW_HOURS = 3.0
 
 _SYMPTOM_GAUGE_EFFECTS: Dict[str, Dict[str, float]] = {
     "HEADACHE": {"pain": 1.0, "focus": 0.55, "mood": 0.2, "health_status": 0.55},
-    "MIGRAINE": {"pain": 1.0, "focus": 0.65, "mood": 0.25, "health_status": 0.65},
+    "MIGRAINE": {
+        "pain": 1.0,
+        "focus": 0.65,
+        "stamina": 0.4,
+        "energy": 0.45,
+        "mood": 0.25,
+        "health_status": 0.65,
+    },
     "PAIN": {"pain": 1.0, "stamina": 0.5, "energy": 0.25, "health_status": 0.55},
     "NERVE_PAIN": {"pain": 1.0, "stamina": 0.55, "energy": 0.3, "health_status": 0.55},
     "JOINT_PAIN": {"pain": 1.0, "stamina": 0.45, "health_status": 0.45},

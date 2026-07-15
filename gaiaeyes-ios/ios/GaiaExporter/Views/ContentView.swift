@@ -11561,65 +11561,31 @@ struct ContentView: View {
                 return output
             }
 
-            private func symptomMatches(label: String, candidates: [String]) -> Bool {
-                let normalizedLabel = normalizedPopupToken(label)
-                guard !normalizedLabel.isEmpty else { return false }
-                return candidates.contains { candidate in
-                    let normalizedCandidate = normalizedPopupToken(candidate)
-                    guard !normalizedCandidate.isEmpty else { return false }
-                    if normalizedLabel == normalizedCandidate {
-                        return true
-                    }
-                    if normalizedCandidate == "pain" {
-                        return normalizedLabel.contains("pain")
-                    }
-                    return normalizedLabel.contains(normalizedCandidate)
-                }
-            }
-
             func gaugePopupRelevantSymptoms(for gaugeKey: String) -> [String] {
                 guard let currentSymptomsSnapshot else { return [] }
-                let activeLabels = currentSymptomsSnapshot.items.map { translated($0.label) ?? $0.label }
-                let relevantLabels: [String]
-                switch normalizedGaugePopupKey(gaugeKey) {
-                case "pain":
-                    relevantLabels = activeLabels.filter {
-                        symptomMatches(
-                            label: $0,
-                            candidates: ["headache", "sinus pressure", "joint pain", "muscle pain", "nerve pain", "stiffness"]
-                        )
-                    }
-                case "focus":
-                    relevantLabels = activeLabels.filter {
-                        symptomMatches(
-                            label: $0,
-                            candidates: ["brain fog", "headache", "fatigue", "sinus pressure"]
-                        )
-                    }
-                case "energy":
-                    relevantLabels = activeLabels.filter {
-                        symptomMatches(label: $0, candidates: ["fatigue", "drained", "brain fog"])
-                    }
+                let normalizedGaugeKey = normalizedGaugePopupKey(gaugeKey)
+                if normalizedGaugeKey == "healthStatus" {
+                    let activeLabels = currentSymptomsSnapshot.items.map { translated($0.label) ?? $0.label }
+                    return Array(dedupedSymptomLabels(activeLabels).prefix(3))
+                }
+
+                let backendGaugeKey: String
+                switch normalizedGaugeKey {
+                case "pain", "focus", "energy", "sleep", "mood", "heart":
+                    backendGaugeKey = normalizedGaugeKey
                 case "recoveryLoad":
-                    relevantLabels = activeLabels.filter {
-                        symptomMatches(label: $0, candidates: ["fatigue", "drained", "brain fog", "pain"])
-                    }
-                case "sleep":
-                    relevantLabels = activeLabels.filter {
-                        symptomMatches(label: $0, candidates: ["fatigue", "drained", "restless"])
-                    }
-                case "mood":
-                    relevantLabels = activeLabels.filter {
-                        symptomMatches(label: $0, candidates: ["anxious", "restless", "drained"])
-                    }
-                case "heart":
-                    relevantLabels = activeLabels.filter {
-                        symptomMatches(label: $0, candidates: ["palpitations", "anxious", "fatigue"])
-                    }
-                case "healthStatus":
-                    relevantLabels = activeLabels
+                    backendGaugeKey = "stamina"
                 default:
-                    relevantLabels = []
+                    return []
+                }
+
+                let normalizedBackendGaugeKey = normalizedPopupToken(backendGaugeKey)
+                let relevantLabels = currentSymptomsSnapshot.items.compactMap { item -> String? in
+                    let matchesGauge = item.gaugeKeys.contains {
+                        normalizedPopupToken($0) == normalizedBackendGaugeKey
+                    }
+                    guard matchesGauge else { return nil }
+                    return translated(item.label) ?? item.label
                 }
                 return Array(dedupedSymptomLabels(relevantLabels).prefix(3))
             }

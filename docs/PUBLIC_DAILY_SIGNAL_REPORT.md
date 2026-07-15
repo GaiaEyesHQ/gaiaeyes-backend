@@ -11,13 +11,17 @@ This pipeline builds a broad public report. It does not read user locations, sym
 
 The public name is `Gaia Eyes Daily Signal Report`. Existing `earthscope` code, API fields, and publishing workflows remain unchanged during shadow review.
 
+## Publishing lanes
+
+This report is additive. Promotion must create a separate Regional Watch post and schedule; it must not replace, rename, or absorb the existing daily space-weather Signal Watch post. The two public posts should run several hours apart so each has its own audience and distribution window. Exact timing remains a review decision and is not configured by the shadow runner.
+
 ## Inputs
 
 - 120 fixed public anchors: three anchors across each of 40 broad regions.
 - OpenWeather current weather and air pollution.
 - Google Pollen when configured and supported.
 - `marts.space_weather_daily`.
-- `marts.schumann_daily_v2` or `marts.schumann_daily`.
+- Latest usable `marts.schumann_daily_v2` harmonics, falling back to the latest valid station-average from `marts.schumann_daily`.
 - `marts.ulf_context_5m`.
 - `ext.global_hazards`, which already combines GDACS/USGS-style hazard ingestion.
 
@@ -47,4 +51,4 @@ The writer uses a strict JSON schema and validates platform word ranges. A draft
 
 ## Promotion boundary
 
-Do not connect this report to `content.daily_posts`, `/v1/features/today`, the website, reel rendering, or Meta publishing until at least seven shadow reports have been reviewed. Promotion should preserve the existing caption and section fields while adding the structured report under `metrics_json.sections.daily_signal_report`.
+Do not connect this report to `content.daily_posts`, `/v1/features/today`, the website, reel rendering, or Meta publishing until at least seven shadow reports have been reviewed. Promotion must use a new post identity and schedule, preserve the existing space-weather Daily Signal post unchanged, and keep any structured report data separate from the current EarthScope fields.

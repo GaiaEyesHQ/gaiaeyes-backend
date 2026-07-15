@@ -897,12 +897,12 @@ _EFFECT_BUCKET_QUICK_LOG = {
 
 _SYMPTOM_CODES_BY_GAUGE = {
     "pain": {"HEADACHE", "MIGRAINE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY", "PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS"},
-    "focus": {"BRAIN_FOG", "FOCUS_DRIFT", "HEADACHE", "DRAINED", "FATIGUE"},
+    "focus": {"BRAIN_FOG", "FOCUS_DRIFT", "HEADACHE", "MIGRAINE", "LIGHT_SENSITIVITY", "DRAINED", "FATIGUE"},
     "heart": {"PALPITATIONS", "CHEST_TIGHTNESS", "RESP_IRRITATION", "ANXIOUS", "WIRED"},
-    "stamina": {"FATIGUE", "DRAINED", "PAIN", "JOINT_PAIN", "STIFFNESS", "RESTLESS_SLEEP", "INSOMNIA"},
-    "energy": {"FATIGUE", "DRAINED", "BRAIN_FOG", "RESTLESS_SLEEP", "INSOMNIA", "WIRED"},
+    "stamina": {"FATIGUE", "DRAINED", "MIGRAINE", "PAIN", "JOINT_PAIN", "STIFFNESS", "RESTLESS_SLEEP", "INSOMNIA"},
+    "energy": {"FATIGUE", "DRAINED", "MIGRAINE", "BRAIN_FOG", "RESTLESS_SLEEP", "INSOMNIA", "WIRED"},
     "sleep": {"RESTLESS_SLEEP", "INSOMNIA", "WIRED", "ANXIOUS", "DRAINED"},
-    "mood": {"ANXIOUS", "WIRED", "DRAINED"},
+    "mood": {"ANXIOUS", "WIRED", "DRAINED", "MIGRAINE", "LIGHT_SENSITIVITY"},
     "health_status": {"HEADACHE", "MIGRAINE", "SINUS_PRESSURE", "PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS", "FATIGUE", "DRAINED", "BRAIN_FOG", "RESTLESS_SLEEP", "INSOMNIA", "ANXIOUS", "PALPITATIONS", "RESP_IRRITATION"},
 }
 
@@ -1134,7 +1134,7 @@ def _matching_symptom_rows(gauge_key: str, symptoms: Optional[Dict[str, Any]]) -
         row for row in rows
         if str(row.get("symptom_code") or "").strip().upper() in allowed
     ]
-    return filtered or rows
+    return filtered
 
 
 def _matching_exposure_rows(gauge_key: str, exposures: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:

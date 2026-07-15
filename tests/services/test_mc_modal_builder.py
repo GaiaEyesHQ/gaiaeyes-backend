@@ -226,6 +226,33 @@ def test_energy_modal_uses_daily_checkin_and_dedupes_effects() -> None:
     assert energy["voice_semantic"]["interpretation"]["action_lines"] == energy["suggested_actions"]
 
 
+def test_migraine_appears_only_in_gauge_modals_it_scores() -> None:
+    gauge_keys = ["pain", "focus", "stamina", "energy", "sleep", "mood"]
+    payload = build_modal_models(
+        day=date(2026, 7, 15),
+        gauges={key: 60 for key in gauge_keys},
+        gauges_meta={key: {"zone": "elevated", "label": "Watch"} for key in gauge_keys},
+        gauge_labels={
+            "pain": "Pain",
+            "focus": "Focus",
+            "stamina": "Recovery Load",
+            "energy": "Energy",
+            "sleep": "Sleep",
+            "mood": "Mood",
+        },
+        drivers=[],
+        symptoms={
+            "top_symptoms": [
+                {"symptom_code": "MIGRAINE", "events": 1, "max_severity": 5},
+            ]
+        },
+    )
+
+    for key in ["pain", "focus", "stamina", "energy", "mood"]:
+        assert "migraine" in payload["gauges"][key]["causal_callout"].lower()
+    assert payload["gauges"]["sleep"]["causal_callout"] is None
+
+
 def test_low_driver_modal_includes_short_semantic_summary() -> None:
     payload = build_modal_models(
         day=date(2026, 3, 27),

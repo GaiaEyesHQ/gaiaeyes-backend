@@ -210,6 +210,53 @@ def _fetch_all(conn: psycopg.Connection, query: str) -> list[dict[str, Any]]:
         return []
 
 
+def _schumann_harmonics_available(row: Mapping[str, Any] | None) -> bool:
+    return bool(row) and any(row.get(key) is not None for key in ("f0", "f1", "f2", "f3", "f4", "f5"))
+
+
+def _fetch_schumann_context(conn: psycopg.Connection) -> dict[str, Any]:
+    v2 = _fetch_one(
+        conn,
+        (
+            """
+            select day, generated_at, f0, f1, f2, f3, f4, f5, combined_f1,
+                   'marts.schumann_daily_v2' as source
+            from marts.schumann_daily_v2
+            where coalesce(f0, f1, f2, f3, f4, f5) is not null
+            order by day desc
+            limit 1
+            """,
+        ),
+    )
+    if _schumann_harmonics_available(v2):
+        return v2
+
+    daily = _fetch_one(
+        conn,
+        (
+            """
+            select day,
+                   (day::timestamp at time zone 'UTC') as generated_at,
+                   avg(f0_avg_hz)::float as f0,
+                   avg(f1_avg_hz)::float as f1,
+                   avg(f2_avg_hz)::float as f2,
+                   avg(f3_avg_hz)::float as f3,
+                   avg(f4_avg_hz)::float as f4,
+                   avg(f5_avg_hz)::float as f5,
+                   null::float as combined_f1,
+                   array_agg(station_id order by station_id) as stations_used,
+                   'marts.schumann_daily' as source
+            from marts.schumann_daily
+            where coalesce(f0_avg_hz, f1_avg_hz, f2_avg_hz, f3_avg_hz, f4_avg_hz, f5_avg_hz) is not null
+            group by day
+            order by day desc
+            limit 1
+            """,
+        ),
+    )
+    return daily if _schumann_harmonics_available(daily) else {}
+
+
 def collect_existing_public_context(db_url: str) -> dict[str, Any]:
     with psycopg.connect(db_url, row_factory=dict_row, autocommit=True) as conn:
         space = _fetch_one(
@@ -221,13 +268,7 @@ def collect_existing_public_context(db_url: str) -> dict[str, Any]:
                 """,
             ),
         )
-        schumann = _fetch_one(
-            conn,
-            (
-                "select * from marts.schumann_daily_v2 order by day desc limit 1",
-                "select * from marts.schumann_daily order by day desc limit 1",
-            ),
-        )
+        schumann = _fetch_schumann_context(conn)
         ulf = _fetch_one(
             conn,
             (

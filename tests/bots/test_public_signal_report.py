@@ -143,6 +143,47 @@ def test_collector_parses_provider_rows_and_previous_day_deltas(monkeypatch) -> 
     assert row["provider_status"] == {"weather": True, "air": True, "pollen": None}
 
 
+def test_schumann_context_falls_back_when_v2_harmonics_are_null(monkeypatch) -> None:
+    rows = iter(
+        [
+            {"day": "2026-07-15", "f0": None, "f1": None, "f2": None},
+            {
+                "day": "2026-07-15",
+                "f0": 7.37,
+                "f1": 7.37,
+                "f2": 14.38,
+                "stations_used": ["cumiana", "tomsk"],
+                "source": "marts.schumann_daily",
+            },
+        ]
+    )
+    monkeypatch.setattr(collector, "_fetch_one", lambda _conn, _queries: next(rows))
+
+    result = collector._fetch_schumann_context(object())
+
+    assert result["f0"] == 7.37
+    assert result["stations_used"] == ["cumiana", "tomsk"]
+    assert result["source"] == "marts.schumann_daily"
+
+
+def test_writer_marks_normalized_schumann_facts_available() -> None:
+    context = _context()
+    context["schumann"] = {
+        "day": "2026-07-15",
+        "f0": 7.37,
+        "f1": 7.37,
+        "f2": 14.38,
+        "stations_used": ["cumiana", "tomsk"],
+        "source": "marts.schumann_daily",
+    }
+    report = build_daily_signal_report(day="2026-07-15", observations=[], context=context)
+
+    earth_facts = writer.writer_payload(report)["facts"]["earth_signal"]
+
+    assert earth_facts["schumann_available"] is True
+    assert earth_facts["schumann_values"]["f0"] == 7.37
+
+
 def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None:
     captured: dict = {}
     output = {
@@ -186,6 +227,7 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
     assert "Facebook must also open" in captured["messages"][0]["content"]
     assert "no CTA, advice, wellness tip, reflection prompt" in captured["messages"][0]["content"]
     assert "includes an explicit health_context" in captured["messages"][0]["content"]
+    assert "not an activity or intensity score" in captured["messages"][0]["content"]
     assert captured["response_format"]["type"] == "json_schema"
     assert captured["response_format"]["json_schema"]["strict"] is True
     supplied_facts = json.loads(captured["messages"][1]["content"])["facts"]

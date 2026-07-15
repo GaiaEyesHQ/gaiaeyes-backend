@@ -39,9 +39,13 @@ def test_build_current_symptoms_semantic_with_active_items() -> None:
     rendered = payload.to_dict()
     assert rendered["kind"] == "current_symptoms_snapshot"
     assert rendered["facts"]["active_labels"] == ["Headache", "Fatigue"]
-    assert "2 symptoms are active right now." in rendered["interpretation"]["header_summary"]
-    assert "Pressure Swing" in rendered["interpretation"]["header_summary"] or "one looks worse" in rendered["interpretation"]["header_summary"]
-    assert "Headache and Fatigue" in rendered["interpretation"]["active_summary"]
+    assert rendered["interpretation"]["header_summary"] == (
+        "You have 2 active symptoms. At least one is getting worse and may be worth updating."
+    )
+    assert rendered["interpretation"]["active_summary"] == (
+        "Headache and fatigue are active, and at least one is getting worse. "
+        "Update them if they improve, worsen, or resolve."
+    )
     assert rendered["guardrails"]["max_urgency"] == "watch"
     assert rendered["guardrails"]["claim_strength"] == "may_notice"
 

@@ -172,6 +172,7 @@ def generate_platform_copy(
         "Regional health language may say 'may', 'can', or 'some people notice' and must stay within each region's supplied health_context. "
         "Choose only the most relevant one or two supplied health effects per regional paragraph; do not reproduce symptom lists. "
         "Earth Signal may describe possible human effects with 'may', 'can', or 'some people notice' only when its supplied measurement is marked usable and earth_signal includes an explicit health_context. Without that list, describe only the measured field pattern. If ULF is unusable, do not interpret its class, numbers, or human effects. "
+        "Schumann harmonic values are frequency measurements, not an activity or intensity score. Do not call them steady, elevated, active, calm, or unusual unless comparative evidence is explicitly supplied. "
         "Do not append a disclaimer, caveat paragraph, or research defense to Earth Signal. "
         "Use recovery or recoup language only when space_watch.recovery_frame is true. When it is false, describe current versus daily activity without a recovery claim. "
         "When Earth measurements are unavailable, state that once in plain English without exposing internal confidence-threshold language. "

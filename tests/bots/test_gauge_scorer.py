@@ -348,6 +348,21 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertIn("pain", summary["recent_matching_gauges"])
         self.assertAlmostEqual(summary["health_status_symptom_boost"], 10.2, places=2)
 
+    def test_migraine_affects_capacity_without_automatically_scoring_sleep(self) -> None:
+        now = datetime.now(timezone.utc)
+        summary = _build_symptom_signal_summary(
+            [
+                {"symptom_code": "MIGRAINE", "severity": 5, "ts_utc": now},
+            ]
+        )
+
+        self.assertEqual(summary["gauge_boosts"]["pain"], 7.0)
+        self.assertEqual(summary["gauge_boosts"]["focus"], 4.55)
+        self.assertEqual(summary["gauge_boosts"]["stamina"], 2.8)
+        self.assertEqual(summary["gauge_boosts"]["energy"], 3.15)
+        self.assertEqual(summary["gauge_boosts"]["mood"], 1.75)
+        self.assertNotIn("sleep", summary["gauge_boosts"])
+
     def test_symptom_signal_summary_respects_current_state_multipliers(self) -> None:
         now = datetime.now(timezone.utc)
         summary = _build_symptom_signal_summary(
