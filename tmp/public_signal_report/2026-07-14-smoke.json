@@ -1,0 +1,1476 @@
+{
+  "auto_publish": false,
+  "report": {
+    "report_version": "public-daily-signal-report.v1",
+    "day": "2026-07-14",
+    "public_name": "Gaia Eyes Daily Signal Report",
+    "section_order": [
+      "regional_watch",
+      "space_watch",
+      "earth_signal",
+      "major_events"
+    ],
+    "headline": null,
+    "quick_read": null,
+    "regional_watch": {
+      "items": [],
+      "selection_method": "At least two fixed anchors must support the same driver."
+    },
+    "space_watch": {
+      "signal_strength": "low",
+      "recovery_frame": true,
+      "metrics": {
+        "kp_max": 3.0,
+        "bz_min": -4.96,
+        "solar_wind_kms": 450.24368932038834,
+        "flares_count": 0.0,
+        "cmes_count": 0.0
+      },
+      "source_row": {
+        "day": "2026-07-15",
+        "kp_max": 3.0,
+        "bz_min": -4.96,
+        "sw_speed_avg": 450.24368932038834,
+        "row_count": 103,
+        "updated_at": "2026-07-15T01:48:10.382723+00:00",
+        "flares_count": 0,
+        "cmes_count": 0,
+        "aurora_hp_north_gw": 14.0,
+        "aurora_hp_south_gw": 15.0,
+        "xray_peak_flux_wm2": null,
+        "xray_max_class": null,
+        "sep_s_max": null,
+        "belts_flux_gt2mev_max": null,
+        "belts_risk_level": null,
+        "drap_absorption_polar_db": null,
+        "drap_absorption_midlat_db": null,
+        "sep_flux_gt10mev_max_pfu": null,
+        "now_ts": "2026-07-15T01:42:00+00:00",
+        "kp_now": 3.0,
+        "bz_now": -0.3,
+        "sw_speed_now": 474.0,
+        "wing_kp_max": null,
+        "ae_max": null,
+        "al_min": null,
+        "pc_max": null,
+        "sep_flux_10mev_max": null,
+        "cmes_earth_directed_count": null,
+        "cmes_max_speed_kms": null,
+        "sw_density_max_cm3": 16.01,
+        "r_scale_max": null,
+        "sw_speed_now_kms": 474.0,
+        "sw_density_now_cm3": 13.13,
+        "cmes_ed_24h": null
+      }
+    },
+    "earth_signal": {
+      "schumann": {
+        "day": "2026-07-15",
+        "generated_at": "2026-07-15T01:48:54.600115+00:00",
+        "f0": null,
+        "f1": null,
+        "f2": null,
+        "f3": null,
+        "f4": null,
+        "f5": null,
+        "combined_f1": null
+      },
+      "ulf": {
+        "ts_utc": "2026-07-15T01:40:00+00:00",
+        "stations_used": [
+          "BOU",
+          "CMO"
+        ],
+        "regional_intensity": 80.77,
+        "regional_coherence": 0.584,
+        "regional_persistence": 70.02,
+        "context_class": "Elevated (coherent)",
+        "confidence_score": 0.584,
+        "quality_flags": []
+      },
+      "ulf_usable": true,
+      "health_language": "Possible effects may use 'may', 'can', or 'some people notice' without an appended disclaimer."
+    },
+    "major_events": {
+      "items": [
+        {
+          "kind": "wildfire",
+          "title": "Orange forest fire notification in France",
+          "location": "France",
+          "severity": "orange",
+          "started_at": "2026-07-14T03:00:43Z",
+          "source": "gdacs",
+          "url": null,
+          "selection_score": 3
+        },
+        {
+          "kind": "quake",
+          "title": "34 km WSW of Sarangani, Philippines",
+          "location": null,
+          "severity": "yellow",
+          "started_at": "2026-07-14T15:49:41Z",
+          "source": "media",
+          "url": null,
+          "selection_score": 2
+        }
+      ],
+      "selection_method": "Fresh yellow-or-higher GDACS/USGS events, deduplicated and capped."
+    },
+    "platform_copy": {
+      "facebook": null,
+      "instagram": null,
+      "voiceover": null,
+      "reel_story": null
+    },
+    "coverage": {
+      "expected_anchors": 120,
+      "observed_anchors": 6,
+      "weather_anchors": 6,
+      "air_anchors": 6,
+      "pollen_anchors": 0,
+      "regions_observed": 2,
+      "weather_ratio": 0.05,
+      "public_global_claims_allowed": false,
+      "provider_failures": {
+        "pollen": 6
+      }
+    },
+    "sources": [
+      "OpenWeather current weather",
+      "OpenWeather air pollution",
+      "Google Pollen when available",
+      "marts.space_weather_daily",
+      "marts.schumann_daily_v2 or marts.schumann_daily",
+      "marts.ulf_context_5m",
+      "ext.global_hazards"
+    ],
+    "generated_at_utc": "2026-07-15T01:48:56Z",
+    "auto_publish": false
+  },
+  "copy_runtime": {
+    "status": "not_generated",
+    "reason": "--no-writer"
+  },
+  "review_inputs": {
+    "observation_count": 6,
+    "observations": [
+      {
+        "anchor_id": "us_new_england:boston",
+        "region_key": "us_new_england",
+        "region_label": "New England",
+        "macro_region": "North America",
+        "location_label": "Boston",
+        "lat": 42.36,
+        "lon": -71.06,
+        "observed_at": "2026-07-15T01:42:01Z",
+        "weather": {
+          "temp_c": 28.04,
+          "feels_like_c": 30.61,
+          "temp_delta_24h_c": null,
+          "pressure_hpa": 1008.0,
+          "pressure_delta_24h_hpa": null,
+          "humidity_pct": 69.0,
+          "wind_speed_mps": 3.13,
+          "wind_gust_mps": 5.81,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 11.6,
+          "pm10": 20.93,
+          "o3": 121.27
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": false
+        }
+      },
+      {
+        "anchor_id": "us_new_england:portland_maine",
+        "region_key": "us_new_england",
+        "region_label": "New England",
+        "macro_region": "North America",
+        "location_label": "Portland Maine",
+        "lat": 43.66,
+        "lon": -70.26,
+        "observed_at": "2026-07-15T01:47:57Z",
+        "weather": {
+          "temp_c": 24.64,
+          "feels_like_c": 25.38,
+          "temp_delta_24h_c": null,
+          "pressure_hpa": 1005.0,
+          "pressure_delta_24h_hpa": null,
+          "humidity_pct": 85.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 1.79,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 13.53,
+          "pm10": 14.09,
+          "o3": 106.42
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": false
+        }
+      },
+      {
+        "anchor_id": "us_new_england:burlington",
+        "region_key": "us_new_england",
+        "region_label": "New England",
+        "macro_region": "North America",
+        "location_label": "Burlington",
+        "lat": 44.48,
+        "lon": -73.21,
+        "observed_at": "2026-07-15T01:44:08Z",
+        "weather": {
+          "temp_c": 26.65,
+          "feels_like_c": 26.65,
+          "temp_delta_24h_c": null,
+          "pressure_hpa": 1007.0,
+          "pressure_delta_24h_hpa": null,
+          "humidity_pct": 80.0,
+          "wind_speed_mps": 3.13,
+          "wind_gust_mps": 4.31,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 12.78,
+          "pm10": 13.18,
+          "o3": 111.31
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": false
+        }
+      },
+      {
+        "anchor_id": "us_mid_atlantic:new_york",
+        "region_key": "us_mid_atlantic",
+        "region_label": "Mid-Atlantic US",
+        "macro_region": "North America",
+        "location_label": "New York",
+        "lat": 40.71,
+        "lon": -74.01,
+        "observed_at": "2026-07-15T01:35:39Z",
+        "weather": {
+          "temp_c": 30.44,
+          "feels_like_c": 33.05,
+          "temp_delta_24h_c": null,
+          "pressure_hpa": 1012.0,
+          "pressure_delta_24h_hpa": null,
+          "humidity_pct": 57.0,
+          "wind_speed_mps": 4.92,
+          "wind_gust_mps": 8.94,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 6.81,
+          "pm10": 10.41,
+          "o3": 108.49
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": false
+        }
+      },
+      {
+        "anchor_id": "us_mid_atlantic:philadelphia",
+        "region_key": "us_mid_atlantic",
+        "region_label": "Mid-Atlantic US",
+        "macro_region": "North America",
+        "location_label": "Philadelphia",
+        "lat": 39.95,
+        "lon": -75.17,
+        "observed_at": "2026-07-15T01:47:57Z",
+        "weather": {
+          "temp_c": 27.96,
+          "feels_like_c": 31.13,
+          "temp_delta_24h_c": null,
+          "pressure_hpa": 1015.0,
+          "pressure_delta_24h_hpa": null,
+          "humidity_pct": 74.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 4.02,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 3.64,
+          "pm10": 6.97,
+          "o3": 87.98
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": false
+        }
+      },
+      {
+        "anchor_id": "us_mid_atlantic:pittsburgh",
+        "region_key": "us_mid_atlantic",
+        "region_label": "Mid-Atlantic US",
+        "macro_region": "North America",
+        "location_label": "Pittsburgh",
+        "lat": 40.44,
+        "lon": -79.99,
+        "observed_at": "2026-07-15T01:47:57Z",
+        "weather": {
+          "temp_c": 26.04,
+          "feels_like_c": 26.04,
+          "temp_delta_24h_c": null,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": null,
+          "humidity_pct": 77.0,
+          "wind_speed_mps": 1.65,
+          "wind_gust_mps": 2.54,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 10.53,
+          "pm10": 11.8,
+          "o3": 46.94
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": false
+        }
+      }
+    ],
+    "context": {
+      "space": {
+        "day": "2026-07-15",
+        "kp_max": 3.0,
+        "bz_min": -4.96,
+        "sw_speed_avg": 450.24368932038834,
+        "row_count": 103,
+        "updated_at": "2026-07-15T01:48:10.382723+00:00",
+        "flares_count": 0,
+        "cmes_count": 0,
+        "aurora_hp_north_gw": 14.0,
+        "aurora_hp_south_gw": 15.0,
+        "xray_peak_flux_wm2": null,
+        "xray_max_class": null,
+        "sep_s_max": null,
+        "belts_flux_gt2mev_max": null,
+        "belts_risk_level": null,
+        "drap_absorption_polar_db": null,
+        "drap_absorption_midlat_db": null,
+        "sep_flux_gt10mev_max_pfu": null,
+        "now_ts": "2026-07-15T01:42:00+00:00",
+        "kp_now": 3.0,
+        "bz_now": -0.3,
+        "sw_speed_now": 474.0,
+        "wing_kp_max": null,
+        "ae_max": null,
+        "al_min": null,
+        "pc_max": null,
+        "sep_flux_10mev_max": null,
+        "cmes_earth_directed_count": null,
+        "cmes_max_speed_kms": null,
+        "sw_density_max_cm3": 16.01,
+        "r_scale_max": null,
+        "sw_speed_now_kms": 474.0,
+        "sw_density_now_cm3": 13.13,
+        "cmes_ed_24h": null
+      },
+      "schumann": {
+        "day": "2026-07-15",
+        "generated_at": "2026-07-15T01:48:54.600115+00:00",
+        "f0": null,
+        "f1": null,
+        "f2": null,
+        "f3": null,
+        "f4": null,
+        "f5": null,
+        "combined_f1": null
+      },
+      "ulf": {
+        "ts_utc": "2026-07-15T01:40:00+00:00",
+        "stations_used": [
+          "BOU",
+          "CMO"
+        ],
+        "regional_intensity": 80.77,
+        "regional_coherence": 0.584,
+        "regional_persistence": 70.02,
+        "context_class": "Elevated (coherent)",
+        "confidence_score": 0.584,
+        "quality_flags": []
+      },
+      "hazards": [
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 5.5M, Depth:574.304km) in Fiji 14/07/2026 22:50 UTC, Few people affected in 100km.",
+          "location": "Fiji 14/07/2026 22:50 UTC, Few people affected in 100km.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551894",
+            "ts": "2026-07-14T23:05:13Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 10:50:12 PM, an earthquake occurred in Fiji potentially affecting Few people affected in 100km. The earthquake had Magnitude 5.5M, Depth:574.304km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551894"
+            ],
+            "title": "Green earthquake (Magnitude 5.5M, Depth:574.304km) in Fiji 14/07/2026 22:50 UTC, Few people affected in 100km.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 10:50:12 PM, an earthquake occurred in Fiji potentially affecting Few people affected in 100km. The earthquake had Magnitude 5.5M, Depth:574.304km.",
+            "location": "Fiji 14/07/2026 22:50 UTC, Few people affected in 100km.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-15T00:09:02.770233+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "Fiji region",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0hk",
+            "ts": "2026-07-14T22:50:12Z",
+            "lat": -20.748,
+            "lon": -178.5092,
+            "mag": 5.5,
+            "body": "Fiji region",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0hk"
+            ],
+            "title": "Fiji region",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-15T00:09:02.770233+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "cyclone",
+          "title": "Green notification for tropical cyclone FIVE-E-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+          "location": "Tropical Storm).",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "TC1001282",
+            "ts": "2026-07-14T21:06:26Z",
+            "lat": null,
+            "lon": null,
+            "body": "From 14/07/2026 to 14/07/2026, a Tropical Depression (maximum wind speed of 157 km/h) FIVE-E-26 was active in EastPacific. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (0 in tropical storm).",
+            "type": "cyclone",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001282"
+            ],
+            "title": "Green notification for tropical cyclone FIVE-E-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+            "source": "gdacs",
+            "details": "From 14/07/2026 to 14/07/2026, a Tropical Depression (maximum wind speed of 157 km/h) FIVE-E-26 was active in EastPacific. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (0 in tropical storm).",
+            "location": "Tropical Storm).",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T22:12:05.653903+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "90 km SSE of False Pass, Alaska",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0fu",
+            "ts": "2026-07-14T18:51:07Z",
+            "lat": 54.1759,
+            "lon": -162.6381,
+            "mag": 5.4,
+            "body": "90 km SSE of False Pass, Alaska",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0fu"
+            ],
+            "title": "90 km SSE of False Pass, Alaska",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T20:13:56.509993+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 6.2M, Depth:67.854km) in Philippines 14/07/2026 15:49 UTC, 30 thousand in MMI VI.",
+          "location": "Philippines 14/07/2026 15:49 UTC, 30 thousand in MMI VI.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551846",
+            "ts": "2026-07-14T16:07:21Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 3:49:41 PM, an earthquake occurred in Philippines potentially affecting 30 thousand in MMI VI. The earthquake had Magnitude 6.2M, Depth:67.854km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551846"
+            ],
+            "title": "Green earthquake (Magnitude 6.2M, Depth:67.854km) in Philippines 14/07/2026 15:49 UTC, 30 thousand in MMI VI.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 3:49:41 PM, an earthquake occurred in Philippines potentially affecting 30 thousand in MMI VI. The earthquake had Magnitude 6.2M, Depth:67.854km.",
+            "location": "Philippines 14/07/2026 15:49 UTC, 30 thousand in MMI VI.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-14T18:13:33.700286+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "34 km WSW of Sarangani, Philippines",
+          "location": null,
+          "severity": "yellow",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0d0",
+            "ts": "2026-07-14T15:49:41Z",
+            "lat": 5.3269,
+            "lon": 125.1655,
+            "mag": 6.2,
+            "body": "34 km WSW of Sarangani, Philippines",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0d0"
+            ],
+            "title": "34 km WSW of Sarangani, Philippines",
+            "source": "media",
+            "severity": "yellow"
+          },
+          "ingested_at": "2026-07-14T17:37:14.361790+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 6.2M, Depth:67.854km) in Philippines 14/07/2026 15:49 UTC, 130 thousand in MMI V.",
+          "location": "Philippines 14/07/2026 15:49 UTC, 130 thousand in MMI V.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551846",
+            "ts": "2026-07-14T16:07:21Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 3:49:41 PM, an earthquake occurred in Philippines potentially affecting 130 thousand in MMI V. The earthquake had Magnitude 6.2M, Depth:67.854km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551846"
+            ],
+            "title": "Green earthquake (Magnitude 6.2M, Depth:67.854km) in Philippines 14/07/2026 15:49 UTC, 130 thousand in MMI V.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 3:49:41 PM, an earthquake occurred in Philippines potentially affecting 130 thousand in MMI V. The earthquake had Magnitude 6.2M, Depth:67.854km.",
+            "location": "Philippines 14/07/2026 15:49 UTC, 130 thousand in MMI V.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-14T17:37:14.361790+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Australia",
+          "location": "Australia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029512",
+            "ts": "2026-07-14T15:10:09Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 05/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029512"
+            ],
+            "title": "Green forest fire notification in Australia",
+            "source": "gdacs",
+            "details": "On 05/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "location": "Australia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Australia",
+          "location": "Australia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029511",
+            "ts": "2026-07-14T15:07:42Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 06/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029511"
+            ],
+            "title": "Green forest fire notification in Australia",
+            "source": "gdacs",
+            "details": "On 06/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "location": "Australia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029504",
+            "ts": "2026-07-14T15:01:20Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029504"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029503",
+            "ts": "2026-07-14T15:00:58Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029503"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029502",
+            "ts": "2026-07-14T15:00:44Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029502"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in United States, Canada",
+          "location": "United States, Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029497",
+            "ts": "2026-07-14T03:01:58Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 09/07/2026, a forest fire started in United States, Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029497"
+            ],
+            "title": "Green forest fire notification in United States, Canada",
+            "source": "gdacs",
+            "details": "On 09/07/2026, a forest fire started in United States, Canada,  until 14/07/2026.",
+            "location": "United States, Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in United States, Canada",
+          "location": "United States, Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029508",
+            "ts": "2026-07-14T15:02:12Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in United States, Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029508"
+            ],
+            "title": "Green forest fire notification in United States, Canada",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in United States, Canada,  until 14/07/2026.",
+            "location": "United States, Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029509",
+            "ts": "2026-07-14T15:02:40Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029509"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029507",
+            "ts": "2026-07-14T15:02:04Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029507"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029510",
+            "ts": "2026-07-14T15:03:35Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 10/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029510"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 10/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Australia",
+          "location": "Australia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029506",
+            "ts": "2026-07-14T15:01:41Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029506"
+            ],
+            "title": "Green forest fire notification in Australia",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "location": "Australia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029505",
+            "ts": "2026-07-14T15:01:33Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029505"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029501",
+            "ts": "2026-07-14T15:00:32Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029501"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029500",
+            "ts": "2026-07-14T15:00:16Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029500"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "3 km NNW of Sugal, Philippines",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0bm",
+            "ts": "2026-07-14T13:15:08Z",
+            "lat": 5.69,
+            "lon": 125.4433,
+            "mag": 5.1,
+            "body": "3 km NNW of Sugal, Philippines",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0bm"
+            ],
+            "title": "3 km NNW of Sugal, Philippines",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T14:56:19.879122+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "drought",
+          "title": "Drought is on going in Kazakhstan",
+          "location": "Kazakhstan",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "DR1027491",
+            "ts": "2026-07-14T14:07:56Z",
+            "lat": null,
+            "lon": null,
+            "body": "The  Drought notification level is Green.",
+            "type": "drought",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=DR&eventid=1027491"
+            ],
+            "title": "Drought is on going in Kazakhstan",
+            "source": "gdacs",
+            "details": "The  Drought notification level is Green.",
+            "location": "Kazakhstan",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T14:56:19.879122+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "96 km SE of False Pass, Alaska",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0b5",
+            "ts": "2026-07-14T12:12:19Z",
+            "lat": 54.1456,
+            "lon": -162.543,
+            "mag": 5.3,
+            "body": "96 km SE of False Pass, Alaska",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0b5"
+            ],
+            "title": "96 km SE of False Pass, Alaska",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T14:56:19.879122+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "flood",
+          "title": "Green flood alert in Germany",
+          "location": "Germany",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "FL1104019",
+            "ts": "2026-07-14T10:09:05Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a flood started in Germany, lasting until 15/07/2026 (last update). The flood caused 0 deaths and 0 displaced .",
+            "type": "flood",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104019"
+            ],
+            "title": "Green flood alert in Germany",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a flood started in Germany, lasting until 15/07/2026 (last update). The flood caused 0 deaths and 0 displaced .",
+            "location": "Germany",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T11:48:08.811802+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 5.6M, Depth:140.088km) in Peru 14/07/2026 08:21 UTC, 30 thousand in MMI IV.",
+          "location": "Peru 14/07/2026 08:21 UTC, 30 thousand in MMI IV.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551779",
+            "ts": "2026-07-14T08:42:03Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 8:21:06 AM, an earthquake occurred in Peru potentially affecting 30 thousand in MMI IV. The earthquake had Magnitude 5.6M, Depth:140.088km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551779"
+            ],
+            "title": "Green earthquake (Magnitude 5.6M, Depth:140.088km) in Peru 14/07/2026 08:21 UTC, 30 thousand in MMI IV.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 8:21:06 AM, an earthquake occurred in Peru potentially affecting 30 thousand in MMI IV. The earthquake had Magnitude 5.6M, Depth:140.088km.",
+            "location": "Peru 14/07/2026 08:21 UTC, 30 thousand in MMI IV.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-14T11:48:08.811802+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "11 km N of Pichigua, Peru",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0a3",
+            "ts": "2026-07-14T08:21:06Z",
+            "lat": -14.5779,
+            "lon": -71.4358,
+            "mag": 5.6,
+            "body": "11 km N of Pichigua, Peru",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0a3"
+            ],
+            "title": "11 km N of Pichigua, Peru",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T11:48:08.811802+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "flood",
+          "title": "Green flood alert in Malaysia",
+          "location": "Malaysia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "FL1104020",
+            "ts": "2026-07-14T11:09:20Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 11/07/2026, a flood started in Malaysia, lasting until 14/07/2026 (last update). The flood caused 0 deaths and 918 displaced .",
+            "type": "flood",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104020"
+            ],
+            "title": "Green flood alert in Malaysia",
+            "source": "gdacs",
+            "details": "On 11/07/2026, a flood started in Malaysia, lasting until 14/07/2026 (last update). The flood caused 0 deaths and 918 displaced .",
+            "location": "Malaysia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T11:48:08.811802+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "117 km E of Noda, Japan",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t09u",
+            "ts": "2026-07-14T07:44:09Z",
+            "lat": 40.1338,
+            "lon": 143.1932,
+            "mag": 5,
+            "body": "117 km E of Noda, Japan",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t09u"
+            ],
+            "title": "117 km E of Noda, Japan",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "14 km WSW of Mabiton, Philippines",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t09m",
+            "ts": "2026-07-14T07:04:54Z",
+            "lat": 12.7967,
+            "lon": 123.136,
+            "mag": 5.2,
+            "body": "14 km WSW of Mabiton, Philippines",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t09m"
+            ],
+            "title": "14 km WSW of Mabiton, Philippines",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Orange forest fire notification in France",
+          "location": "France",
+          "severity": "orange",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029489",
+            "ts": "2026-07-14T03:00:43Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in France,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029489"
+            ],
+            "title": "Orange forest fire notification in France",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in France,  until 14/07/2026.",
+            "location": "France",
+            "severity": "orange"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "flood",
+          "title": "Green flood alert in Georgia",
+          "location": "Georgia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "FL1104018",
+            "ts": "2026-07-14T08:39:39Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 11/07/2026, a flood started in Georgia, lasting until 13/07/2026 (last update). The flood caused 0 deaths and 50 displaced .",
+            "type": "flood",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104018"
+            ],
+            "title": "Green flood alert in Georgia",
+            "source": "gdacs",
+            "details": "On 11/07/2026, a flood started in Georgia, lasting until 13/07/2026 (last update). The flood caused 0 deaths and 50 displaced .",
+            "location": "Georgia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 5.6M, Depth:140.088km) in Peru 14/07/2026 08:21 UTC, 20 thousand in MMI IV.",
+          "location": "Peru 14/07/2026 08:21 UTC, 20 thousand in MMI IV.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551779",
+            "ts": "2026-07-14T08:42:03Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 8:21:06 AM, an earthquake occurred in Peru potentially affecting 20 thousand in MMI IV. The earthquake had Magnitude 5.6M, Depth:140.088km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551779"
+            ],
+            "title": "Green earthquake (Magnitude 5.6M, Depth:140.088km) in Peru 14/07/2026 08:21 UTC, 20 thousand in MMI IV.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 8:21:06 AM, an earthquake occurred in Peru potentially affecting 20 thousand in MMI IV. The earthquake had Magnitude 5.6M, Depth:140.088km.",
+            "location": "Peru 14/07/2026 08:21 UTC, 20 thousand in MMI IV.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Angola",
+          "location": "Angola",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029499",
+            "ts": "2026-07-14T15:02:48Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in Angola,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029499"
+            ],
+            "title": "Green forest fire notification in Angola",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in Angola,  until 14/07/2026.",
+            "location": "Angola",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T08:11:34.514670+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Angola",
+          "location": "Angola",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029498",
+            "ts": "2026-07-14T11:00:41Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Angola,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029498"
+            ],
+            "title": "Green forest fire notification in Angola",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Angola,  until 14/07/2026.",
+            "location": "Angola",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T08:11:34.514670+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "2 km WSW of Congregación Reforma, Mexico",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t07s",
+            "ts": "2026-07-14T01:19:59Z",
+            "lat": 14.7717,
+            "lon": -92.3316,
+            "mag": 5,
+            "body": "2 km WSW of Congregación Reforma, Mexico",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t07s"
+            ],
+            "title": "2 km WSW of Congregación Reforma, Mexico",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T04:13:24.399358+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029496",
+            "ts": "2026-07-14T03:00:58Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 11/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029496"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 11/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T03:30:56.735766+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in United States",
+          "location": "United States",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029497",
+            "ts": "2026-07-14T03:01:58Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 09/07/2026, a forest fire started in United States,  until 13/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029497"
+            ],
+            "title": "Green forest fire notification in United States",
+            "source": "gdacs",
+            "details": "On 09/07/2026, a forest fire started in United States,  until 13/07/2026.",
+            "location": "United States",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T03:30:56.735766+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Australia",
+          "location": "Australia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029494",
+            "ts": "2026-07-14T07:20:42Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 01/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029494"
+            ],
+            "title": "Green forest fire notification in Australia",
+            "source": "gdacs",
+            "details": "On 01/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "location": "Australia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T00:07:10.784257+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029495",
+            "ts": "2026-07-13T23:21:12Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 30/06/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029495"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 30/06/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T00:07:10.784257+00:00"
+        }
+      ]
+    }
+  }
+}
