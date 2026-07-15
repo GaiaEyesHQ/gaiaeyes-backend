@@ -62,6 +62,34 @@ struct SymptomEnvelopeTests {
     }
 
     @Test
+    func decodesExposureSaveEnvelopeWithAPIKeyStrategy() throws {
+        let payload = """
+        {
+            "ok": true,
+            "data": {
+                "id": "exposure-123",
+                "exposure_key": "rapid_temperature_change",
+                "intensity": 1,
+                "event_ts_utc": "2026-07-14T22:56:00Z",
+                "source": "manual",
+                "note_text": null
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let envelope = try decoder.decode(Envelope<ExposureEventOut>.self, from: payload)
+        let exposure = try #require(envelope.payload)
+
+        #expect(exposure.exposureKey == "rapid_temperature_change")
+        #expect(exposure.intensity == 1)
+        #expect(exposure.eventTsUtc == "2026-07-14T22:56:00Z")
+        #expect(exposure.source == "manual")
+    }
+
+    @Test
     func normalizesQueuedEventCodes() {
         let event = SymptomQueuedEvent(symptomCode: "nerve pain")
         #expect(event.symptomCode == "NERVE_PAIN")

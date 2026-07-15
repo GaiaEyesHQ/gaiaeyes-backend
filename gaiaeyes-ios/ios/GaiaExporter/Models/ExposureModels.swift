@@ -59,13 +59,4 @@ struct ExposureEventOut: Decodable, Hashable {
     let eventTsUtc: String?
     let source: String
     let noteText: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case exposureKey = "exposure_key"
-        case intensity
-        case eventTsUtc = "event_ts_utc"
-        case source
-        case noteText = "note_text"
-    }
 }

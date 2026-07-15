@@ -17893,7 +17893,7 @@ struct ContentView: View {
                     HighlightStat(
                         id: .temperature,
                         title: "Temp Δ",
-                        value: LocalConditionsFormatting.formatTemperatureDelta(rawDelta, unit: tempUnit),
+                        value: LocalConditionsFormatting.formatTemperatureDelta(rawDelta, unit: tempUnit, decimals: 2),
                         detail: deltaDetail(converted, threshold: tempUnit == .fahrenheit ? 0.35 : 0.2),
                         progress: deltaProgress(converted, maxAbs: tempUnit == .fahrenheit ? 3.0 : 1.7),
                         tint: GaugePalette.elevated,
@@ -18089,7 +18089,7 @@ struct ContentView: View {
                     SupportingStat(
                         id: .temperature,
                         label: "Temp Δ",
-                        value: LocalConditionsFormatting.formatTemperatureDelta(rawDelta, unit: tempUnit),
+                        value: LocalConditionsFormatting.formatTemperatureDelta(rawDelta, unit: tempUnit, decimals: 2),
                         tint: GaugePalette.elevated
                     )
                 )
@@ -24535,7 +24535,9 @@ struct ContentView: View {
 
         static func formatTemperatureDelta(_ celsius: Double?, unit: TemperatureUnit, decimals: Int = 1) -> String {
             guard let converted = convertTempDelta(celsius, unit: unit) else { return "—" }
-            return "\(String(format: "%+.\(decimals)f", converted)) \(unit.symbol)"
+            let zeroThreshold = 0.5 * pow(10.0, -Double(decimals))
+            let displayValue = abs(converted) < zeroThreshold ? 0.0 : converted
+            return "\(String(format: "%+.\(decimals)f", displayValue)) \(unit.symbol)"
         }
 
         static func formatTempMetric(_ celsius: Double?) -> String {

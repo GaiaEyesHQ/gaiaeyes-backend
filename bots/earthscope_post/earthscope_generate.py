@@ -427,6 +427,8 @@ EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
 
 HOOKS = {
     "calm": [
+        "Finally, a little room to recoup.",
+        "A quieter stretch can be a welcome breather.",
         "Sleep may have more room tonight.",
         "Your body may feel less noisy today.",
         "Your nervous system may exhale a little.",
@@ -457,6 +459,8 @@ HOOKS = {
         "Head, mood, and energy may all ask for slack.",
     ],
     "neutral": [
+        "Finally, a little breathing room.",
+        "A quieter sky can leave room to recoup.",
         "Track the body pattern, not just the sky.",
         "A good day to compare symptoms and signals.",
         "Small body shifts are still data.",
@@ -605,6 +609,11 @@ def _first_nonempty_line(txt: str) -> str:
 
 
 HOOK_LANES: Dict[str, Dict[str, Any]] = {
+    "recovery_breather": {
+        "label": "a quieter stretch to recover",
+        "terms": ("breather", "breathing room", "recoup", "recover", "quieter stretch", "catch your breath"),
+        "examples": ["Finally, a little breathing room?", "A quieter day to catch your breath?"],
+    },
     "sleep": {
         "label": "sleep or bedtime friction",
         "terms": ("sleep", "bed", "bedtime", "night", "tired", "rest", "wake", "waking", "evening"),
@@ -693,9 +702,11 @@ def _preferred_hook_lanes(ctx: Dict[str, Any], *, limit: int = 3) -> List[str]:
         for lane in ("wired_tired", "brain_fog", "mood", "head_pressure", "migraine_headache", "chronic_flare"):
             scores[lane] += 1.4
     elif tone == "calm":
+        scores["recovery_breather"] += 2.0
         for lane in ("pain", "energy", "brain_fog", "sleep", "migraine_headache"):
             scores[lane] += 0.9
     else:
+        scores["recovery_breather"] += 1.8
         for lane in ("mood", "energy", "wired_tired", "pain", "chronic_flare"):
             scores[lane] += 1.0
 
@@ -1304,10 +1315,28 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
     facts["public_signal_strength"] = signal_strength
     if signal_strength == "low":
         facts["public_positioning"] = (
-            "Mostly steady conditions. Lead with observation or personal pattern-checking, not a prediction that "
-            "people will be reactive or symptomatic. Do not assign specific mood, headache, pressure, flare, pain, "
-            "or sleep effects unless another supported driver is genuinely unsettled."
+            "Mostly steady space conditions can be framed as a welcome breather: finally, some room to recoup, while "
+            "still taking it easy. A quiet sky does not guarantee an instant body reset; personal patterns can lag, "
+            "and local conditions can still add load. Lead with relief and recovery space, not a prediction that "
+            "people will be reactive or symptomatic."
         )
+        facts["quiet_day_context"] = {
+            "primary_frame": "A welcome break to recoup without treating the day as an all-clear to overdo it.",
+            "carryover": "Some people may need time to settle after a louder stretch; do not claim a specific past event caused symptoms.",
+            "local_factors_to_check": [
+                "rapid temperature changes",
+                "barometric pressure swings and storms",
+                "humidity and heat load",
+                "strong winds, gusts, and frontal passages",
+                "thunderstorms and lightning",
+                "AQI, smoke, and ozone",
+                "pollen and other allergens",
+            ],
+            "claim_boundary": (
+                "These factors vary by location. Invite readers to check their local conditions; do not say any one "
+                "factor is active globally unless supporting data is provided."
+            ),
+        }
     elif signal_strength == "moderate":
         facts["public_positioning"] = (
             "A noticeable but limited signal. Name only effects that fit the active driver and keep uncertainty clear."
@@ -1691,14 +1720,14 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "You are Gaia Eyes’ daily weather desk: viral, practical, and lightly funny. "
         "Interpret today’s space/earth conditions for humans. "
         "Write for a wide social audience at about a 3rd-grade reading level: short words, short sentences, no medical/science lecture voice. "
-        "The first sentence must not start with or center on HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. Lead with an everyday feeling instead. Use hook_lane_brief to choose the opening lane. "
+        "The first sentence must not start with or center on HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. Plain phrases such as 'room to recover' or 'time to recoup' are welcome on quiet days. Lead with an everyday feeling instead. Use hook_lane_brief to choose the opening lane. "
         "Sleep is allowed when it is the best lane, but do not default to sleep because a previous sleep post performed well. "
         "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes, e.g. 'Plain English: HRV = small changes between heartbeats that can reflect body stress.' "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin or press release). Avoid sterile or overly technical phrasing (e.g., 'inward-pointing field component'). Prefer plain equivalents like 'southward field orientation' or 'field leaning south'. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
-        "Follow public_signal_strength and public_positioning. On low-signal calm or neutral days, do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. Frame the day as mostly steady and invite people to compare their own patterns. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
+        "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, lead with the welcome chance to recoup while still pacing gently. Explain that quiet space conditions do not erase carryover or local influences. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
         "Humor is optional. If you use an analogy, keep it to one sentence max and do not use the phrase 'Think of it like'. Vary phrasing. Never start a sentence with 'Think of it like'. You may use metaphor_pool as guidance or invent a fresh analogy. Do not reuse any recent_analogies. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
@@ -1905,11 +1934,11 @@ def _rewrite_json_candidates(
         "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
-        "Follow public_signal_strength and public_positioning. On low-signal calm or neutral days, do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. Frame the day as mostly steady and invite people to compare their own patterns. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
-        "Lead with a felt human hook before explaining the signal context. Use hook_lane_brief to choose the doorway across trouble sleeping, wired/tired, brain fog, headache, migraine, chronic illness flare, head pressure, pain flare, low energy, restless body, mood, and scattered focus. "
+        "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, lead with the welcome chance to recoup while still pacing gently. Explain that quiet space conditions do not erase carryover or local influences. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
+        "Lead with a felt human hook before explaining the signal context. Use hook_lane_brief to choose the doorway across quiet-day breathing room, trouble sleeping, wired/tired, brain fog, headache, migraine, chronic illness flare, head pressure, pain flare, low energy, restless body, mood, and scattered focus. "
         "Do not make sleep the default just because a sleep hook performed well before; sleep must earn its place from today's facts and recent lane history. "
         "Do not make focus/productivity the default. "
-        "Do not open with HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. "
+        "Do not open with HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. Plain phrases such as 'room to recover' or 'time to recoup' are welcome on quiet days. "
         "Write for a wide social audience at about a 3rd-grade reading level: short words, short sentences, no medical/science lecture voice. "
         "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes. "
         "You may use a question as the opening hook if it feels natural. Humor is welcome when warm and grounded. "
@@ -1936,6 +1965,7 @@ def _rewrite_json_candidates(
             "hook_lane_brief": facts.get("hook_lane_brief"),
             "hook_doorways_to_rotate": [
                 "follow hook_lane_brief.preferred_lanes first",
+                "quiet-day breathing room or time to recoup",
                 "sleep or bedtime routine",
                 "wired/tired or body stress",
                 "mood or restlessness",
@@ -1954,13 +1984,13 @@ def _rewrite_json_candidates(
                 "clinician/professional framing",
                 "overexplaining the metrics",
                 "defaulting to focused work blocks",
-                "opening with HRV, heart-rate variability, recovery, or wearable jargon",
+                "opening with HRV, heart-rate variability, a recovery score, or wearable jargon",
                 "parasympathetic/autonomic jargon",
                 "college-level science phrasing",
             ],
         },
         "candidate_requirements": {
-            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, recovery, parasympathetic, or autonomic.",
+            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, a recovery score, parasympathetic, or autonomic. Ordinary phrases such as room to recover or time to recoup are allowed.",
             "snapshot": "2-4 plain-language sentences with no numeric space-weather measurements.",
             "affects": "2-4 sentences about possible felt patterns without certainty.",
             "playbook": "3-5 short bullets.",
@@ -3271,7 +3301,7 @@ def _rewrite_shadow_caption_minimal(
         "Do not open with technical phrases like 'Geomagnetic conditions', 'Unsettled geomagnetic conditions', "
         "'Near-Earth space', 'Recent solar eruptions', or 'Unsettled space weather'. "
         "Use at most one analogy. Keep the science grounded, but do not lead with it. "
-        "Do not mention clinicians or professional audiences. Do not open with HRV, heart-rate variability, recovery, parasympathetic, autonomic, or wearable jargon. Lead with everyday feeling words instead. If HRV or Schumann must appear, define it in a short final Plain English note. Write around a 3rd-grade reading level: short words, short sentences, and no science lecture voice. "
+        "Do not mention clinicians or professional audiences. Do not open with HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. Plain phrases such as 'room to recover' or 'time to recoup' are welcome on quiet days. Lead with everyday feeling words instead. If HRV or Schumann must appear, define it in a short final Plain English note. Write around a 3rd-grade reading level: short words, short sentences, and no science lecture voice. "
         "Do not copy phrases directly from the context bullets. "
         "No emojis. A natural opening question is allowed when it fits. No fear language. No deterministic medical claims. "
         "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
@@ -3291,6 +3321,9 @@ def _rewrite_shadow_caption_minimal(
             "pacing_actions": playbook_lines[:2],
         },
         "hook_lane_brief": facts.get("hook_lane_brief"),
+        "public_signal_strength": facts.get("public_signal_strength"),
+        "public_positioning": facts.get("public_positioning"),
+        "quiet_day_context": facts.get("quiet_day_context"),
         "good_examples": good_examples,
         "anti_examples": anti_examples,
         "constraints": {

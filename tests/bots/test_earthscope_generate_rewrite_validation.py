@@ -572,11 +572,32 @@ def test_quiet_neutral_facts_keep_count_only_cme_in_background():
 
     assert facts["tone"] == "neutral"
     assert facts["public_signal_strength"] == "low"
-    assert "not a prediction that people will be reactive" in facts["public_positioning"]
+    assert "welcome breather" in facts["public_positioning"]
+    assert "still taking it easy" in facts["public_positioning"]
+    assert "barometric pressure swings and storms" in facts["quiet_day_context"]["local_factors_to_check"]
+    assert "AQI, smoke, and ozone" in facts["quiet_day_context"]["local_factors_to_check"]
+    assert "vary by location" in facts["quiet_day_context"]["claim_boundary"]
     assert "mostly steady environmental signals" in summary
     assert "background context only" in summary
     assert "recent CME activity" not in summary
     assert "lively Schumann" not in summary
+
+
+def test_quiet_days_prefer_recovery_breather_hook_lane():
+    lanes = _preferred_hook_lanes(
+        {
+            "day": "2026-07-15",
+            "platform": "default",
+            "kp_max_24h": 1.8,
+            "bz_min": -1.0,
+            "solar_wind_kms": 360.0,
+            "flares_24h": 0,
+            "cmes_24h": 0,
+            "recent_captions": [],
+        }
+    )
+
+    assert lanes[0] == "recovery_breather"
 
 
 def test_facebook_caption_profile_is_longer_than_instagram():

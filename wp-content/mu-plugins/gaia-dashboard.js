@@ -3525,11 +3525,12 @@
       cards.push({ key: "hrv", label: "HRV Δ", value: `${hrvDelta > 0 ? "+" : ""}${hrvDelta.toFixed(1)} ms`, detail: hrvDelta > 1 ? "above usual" : hrvDelta < -1 ? "below usual" : "near usual", salience: Math.max(0, Math.min(1, Math.abs(hrvDelta) / 20)) });
     }
     if (Number.isFinite(tempDeviation)) {
+      const displayTempDeviation = Math.abs(tempDeviation) < 0.005 ? 0 : tempDeviation;
       cards.push({
         key: "temperature",
         label: "Temp Δ",
-        value: `${tempDeviation > 0 ? "+" : ""}${tempDeviation.toFixed(1)}°`,
-        detail: tempDeviation > 0 ? "above usual" : "below usual",
+        value: `${displayTempDeviation > 0 ? "+" : ""}${displayTempDeviation.toFixed(2)}°C`,
+        detail: tempDeviation > 0.2 ? "above usual" : tempDeviation < -0.2 ? "below usual" : "near usual",
         salience: Math.max(0, Math.min(1, Math.abs(tempDeviation) / 3)),
       });
     }
