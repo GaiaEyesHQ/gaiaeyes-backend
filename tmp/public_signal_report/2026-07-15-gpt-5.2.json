@@ -1,0 +1,5880 @@
+{
+  "auto_publish": false,
+  "report": {
+    "report_version": "public-daily-signal-report.v1",
+    "day": "2026-07-15",
+    "public_name": "Gaia Eyes Daily Signal Report",
+    "section_order": [
+      "regional_watch",
+      "space_watch",
+      "earth_signal",
+      "major_events"
+    ],
+    "headline": null,
+    "quick_read": null,
+    "regional_watch": {
+      "items": [
+        {
+          "region_key": "middle_east",
+          "label": "Middle East",
+          "macro_region": "Asia",
+          "sample_count": 3,
+          "required_support": 2,
+          "drivers": [
+            {
+              "key": "pressure_swings",
+              "label": "Pressure swings",
+              "support_count": 2,
+              "supporting_locations": [
+                "Riyadh",
+                "Tehran"
+              ]
+            },
+            {
+              "key": "heat_humidity",
+              "label": "Heat and humidity",
+              "support_count": 2,
+              "supporting_locations": [
+                "Riyadh",
+                "Tehran"
+              ]
+            },
+            {
+              "key": "temperature_shifts",
+              "label": "Rapid temperature shifts",
+              "support_count": 3,
+              "supporting_locations": [
+                "Istanbul",
+                "Riyadh",
+                "Tehran"
+              ]
+            }
+          ],
+          "health_context": [
+            "fatigue",
+            "joint discomfort",
+            "chronic-condition flares",
+            "head or sinus pressure",
+            "migraine sensitivity",
+            "sleep disruption",
+            "lower exercise tolerance"
+          ],
+          "confidence": "high",
+          "selection_score": 20
+        },
+        {
+          "region_key": "east_asia",
+          "label": "East Asia",
+          "macro_region": "Asia",
+          "sample_count": 3,
+          "required_support": 2,
+          "drivers": [
+            {
+              "key": "poor_air",
+              "label": "Poor air quality",
+              "support_count": 3,
+              "supporting_locations": [
+                "Beijing",
+                "Seoul",
+                "Tokyo"
+              ]
+            },
+            {
+              "key": "pressure_swings",
+              "label": "Pressure swings",
+              "support_count": 2,
+              "supporting_locations": [
+                "Seoul",
+                "Tokyo"
+              ]
+            }
+          ],
+          "health_context": [
+            "breathing irritation",
+            "headache",
+            "fatigue",
+            "reduced exercise tolerance",
+            "head or sinus pressure",
+            "migraine sensitivity",
+            "joint discomfort"
+          ],
+          "confidence": "high",
+          "selection_score": 15
+        },
+        {
+          "region_key": "southern_europe",
+          "label": "Southern Europe",
+          "macro_region": "Europe",
+          "sample_count": 3,
+          "required_support": 2,
+          "drivers": [
+            {
+              "key": "heat_humidity",
+              "label": "Heat and humidity",
+              "support_count": 3,
+              "supporting_locations": [
+                "Madrid",
+                "Rome",
+                "Athens"
+              ]
+            },
+            {
+              "key": "temperature_shifts",
+              "label": "Rapid temperature shifts",
+              "support_count": 3,
+              "supporting_locations": [
+                "Madrid",
+                "Rome",
+                "Athens"
+              ]
+            }
+          ],
+          "health_context": [
+            "fatigue",
+            "joint discomfort",
+            "chronic-condition flares",
+            "sleep disruption",
+            "lower exercise tolerance"
+          ],
+          "confidence": "high",
+          "selection_score": 14
+        },
+        {
+          "region_key": "us_desert_southwest",
+          "label": "Desert Southwest US",
+          "macro_region": "North America",
+          "sample_count": 3,
+          "required_support": 2,
+          "drivers": [
+            {
+              "key": "heat_humidity",
+              "label": "Heat and humidity",
+              "support_count": 2,
+              "supporting_locations": [
+                "Phoenix",
+                "Las Vegas"
+              ]
+            },
+            {
+              "key": "temperature_shifts",
+              "label": "Rapid temperature shifts",
+              "support_count": 2,
+              "supporting_locations": [
+                "Phoenix",
+                "Las Vegas"
+              ]
+            }
+          ],
+          "health_context": [
+            "fatigue",
+            "joint discomfort",
+            "chronic-condition flares",
+            "sleep disruption",
+            "lower exercise tolerance"
+          ],
+          "confidence": "moderate",
+          "selection_score": 12
+        },
+        {
+          "region_key": "caribbean",
+          "label": "Caribbean",
+          "macro_region": "North America",
+          "sample_count": 3,
+          "required_support": 2,
+          "drivers": [
+            {
+              "key": "heat_humidity",
+              "label": "Heat and humidity",
+              "support_count": 3,
+              "supporting_locations": [
+                "San Juan",
+                "Havana",
+                "Santo Domingo"
+              ]
+            }
+          ],
+          "health_context": [
+            "fatigue",
+            "sleep disruption",
+            "lower exercise tolerance"
+          ],
+          "confidence": "high",
+          "selection_score": 7
+        }
+      ],
+      "selection_method": "At least two fixed anchors must support the same driver."
+    },
+    "space_watch": {
+      "signal_strength": "moderate",
+      "recovery_frame": false,
+      "metrics": {
+        "kp_max": 3.67,
+        "bz_min": -8.08,
+        "solar_wind_kms": 472.14154370034055,
+        "flares_count": 0.0,
+        "cmes_count": 2.0
+      },
+      "source_row": {
+        "day": "2026-07-15",
+        "kp_max": 3.67,
+        "bz_min": -8.08,
+        "sw_speed_avg": 472.14154370034055,
+        "row_count": 882,
+        "updated_at": "2026-07-15T14:47:24.491800+00:00",
+        "flares_count": 0,
+        "cmes_count": 2,
+        "aurora_hp_north_gw": 17.0,
+        "aurora_hp_south_gw": 19.0,
+        "xray_peak_flux_wm2": null,
+        "xray_max_class": null,
+        "sep_s_max": null,
+        "belts_flux_gt2mev_max": null,
+        "belts_risk_level": null,
+        "drap_absorption_polar_db": null,
+        "drap_absorption_midlat_db": null,
+        "sep_flux_gt10mev_max_pfu": null,
+        "now_ts": "2026-07-15T14:41:00+00:00",
+        "kp_now": 2.0,
+        "bz_now": -0.3,
+        "sw_speed_now": 462.0,
+        "wing_kp_max": null,
+        "ae_max": null,
+        "al_min": null,
+        "pc_max": null,
+        "sep_flux_10mev_max": null,
+        "cmes_earth_directed_count": null,
+        "cmes_max_speed_kms": null,
+        "sw_density_max_cm3": 18.09,
+        "r_scale_max": null,
+        "sw_speed_now_kms": 462.0,
+        "sw_density_now_cm3": 9.46,
+        "cmes_ed_24h": null
+      }
+    },
+    "earth_signal": {
+      "schumann": {
+        "day": "2026-07-15",
+        "generated_at": "2026-07-15T14:59:41.485270+00:00",
+        "f0": null,
+        "f1": null,
+        "f2": null,
+        "f3": null,
+        "f4": null,
+        "f5": null,
+        "combined_f1": null
+      },
+      "ulf": {
+        "ts_utc": "2026-07-15T14:40:00+00:00",
+        "stations_used": [
+          "BOU",
+          "CMO"
+        ],
+        "regional_intensity": 26.34,
+        "regional_coherence": 0.146,
+        "regional_persistence": 17.02,
+        "context_class": "Quiet",
+        "confidence_score": 0.146,
+        "quality_flags": []
+      },
+      "ulf_usable": false,
+      "health_language": "Possible effects may use 'may', 'can', or 'some people notice' without an appended disclaimer."
+    },
+    "major_events": {
+      "items": [
+        {
+          "kind": "wildfire",
+          "title": "Orange forest fire notification in France",
+          "location": "France",
+          "severity": "orange",
+          "started_at": "2026-07-14T03:00:43Z",
+          "source": "gdacs",
+          "url": null,
+          "selection_score": 3
+        },
+        {
+          "kind": "quake",
+          "title": "34 km WSW of Sarangani, Philippines",
+          "location": null,
+          "severity": "yellow",
+          "started_at": "2026-07-14T15:49:41Z",
+          "source": "media",
+          "url": null,
+          "selection_score": 2
+        }
+      ],
+      "selection_method": "Fresh yellow-or-higher GDACS/USGS events, deduplicated and capped."
+    },
+    "platform_copy": {
+      "facebook": null,
+      "instagram": null,
+      "voiceover": null,
+      "reel_story": null
+    },
+    "coverage": {
+      "expected_anchors": 120,
+      "observed_anchors": 120,
+      "weather_anchors": 120,
+      "air_anchors": 120,
+      "pollen_anchors": 0,
+      "pollen_configured": false,
+      "regions_observed": 40,
+      "weather_ratio": 1.0,
+      "public_global_claims_allowed": true,
+      "provider_failures": {}
+    },
+    "sources": [
+      "OpenWeather current weather",
+      "OpenWeather air pollution",
+      "Google Pollen when available",
+      "marts.space_weather_daily",
+      "marts.schumann_daily_v2 or marts.schumann_daily",
+      "marts.ulf_context_5m",
+      "ext.global_hazards"
+    ],
+    "generated_at_utc": "2026-07-15T14:59:42Z",
+    "auto_publish": false
+  },
+  "copy_runtime": {
+    "status": "error",
+    "reason": "Error code: 403 - {'error': {'message': 'Project `proj_mGMHb2kd3wkVlAmZSBTPZRA5` does not have access to model `gpt-5.2`', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+    "model": "gpt-5.2"
+  },
+  "review_inputs": {
+    "observation_count": 120,
+    "observations": [
+      {
+        "anchor_id": "us_new_england:boston",
+        "region_key": "us_new_england",
+        "region_label": "New England",
+        "macro_region": "North America",
+        "location_label": "Boston",
+        "lat": 42.36,
+        "lon": -71.06,
+        "observed_at": "2026-07-15T14:59:26Z",
+        "weather": {
+          "temp_c": 28.72,
+          "feels_like_c": 31.96,
+          "temp_delta_24h_c": 0.7,
+          "pressure_hpa": 1006.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 69.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 3.13,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 17.95,
+          "pm10": 21.06,
+          "o3": 110.99
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_new_england:portland_maine",
+        "region_key": "us_new_england",
+        "region_label": "New England",
+        "macro_region": "North America",
+        "location_label": "Portland Maine",
+        "lat": 43.66,
+        "lon": -70.26,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 27.77,
+          "feels_like_c": 29.87,
+          "temp_delta_24h_c": 3.1,
+          "pressure_hpa": 1004.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 67.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 3.13,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 14.96,
+          "pm10": 15.07,
+          "o3": 91.77
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_new_england:burlington",
+        "region_key": "us_new_england",
+        "region_label": "New England",
+        "macro_region": "North America",
+        "location_label": "Burlington",
+        "lat": 44.48,
+        "lon": -73.21,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 26.09,
+          "feels_like_c": 26.09,
+          "temp_delta_24h_c": -0.6,
+          "pressure_hpa": 1008.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 69.0,
+          "wind_speed_mps": 4.92,
+          "wind_gust_mps": 8.05,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 5.43,
+          "pm10": 5.45,
+          "o3": 73.87
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_mid_atlantic:new_york",
+        "region_key": "us_mid_atlantic",
+        "region_label": "Mid-Atlantic US",
+        "macro_region": "North America",
+        "location_label": "New York",
+        "lat": 40.71,
+        "lon": -74.01,
+        "observed_at": "2026-07-15T14:49:40Z",
+        "weather": {
+          "temp_c": 32.64,
+          "feels_like_c": 37.32,
+          "temp_delta_24h_c": 2.2,
+          "pressure_hpa": 1010.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 56.0,
+          "wind_speed_mps": 3.58,
+          "wind_gust_mps": 5.81,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 18.26,
+          "pm10": 19.43,
+          "o3": 112.72
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_mid_atlantic:philadelphia",
+        "region_key": "us_mid_atlantic",
+        "region_label": "Mid-Atlantic US",
+        "macro_region": "North America",
+        "location_label": "Philadelphia",
+        "lat": 39.95,
+        "lon": -75.17,
+        "observed_at": "2026-07-15T14:47:22Z",
+        "weather": {
+          "temp_c": 31.44,
+          "feels_like_c": 36.07,
+          "temp_delta_24h_c": 3.5,
+          "pressure_hpa": 1013.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 61.0,
+          "wind_speed_mps": 2.24,
+          "wind_gust_mps": 4.47,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 16.09,
+          "pm10": 18.36,
+          "o3": 106.34
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_mid_atlantic:pittsburgh",
+        "region_key": "us_mid_atlantic",
+        "region_label": "Mid-Atlantic US",
+        "macro_region": "North America",
+        "location_label": "Pittsburgh",
+        "lat": 40.44,
+        "lon": -79.99,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 29.17,
+          "feels_like_c": 33.3,
+          "temp_delta_24h_c": 3.1,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 71.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 2.24,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 10.66,
+          "pm10": 11.6,
+          "o3": 61.44
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_southeast:atlanta",
+        "region_key": "us_southeast",
+        "region_label": "Southeastern US",
+        "macro_region": "North America",
+        "location_label": "Atlanta",
+        "lat": 33.75,
+        "lon": -84.39,
+        "observed_at": "2026-07-15T14:58:26Z",
+        "weather": {
+          "temp_c": 26.05,
+          "feels_like_c": 26.05,
+          "temp_delta_24h_c": 3.1,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 74.0,
+          "wind_speed_mps": 1.0,
+          "wind_gust_mps": 1.06,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 2.38,
+          "pm10": 2.9,
+          "o3": 18.47
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_southeast:raleigh",
+        "region_key": "us_southeast",
+        "region_label": "Southeastern US",
+        "macro_region": "North America",
+        "location_label": "Raleigh",
+        "lat": 35.78,
+        "lon": -78.64,
+        "observed_at": "2026-07-15T14:57:05Z",
+        "weather": {
+          "temp_c": 29.71,
+          "feels_like_c": 32.48,
+          "temp_delta_24h_c": 6.0,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 61.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 1.34,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.69,
+          "pm10": 8.34,
+          "o3": 47.73
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_southeast:charleston",
+        "region_key": "us_southeast",
+        "region_label": "Southeastern US",
+        "macro_region": "North America",
+        "location_label": "Charleston",
+        "lat": 32.78,
+        "lon": -79.93,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 29.36,
+          "feels_like_c": 36.36,
+          "temp_delta_24h_c": 3.1,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 83.0,
+          "wind_speed_mps": 2.68,
+          "wind_gust_mps": 4.47,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.73,
+          "pm10": 4.5,
+          "o3": 50.22
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_florida_gulf:miami",
+        "region_key": "us_florida_gulf",
+        "region_label": "Florida and the Gulf Coast",
+        "macro_region": "North America",
+        "location_label": "Miami",
+        "lat": 25.76,
+        "lon": -80.19,
+        "observed_at": "2026-07-15T14:58:26Z",
+        "weather": {
+          "temp_c": 31.81,
+          "feels_like_c": 38.81,
+          "temp_delta_24h_c": 3.1,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 70.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 2.24,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 3.55,
+          "pm10": 8.95,
+          "o3": 61.99
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_florida_gulf:tampa",
+        "region_key": "us_florida_gulf",
+        "region_label": "Florida and the Gulf Coast",
+        "macro_region": "North America",
+        "location_label": "Tampa",
+        "lat": 27.95,
+        "lon": -82.46,
+        "observed_at": "2026-07-15T14:54:30Z",
+        "weather": {
+          "temp_c": 31.07,
+          "feels_like_c": 37.19,
+          "temp_delta_24h_c": 2.2,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 68.0,
+          "wind_speed_mps": 1.82,
+          "wind_gust_mps": 2.89,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 4.89,
+          "pm10": 6.55,
+          "o3": 73.92
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_florida_gulf:new_orleans",
+        "region_key": "us_florida_gulf",
+        "region_label": "Florida and the Gulf Coast",
+        "macro_region": "North America",
+        "location_label": "New Orleans",
+        "lat": 29.95,
+        "lon": -90.07,
+        "observed_at": "2026-07-15T14:56:07Z",
+        "weather": {
+          "temp_c": 30.41,
+          "feels_like_c": 35.79,
+          "temp_delta_24h_c": 3.3,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 69.0,
+          "wind_speed_mps": 2.24,
+          "wind_gust_mps": 3.13,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 2.34,
+          "pm10": 5.56,
+          "o3": 48.79
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_great_lakes:chicago",
+        "region_key": "us_great_lakes",
+        "region_label": "Great Lakes US",
+        "macro_region": "North America",
+        "location_label": "Chicago",
+        "lat": 41.88,
+        "lon": -87.63,
+        "observed_at": "2026-07-15T14:58:26Z",
+        "weather": {
+          "temp_c": 31.52,
+          "feels_like_c": 37.13,
+          "temp_delta_24h_c": 0.2,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 64.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 0.89,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 15.96,
+          "pm10": 16.44,
+          "o3": 33.07
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_great_lakes:detroit",
+        "region_key": "us_great_lakes",
+        "region_label": "Great Lakes US",
+        "macro_region": "North America",
+        "location_label": "Detroit",
+        "lat": 42.33,
+        "lon": -83.05,
+        "observed_at": "2026-07-15T14:48:00Z",
+        "weather": {
+          "temp_c": 30.21,
+          "feels_like_c": 35.3,
+          "temp_delta_24h_c": -1.0,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 69.0,
+          "wind_speed_mps": 3.63,
+          "wind_gust_mps": 5.59,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 20.11,
+          "pm10": 21.12,
+          "o3": 76.29
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_great_lakes:cleveland",
+        "region_key": "us_great_lakes",
+        "region_label": "Great Lakes US",
+        "macro_region": "North America",
+        "location_label": "Cleveland",
+        "lat": 41.5,
+        "lon": -81.69,
+        "observed_at": "2026-07-15T14:51:58Z",
+        "weather": {
+          "temp_c": 29.87,
+          "feels_like_c": 35.2,
+          "temp_delta_24h_c": 1.8,
+          "pressure_hpa": 1017.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 72.0,
+          "wind_speed_mps": 4.81,
+          "wind_gust_mps": 6.99,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 13.96,
+          "pm10": 14.72,
+          "o3": 77.49
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_ohio_tennessee:cincinnati",
+        "region_key": "us_ohio_tennessee",
+        "region_label": "Ohio and Tennessee Valleys",
+        "macro_region": "North America",
+        "location_label": "Cincinnati",
+        "lat": 39.1,
+        "lon": -84.51,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 30.09,
+          "feels_like_c": 34.08,
+          "temp_delta_24h_c": 3.2,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 65.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 1.34,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.77,
+          "pm10": 4.43,
+          "o3": 25.58
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_ohio_tennessee:louisville",
+        "region_key": "us_ohio_tennessee",
+        "region_label": "Ohio and Tennessee Valleys",
+        "macro_region": "North America",
+        "location_label": "Louisville",
+        "lat": 38.25,
+        "lon": -85.76,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 29.63,
+          "feels_like_c": 33.3,
+          "temp_delta_24h_c": 2.5,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 66.0,
+          "wind_speed_mps": 0.74,
+          "wind_gust_mps": 1.02,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.53,
+          "pm10": 3.84,
+          "o3": 35.26
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_ohio_tennessee:nashville",
+        "region_key": "us_ohio_tennessee",
+        "region_label": "Ohio and Tennessee Valleys",
+        "macro_region": "North America",
+        "location_label": "Nashville",
+        "lat": 36.16,
+        "lon": -86.78,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 25.78,
+          "feels_like_c": 26.66,
+          "temp_delta_24h_c": 0.0,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 86.0,
+          "wind_speed_mps": 2.24,
+          "wind_gust_mps": null,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 6.4,
+          "pm10": 7.32,
+          "o3": 28.12
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_northern_plains:minneapolis",
+        "region_key": "us_northern_plains",
+        "region_label": "Northern Plains US",
+        "macro_region": "North America",
+        "location_label": "Minneapolis",
+        "lat": 44.98,
+        "lon": -93.27,
+        "observed_at": "2026-07-15T14:57:05Z",
+        "weather": {
+          "temp_c": 29.33,
+          "feels_like_c": 34.09,
+          "temp_delta_24h_c": -0.7,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 73.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 3.13,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 10.55,
+          "pm10": 11.39,
+          "o3": 9.68
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_northern_plains:fargo",
+        "region_key": "us_northern_plains",
+        "region_label": "Northern Plains US",
+        "macro_region": "North America",
+        "location_label": "Fargo",
+        "lat": 46.88,
+        "lon": -96.79,
+        "observed_at": "2026-07-15T14:54:31Z",
+        "weather": {
+          "temp_c": 27.54,
+          "feels_like_c": 30.14,
+          "temp_delta_24h_c": -3.9,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 3.0,
+          "humidity_pct": 73.0,
+          "wind_speed_mps": 2.24,
+          "wind_gust_mps": 4.92,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 7.56,
+          "pm10": 7.74,
+          "o3": 46.96
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_northern_plains:rapid_city",
+        "region_key": "us_northern_plains",
+        "region_label": "Northern Plains US",
+        "macro_region": "North America",
+        "location_label": "Rapid City",
+        "lat": 44.08,
+        "lon": -103.23,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 28.93,
+          "feels_like_c": 29.12,
+          "temp_delta_24h_c": -4.5,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": 4.0,
+          "humidity_pct": 46.0,
+          "wind_speed_mps": 4.47,
+          "wind_gust_mps": 7.15,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 3.2,
+          "pm10": 3.74,
+          "o3": 82.2
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_southern_plains:dallas",
+        "region_key": "us_southern_plains",
+        "region_label": "Southern Plains US",
+        "macro_region": "North America",
+        "location_label": "Dallas",
+        "lat": 32.78,
+        "lon": -96.8,
+        "observed_at": "2026-07-15T14:50:54Z",
+        "weather": {
+          "temp_c": 27.36,
+          "feels_like_c": 30.44,
+          "temp_delta_24h_c": 0.4,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": 3.0,
+          "humidity_pct": 79.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 2.68,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 4.52,
+          "pm10": 4.71,
+          "o3": 33.98
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_southern_plains:oklahoma_city",
+        "region_key": "us_southern_plains",
+        "region_label": "Southern Plains US",
+        "macro_region": "North America",
+        "location_label": "Oklahoma City",
+        "lat": 35.47,
+        "lon": -97.52,
+        "observed_at": "2026-07-15T14:54:31Z",
+        "weather": {
+          "temp_c": 28.42,
+          "feels_like_c": 31.98,
+          "temp_delta_24h_c": -0.4,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 73.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 2.68,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 5.13,
+          "pm10": 5.43,
+          "o3": 39.87
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_southern_plains:wichita",
+        "region_key": "us_southern_plains",
+        "region_label": "Southern Plains US",
+        "macro_region": "North America",
+        "location_label": "Wichita",
+        "lat": 37.69,
+        "lon": -97.34,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 28.39,
+          "feels_like_c": 30.04,
+          "temp_delta_24h_c": -0.7,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 60.0,
+          "wind_speed_mps": 1.91,
+          "wind_gust_mps": 1.82,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 7.21,
+          "pm10": 7.57,
+          "o3": 47.27
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_mountain_west:denver",
+        "region_key": "us_mountain_west",
+        "region_label": "Mountain West US",
+        "macro_region": "North America",
+        "location_label": "Denver",
+        "lat": 39.74,
+        "lon": -104.99,
+        "observed_at": "2026-07-15T14:55:18Z",
+        "weather": {
+          "temp_c": 23.74,
+          "feels_like_c": 23.37,
+          "temp_delta_24h_c": -7.7,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": 5.0,
+          "humidity_pct": 46.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 3.13,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.84,
+          "pm10": 2.29,
+          "o3": 45.34
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_mountain_west:salt_lake_city",
+        "region_key": "us_mountain_west",
+        "region_label": "Mountain West US",
+        "macro_region": "North America",
+        "location_label": "Salt Lake City",
+        "lat": 40.76,
+        "lon": -111.89,
+        "observed_at": "2026-07-15T14:50:34Z",
+        "weather": {
+          "temp_c": 26.99,
+          "feels_like_c": 27.29,
+          "temp_delta_24h_c": -5.0,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 48.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 2.24,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 5.74,
+          "pm10": 11.67,
+          "o3": 61.74
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_mountain_west:boise",
+        "region_key": "us_mountain_west",
+        "region_label": "Mountain West US",
+        "macro_region": "North America",
+        "location_label": "Boise",
+        "lat": 43.62,
+        "lon": -116.2,
+        "observed_at": "2026-07-15T14:52:43Z",
+        "weather": {
+          "temp_c": 23.1,
+          "feels_like_c": 23.19,
+          "temp_delta_24h_c": -7.1,
+          "pressure_hpa": 1017.0,
+          "pressure_delta_24h_hpa": 3.0,
+          "humidity_pct": 66.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 1.34,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.08,
+          "pm10": 1.85,
+          "o3": 45.44
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_desert_southwest:phoenix",
+        "region_key": "us_desert_southwest",
+        "region_label": "Desert Southwest US",
+        "macro_region": "North America",
+        "location_label": "Phoenix",
+        "lat": 33.45,
+        "lon": -112.07,
+        "observed_at": "2026-07-15T14:47:22Z",
+        "weather": {
+          "temp_c": 34.29,
+          "feels_like_c": 36.49,
+          "temp_delta_24h_c": -6.5,
+          "pressure_hpa": 1010.0,
+          "pressure_delta_24h_hpa": 3.0,
+          "humidity_pct": 42.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 4.92,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 7.15,
+          "pm10": 34.68,
+          "o3": 48.57
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_desert_southwest:las_vegas",
+        "region_key": "us_desert_southwest",
+        "region_label": "Desert Southwest US",
+        "macro_region": "North America",
+        "location_label": "Las Vegas",
+        "lat": 36.17,
+        "lon": -115.14,
+        "observed_at": "2026-07-15T14:52:06Z",
+        "weather": {
+          "temp_c": 33.83,
+          "feels_like_c": 32.74,
+          "temp_delta_24h_c": -5.6,
+          "pressure_hpa": 1010.0,
+          "pressure_delta_24h_hpa": 5.0,
+          "humidity_pct": 28.0,
+          "wind_speed_mps": 0.82,
+          "wind_gust_mps": 0.4,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 7.92,
+          "pm10": 20.41,
+          "o3": 80.27
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_desert_southwest:albuquerque",
+        "region_key": "us_desert_southwest",
+        "region_label": "Desert Southwest US",
+        "macro_region": "North America",
+        "location_label": "Albuquerque",
+        "lat": 35.08,
+        "lon": -106.65,
+        "observed_at": "2026-07-15T14:56:08Z",
+        "weather": {
+          "temp_c": 25.47,
+          "feels_like_c": 25.2,
+          "temp_delta_24h_c": -4.5,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": 3.0,
+          "humidity_pct": 43.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 1.79,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.12,
+          "pm10": 3.4,
+          "o3": 52.43
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_california:los_angeles",
+        "region_key": "us_california",
+        "region_label": "California",
+        "macro_region": "North America",
+        "location_label": "Los Angeles",
+        "lat": 34.05,
+        "lon": -118.24,
+        "observed_at": "2026-07-15T14:58:27Z",
+        "weather": {
+          "temp_c": 23.54,
+          "feels_like_c": 23.86,
+          "temp_delta_24h_c": -5.4,
+          "pressure_hpa": 1012.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 73.0,
+          "wind_speed_mps": 1.27,
+          "wind_gust_mps": 1.15,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 7.32,
+          "pm10": 20.24,
+          "o3": 76.32
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_california:san_francisco",
+        "region_key": "us_california",
+        "region_label": "California",
+        "macro_region": "North America",
+        "location_label": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42,
+        "observed_at": "2026-07-15T14:49:43Z",
+        "weather": {
+          "temp_c": 16.56,
+          "feels_like_c": 16.33,
+          "temp_delta_24h_c": -4.1,
+          "pressure_hpa": 1014.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 79.0,
+          "wind_speed_mps": 3.58,
+          "wind_gust_mps": 4.47,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 4.5,
+          "pm10": 15.5,
+          "o3": 71.37
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_california:sacramento",
+        "region_key": "us_california",
+        "region_label": "California",
+        "macro_region": "North America",
+        "location_label": "Sacramento",
+        "lat": 38.58,
+        "lon": -121.49,
+        "observed_at": "2026-07-15T14:49:27Z",
+        "weather": {
+          "temp_c": 26.41,
+          "feels_like_c": 26.41,
+          "temp_delta_24h_c": -12.6,
+          "pressure_hpa": 1012.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 43.0,
+          "wind_speed_mps": 2.21,
+          "wind_gust_mps": 2.96,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.88,
+          "pm10": 8.58,
+          "o3": 56.11
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_pacific_northwest:seattle",
+        "region_key": "us_pacific_northwest",
+        "region_label": "Pacific Northwest US",
+        "macro_region": "North America",
+        "location_label": "Seattle",
+        "lat": 47.61,
+        "lon": -122.33,
+        "observed_at": "2026-07-15T14:51:24Z",
+        "weather": {
+          "temp_c": 16.37,
+          "feels_like_c": 16.05,
+          "temp_delta_24h_c": -10.0,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 3.0,
+          "humidity_pct": 76.0,
+          "wind_speed_mps": 2.24,
+          "wind_gust_mps": 3.58,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.92,
+          "pm10": 6.24,
+          "o3": 13.26
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_pacific_northwest:portland_oregon",
+        "region_key": "us_pacific_northwest",
+        "region_label": "Pacific Northwest US",
+        "macro_region": "North America",
+        "location_label": "Portland Oregon",
+        "lat": 45.52,
+        "lon": -122.68,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 17.08,
+          "feels_like_c": 16.72,
+          "temp_delta_24h_c": -13.8,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 4.0,
+          "humidity_pct": 72.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 3.58,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.75,
+          "pm10": 6.53,
+          "o3": 20.08
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_pacific_northwest:spokane",
+        "region_key": "us_pacific_northwest",
+        "region_label": "Pacific Northwest US",
+        "macro_region": "North America",
+        "location_label": "Spokane",
+        "lat": 47.66,
+        "lon": -117.43,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 19.92,
+          "feels_like_c": 19.8,
+          "temp_delta_24h_c": -8.2,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 70.0,
+          "wind_speed_mps": 1.47,
+          "wind_gust_mps": 2.08,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 3.7,
+          "pm10": 4.27,
+          "o3": 60.38
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_alaska:anchorage",
+        "region_key": "us_alaska",
+        "region_label": "Alaska",
+        "macro_region": "North America",
+        "location_label": "Anchorage",
+        "lat": 61.22,
+        "lon": -149.9,
+        "observed_at": "2026-07-15T14:57:26Z",
+        "weather": {
+          "temp_c": 10.18,
+          "feels_like_c": 9.53,
+          "temp_delta_24h_c": -4.0,
+          "pressure_hpa": 1012.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 87.0,
+          "wind_speed_mps": 4.92,
+          "wind_gust_mps": null,
+          "condition_code": 500,
+          "condition": "Rain",
+          "condition_summary": "light rain",
+          "rain_1h_mm": 0.57,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 0.52,
+          "pm10": 0.8,
+          "o3": 42.64
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_alaska:fairbanks",
+        "region_key": "us_alaska",
+        "region_label": "Alaska",
+        "macro_region": "North America",
+        "location_label": "Fairbanks",
+        "lat": 64.84,
+        "lon": -147.72,
+        "observed_at": "2026-07-15T14:56:08Z",
+        "weather": {
+          "temp_c": 11.73,
+          "feels_like_c": 11.07,
+          "temp_delta_24h_c": -7.4,
+          "pressure_hpa": 1008.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 81.0,
+          "wind_speed_mps": 1.48,
+          "wind_gust_mps": 3.64,
+          "condition_code": 500,
+          "condition": "Rain",
+          "condition_summary": "light rain",
+          "rain_1h_mm": 0.17,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 0.5,
+          "pm10": 0.5,
+          "o3": 48.29
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_alaska:juneau",
+        "region_key": "us_alaska",
+        "region_label": "Alaska",
+        "macro_region": "North America",
+        "location_label": "Juneau",
+        "lat": 58.3,
+        "lon": -134.42,
+        "observed_at": "2026-07-15T14:55:05Z",
+        "weather": {
+          "temp_c": 11.72,
+          "feels_like_c": 11.56,
+          "temp_delta_24h_c": -2.2,
+          "pressure_hpa": 1021.0,
+          "pressure_delta_24h_hpa": -3.0,
+          "humidity_pct": 100.0,
+          "wind_speed_mps": 0.93,
+          "wind_gust_mps": 1.16,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.52,
+          "pm10": 3.0,
+          "o3": 38.45
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_hawaii:honolulu",
+        "region_key": "us_hawaii",
+        "region_label": "Hawaii",
+        "macro_region": "Oceania",
+        "location_label": "Honolulu",
+        "lat": 21.31,
+        "lon": -157.86,
+        "observed_at": "2026-07-15T14:54:31Z",
+        "weather": {
+          "temp_c": 23.04,
+          "feels_like_c": 23.7,
+          "temp_delta_24h_c": -5.1,
+          "pressure_hpa": 1013.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 88.0,
+          "wind_speed_mps": 1.34,
+          "wind_gust_mps": 2.24,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.42,
+          "pm10": 3.19,
+          "o3": 46.88
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_hawaii:hilo",
+        "region_key": "us_hawaii",
+        "region_label": "Hawaii",
+        "macro_region": "Oceania",
+        "location_label": "Hilo",
+        "lat": 19.71,
+        "lon": -155.08,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 21.35,
+          "feels_like_c": 22.05,
+          "temp_delta_24h_c": -5.1,
+          "pressure_hpa": 1014.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 96.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 2.24,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.18,
+          "pm10": 2.52,
+          "o3": 40.91
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "us_hawaii:kahului",
+        "region_key": "us_hawaii",
+        "region_label": "Hawaii",
+        "macro_region": "Oceania",
+        "location_label": "Kahului",
+        "lat": 20.89,
+        "lon": -156.47,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 21.69,
+          "feels_like_c": 22.11,
+          "temp_delta_24h_c": -5.3,
+          "pressure_hpa": 1013.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 84.0,
+          "wind_speed_mps": 2.89,
+          "wind_gust_mps": 3.42,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 4.17,
+          "pm10": 5.86,
+          "o3": 44.73
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "canada_west:vancouver",
+        "region_key": "canada_west",
+        "region_label": "Western Canada",
+        "macro_region": "North America",
+        "location_label": "Vancouver",
+        "lat": 49.28,
+        "lon": -123.12,
+        "observed_at": "2026-07-15T14:58:27Z",
+        "weather": {
+          "temp_c": 17.89,
+          "feels_like_c": 17.48,
+          "temp_delta_24h_c": -6.2,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 67.0,
+          "wind_speed_mps": 1.34,
+          "wind_gust_mps": 1.79,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.82,
+          "pm10": 5.3,
+          "o3": 17.34
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "canada_west:calgary",
+        "region_key": "canada_west",
+        "region_label": "Western Canada",
+        "macro_region": "North America",
+        "location_label": "Calgary",
+        "lat": 51.05,
+        "lon": -114.07,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 19.48,
+          "feels_like_c": 19.23,
+          "temp_delta_24h_c": -3.5,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 67.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 1.34,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 2.14,
+          "pm10": 2.32,
+          "o3": 43.42
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "canada_west:winnipeg",
+        "region_key": "canada_west",
+        "region_label": "Western Canada",
+        "macro_region": "North America",
+        "location_label": "Winnipeg",
+        "lat": 49.9,
+        "lon": -97.14,
+        "observed_at": "2026-07-15T14:54:31Z",
+        "weather": {
+          "temp_c": 19.78,
+          "feels_like_c": 19.98,
+          "temp_delta_24h_c": -5.2,
+          "pressure_hpa": 1024.0,
+          "pressure_delta_24h_hpa": 4.0,
+          "humidity_pct": 83.0,
+          "wind_speed_mps": 3.58,
+          "wind_gust_mps": null,
+          "condition_code": 500,
+          "condition": "Rain",
+          "condition_summary": "light rain",
+          "rain_1h_mm": 0.21,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.12,
+          "pm10": 3.2,
+          "o3": 37.18
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "canada_east:toronto",
+        "region_key": "canada_east",
+        "region_label": "Eastern Canada",
+        "macro_region": "North America",
+        "location_label": "Toronto",
+        "lat": 43.65,
+        "lon": -79.38,
+        "observed_at": "2026-07-15T14:59:22Z",
+        "weather": {
+          "temp_c": 26.32,
+          "feels_like_c": 26.32,
+          "temp_delta_24h_c": -5.6,
+          "pressure_hpa": 1014.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 62.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 2.24,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 10.67,
+          "pm10": 11.31,
+          "o3": 69.48
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "canada_east:montreal",
+        "region_key": "canada_east",
+        "region_label": "Eastern Canada",
+        "macro_region": "North America",
+        "location_label": "Montreal",
+        "lat": 45.5,
+        "lon": -73.57,
+        "observed_at": "2026-07-15T14:54:31Z",
+        "weather": {
+          "temp_c": 25.12,
+          "feels_like_c": 25.33,
+          "temp_delta_24h_c": -2.2,
+          "pressure_hpa": 1008.0,
+          "pressure_delta_24h_hpa": 3.0,
+          "humidity_pct": 63.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 3.13,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 9.27,
+          "pm10": 9.3,
+          "o3": 52.74
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "canada_east:halifax",
+        "region_key": "canada_east",
+        "region_label": "Eastern Canada",
+        "macro_region": "North America",
+        "location_label": "Halifax",
+        "lat": 44.65,
+        "lon": -63.57,
+        "observed_at": "2026-07-15T14:58:27Z",
+        "weather": {
+          "temp_c": 25.08,
+          "feels_like_c": 25.45,
+          "temp_delta_24h_c": 8.3,
+          "pressure_hpa": 1000.0,
+          "pressure_delta_24h_hpa": -6.0,
+          "humidity_pct": 69.0,
+          "wind_speed_mps": 1.34,
+          "wind_gust_mps": 4.02,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 14.57,
+          "pm10": 17.04,
+          "o3": 97.2
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "mexico_central_america:mexico_city",
+        "region_key": "mexico_central_america",
+        "region_label": "Mexico and Central America",
+        "macro_region": "North America",
+        "location_label": "Mexico City",
+        "lat": 19.43,
+        "lon": -99.13,
+        "observed_at": "2026-07-15T14:58:27Z",
+        "weather": {
+          "temp_c": 17.75,
+          "feels_like_c": 17.33,
+          "temp_delta_24h_c": -2.4,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 4.0,
+          "humidity_pct": 67.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": null,
+          "condition_code": 500,
+          "condition": "Rain",
+          "condition_summary": "light rain",
+          "rain_1h_mm": 0.11,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 32.71,
+          "pm10": 37.32,
+          "o3": 69.19
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "mexico_central_america:guatemala_city",
+        "region_key": "mexico_central_america",
+        "region_label": "Mexico and Central America",
+        "macro_region": "North America",
+        "location_label": "Guatemala City",
+        "lat": 14.63,
+        "lon": -90.51,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 20.04,
+          "feels_like_c": 20.21,
+          "temp_delta_24h_c": 3.0,
+          "pressure_hpa": 1017.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 81.0,
+          "wind_speed_mps": 2.73,
+          "wind_gust_mps": 4.56,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 34.05,
+          "pm10": 40.96,
+          "o3": 45.19
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "mexico_central_america:panama_city",
+        "region_key": "mexico_central_america",
+        "region_label": "Mexico and Central America",
+        "macro_region": "North America",
+        "location_label": "Panama City",
+        "lat": 8.98,
+        "lon": -79.52,
+        "observed_at": "2026-07-15T14:52:02Z",
+        "weather": {
+          "temp_c": 32.19,
+          "feels_like_c": 36.04,
+          "temp_delta_24h_c": -0.3,
+          "pressure_hpa": 1009.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 55.0,
+          "wind_speed_mps": 1.49,
+          "wind_gust_mps": 3.15,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 2.53,
+          "pm10": 3.21,
+          "o3": 26.31
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "caribbean:san_juan",
+        "region_key": "caribbean",
+        "region_label": "Caribbean",
+        "macro_region": "North America",
+        "location_label": "San Juan",
+        "lat": 18.47,
+        "lon": -66.11,
+        "observed_at": "2026-07-15T14:56:08Z",
+        "weather": {
+          "temp_c": 31.17,
+          "feels_like_c": 37.75,
+          "temp_delta_24h_c": 3.4,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 69.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 5.36,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 2.14,
+          "pm10": 10.16,
+          "o3": 36.02
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "caribbean:havana",
+        "region_key": "caribbean",
+        "region_label": "Caribbean",
+        "macro_region": "North America",
+        "location_label": "Havana",
+        "lat": 23.11,
+        "lon": -82.37,
+        "observed_at": "2026-07-15T14:58:28Z",
+        "weather": {
+          "temp_c": 30.36,
+          "feels_like_c": 37.36,
+          "temp_delta_24h_c": 1.1,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 79.0,
+          "wind_speed_mps": 7.66,
+          "wind_gust_mps": 9.1,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.92,
+          "pm10": 5.63,
+          "o3": 36.43
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "caribbean:santo_domingo",
+        "region_key": "caribbean",
+        "region_label": "Caribbean",
+        "macro_region": "North America",
+        "location_label": "Santo Domingo",
+        "lat": 18.49,
+        "lon": -69.99,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 29.89,
+          "feels_like_c": 34.77,
+          "temp_delta_24h_c": 1.4,
+          "pressure_hpa": 1017.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 70.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 0.89,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 2.44,
+          "pm10": 12.28,
+          "o3": 41.99
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "uk_ireland:london",
+        "region_key": "uk_ireland",
+        "region_label": "UK and Ireland",
+        "macro_region": "Europe",
+        "location_label": "London",
+        "lat": 51.51,
+        "lon": -0.13,
+        "observed_at": "2026-07-15T14:56:52Z",
+        "weather": {
+          "temp_c": 28.13,
+          "feels_like_c": 28.16,
+          "temp_delta_24h_c": 10.2,
+          "pressure_hpa": 1021.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 45.0,
+          "wind_speed_mps": 4.02,
+          "wind_gust_mps": 7.15,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 7.4,
+          "pm10": 15.1,
+          "o3": 113.26
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "uk_ireland:manchester",
+        "region_key": "uk_ireland",
+        "region_label": "UK and Ireland",
+        "macro_region": "Europe",
+        "location_label": "Manchester",
+        "lat": 53.48,
+        "lon": -2.24,
+        "observed_at": "2026-07-15T14:52:22Z",
+        "weather": {
+          "temp_c": 29.13,
+          "feels_like_c": 28.56,
+          "temp_delta_24h_c": 13.4,
+          "pressure_hpa": 1024.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 38.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 1.79,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 3.8,
+          "pm10": 6.21,
+          "o3": 102.31
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "uk_ireland:dublin",
+        "region_key": "uk_ireland",
+        "region_label": "UK and Ireland",
+        "macro_region": "Europe",
+        "location_label": "Dublin",
+        "lat": 53.35,
+        "lon": -6.26,
+        "observed_at": "2026-07-15T14:48:32Z",
+        "weather": {
+          "temp_c": 21.79,
+          "feels_like_c": 21.93,
+          "temp_delta_24h_c": 6.6,
+          "pressure_hpa": 1025.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 73.0,
+          "wind_speed_mps": 5.36,
+          "wind_gust_mps": null,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 4.98,
+          "pm10": 8.09,
+          "o3": 95.04
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "western_europe:paris",
+        "region_key": "western_europe",
+        "region_label": "Western Europe",
+        "macro_region": "Europe",
+        "location_label": "Paris",
+        "lat": 48.86,
+        "lon": 2.35,
+        "observed_at": "2026-07-15T14:48:49Z",
+        "weather": {
+          "temp_c": 32.75,
+          "feels_like_c": 31.56,
+          "temp_delta_24h_c": 6.3,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 29.0,
+          "wind_speed_mps": 3.94,
+          "wind_gust_mps": 4.15,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 6.47,
+          "pm10": 7.12,
+          "o3": 104.17
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "western_europe:amsterdam",
+        "region_key": "western_europe",
+        "region_label": "Western Europe",
+        "macro_region": "Europe",
+        "location_label": "Amsterdam",
+        "lat": 52.37,
+        "lon": 4.9,
+        "observed_at": "2026-07-15T14:52:09Z",
+        "weather": {
+          "temp_c": 27.92,
+          "feels_like_c": 27.8,
+          "temp_delta_24h_c": 8.0,
+          "pressure_hpa": 1021.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 43.0,
+          "wind_speed_mps": 3.58,
+          "wind_gust_mps": 6.71,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 2.88,
+          "pm10": 3.46,
+          "o3": 118.26
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "western_europe:brussels",
+        "region_key": "western_europe",
+        "region_label": "Western Europe",
+        "macro_region": "Europe",
+        "location_label": "Brussels",
+        "lat": 50.85,
+        "lon": 4.35,
+        "observed_at": "2026-07-15T14:56:08Z",
+        "weather": {
+          "temp_c": 30.02,
+          "feels_like_c": 29.39,
+          "temp_delta_24h_c": 9.8,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 37.0,
+          "wind_speed_mps": 6.2,
+          "wind_gust_mps": 5.57,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 2.07,
+          "pm10": 2.4,
+          "o3": 112.81
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "central_europe:berlin",
+        "region_key": "central_europe",
+        "region_label": "Central Europe",
+        "macro_region": "Europe",
+        "location_label": "Berlin",
+        "lat": 52.52,
+        "lon": 13.41,
+        "observed_at": "2026-07-15T14:59:40Z",
+        "weather": {
+          "temp_c": 24.59,
+          "feels_like_c": 24.23,
+          "temp_delta_24h_c": 7.2,
+          "pressure_hpa": 1021.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 43.0,
+          "wind_speed_mps": 4.02,
+          "wind_gust_mps": 7.15,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 2.32,
+          "pm10": 2.53,
+          "o3": 90.97
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "central_europe:warsaw",
+        "region_key": "central_europe",
+        "region_label": "Central Europe",
+        "macro_region": "Europe",
+        "location_label": "Warsaw",
+        "lat": 52.23,
+        "lon": 21.01,
+        "observed_at": "2026-07-15T14:52:11Z",
+        "weather": {
+          "temp_c": 28.43,
+          "feels_like_c": 28.29,
+          "temp_delta_24h_c": 10.9,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 43.0,
+          "wind_speed_mps": 2.67,
+          "wind_gust_mps": 1.98,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.19,
+          "pm10": 3.74,
+          "o3": 59.11
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "central_europe:vienna",
+        "region_key": "central_europe",
+        "region_label": "Central Europe",
+        "macro_region": "Europe",
+        "location_label": "Vienna",
+        "lat": 48.21,
+        "lon": 16.37,
+        "observed_at": "2026-07-15T14:57:06Z",
+        "weather": {
+          "temp_c": 28.16,
+          "feels_like_c": 28.63,
+          "temp_delta_24h_c": 7.5,
+          "pressure_hpa": 1017.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 50.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 6.26,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 1.18,
+          "pm10": 1.4,
+          "o3": 106.43
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "northern_europe:oslo",
+        "region_key": "northern_europe",
+        "region_label": "Northern Europe",
+        "macro_region": "Europe",
+        "location_label": "Oslo",
+        "lat": 59.91,
+        "lon": 10.75,
+        "observed_at": "2026-07-15T14:57:06Z",
+        "weather": {
+          "temp_c": 34.92,
+          "feels_like_c": 34.99,
+          "temp_delta_24h_c": 20.1,
+          "pressure_hpa": 1022.0,
+          "pressure_delta_24h_hpa": -3.0,
+          "humidity_pct": 32.0,
+          "wind_speed_mps": 0.74,
+          "wind_gust_mps": 1.08,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 6.18,
+          "pm10": 7.05,
+          "o3": 106.02
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "northern_europe:stockholm",
+        "region_key": "northern_europe",
+        "region_label": "Northern Europe",
+        "macro_region": "Europe",
+        "location_label": "Stockholm",
+        "lat": 59.33,
+        "lon": 18.07,
+        "observed_at": "2026-07-15T14:57:06Z",
+        "weather": {
+          "temp_c": 29.58,
+          "feels_like_c": 29.02,
+          "temp_delta_24h_c": 16.1,
+          "pressure_hpa": 1023.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 38.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 3.58,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 6.5,
+          "pm10": 9.02,
+          "o3": 85.26
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "northern_europe:helsinki",
+        "region_key": "northern_europe",
+        "region_label": "Northern Europe",
+        "macro_region": "Europe",
+        "location_label": "Helsinki",
+        "lat": 60.17,
+        "lon": 24.94,
+        "observed_at": "2026-07-15T14:50:15Z",
+        "weather": {
+          "temp_c": 26.63,
+          "feels_like_c": 26.63,
+          "temp_delta_24h_c": 11.8,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 45.0,
+          "wind_speed_mps": 4.47,
+          "wind_gust_mps": 8.05,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 2.16,
+          "pm10": 2.59,
+          "o3": 82.94
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_europe:madrid",
+        "region_key": "southern_europe",
+        "region_label": "Southern Europe",
+        "macro_region": "Europe",
+        "location_label": "Madrid",
+        "lat": 40.42,
+        "lon": -3.7,
+        "observed_at": "2026-07-15T14:52:33Z",
+        "weather": {
+          "temp_c": 33.4,
+          "feels_like_c": 31.71,
+          "temp_delta_24h_c": 7.3,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 24.0,
+          "wind_speed_mps": 3.13,
+          "wind_gust_mps": 8.05,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 2.35,
+          "pm10": 8.14,
+          "o3": 76.82
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_europe:rome",
+        "region_key": "southern_europe",
+        "region_label": "Southern Europe",
+        "macro_region": "Europe",
+        "location_label": "Rome",
+        "lat": 41.9,
+        "lon": 12.5,
+        "observed_at": "2026-07-15T14:51:03Z",
+        "weather": {
+          "temp_c": 34.0,
+          "feels_like_c": 37.11,
+          "temp_delta_24h_c": 8.4,
+          "pressure_hpa": 1015.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 46.0,
+          "wind_speed_mps": 5.23,
+          "wind_gust_mps": 3.58,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 4,
+          "pm2_5": 70.78,
+          "pm10": 86.83,
+          "o3": 80.16
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_europe:athens",
+        "region_key": "southern_europe",
+        "region_label": "Southern Europe",
+        "macro_region": "Europe",
+        "location_label": "Athens",
+        "lat": 37.98,
+        "lon": 23.73,
+        "observed_at": "2026-07-15T14:57:06Z",
+        "weather": {
+          "temp_c": 33.21,
+          "feels_like_c": 34.34,
+          "temp_delta_24h_c": 7.9,
+          "pressure_hpa": 1014.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 41.0,
+          "wind_speed_mps": 4.47,
+          "wind_gust_mps": 8.49,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 10.0,
+          "pm10": 14.2,
+          "o3": 114.08
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "north_africa:casablanca",
+        "region_key": "north_africa",
+        "region_label": "North Africa",
+        "macro_region": "Africa",
+        "location_label": "Casablanca",
+        "lat": 33.57,
+        "lon": -7.59,
+        "observed_at": "2026-07-15T14:58:04Z",
+        "weather": {
+          "temp_c": 25.55,
+          "feels_like_c": 25.86,
+          "temp_delta_24h_c": 2.8,
+          "pressure_hpa": 1017.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 65.0,
+          "wind_speed_mps": 3.58,
+          "wind_gust_mps": null,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 11.26,
+          "pm10": 25.91,
+          "o3": 103.55
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "north_africa:algiers",
+        "region_key": "north_africa",
+        "region_label": "North Africa",
+        "macro_region": "Africa",
+        "location_label": "Algiers",
+        "lat": 36.75,
+        "lon": 3.06,
+        "observed_at": "2026-07-15T14:58:13Z",
+        "weather": {
+          "temp_c": 31.12,
+          "feels_like_c": 34.85,
+          "temp_delta_24h_c": 1.3,
+          "pressure_hpa": 1017.0,
+          "pressure_delta_24h_hpa": 3.0,
+          "humidity_pct": 59.0,
+          "wind_speed_mps": 3.35,
+          "wind_gust_mps": 2.64,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 13.89,
+          "pm10": 53.87,
+          "o3": 119.96
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "north_africa:cairo",
+        "region_key": "north_africa",
+        "region_label": "North Africa",
+        "macro_region": "Africa",
+        "location_label": "Cairo",
+        "lat": 30.04,
+        "lon": 31.24,
+        "observed_at": "2026-07-15T14:53:53Z",
+        "weather": {
+          "temp_c": 34.03,
+          "feels_like_c": 34.09,
+          "temp_delta_24h_c": 8.8,
+          "pressure_hpa": 1007.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 34.0,
+          "wind_speed_mps": 8.62,
+          "wind_gust_mps": 6.32,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 7.14,
+          "pm10": 24.5,
+          "o3": 104.65
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "west_central_africa:dakar",
+        "region_key": "west_central_africa",
+        "region_label": "West and Central Africa",
+        "macro_region": "Africa",
+        "location_label": "Dakar",
+        "lat": 14.72,
+        "lon": -17.47,
+        "observed_at": "2026-07-15T14:58:28Z",
+        "weather": {
+          "temp_c": 27.24,
+          "feels_like_c": 30.07,
+          "temp_delta_24h_c": 1.1,
+          "pressure_hpa": 1013.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 78.0,
+          "wind_speed_mps": 3.18,
+          "wind_gust_mps": 3.34,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 5.33,
+          "pm10": 14.32,
+          "o3": 51.78
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "west_central_africa:lagos",
+        "region_key": "west_central_africa",
+        "region_label": "West and Central Africa",
+        "macro_region": "Africa",
+        "location_label": "Lagos",
+        "lat": 6.52,
+        "lon": 3.38,
+        "observed_at": "2026-07-15T14:56:21Z",
+        "weather": {
+          "temp_c": 26.51,
+          "feels_like_c": 26.51,
+          "temp_delta_24h_c": 1.6,
+          "pressure_hpa": 1013.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 80.0,
+          "wind_speed_mps": 6.7,
+          "wind_gust_mps": 8.21,
+          "condition_code": 500,
+          "condition": "Rain",
+          "condition_summary": "light rain",
+          "rain_1h_mm": 0.48,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 2.77,
+          "pm10": 6.76,
+          "o3": 68.3
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "west_central_africa:kinshasa",
+        "region_key": "west_central_africa",
+        "region_label": "West and Central Africa",
+        "macro_region": "Africa",
+        "location_label": "Kinshasa",
+        "lat": -4.33,
+        "lon": 15.31,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 35.43,
+          "feels_like_c": 33.96,
+          "temp_delta_24h_c": 13.8,
+          "pressure_hpa": 1010.0,
+          "pressure_delta_24h_hpa": -3.0,
+          "humidity_pct": 23.0,
+          "wind_speed_mps": 0.86,
+          "wind_gust_mps": 1.8,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 18.29,
+          "pm10": 23.03,
+          "o3": 77.34
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "east_africa:addis_ababa",
+        "region_key": "east_africa",
+        "region_label": "East Africa",
+        "macro_region": "Africa",
+        "location_label": "Addis Ababa",
+        "lat": 9.03,
+        "lon": 38.74,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 17.06,
+          "feels_like_c": 16.49,
+          "temp_delta_24h_c": 3.5,
+          "pressure_hpa": 1015.0,
+          "pressure_delta_24h_hpa": -3.0,
+          "humidity_pct": 64.0,
+          "wind_speed_mps": 1.83,
+          "wind_gust_mps": 4.59,
+          "condition_code": 500,
+          "condition": "Rain",
+          "condition_summary": "light rain",
+          "rain_1h_mm": 0.45,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 35.31,
+          "pm10": 52.46,
+          "o3": 55.1
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "east_africa:nairobi",
+        "region_key": "east_africa",
+        "region_label": "East Africa",
+        "macro_region": "Africa",
+        "location_label": "Nairobi",
+        "lat": -1.29,
+        "lon": 36.82,
+        "observed_at": "2026-07-15T14:54:50Z",
+        "weather": {
+          "temp_c": 22.99,
+          "feels_like_c": 22.49,
+          "temp_delta_24h_c": 8.8,
+          "pressure_hpa": 1014.0,
+          "pressure_delta_24h_hpa": -5.0,
+          "humidity_pct": 44.0,
+          "wind_speed_mps": 2.81,
+          "wind_gust_mps": 3.54,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 4.04,
+          "pm10": 9.97,
+          "o3": 58.6
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "east_africa:dar_es_salaam",
+        "region_key": "east_africa",
+        "region_label": "East Africa",
+        "macro_region": "Africa",
+        "location_label": "Dar es Salaam",
+        "lat": -6.79,
+        "lon": 39.21,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 25.87,
+          "feels_like_c": 26.08,
+          "temp_delta_24h_c": 4.8,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 60.0,
+          "wind_speed_mps": 4.24,
+          "wind_gust_mps": 5.85,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 7.74,
+          "pm10": 11.44,
+          "o3": 68.97
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_africa:johannesburg",
+        "region_key": "southern_africa",
+        "region_label": "Southern Africa",
+        "macro_region": "Africa",
+        "location_label": "Johannesburg",
+        "lat": -26.2,
+        "lon": 28.05,
+        "observed_at": "2026-07-15T14:55:37Z",
+        "weather": {
+          "temp_c": 18.5,
+          "feels_like_c": 17.14,
+          "temp_delta_24h_c": 9.2,
+          "pressure_hpa": 1022.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 28.0,
+          "wind_speed_mps": 4.46,
+          "wind_gust_mps": 7.72,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 32.03,
+          "pm10": 37.63,
+          "o3": 93.31
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_africa:cape_town",
+        "region_key": "southern_africa",
+        "region_label": "Southern Africa",
+        "macro_region": "Africa",
+        "location_label": "Cape Town",
+        "lat": -33.92,
+        "lon": 18.42,
+        "observed_at": "2026-07-15T14:50:50Z",
+        "weather": {
+          "temp_c": 15.76,
+          "feels_like_c": 15.51,
+          "temp_delta_24h_c": 3.2,
+          "pressure_hpa": 1026.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 81.0,
+          "wind_speed_mps": 1.49,
+          "wind_gust_mps": 1.93,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 1.94,
+          "pm10": 9.7,
+          "o3": 67.75
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_africa:harare",
+        "region_key": "southern_africa",
+        "region_label": "Southern Africa",
+        "macro_region": "Africa",
+        "location_label": "Harare",
+        "lat": -17.83,
+        "lon": 31.05,
+        "observed_at": "2026-07-15T14:52:44Z",
+        "weather": {
+          "temp_c": 20.08,
+          "feels_like_c": 18.59,
+          "temp_delta_24h_c": 11.2,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": -3.0,
+          "humidity_pct": 17.0,
+          "wind_speed_mps": 4.47,
+          "wind_gust_mps": 6.15,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 16.08,
+          "pm10": 19.01,
+          "o3": 93.35
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "middle_east:istanbul",
+        "region_key": "middle_east",
+        "region_label": "Middle East",
+        "macro_region": "Asia",
+        "location_label": "Istanbul",
+        "lat": 41.01,
+        "lon": 28.98,
+        "observed_at": "2026-07-15T14:58:01Z",
+        "weather": {
+          "temp_c": 28.82,
+          "feels_like_c": 30.73,
+          "temp_delta_24h_c": 7.9,
+          "pressure_hpa": 1015.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 60.0,
+          "wind_speed_mps": 4.69,
+          "wind_gust_mps": 6.29,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 5.68,
+          "pm10": 6.07,
+          "o3": 107.92
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "middle_east:riyadh",
+        "region_key": "middle_east",
+        "region_label": "Middle East",
+        "macro_region": "Asia",
+        "location_label": "Riyadh",
+        "lat": 24.71,
+        "lon": 46.68,
+        "observed_at": "2026-07-15T14:58:28Z",
+        "weather": {
+          "temp_c": 42.92,
+          "feels_like_c": 38.84,
+          "temp_delta_24h_c": 11.3,
+          "pressure_hpa": 1000.0,
+          "pressure_delta_24h_hpa": -4.0,
+          "humidity_pct": 6.0,
+          "wind_speed_mps": 6.5,
+          "wind_gust_mps": 8.12,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 4,
+          "pm2_5": 15.57,
+          "pm10": 45.97,
+          "o3": 145.66
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "middle_east:tehran",
+        "region_key": "middle_east",
+        "region_label": "Middle East",
+        "macro_region": "Asia",
+        "location_label": "Tehran",
+        "lat": 35.69,
+        "lon": 51.39,
+        "observed_at": "2026-07-15T14:58:28Z",
+        "weather": {
+          "temp_c": 38.74,
+          "feels_like_c": 35.55,
+          "temp_delta_24h_c": 10.0,
+          "pressure_hpa": 1004.0,
+          "pressure_delta_24h_hpa": -4.0,
+          "humidity_pct": 8.0,
+          "wind_speed_mps": 4.02,
+          "wind_gust_mps": null,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 9.63,
+          "pm10": 32.76,
+          "o3": 136.31
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "central_asia:almaty",
+        "region_key": "central_asia",
+        "region_label": "Central Asia",
+        "macro_region": "Asia",
+        "location_label": "Almaty",
+        "lat": 43.24,
+        "lon": 76.95,
+        "observed_at": "2026-07-15T14:50:52Z",
+        "weather": {
+          "temp_c": 28.58,
+          "feels_like_c": 27.83,
+          "temp_delta_24h_c": 0.4,
+          "pressure_hpa": 1009.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 35.0,
+          "wind_speed_mps": 4.87,
+          "wind_gust_mps": 3.92,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 4.82,
+          "pm10": 8.98,
+          "o3": 69.91
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "central_asia:tashkent",
+        "region_key": "central_asia",
+        "region_label": "Central Asia",
+        "macro_region": "Asia",
+        "location_label": "Tashkent",
+        "lat": 41.3,
+        "lon": 69.24,
+        "observed_at": "2026-07-15T14:52:45Z",
+        "weather": {
+          "temp_c": 36.29,
+          "feels_like_c": 33.49,
+          "temp_delta_24h_c": 5.9,
+          "pressure_hpa": 1002.0,
+          "pressure_delta_24h_hpa": -4.0,
+          "humidity_pct": 10.0,
+          "wind_speed_mps": 1.37,
+          "wind_gust_mps": 1.68,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 7.14,
+          "pm10": 14.59,
+          "o3": 99.23
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "central_asia:astana",
+        "region_key": "central_asia",
+        "region_label": "Central Asia",
+        "macro_region": "Asia",
+        "location_label": "Astana",
+        "lat": 51.17,
+        "lon": 71.43,
+        "observed_at": "2026-07-15T14:52:45Z",
+        "weather": {
+          "temp_c": 25.52,
+          "feels_like_c": 25.49,
+          "temp_delta_24h_c": 0.8,
+          "pressure_hpa": 1006.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 52.0,
+          "wind_speed_mps": 6.62,
+          "wind_gust_mps": 10.84,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 1.94,
+          "pm10": 2.07,
+          "o3": 102.11
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "south_asia:delhi",
+        "region_key": "south_asia",
+        "region_label": "South Asia",
+        "macro_region": "Asia",
+        "location_label": "Delhi",
+        "lat": 28.61,
+        "lon": 77.21,
+        "observed_at": "2026-07-15T14:54:31Z",
+        "weather": {
+          "temp_c": 37.39,
+          "feels_like_c": 39.04,
+          "temp_delta_24h_c": 3.4,
+          "pressure_hpa": 999.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 32.0,
+          "wind_speed_mps": 4.39,
+          "wind_gust_mps": 5.78,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 21.97,
+          "pm10": 73.73,
+          "o3": 63.0
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "south_asia:mumbai",
+        "region_key": "south_asia",
+        "region_label": "South Asia",
+        "macro_region": "Asia",
+        "location_label": "Mumbai",
+        "lat": 19.08,
+        "lon": 72.88,
+        "observed_at": "2026-07-15T14:50:53Z",
+        "weather": {
+          "temp_c": 29.2,
+          "feels_like_c": 33.37,
+          "temp_delta_24h_c": 0.5,
+          "pressure_hpa": 1009.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 71.0,
+          "wind_speed_mps": 5.9,
+          "wind_gust_mps": 7.11,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 3.67,
+          "pm10": 8.35,
+          "o3": 44.32
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "south_asia:dhaka",
+        "region_key": "south_asia",
+        "region_label": "South Asia",
+        "macro_region": "Asia",
+        "location_label": "Dhaka",
+        "lat": 23.81,
+        "lon": 90.41,
+        "observed_at": "2026-07-15T14:58:28Z",
+        "weather": {
+          "temp_c": 28.09,
+          "feels_like_c": 32.98,
+          "temp_delta_24h_c": -1.4,
+          "pressure_hpa": 1003.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 84.0,
+          "wind_speed_mps": 5.72,
+          "wind_gust_mps": 10.21,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 15.43,
+          "pm10": 18.03,
+          "o3": 60.84
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southeast_asia:bangkok",
+        "region_key": "southeast_asia",
+        "region_label": "Southeast Asia",
+        "macro_region": "Asia",
+        "location_label": "Bangkok",
+        "lat": 13.76,
+        "lon": 100.5,
+        "observed_at": "2026-07-15T14:59:40Z",
+        "weather": {
+          "temp_c": 29.4,
+          "feels_like_c": 34.7,
+          "temp_delta_24h_c": -0.6,
+          "pressure_hpa": 1011.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 75.0,
+          "wind_speed_mps": 4.69,
+          "wind_gust_mps": 9.95,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.0,
+          "pm10": 1.6,
+          "o3": 24.22
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southeast_asia:singapore",
+        "region_key": "southeast_asia",
+        "region_label": "Southeast Asia",
+        "macro_region": "Asia",
+        "location_label": "Singapore",
+        "lat": 1.35,
+        "lon": 103.82,
+        "observed_at": "2026-07-15T14:47:48Z",
+        "weather": {
+          "temp_c": 29.15,
+          "feels_like_c": 35.86,
+          "temp_delta_24h_c": -1.2,
+          "pressure_hpa": 1012.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 83.0,
+          "wind_speed_mps": 3.44,
+          "wind_gust_mps": 4.15,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 2.31,
+          "pm10": 4.46,
+          "o3": 23.48
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southeast_asia:jakarta",
+        "region_key": "southeast_asia",
+        "region_label": "Southeast Asia",
+        "macro_region": "Asia",
+        "location_label": "Jakarta",
+        "lat": -6.21,
+        "lon": 106.85,
+        "observed_at": "2026-07-15T14:59:40Z",
+        "weather": {
+          "temp_c": 27.86,
+          "feels_like_c": 31.32,
+          "temp_delta_24h_c": -2.1,
+          "pressure_hpa": 1014.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 77.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 2.24,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 8.22,
+          "pm10": 17.41,
+          "o3": 63.04
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "east_asia:beijing",
+        "region_key": "east_asia",
+        "region_label": "East Asia",
+        "macro_region": "Asia",
+        "location_label": "Beijing",
+        "lat": 39.9,
+        "lon": 116.41,
+        "observed_at": "2026-07-15T14:46:27Z",
+        "weather": {
+          "temp_c": 31.9,
+          "feels_like_c": 32.31,
+          "temp_delta_24h_c": -0.8,
+          "pressure_hpa": 1000.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 41.0,
+          "wind_speed_mps": 0.56,
+          "wind_gust_mps": 1.29,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 5,
+          "pm2_5": 75.93,
+          "pm10": 83.04,
+          "o3": 87.69
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "east_asia:seoul",
+        "region_key": "east_asia",
+        "region_label": "East Asia",
+        "macro_region": "Asia",
+        "location_label": "Seoul",
+        "lat": 37.57,
+        "lon": 126.98,
+        "observed_at": "2026-07-15T14:51:04Z",
+        "weather": {
+          "temp_c": 23.98,
+          "feels_like_c": 24.52,
+          "temp_delta_24h_c": -0.5,
+          "pressure_hpa": 1004.0,
+          "pressure_delta_24h_hpa": 4.0,
+          "humidity_pct": 80.0,
+          "wind_speed_mps": 1.49,
+          "wind_gust_mps": 2.36,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 4,
+          "pm2_5": 70.52,
+          "pm10": 85.67,
+          "o3": 123.36
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "east_asia:tokyo",
+        "region_key": "east_asia",
+        "region_label": "East Asia",
+        "macro_region": "Asia",
+        "location_label": "Tokyo",
+        "lat": 35.68,
+        "lon": 139.69,
+        "observed_at": "2026-07-15T14:59:40Z",
+        "weather": {
+          "temp_c": 28.04,
+          "feels_like_c": 32.52,
+          "temp_delta_24h_c": -4.4,
+          "pressure_hpa": 1000.0,
+          "pressure_delta_24h_hpa": -4.0,
+          "humidity_pct": 82.0,
+          "wind_speed_mps": 3.13,
+          "wind_gust_mps": 5.36,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 3,
+          "pm2_5": 41.22,
+          "pm10": 62.66,
+          "o3": 90.34
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "north_asia:novosibirsk",
+        "region_key": "north_asia",
+        "region_label": "Northern Asia",
+        "macro_region": "Asia",
+        "location_label": "Novosibirsk",
+        "lat": 55.03,
+        "lon": 82.92,
+        "observed_at": "2026-07-15T14:49:45Z",
+        "weather": {
+          "temp_c": 19.73,
+          "feels_like_c": 19.27,
+          "temp_delta_24h_c": -0.4,
+          "pressure_hpa": 1008.0,
+          "pressure_delta_24h_hpa": -4.0,
+          "humidity_pct": 58.0,
+          "wind_speed_mps": 1.16,
+          "wind_gust_mps": 1.25,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.4,
+          "pm10": 1.49,
+          "o3": 41.4
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "north_asia:irkutsk",
+        "region_key": "north_asia",
+        "region_label": "Northern Asia",
+        "macro_region": "Asia",
+        "location_label": "Irkutsk",
+        "lat": 52.29,
+        "lon": 104.28,
+        "observed_at": "2026-07-15T14:52:45Z",
+        "weather": {
+          "temp_c": 17.25,
+          "feels_like_c": 16.99,
+          "temp_delta_24h_c": -3.4,
+          "pressure_hpa": 1008.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 75.0,
+          "wind_speed_mps": 2.57,
+          "wind_gust_mps": 6.19,
+          "condition_code": 500,
+          "condition": "Rain",
+          "condition_summary": "light rain",
+          "rain_1h_mm": 0.11,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 0.74,
+          "pm10": 0.76,
+          "o3": 20.5
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "north_asia:vladivostok",
+        "region_key": "north_asia",
+        "region_label": "Northern Asia",
+        "macro_region": "Asia",
+        "location_label": "Vladivostok",
+        "lat": 43.12,
+        "lon": 131.89,
+        "observed_at": "2026-07-15T14:52:45Z",
+        "weather": {
+          "temp_c": 20.47,
+          "feels_like_c": 21.08,
+          "temp_delta_24h_c": -0.8,
+          "pressure_hpa": 996.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 96.0,
+          "wind_speed_mps": 1.48,
+          "wind_gust_mps": 1.61,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 10.92,
+          "pm10": 16.23,
+          "o3": 69.8
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "northern_south_america:bogota",
+        "region_key": "northern_south_america",
+        "region_label": "Northern South America",
+        "macro_region": "South America",
+        "location_label": "Bogota",
+        "lat": 4.71,
+        "lon": -74.07,
+        "observed_at": "2026-07-15T14:56:08Z",
+        "weather": {
+          "temp_c": 13.16,
+          "feels_like_c": 12.78,
+          "temp_delta_24h_c": -0.2,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 86.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 2.24,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.27,
+          "pm10": 1.51,
+          "o3": 19.36
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "northern_south_america:caracas",
+        "region_key": "northern_south_america",
+        "region_label": "Northern South America",
+        "macro_region": "South America",
+        "location_label": "Caracas",
+        "lat": 10.48,
+        "lon": -66.9,
+        "observed_at": "2026-07-15T14:56:08Z",
+        "weather": {
+          "temp_c": 26.47,
+          "feels_like_c": 26.47,
+          "temp_delta_24h_c": 0.6,
+          "pressure_hpa": 1016.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 63.0,
+          "wind_speed_mps": 3.13,
+          "wind_gust_mps": 6.71,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 2.59,
+          "pm10": 3.26,
+          "o3": 39.87
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "northern_south_america:georgetown",
+        "region_key": "northern_south_america",
+        "region_label": "Northern South America",
+        "macro_region": "South America",
+        "location_label": "Georgetown",
+        "lat": 6.8,
+        "lon": -58.16,
+        "observed_at": "2026-07-15T14:52:45Z",
+        "weather": {
+          "temp_c": 29.21,
+          "feels_like_c": 32.62,
+          "temp_delta_24h_c": 4.3,
+          "pressure_hpa": 1015.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 67.0,
+          "wind_speed_mps": 3.09,
+          "wind_gust_mps": 4.08,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 0.95,
+          "pm10": 2.08,
+          "o3": 31.61
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "andes:quito",
+        "region_key": "andes",
+        "region_label": "Andean South America",
+        "macro_region": "South America",
+        "location_label": "Quito",
+        "lat": -0.18,
+        "lon": -78.47,
+        "observed_at": "2026-07-15T14:52:04Z",
+        "weather": {
+          "temp_c": 17.46,
+          "feels_like_c": 16.38,
+          "temp_delta_24h_c": 6.1,
+          "pressure_hpa": 1014.0,
+          "pressure_delta_24h_hpa": -3.0,
+          "humidity_pct": 43.0,
+          "wind_speed_mps": 2.64,
+          "wind_gust_mps": 4.46,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 4.21,
+          "pm10": 6.24,
+          "o3": 20.83
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "andes:lima",
+        "region_key": "andes",
+        "region_label": "Andean South America",
+        "macro_region": "South America",
+        "location_label": "Lima",
+        "lat": -12.05,
+        "lon": -77.04,
+        "observed_at": "2026-07-15T14:48:28Z",
+        "weather": {
+          "temp_c": 22.78,
+          "feels_like_c": 23.23,
+          "temp_delta_24h_c": 1.1,
+          "pressure_hpa": 1013.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 81.0,
+          "wind_speed_mps": 2.27,
+          "wind_gust_mps": 1.35,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 3.84,
+          "pm10": 6.61,
+          "o3": 61.02
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "andes:la_paz",
+        "region_key": "andes",
+        "region_label": "Andean South America",
+        "macro_region": "South America",
+        "location_label": "La Paz",
+        "lat": -16.49,
+        "lon": -68.12,
+        "observed_at": "2026-07-15T14:56:22Z",
+        "weather": {
+          "temp_c": 10.51,
+          "feels_like_c": 8.19,
+          "temp_delta_24h_c": 5.5,
+          "pressure_hpa": 1018.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 22.0,
+          "wind_speed_mps": 1.8,
+          "wind_gust_mps": 1.14,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 5.24,
+          "pm10": 8.45,
+          "o3": 50.26
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "brazil_atlantic:manaus",
+        "region_key": "brazil_atlantic",
+        "region_label": "Brazil and the Atlantic Coast",
+        "macro_region": "South America",
+        "location_label": "Manaus",
+        "lat": -3.12,
+        "lon": -60.02,
+        "observed_at": "2026-07-15T14:54:26Z",
+        "weather": {
+          "temp_c": 31.16,
+          "feels_like_c": 34.68,
+          "temp_delta_24h_c": 5.4,
+          "pressure_hpa": 1013.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 58.0,
+          "wind_speed_mps": 2.04,
+          "wind_gust_mps": 3.78,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 0.72,
+          "pm10": 0.75,
+          "o3": 11.15
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "brazil_atlantic:brasilia",
+        "region_key": "brazil_atlantic",
+        "region_label": "Brazil and the Atlantic Coast",
+        "macro_region": "South America",
+        "location_label": "Brasilia",
+        "lat": -15.79,
+        "lon": -47.88,
+        "observed_at": "2026-07-15T14:54:32Z",
+        "weather": {
+          "temp_c": 24.64,
+          "feels_like_c": 24.36,
+          "temp_delta_24h_c": 6.9,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 46.0,
+          "wind_speed_mps": 4.76,
+          "wind_gust_mps": 5.07,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 6.28,
+          "pm10": 7.11,
+          "o3": 60.51
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "brazil_atlantic:sao_paulo",
+        "region_key": "brazil_atlantic",
+        "region_label": "Brazil and the Atlantic Coast",
+        "macro_region": "South America",
+        "location_label": "Sao Paulo",
+        "lat": -23.55,
+        "lon": -46.63,
+        "observed_at": "2026-07-15T14:56:38Z",
+        "weather": {
+          "temp_c": 16.61,
+          "feels_like_c": 16.08,
+          "temp_delta_24h_c": 3.0,
+          "pressure_hpa": 1024.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 67.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 2.24,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 6.66,
+          "pm10": 19.47,
+          "o3": 39.8
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_cone:buenos_aires",
+        "region_key": "southern_cone",
+        "region_label": "Southern South America",
+        "macro_region": "South America",
+        "location_label": "Buenos Aires",
+        "lat": -34.6,
+        "lon": -58.38,
+        "observed_at": "2026-07-15T14:56:08Z",
+        "weather": {
+          "temp_c": 14.62,
+          "feels_like_c": 14.17,
+          "temp_delta_24h_c": 2.1,
+          "pressure_hpa": 1012.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 78.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 0.89,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 11.28,
+          "pm10": 16.9,
+          "o3": 34.03
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_cone:santiago",
+        "region_key": "southern_cone",
+        "region_label": "Southern South America",
+        "macro_region": "South America",
+        "location_label": "Santiago",
+        "lat": -33.45,
+        "lon": -70.67,
+        "observed_at": "2026-07-15T14:56:08Z",
+        "weather": {
+          "temp_c": 17.24,
+          "feels_like_c": 16.43,
+          "temp_delta_24h_c": 4.1,
+          "pressure_hpa": 1013.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 54.0,
+          "wind_speed_mps": 2.68,
+          "wind_gust_mps": 4.92,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 4,
+          "pm2_5": 61.9,
+          "pm10": 65.9,
+          "o3": 49.03
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "southern_cone:montevideo",
+        "region_key": "southern_cone",
+        "region_label": "Southern South America",
+        "macro_region": "South America",
+        "location_label": "Montevideo",
+        "lat": -34.9,
+        "lon": -56.16,
+        "observed_at": "2026-07-15T14:56:09Z",
+        "weather": {
+          "temp_c": 16.59,
+          "feels_like_c": 16.13,
+          "temp_delta_24h_c": 4.1,
+          "pressure_hpa": 1014.0,
+          "pressure_delta_24h_hpa": -2.0,
+          "humidity_pct": 70.0,
+          "wind_speed_mps": 1.34,
+          "wind_gust_mps": 6.26,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 9.09,
+          "pm10": 10.72,
+          "o3": 49.76
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "eastern_australia:brisbane",
+        "region_key": "eastern_australia",
+        "region_label": "Eastern Australia",
+        "macro_region": "Oceania",
+        "location_label": "Brisbane",
+        "lat": -27.47,
+        "lon": 153.03,
+        "observed_at": "2026-07-15T14:57:06Z",
+        "weather": {
+          "temp_c": 12.57,
+          "feels_like_c": 11.87,
+          "temp_delta_24h_c": -6.2,
+          "pressure_hpa": 1028.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 76.0,
+          "wind_speed_mps": 2.24,
+          "wind_gust_mps": 4.92,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.51,
+          "pm10": 1.86,
+          "o3": 45.55
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "eastern_australia:sydney",
+        "region_key": "eastern_australia",
+        "region_label": "Eastern Australia",
+        "macro_region": "Oceania",
+        "location_label": "Sydney",
+        "lat": -33.87,
+        "lon": 151.21,
+        "observed_at": "2026-07-15T14:59:40Z",
+        "weather": {
+          "temp_c": 9.63,
+          "feels_like_c": 6.76,
+          "temp_delta_24h_c": -6.5,
+          "pressure_hpa": 1034.0,
+          "pressure_delta_24h_hpa": 2.0,
+          "humidity_pct": 62.0,
+          "wind_speed_mps": 6.04,
+          "wind_gust_mps": 9.41,
+          "condition_code": 802,
+          "condition": "Clouds",
+          "condition_summary": "scattered clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 1.3,
+          "pm10": 3.83,
+          "o3": 44.16
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "eastern_australia:melbourne",
+        "region_key": "eastern_australia",
+        "region_label": "Eastern Australia",
+        "macro_region": "Oceania",
+        "location_label": "Melbourne",
+        "lat": -37.81,
+        "lon": 144.96,
+        "observed_at": "2026-07-15T14:57:06Z",
+        "weather": {
+          "temp_c": 12.02,
+          "feels_like_c": 11.6,
+          "temp_delta_24h_c": -0.8,
+          "pressure_hpa": 1037.0,
+          "pressure_delta_24h_hpa": 1.0,
+          "humidity_pct": 89.0,
+          "wind_speed_mps": 0.96,
+          "wind_gust_mps": 1.14,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 1.25,
+          "pm10": 4.58,
+          "o3": 63.62
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "western_northern_australia:perth",
+        "region_key": "western_northern_australia",
+        "region_label": "Western and Northern Australia",
+        "macro_region": "Oceania",
+        "location_label": "Perth",
+        "lat": -31.95,
+        "lon": 115.86,
+        "observed_at": "2026-07-15T14:59:40Z",
+        "weather": {
+          "temp_c": 17.32,
+          "feels_like_c": 16.62,
+          "temp_delta_24h_c": -0.4,
+          "pressure_hpa": 1020.0,
+          "pressure_delta_24h_hpa": -3.0,
+          "humidity_pct": 58.0,
+          "wind_speed_mps": 0.89,
+          "wind_gust_mps": 2.24,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 5.44,
+          "pm10": 15.89,
+          "o3": 56.17
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "western_northern_australia:darwin",
+        "region_key": "western_northern_australia",
+        "region_label": "Western and Northern Australia",
+        "macro_region": "Oceania",
+        "location_label": "Darwin",
+        "lat": -12.46,
+        "lon": 130.84,
+        "observed_at": "2026-07-15T14:52:45Z",
+        "weather": {
+          "temp_c": 24.99,
+          "feels_like_c": 24.85,
+          "temp_delta_24h_c": -2.8,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 50.0,
+          "wind_speed_mps": 4.92,
+          "wind_gust_mps": null,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 7.87,
+          "pm10": 18.44,
+          "o3": 44.84
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "western_northern_australia:adelaide",
+        "region_key": "western_northern_australia",
+        "region_label": "Western and Northern Australia",
+        "macro_region": "Oceania",
+        "location_label": "Adelaide",
+        "lat": -34.93,
+        "lon": 138.6,
+        "observed_at": "2026-07-15T14:59:40Z",
+        "weather": {
+          "temp_c": 8.57,
+          "feels_like_c": 7.72,
+          "temp_delta_24h_c": -5.6,
+          "pressure_hpa": 1039.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 87.0,
+          "wind_speed_mps": 1.79,
+          "wind_gust_mps": 3.58,
+          "condition_code": 800,
+          "condition": "Clear",
+          "condition_summary": "clear sky",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 13.28,
+          "pm10": 16.38,
+          "o3": 60.66
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "new_zealand_pacific:auckland",
+        "region_key": "new_zealand_pacific",
+        "region_label": "New Zealand and the South Pacific",
+        "macro_region": "Oceania",
+        "location_label": "Auckland",
+        "lat": -36.85,
+        "lon": 174.76,
+        "observed_at": "2026-07-15T14:59:40Z",
+        "weather": {
+          "temp_c": 10.04,
+          "feels_like_c": 9.63,
+          "temp_delta_24h_c": -7.3,
+          "pressure_hpa": 1027.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 97.0,
+          "wind_speed_mps": 0.45,
+          "wind_gust_mps": 1.34,
+          "condition_code": 801,
+          "condition": "Clouds",
+          "condition_summary": "few clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 1.84,
+          "pm10": 4.78,
+          "o3": 68.42
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "new_zealand_pacific:wellington",
+        "region_key": "new_zealand_pacific",
+        "region_label": "New Zealand and the South Pacific",
+        "macro_region": "Oceania",
+        "location_label": "Wellington",
+        "lat": -41.29,
+        "lon": 174.78,
+        "observed_at": "2026-07-15T14:59:26Z",
+        "weather": {
+          "temp_c": 13.06,
+          "feels_like_c": 12.82,
+          "temp_delta_24h_c": -1.6,
+          "pressure_hpa": 1021.0,
+          "pressure_delta_24h_hpa": -1.0,
+          "humidity_pct": 92.0,
+          "wind_speed_mps": 8.05,
+          "wind_gust_mps": 12.07,
+          "condition_code": 803,
+          "condition": "Clouds",
+          "condition_summary": "broken clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 1,
+          "pm2_5": 0.52,
+          "pm10": 0.56,
+          "o3": 46.0
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      },
+      {
+        "anchor_id": "new_zealand_pacific:suva",
+        "region_key": "new_zealand_pacific",
+        "region_label": "New Zealand and the South Pacific",
+        "macro_region": "Oceania",
+        "location_label": "Suva",
+        "lat": -18.14,
+        "lon": 178.44,
+        "observed_at": "2026-07-15T14:52:45Z",
+        "weather": {
+          "temp_c": 21.16,
+          "feels_like_c": 21.24,
+          "temp_delta_24h_c": -2.1,
+          "pressure_hpa": 1019.0,
+          "pressure_delta_24h_hpa": 0.0,
+          "humidity_pct": 73.0,
+          "wind_speed_mps": 7.94,
+          "wind_gust_mps": 10.27,
+          "condition_code": 804,
+          "condition": "Clouds",
+          "condition_summary": "overcast clouds",
+          "rain_1h_mm": null,
+          "snow_1h_mm": null
+        },
+        "air": {
+          "openweather_aqi": 2,
+          "pm2_5": 2.75,
+          "pm10": 17.2,
+          "o3": 76.04
+        },
+        "pollen": {},
+        "provider_status": {
+          "weather": true,
+          "air": true,
+          "pollen": null
+        }
+      }
+    ],
+    "context": {
+      "space": {
+        "day": "2026-07-15",
+        "kp_max": 3.67,
+        "bz_min": -8.08,
+        "sw_speed_avg": 472.14154370034055,
+        "row_count": 882,
+        "updated_at": "2026-07-15T14:47:24.491800+00:00",
+        "flares_count": 0,
+        "cmes_count": 2,
+        "aurora_hp_north_gw": 17.0,
+        "aurora_hp_south_gw": 19.0,
+        "xray_peak_flux_wm2": null,
+        "xray_max_class": null,
+        "sep_s_max": null,
+        "belts_flux_gt2mev_max": null,
+        "belts_risk_level": null,
+        "drap_absorption_polar_db": null,
+        "drap_absorption_midlat_db": null,
+        "sep_flux_gt10mev_max_pfu": null,
+        "now_ts": "2026-07-15T14:41:00+00:00",
+        "kp_now": 2.0,
+        "bz_now": -0.3,
+        "sw_speed_now": 462.0,
+        "wing_kp_max": null,
+        "ae_max": null,
+        "al_min": null,
+        "pc_max": null,
+        "sep_flux_10mev_max": null,
+        "cmes_earth_directed_count": null,
+        "cmes_max_speed_kms": null,
+        "sw_density_max_cm3": 18.09,
+        "r_scale_max": null,
+        "sw_speed_now_kms": 462.0,
+        "sw_density_now_cm3": 9.46,
+        "cmes_ed_24h": null
+      },
+      "schumann": {
+        "day": "2026-07-15",
+        "generated_at": "2026-07-15T14:59:41.485270+00:00",
+        "f0": null,
+        "f1": null,
+        "f2": null,
+        "f3": null,
+        "f4": null,
+        "f5": null,
+        "combined_f1": null
+      },
+      "ulf": {
+        "ts_utc": "2026-07-15T14:40:00+00:00",
+        "stations_used": [
+          "BOU",
+          "CMO"
+        ],
+        "regional_intensity": 26.34,
+        "regional_coherence": 0.146,
+        "regional_persistence": 17.02,
+        "context_class": "Quiet",
+        "confidence_score": 0.146,
+        "quality_flags": []
+      },
+      "hazards": [
+        {
+          "source": "gdacs",
+          "kind": "cyclone",
+          "title": "Green notification for tropical cyclone ELIDA-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+          "location": "Tropical Storm).",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "TC1001282",
+            "ts": "2026-07-14T21:06:26Z",
+            "lat": null,
+            "lon": null,
+            "body": "From 14/07/2026 to 15/07/2026, a Tropical Storm (maximum wind speed of 157 km/h) ELIDA-26 was active in EastPacific. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (0 in tropical storm).",
+            "type": "cyclone",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001282"
+            ],
+            "title": "Green notification for tropical cyclone ELIDA-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+            "source": "gdacs",
+            "details": "From 14/07/2026 to 15/07/2026, a Tropical Storm (maximum wind speed of 157 km/h) ELIDA-26 was active in EastPacific. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (0 in tropical storm).",
+            "location": "Tropical Storm).",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-15T10:13:39.024050+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "flood",
+          "title": "Green flood alert in Honduras",
+          "location": "Honduras",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "FL1104021",
+            "ts": "2026-07-15T05:40:24Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a flood started in Honduras, lasting until 14/07/2026 (last update). The flood caused 0 deaths and 160 displaced .",
+            "type": "flood",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104021"
+            ],
+            "title": "Green flood alert in Honduras",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a flood started in Honduras, lasting until 14/07/2026 (last update). The flood caused 0 deaths and 160 displaced .",
+            "location": "Honduras",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-15T05:57:23.528522+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "190 km SSE of Vilyuchinsk, Russia",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0k1",
+            "ts": "2026-07-15T02:42:18Z",
+            "lat": 51.3809,
+            "lon": 159.5815,
+            "mag": 5.1,
+            "body": "190 km SSE of Vilyuchinsk, Russia",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0k1"
+            ],
+            "title": "190 km SSE of Vilyuchinsk, Russia",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-15T05:57:23.528522+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "52 km NNW of Valparaíso, Chile",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0it",
+            "ts": "2026-07-15T01:09:20Z",
+            "lat": -32.6034,
+            "lon": -71.8626,
+            "mag": 5.1,
+            "body": "52 km NNW of Valparaíso, Chile",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0it"
+            ],
+            "title": "52 km NNW of Valparaíso, Chile",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-15T02:14:04.901375+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "South Sandwich Islands region",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0ia",
+            "ts": "2026-07-15T00:35:28Z",
+            "lat": -58.7712,
+            "lon": -29.4723,
+            "mag": 5.1,
+            "body": "South Sandwich Islands region",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0ia"
+            ],
+            "title": "South Sandwich Islands region",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-15T02:14:04.901375+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "Fiji region",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0hk",
+            "ts": "2026-07-14T22:50:12Z",
+            "lat": -20.748,
+            "lon": -178.5092,
+            "mag": 5.5,
+            "body": "Fiji region",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0hk"
+            ],
+            "title": "Fiji region",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-15T00:09:02.770233+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 5.5M, Depth:574.304km) in Fiji 14/07/2026 22:50 UTC, Few people affected in 100km.",
+          "location": "Fiji 14/07/2026 22:50 UTC, Few people affected in 100km.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551894",
+            "ts": "2026-07-14T23:05:13Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 10:50:12 PM, an earthquake occurred in Fiji potentially affecting Few people affected in 100km. The earthquake had Magnitude 5.5M, Depth:574.304km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551894"
+            ],
+            "title": "Green earthquake (Magnitude 5.5M, Depth:574.304km) in Fiji 14/07/2026 22:50 UTC, Few people affected in 100km.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 10:50:12 PM, an earthquake occurred in Fiji potentially affecting Few people affected in 100km. The earthquake had Magnitude 5.5M, Depth:574.304km.",
+            "location": "Fiji 14/07/2026 22:50 UTC, Few people affected in 100km.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-15T00:09:02.770233+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "cyclone",
+          "title": "Green notification for tropical cyclone FIVE-E-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+          "location": "Tropical Storm).",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "TC1001282",
+            "ts": "2026-07-14T21:06:26Z",
+            "lat": null,
+            "lon": null,
+            "body": "From 14/07/2026 to 15/07/2026, a Tropical Depression (maximum wind speed of 157 km/h) FIVE-E-26 was active in EastPacific. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (0 in tropical storm).",
+            "type": "cyclone",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001282"
+            ],
+            "title": "Green notification for tropical cyclone FIVE-E-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+            "source": "gdacs",
+            "details": "From 14/07/2026 to 15/07/2026, a Tropical Depression (maximum wind speed of 157 km/h) FIVE-E-26 was active in EastPacific. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimated population affected by category 1 (120 km/h) wind speeds or higher is 0  (0 in tropical storm).",
+            "location": "Tropical Storm).",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T22:12:05.653903+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "90 km SSE of False Pass, Alaska",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0fu",
+            "ts": "2026-07-14T18:51:07Z",
+            "lat": 54.1759,
+            "lon": -162.6381,
+            "mag": 5.4,
+            "body": "90 km SSE of False Pass, Alaska",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0fu"
+            ],
+            "title": "90 km SSE of False Pass, Alaska",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T20:13:56.509993+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 6.2M, Depth:67.854km) in Philippines 14/07/2026 15:49 UTC, 30 thousand in MMI VI.",
+          "location": "Philippines 14/07/2026 15:49 UTC, 30 thousand in MMI VI.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551846",
+            "ts": "2026-07-14T16:07:21Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 3:49:41 PM, an earthquake occurred in Philippines potentially affecting 30 thousand in MMI VI. The earthquake had Magnitude 6.2M, Depth:67.854km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551846"
+            ],
+            "title": "Green earthquake (Magnitude 6.2M, Depth:67.854km) in Philippines 14/07/2026 15:49 UTC, 30 thousand in MMI VI.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 3:49:41 PM, an earthquake occurred in Philippines potentially affecting 30 thousand in MMI VI. The earthquake had Magnitude 6.2M, Depth:67.854km.",
+            "location": "Philippines 14/07/2026 15:49 UTC, 30 thousand in MMI VI.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-14T18:13:33.700286+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "34 km WSW of Sarangani, Philippines",
+          "location": null,
+          "severity": "yellow",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0d0",
+            "ts": "2026-07-14T15:49:41Z",
+            "lat": 5.3269,
+            "lon": 125.1655,
+            "mag": 6.2,
+            "body": "34 km WSW of Sarangani, Philippines",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0d0"
+            ],
+            "title": "34 km WSW of Sarangani, Philippines",
+            "source": "media",
+            "severity": "yellow"
+          },
+          "ingested_at": "2026-07-14T17:37:14.361790+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 6.2M, Depth:67.854km) in Philippines 14/07/2026 15:49 UTC, 130 thousand in MMI V.",
+          "location": "Philippines 14/07/2026 15:49 UTC, 130 thousand in MMI V.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551846",
+            "ts": "2026-07-14T16:07:21Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 3:49:41 PM, an earthquake occurred in Philippines potentially affecting 130 thousand in MMI V. The earthquake had Magnitude 6.2M, Depth:67.854km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551846"
+            ],
+            "title": "Green earthquake (Magnitude 6.2M, Depth:67.854km) in Philippines 14/07/2026 15:49 UTC, 130 thousand in MMI V.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 3:49:41 PM, an earthquake occurred in Philippines potentially affecting 130 thousand in MMI V. The earthquake had Magnitude 6.2M, Depth:67.854km.",
+            "location": "Philippines 14/07/2026 15:49 UTC, 130 thousand in MMI V.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-14T17:37:14.361790+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in United States, Canada",
+          "location": "United States, Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029508",
+            "ts": "2026-07-14T15:02:12Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in United States, Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029508"
+            ],
+            "title": "Green forest fire notification in United States, Canada",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in United States, Canada,  until 14/07/2026.",
+            "location": "United States, Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in United States, Canada",
+          "location": "United States, Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029497",
+            "ts": "2026-07-14T03:01:58Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 09/07/2026, a forest fire started in United States, Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029497"
+            ],
+            "title": "Green forest fire notification in United States, Canada",
+            "source": "gdacs",
+            "details": "On 09/07/2026, a forest fire started in United States, Canada,  until 14/07/2026.",
+            "location": "United States, Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029507",
+            "ts": "2026-07-14T15:02:04Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029507"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029510",
+            "ts": "2026-07-14T15:03:35Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 10/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029510"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 10/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Australia",
+          "location": "Australia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029506",
+            "ts": "2026-07-14T15:01:41Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029506"
+            ],
+            "title": "Green forest fire notification in Australia",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "location": "Australia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029505",
+            "ts": "2026-07-14T15:01:33Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029505"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029500",
+            "ts": "2026-07-14T15:00:16Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029500"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029501",
+            "ts": "2026-07-14T15:00:32Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029501"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Australia",
+          "location": "Australia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029512",
+            "ts": "2026-07-14T15:10:09Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 05/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029512"
+            ],
+            "title": "Green forest fire notification in Australia",
+            "source": "gdacs",
+            "details": "On 05/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "location": "Australia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Australia",
+          "location": "Australia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029511",
+            "ts": "2026-07-14T15:07:42Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 06/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029511"
+            ],
+            "title": "Green forest fire notification in Australia",
+            "source": "gdacs",
+            "details": "On 06/07/2026, a forest fire started in Australia,  until 14/07/2026.",
+            "location": "Australia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029503",
+            "ts": "2026-07-14T15:00:58Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029503"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029502",
+            "ts": "2026-07-14T15:00:44Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029502"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 14/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029504",
+            "ts": "2026-07-14T15:01:20Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029504"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Canada",
+          "location": "Canada",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029509",
+            "ts": "2026-07-14T15:02:40Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029509"
+            ],
+            "title": "Green forest fire notification in Canada",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in Canada,  until 14/07/2026.",
+            "location": "Canada",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T16:13:34.427103+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "96 km SE of False Pass, Alaska",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0b5",
+            "ts": "2026-07-14T12:12:19Z",
+            "lat": 54.1456,
+            "lon": -162.543,
+            "mag": 5.3,
+            "body": "96 km SE of False Pass, Alaska",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0b5"
+            ],
+            "title": "96 km SE of False Pass, Alaska",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T14:56:19.879122+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "3 km NNW of Sugal, Philippines",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0bm",
+            "ts": "2026-07-14T13:15:08Z",
+            "lat": 5.69,
+            "lon": 125.4433,
+            "mag": 5.1,
+            "body": "3 km NNW of Sugal, Philippines",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0bm"
+            ],
+            "title": "3 km NNW of Sugal, Philippines",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T14:56:19.879122+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "drought",
+          "title": "Drought is on going in Kazakhstan",
+          "location": "Kazakhstan",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "DR1027491",
+            "ts": "2026-07-14T14:07:56Z",
+            "lat": null,
+            "lon": null,
+            "body": "The  Drought notification level is Green.",
+            "type": "drought",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=DR&eventid=1027491"
+            ],
+            "title": "Drought is on going in Kazakhstan",
+            "source": "gdacs",
+            "details": "The  Drought notification level is Green.",
+            "location": "Kazakhstan",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T14:56:19.879122+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "flood",
+          "title": "Green flood alert in Malaysia",
+          "location": "Malaysia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "FL1104020",
+            "ts": "2026-07-14T11:09:20Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 11/07/2026, a flood started in Malaysia, lasting until 14/07/2026 (last update). The flood caused 0 deaths and 918 displaced .",
+            "type": "flood",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104020"
+            ],
+            "title": "Green flood alert in Malaysia",
+            "source": "gdacs",
+            "details": "On 11/07/2026, a flood started in Malaysia, lasting until 14/07/2026 (last update). The flood caused 0 deaths and 918 displaced .",
+            "location": "Malaysia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T11:48:08.811802+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "11 km N of Pichigua, Peru",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t0a3",
+            "ts": "2026-07-14T08:21:06Z",
+            "lat": -14.5779,
+            "lon": -71.4358,
+            "mag": 5.6,
+            "body": "11 km N of Pichigua, Peru",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t0a3"
+            ],
+            "title": "11 km N of Pichigua, Peru",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T11:48:08.811802+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "flood",
+          "title": "Green flood alert in Germany",
+          "location": "Germany",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "FL1104019",
+            "ts": "2026-07-14T10:09:05Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a flood started in Germany, lasting until 15/07/2026 (last update). The flood caused 0 deaths and 0 displaced .",
+            "type": "flood",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104019"
+            ],
+            "title": "Green flood alert in Germany",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a flood started in Germany, lasting until 15/07/2026 (last update). The flood caused 0 deaths and 0 displaced .",
+            "location": "Germany",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T11:48:08.811802+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 5.6M, Depth:140.088km) in Peru 14/07/2026 08:21 UTC, 30 thousand in MMI IV.",
+          "location": "Peru 14/07/2026 08:21 UTC, 30 thousand in MMI IV.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551779",
+            "ts": "2026-07-14T08:42:03Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 8:21:06 AM, an earthquake occurred in Peru potentially affecting 30 thousand in MMI IV. The earthquake had Magnitude 5.6M, Depth:140.088km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551779"
+            ],
+            "title": "Green earthquake (Magnitude 5.6M, Depth:140.088km) in Peru 14/07/2026 08:21 UTC, 30 thousand in MMI IV.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 8:21:06 AM, an earthquake occurred in Peru potentially affecting 30 thousand in MMI IV. The earthquake had Magnitude 5.6M, Depth:140.088km.",
+            "location": "Peru 14/07/2026 08:21 UTC, 30 thousand in MMI IV.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-14T11:48:08.811802+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Orange forest fire notification in France",
+          "location": "France",
+          "severity": "orange",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029489",
+            "ts": "2026-07-14T03:00:43Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in France,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029489"
+            ],
+            "title": "Orange forest fire notification in France",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in France,  until 14/07/2026.",
+            "location": "France",
+            "severity": "orange"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "quake",
+          "title": "Green earthquake (Magnitude 5.6M, Depth:140.088km) in Peru 14/07/2026 08:21 UTC, 20 thousand in MMI IV.",
+          "location": "Peru 14/07/2026 08:21 UTC, 20 thousand in MMI IV.",
+          "severity": "red",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "EQ1551779",
+            "ts": "2026-07-14T08:42:03Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 7/14/2026 8:21:06 AM, an earthquake occurred in Peru potentially affecting 20 thousand in MMI IV. The earthquake had Magnitude 5.6M, Depth:140.088km.",
+            "type": "quake",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=EQ&eventid=1551779"
+            ],
+            "title": "Green earthquake (Magnitude 5.6M, Depth:140.088km) in Peru 14/07/2026 08:21 UTC, 20 thousand in MMI IV.",
+            "source": "gdacs",
+            "details": "On 7/14/2026 8:21:06 AM, an earthquake occurred in Peru potentially affecting 20 thousand in MMI IV. The earthquake had Magnitude 5.6M, Depth:140.088km.",
+            "location": "Peru 14/07/2026 08:21 UTC, 20 thousand in MMI IV.",
+            "severity": "red"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "14 km WSW of Mabiton, Philippines",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t09m",
+            "ts": "2026-07-14T07:04:54Z",
+            "lat": 12.7967,
+            "lon": 123.136,
+            "mag": 5.2,
+            "body": "14 km WSW of Mabiton, Philippines",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t09m"
+            ],
+            "title": "14 km WSW of Mabiton, Philippines",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "flood",
+          "title": "Green flood alert in Georgia",
+          "location": "Georgia",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "FL1104018",
+            "ts": "2026-07-14T08:39:39Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 11/07/2026, a flood started in Georgia, lasting until 13/07/2026 (last update). The flood caused 0 deaths and 50 displaced .",
+            "type": "flood",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104018"
+            ],
+            "title": "Green flood alert in Georgia",
+            "source": "gdacs",
+            "details": "On 11/07/2026, a flood started in Georgia, lasting until 13/07/2026 (last update). The flood caused 0 deaths and 50 displaced .",
+            "location": "Georgia",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "media",
+          "kind": "quake",
+          "title": "117 km E of Noda, Japan",
+          "location": null,
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "us7000t09u",
+            "ts": "2026-07-14T07:44:09Z",
+            "lat": 40.1338,
+            "lon": 143.1932,
+            "mag": 5,
+            "body": "117 km E of Noda, Japan",
+            "type": "quake",
+            "links": [
+              "https://earthquake.usgs.gov/earthquakes/eventpage/us7000t09u"
+            ],
+            "title": "117 km E of Noda, Japan",
+            "source": "media",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T10:12:15.287798+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Angola",
+          "location": "Angola",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029498",
+            "ts": "2026-07-14T11:00:41Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 13/07/2026, a forest fire started in Angola,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029498"
+            ],
+            "title": "Green forest fire notification in Angola",
+            "source": "gdacs",
+            "details": "On 13/07/2026, a forest fire started in Angola,  until 14/07/2026.",
+            "location": "Angola",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T08:11:34.514670+00:00"
+        },
+        {
+          "source": "gdacs",
+          "kind": "wildfire",
+          "title": "Green forest fire notification in Angola",
+          "location": "Angola",
+          "severity": "info",
+          "started_at": null,
+          "ended_at": null,
+          "payload": {
+            "id": "WF1029499",
+            "ts": "2026-07-14T15:02:48Z",
+            "lat": null,
+            "lon": null,
+            "body": "On 12/07/2026, a forest fire started in Angola,  until 14/07/2026.",
+            "type": "wildfire",
+            "links": [
+              "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1029499"
+            ],
+            "title": "Green forest fire notification in Angola",
+            "source": "gdacs",
+            "details": "On 12/07/2026, a forest fire started in Angola,  until 14/07/2026.",
+            "location": "Angola",
+            "severity": "info"
+          },
+          "ingested_at": "2026-07-14T08:11:34.514670+00:00"
+        }
+      ]
+    }
+  }
+}

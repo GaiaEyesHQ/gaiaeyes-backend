@@ -1743,7 +1743,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
         "Voiceover should be a 40-60 word reel script: open with the caption hook, then use a complete conversational bridge into the strongest factual environmental change, then connect it to possible felt effects already present in affects. Do not begin the second sentence with 'Mostly', 'And', 'But', 'So', or 'Because'. Do not include wellness advice, metrics, or a follow/download CTA. "
-        "For reel_signal, write one short factual environmental sentence, maximum 8 words. For reel_effects, write two short possible felt effects separated by a newline, maximum 6 words each. For reel_pattern, write one human takeaway, maximum 7 words. Do not invent a signal or symptom for these fields. "
+        "For reel_signal, write one complete standalone factual environmental thought, maximum 8 words. For reel_effects, write two complete standalone possible felt effects separated by a newline, maximum 6 words each. For reel_pattern, write one complete standalone day-pattern takeaway, maximum 7 words. Each reel field must serve its own role and must not repeat or slightly shorten another reel field. Never end a reel field with an article, preposition, conjunction, modal verb, or unfinished phrase. Do not invent a signal or symptom for these fields. "
         f"Aim for: caption {caption_profile['caption_instruction']} Snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
         "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. Respect style.template_id and style.template_map to decide sentence order for caption only; rearrange the same facts without adding new claims. "
     )
@@ -1996,9 +1996,9 @@ def _rewrite_json_candidates(
             "playbook": "3-5 short bullets.",
             "hashtags": "6-10 hashtags as one string.",
             "voiceover": "40-60 spoken words. Open with the caption hook, then use a complete conversational second sentence to explain the strongest factual environmental change. Do not start sentence two with Mostly, And, But, So, or Because. Connect only to felt effects already in affects. No advice, CTA, metrics, or hashtags.",
-            "reel_signal": "One factual environmental sentence, maximum 8 words, based only on today's facts.",
-            "reel_effects": "Two short possible felt effects separated by a newline, maximum 6 words each, already supported by affects.",
-            "reel_pattern": "One human takeaway, maximum 7 words, supported by the same content spine.",
+            "reel_signal": "One complete standalone factual environmental thought, maximum 8 words, based only on today's facts.",
+            "reel_effects": "Two complete standalone possible felt effects separated by a newline, maximum 6 words each, already supported by affects.",
+            "reel_pattern": "One complete standalone day-pattern takeaway, maximum 7 words, supported by the same content spine and distinct from reel_effects.",
         },
         "ban_phrases": BAN_PHRASES,
     }
@@ -3077,7 +3077,28 @@ def _build_reel_voiceover_text(
     return _scrub_banned_phrases(" ".join(words[:60]).strip())
 
 
+_DANGLING_REEL_WORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "been", "being", "but", "by",
+    "can", "could", "for", "from", "in", "is", "may", "might", "of", "on", "or",
+    "should", "the", "to", "was", "were", "will", "with", "without", "would",
+}
+
+
+def _reel_text_is_fragment(text: str) -> bool:
+    words = re.findall(r"[A-Za-z']+", str(text or "").lower())
+    return not words or words[-1] in _DANGLING_REEL_WORDS
+
+
+def _reel_text_similarity(left: str, right: str) -> float:
+    left_words = set(re.findall(r"[A-Za-z']+", str(left or "").lower()))
+    right_words = set(re.findall(r"[A-Za-z']+", str(right or "").lower()))
+    if not left_words or not right_words:
+        return 0.0
+    return len(left_words & right_words) / len(left_words | right_words)
+
+
 def _compact_reel_text(text: str, *, max_words: int, max_lines: int = 1) -> str:
+    """Accept concise standalone beats; never manufacture one by word truncation."""
     lines = [
         re.sub(r"^(?:[-*•]|\d+[.)])\s*", "", line.strip()).strip()
         for line in str(text or "").splitlines()
@@ -3088,9 +3109,18 @@ def _compact_reel_text(text: str, *, max_words: int, max_lines: int = 1) -> str:
     compact: List[str] = []
     for line in lines[:max_lines]:
         words = line.split()
-        if words:
-            compact.append(" ".join(words[:max_words]).rstrip(" ,;:-."))
+        cleaned = " ".join(words).rstrip(" ,;:-.")
+        if words and len(words) <= max_words and not _reel_text_is_fragment(cleaned):
+            compact.append(cleaned)
     return "\n".join(compact)
+
+
+def _reel_fallback_sentence(text: str, index: int = 0) -> str:
+    sentences = _split_text_sentences(str(text or ""))
+    if not sentences:
+        return ""
+    selected = sentences[min(index, len(sentences) - 1)].strip()
+    return "" if _reel_text_is_fragment(selected) else selected
 
 
 def _build_reel_story(
@@ -3102,11 +3132,17 @@ def _build_reel_story(
     rewrite: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
     rewrite = rewrite or {}
-    signal = _compact_reel_text(str(rewrite.get("reel_signal") or snapshot), max_words=8)
-    effects = _compact_reel_text(str(rewrite.get("reel_effects") or affects), max_words=6, max_lines=2)
-    pattern = _compact_reel_text(str(rewrite.get("reel_pattern") or affects), max_words=7)
+    signal = _compact_reel_text(str(rewrite.get("reel_signal") or ""), max_words=8)
+    effects = _compact_reel_text(str(rewrite.get("reel_effects") or ""), max_words=6, max_lines=2)
+    pattern = _compact_reel_text(str(rewrite.get("reel_pattern") or ""), max_words=7)
+    signal = signal or _reel_fallback_sentence(snapshot)
+    effects = effects or _reel_fallback_sentence(affects)
+    if not pattern or _reel_text_similarity(pattern, effects) >= 0.7:
+        pattern = _reel_fallback_sentence(affects, 1)
+    if not pattern or _reel_text_similarity(pattern, effects) >= 0.7:
+        pattern = _reel_fallback_sentence(affects, 2)
     return {
-        "hook": _compact_reel_text(title, max_words=12),
+        "hook": _compact_reel_text(title, max_words=12) or _reel_fallback_sentence(title),
         "signal": signal,
         "effects": effects,
         "pattern": pattern,

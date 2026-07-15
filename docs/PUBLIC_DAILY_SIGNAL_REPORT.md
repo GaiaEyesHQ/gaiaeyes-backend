@@ -43,6 +43,8 @@ venv/bin/python -m bots.public_signal_report.shadow \
 
 Artifacts default to `tmp/public_signal_report/<day>.json` and always contain `auto_publish: false`.
 
+The writer uses a strict JSON schema and validates platform word ranges. A draft that misses those ranges receives one complete model revision; a second failure is stored as `invalid` with no platform copy applied to the report. The runner never repairs copy with phrase replacements.
+
 ## Promotion boundary
 
 Do not connect this report to `content.daily_posts`, `/v1/features/today`, the website, reel rendering, or Meta publishing until at least seven shadow reports have been reviewed. Promotion should preserve the existing caption and section fields while adding the structured report under `metrics_json.sections.daily_signal_report`.

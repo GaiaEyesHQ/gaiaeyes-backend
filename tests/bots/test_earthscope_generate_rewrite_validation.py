@@ -634,6 +634,27 @@ def test_reel_story_uses_writer_fields_without_changing_web_sections():
     assert story["pattern"] == "An uneven-energy day"
 
 
+def test_reel_story_fallback_uses_complete_distinct_sentences():
+    story = _build_reel_story(
+        title="Headache threshold lower today?",
+        snapshot=(
+            "Geomagnetic signals are a touch unsettled with a southward tilt. "
+            "A couple of CMEs were observed recently but they are background context only."
+        ),
+        affects=(
+            "Headache and migraine sensitivity may be a bit higher for some. "
+            "Focus can come in short bursts with quicker dips. "
+            "Mood and patience might feel frayed at times."
+        ),
+        voiceover="Headache threshold lower today?",
+        rewrite={},
+    )
+
+    assert story["signal"] == "Geomagnetic signals are a touch unsettled with a southward tilt."
+    assert story["effects"] == "Headache and migraine sensitivity may be a bit higher for some."
+    assert story["pattern"] == "Focus can come in short bursts with quicker dips."
+
+
 def test_reel_voiceover_keeps_hook_signal_and_effect_without_tip():
     voiceover = _build_reel_voiceover_text(
         ctx={"kp_max_24h": 2.0, "bz_min": -4.8},

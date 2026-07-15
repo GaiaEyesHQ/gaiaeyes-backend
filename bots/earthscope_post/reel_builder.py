@@ -390,12 +390,64 @@ def reel_story_from_post(row: Optional[dict]) -> dict:
     sections = _metrics_sections(row)
     stored = sections.get("reel_story")
     stored = stored if isinstance(stored, dict) else {}
+    signal = _valid_story_beat(stored.get("signal")) or _story_sentence(sections.get("snapshot"), 0)
+    effects = _valid_story_beat(stored.get("effects")) or _story_sentence(sections.get("affects"), 0)
+    pattern = _valid_story_beat(stored.get("pattern"))
+    if not pattern or _story_similarity(pattern, effects) >= 0.7:
+        pattern = _story_sentence(sections.get("affects"), 1)
+    if not pattern or _story_similarity(pattern, effects) >= 0.7:
+        pattern = _story_sentence(sections.get("affects"), 2)
     return {
         "hook": str(stored.get("hook") or hook_text_from_post(row)).strip(),
-        "signal": str(stored.get("signal") or _first_sentences(sections.get("snapshot"), max_sentences=1, max_chars=90)).strip(),
-        "effects": str(stored.get("effects") or _first_sentences(sections.get("affects"), max_sentences=2, max_chars=120)).strip(),
-        "pattern": str(stored.get("pattern") or _first_sentences(sections.get("affects"), max_sentences=1, max_chars=75)).strip(),
+        "signal": signal,
+        "effects": effects,
+        "pattern": pattern,
     }
+
+
+_DANGLING_STORY_WORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "been", "being", "but", "by",
+    "can", "could", "for", "from", "in", "is", "may", "might", "of", "on", "or",
+    "should", "the", "to", "was", "were", "will", "with", "without", "would",
+}
+
+
+def _story_lines(text: object) -> List[str]:
+    return [line.strip() for line in str(text or "").splitlines() if line.strip()]
+
+
+def _valid_story_beat(text: object) -> str:
+    lines = _story_lines(text)
+    if not lines:
+        return ""
+    for line in lines:
+        words = re.findall(r"[A-Za-z']+", line.lower())
+        if not words or words[-1] in _DANGLING_STORY_WORDS:
+            return ""
+    return "\n".join(lines)
+
+
+def _story_sentences(text: object) -> List[str]:
+    sentences: List[str] = []
+    for line in _story_lines(text):
+        clean = re.sub(r"^(?:[-*•]|\d+[.)])\s*", "", line).strip()
+        sentences.extend(part.strip() for part in re.split(r"(?<=[.!?])\s+", clean) if part.strip())
+    return sentences
+
+
+def _story_sentence(text: object, index: int) -> str:
+    sentences = _story_sentences(text)
+    if not sentences:
+        return ""
+    return _valid_story_beat(sentences[min(index, len(sentences) - 1)])
+
+
+def _story_similarity(left: object, right: object) -> float:
+    left_words = set(re.findall(r"[A-Za-z']+", str(left or "").lower()))
+    right_words = set(re.findall(r"[A-Za-z']+", str(right or "").lower()))
+    if not left_words or not right_words:
+        return 0.0
+    return len(left_words & right_words) / len(left_words | right_words)
 
 
 def _fit_hook_font(draw: ImageDraw.ImageDraw, text: str, font_path: Path, max_width: int) -> ImageFont.FreeTypeFont:

@@ -148,9 +148,9 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
     output = {
         "headline": "A calmer sky, but regional shifts still matter",
         "quick_read": "A short read.",
-        "facebook": "Facebook copy",
-        "instagram": "Instagram copy",
-        "voiceover": "Voiceover copy",
+        "facebook": " ".join(["Facebook"] * 250),
+        "instagram": " ".join(["Instagram"] * 60),
+        "voiceover": " ".join(["Voiceover"] * 55),
         "section_copy": {
             "regional_watch": "Regional",
             "space_watch": "Space",
@@ -170,12 +170,92 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
             self.chat = SimpleNamespace(completions=FakeCompletions())
 
     monkeypatch.setattr(writer, "OpenAI", FakeOpenAI)
-    result = writer.generate_platform_copy(_context(), api_key="test-key", model="test-model")
+    report = build_daily_signal_report(
+        day="2026-07-14",
+        observations=[_observation("alpha"), _observation("bravo")],
+        context=_context(),
+    )
+    result = writer.generate_platform_copy(report, api_key="test-key", model="test-model")
 
     assert result["status"] == "generated"
-    assert "Voiceover must not include a CTA" in captured["messages"][0]["content"]
+    assert result["writer_attempts"] == 1
+    assert "Voiceover must end on the factual rundown" in captured["messages"][0]["content"]
     assert "public_global_claims_allowed" in captured["messages"][0]["content"]
-    assert captured["response_format"] == {"type": "json_object"}
+    assert "recovery_frame is true" in captured["messages"][0]["content"]
+    assert "Do not say readings explain why" in captured["messages"][0]["content"]
+    assert "Facebook must also open" in captured["messages"][0]["content"]
+    assert "no CTA, advice, wellness tip, reflection prompt" in captured["messages"][0]["content"]
+    assert "includes an explicit health_context" in captured["messages"][0]["content"]
+    assert captured["response_format"]["type"] == "json_schema"
+    assert captured["response_format"]["json_schema"]["strict"] is True
+    supplied_facts = json.loads(captured["messages"][1]["content"])["facts"]
+    assert "source_row" not in supplied_facts["space_watch"]
+    assert supplied_facts["space_watch"]["current_metrics"]["current_kp"] is None
+    assert supplied_facts["earth_signal"]["ulf"] == {
+        "context_class": "quiet",
+        "confidence_score": 0.8,
+        "regional_intensity": None,
+        "regional_coherence": None,
+        "regional_persistence": None,
+        "stations_used": None,
+    }
+
+
+def test_writer_omits_low_confidence_ulf_measurements() -> None:
+    context = _context()
+    context["ulf"] = {
+        "context_class": "Quiet",
+        "confidence_score": 0.146,
+        "regional_intensity": 26.34,
+    }
+    report = build_daily_signal_report(day="2026-07-15", observations=[], context=context)
+
+    facts = writer.writer_payload(report)["facts"]
+
+    assert facts["earth_signal"]["ulf_usable"] is False
+    assert facts["earth_signal"]["ulf"] is None
+    assert "Do not interpret" in facts["earth_signal"]["unavailable_reason"]
+
+
+def test_writer_revises_copy_once_when_word_ranges_fail(monkeypatch) -> None:
+    short = {
+        "headline": "Feeling off?",
+        "quick_read": "Short read.",
+        "facebook": "Too short",
+        "instagram": "Too short",
+        "voiceover": "Too short",
+        "section_copy": {
+            "regional_watch": "Regional",
+            "space_watch": "Space",
+            "earth_signal": "Earth",
+            "major_events": "Events",
+        },
+    }
+    valid = {
+        **short,
+        "facebook": " ".join(["Facebook"] * 250),
+        "instagram": " ".join(["Instagram"] * 60),
+        "voiceover": " ".join(["Voiceover"] * 55),
+    }
+    calls: list[dict] = []
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            output = short if len(calls) == 1 else valid
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(output)))])
+
+    class FakeOpenAI:
+        def __init__(self, *, api_key):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(writer, "OpenAI", FakeOpenAI)
+    result = writer.generate_platform_copy({}, api_key="test-key", model="test-model")
+
+    assert result["status"] == "generated"
+    assert result["writer_attempts"] == 2
+    assert len(calls) == 2
+    assert "instagram must be 60-110 words" in calls[1]["messages"][-1]["content"]
 
 
 def test_shadow_fixture_writes_review_only_bundle(tmp_path) -> None:

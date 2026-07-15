@@ -32,6 +32,11 @@ alongside those fields. Website renderers must not parse slide text, timing, or
 visual labels from `reel_story`; reel formatting can then change without
 breaking the homepage.
 
+Each `reel_story` beat must be a complete standalone thought. `signal`,
+`effects`, and `pattern` must serve different roles and must not be progressive
+fragments or near-duplicate versions of the same sentence. The renderer rejects
+stored fragments and falls back to complete, distinct source sentences.
+
 ## What changed
 
 The posting path now uses one shared Meta poster implementation instead of split

@@ -129,6 +129,33 @@ def test_reel_story_prefers_structured_writer_payload():
     assert story["effects"].splitlines() == ["Restless or jittery", "Energy may spike, then dip"]
 
 
+def test_reel_story_rejects_stored_fragments_and_duplicate_variants():
+    row = {
+        "title": "Headache threshold lower today?",
+        "metrics_json": {
+            "sections": {
+                "snapshot": "Geomagnetic signals are a touch unsettled with a southward tilt.",
+                "affects": (
+                    "Headache and migraine sensitivity may be a bit higher for some. "
+                    "Focus can come in short bursts with quicker dips."
+                ),
+                "reel_story": {
+                    "hook": "Headache threshold lower today?",
+                    "signal": "Geomagnetic signals are a touch unsettled with a",
+                    "effects": "Headache and migraine sensitivity may be",
+                    "pattern": "Headache and migraine sensitivity may be a",
+                },
+            }
+        },
+    }
+
+    story = reel_builder.reel_story_from_post(row)
+
+    assert story["signal"] == "Geomagnetic signals are a touch unsettled with a southward tilt."
+    assert story["effects"] == "Headache and migraine sensitivity may be a bit higher for some."
+    assert story["pattern"] == "Focus can come in short bursts with quicker dips."
+
+
 def test_reel_hook_card_is_vertical_and_hides_dense_source_copy(tmp_path):
     source = tmp_path / "daily_affects.jpg"
     Image.new("RGB", (1080, 1920), (35, 110, 85)).save(source)
