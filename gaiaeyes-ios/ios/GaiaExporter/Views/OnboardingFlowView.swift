@@ -75,28 +75,28 @@ private struct OnboardingFlowCopy {
         case .scientific:
             return OnboardingFlowCopy(
                 headerSubtitle: tone.resolveCopy(
-                    straight: "Gaia Eyes is learning what matters to your body.",
-                    balanced: "Gaia Eyes is learning what matters to your body and your day.",
-                    humorous: "Gaia Eyes is learning your patterns before it starts trying to be helpful."
+                    straight: "Set up Gaia Eyes around what matters to you.",
+                    balanced: "A few choices will help Gaia Eyes feel more relevant from the start.",
+                    humorous: "A few quick choices, then Gaia Eyes can get out of your way and be useful."
                 ),
-                welcomeTitle: "Understand how the world around you may connect to how you feel.",
+                welcomeTitle: "Explore how your body, surroundings, and daily patterns may connect.",
                 welcomeSubtitle: tone.resolveCopy(
-                    straight: "We’ll set up just enough to make your first session useful.",
-                    balanced: "We’ll set up just enough to make your first session useful, personal, and calm.",
-                    humorous: "We’ll set up just enough to make your first session useful without turning setup into a side quest."
+                    straight: "Answer a few quick questions to personalize your dashboard and alerts.",
+                    balanced: "Answer a few quick questions so Gaia Eyes can personalize your dashboard, alerts, and pattern tracking.",
+                    humorous: "A few quick choices will personalize the app—no setup side quest required."
                 ),
                 modeTitle: "How do you want to experience Gaia Eyes?",
-                modeSubtitle: "Choose the style you prefer. The same data stays underneath.",
+                modeSubtitle: "Choose the language style you prefer. Your data and calculations stay the same.",
                 guideTitle: "Choose your guide",
                 guideSubtitle: "Pick the guide style that makes daily check-ins feel easier.",
                 toneTitle: "How should Gaia Eyes speak to you?",
                 toneSubtitle: "Tone changes the wording, not the data.",
                 temperatureTitle: "How do you prefer temperature?",
                 temperatureSubtitle: "Choose the units you want to see. Gaia Eyes converts weather data for display.",
-                sensitivitiesTitle: "What tends to affect you most?",
-                sensitivitiesSubtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
+                sensitivitiesTitle: "What feels most relevant to you?",
+                sensitivitiesSubtitle: "Choose the areas Gaia Eyes should emphasize first. You can change these later.",
                 healthContextTitle: "Your health context",
-                healthContextSubtitle: "Self-reported context only. This helps Gaia Eyes personalize pattern tracking without making diagnoses.",
+                healthContextSubtitle: "Share only what feels relevant. Gaia Eyes uses this to personalize suggestions and patterns, not to diagnose.",
                 locationTitle: "Where should Gaia Eyes track local conditions?",
                 locationSubtitle: "Choose live GPS or a ZIP code. This powers local weather, pressure, air quality, and temperature context.",
                 useGPSOptionTitle: "Use GPS",
@@ -105,29 +105,29 @@ private struct OnboardingFlowCopy {
                 enterZIPOptionSubtitle: "Best when you want a fixed local baseline.",
                 localInsightsToggleTitle: "Use local insights",
                 healthDataTitle: "Connect your health data",
-                healthDataSubtitle: "Optional, but useful for sleep, heart rate, recovery trends, and faster pattern detection.",
+                healthDataSubtitle: "Optional. Connect Apple Health to include sleep, heart rate, HRV, wrist temperature, and other selected wellness trends.",
                 healthDataHint: tone.resolveCopy(
                     straight: "Choose what Gaia Eyes can import. Leave anything sensitive unchecked.",
                     balanced: "Choose what Gaia Eyes can import. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
                     humorous: "Choose what Gaia Eyes can import. You can leave anything sensitive unchecked and keep the useful stuff."
                 ),
                 healthEmptySelectionBody: "Nothing is selected. Tap Not Now, or check at least one metric to request Health access.",
-                backfillTitle: "Import your last 30 days",
-                backfillSubtitle: "Bring in recent Apple Health history so Gaia Eyes can start spotting patterns sooner.",
-                notificationsTitle: "Would you like helpful alerts?",
+                backfillTitle: "Import up to 30 days of health history",
+                backfillSubtitle: "Recent Apple Health history helps Gaia Eyes build useful baselines and personal patterns sooner.",
+                notificationsTitle: "Choose your alerts",
                 notificationsSubtitle: tone.resolveCopy(
-                    straight: "Choose the alert families you care about.",
-                    balanced: "Choose the alert families you care about. Gaia can stay quiet until something meaningfully changes.",
-                    humorous: "Choose the alert families you care about. Gaia can keep the drama low until something actually changes."
+                    straight: "Turn on only the updates you want. You can change these anytime.",
+                    balanced: "Choose the updates that matter to you. Gaia Eyes will stay quiet until something meaningfully changes.",
+                    humorous: "Choose what deserves a notification. Gaia Eyes can keep the drama low until something actually changes."
                 ),
                 enableNotificationsTitle: "Enable Notifications",
                 signalAlertsTitle: "Earth + Space Alerts",
                 localConditionAlertsTitle: "Local Condition Alerts",
-                personalizedAlertsTitle: "Personalized Alerts",
-                geomagneticAlertTitle: "Geomagnetic Activity / Kp",
-                solarWindAlertTitle: "Solar Wind / Bz coupling",
-                flareAlertTitle: "Flares / CME / SEP / DRAP",
-                schumannAlertTitle: "Schumann spike / elevated",
+                personalizedAlertsTitle: "Personal Pattern Alerts",
+                geomagneticAlertTitle: "Geomagnetic activity (Kp)",
+                solarWindAlertTitle: "Solar wind and Bz",
+                flareAlertTitle: "Solar flares and solar storms",
+                schumannAlertTitle: "Schumann activity",
                 pressureAlertTitle: vocabulary.pressureSwingLabel,
                 aqiAlertTitle: vocabulary.aqiLabel,
                 temperatureAlertTitle: vocabulary.temperatureSwingLabel,
@@ -143,28 +143,28 @@ private struct OnboardingFlowCopy {
         case .mystical:
             return OnboardingFlowCopy(
                 headerSubtitle: tone.resolveCopy(
-                    straight: "Gaia Eyes is learning what matters to your body.",
-                    balanced: "Gaia Eyes is learning what matters to your body and your day.",
-                    humorous: "Gaia Eyes is learning your patterns before it starts trying to be helpful."
+                    straight: "Set up Gaia Eyes around what matters to you.",
+                    balanced: "A few choices will help Gaia Eyes feel more relevant from the start.",
+                    humorous: "A few quick choices, then Gaia Eyes can get out of your way and be useful."
                 ),
-                welcomeTitle: "Understand how the world around you may connect to how you feel.",
+                welcomeTitle: "Explore how your body, surroundings, and daily patterns may connect.",
                 welcomeSubtitle: tone.resolveCopy(
-                    straight: "We’ll set up just enough to make your first session useful.",
-                    balanced: "We’ll set up just enough to make your first session useful, personal, and calm.",
-                    humorous: "We’ll set up just enough to make your first session useful without turning setup into a side quest."
+                    straight: "Answer a few quick questions to personalize your dashboard and alerts.",
+                    balanced: "Answer a few quick questions so Gaia Eyes can personalize your dashboard, alerts, and pattern tracking.",
+                    humorous: "A few quick choices will personalize the app—no setup side quest required."
                 ),
                 modeTitle: "How do you want to experience Gaia Eyes?",
-                modeSubtitle: "Choose the style you prefer. The same data stays underneath.",
+                modeSubtitle: "Choose the language style you prefer. Your data and calculations stay the same.",
                 guideTitle: "Choose your guide",
                 guideSubtitle: "Pick the guide style that makes daily check-ins feel easier.",
                 toneTitle: "How should Gaia Eyes speak to you?",
                 toneSubtitle: "Tone changes the wording, not the data.",
                 temperatureTitle: "How do you prefer temperature?",
                 temperatureSubtitle: "Choose the units you want to see. Gaia Eyes converts weather data for display.",
-                sensitivitiesTitle: "What tends to affect you most?",
-                sensitivitiesSubtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
+                sensitivitiesTitle: "What feels most relevant to you?",
+                sensitivitiesSubtitle: "Choose the areas Gaia Eyes should emphasize first. You can change these later.",
                 healthContextTitle: "Your health context",
-                healthContextSubtitle: "Self-reported context only. This helps Gaia Eyes personalize pattern tracking without making diagnoses.",
+                healthContextSubtitle: "Share only what feels relevant. Gaia Eyes uses this to personalize suggestions and patterns, not to diagnose.",
                 locationTitle: "Where should Gaia Eyes track local conditions?",
                 locationSubtitle: "Choose live GPS or a ZIP code. This powers local weather, \(vocabulary.pressureSwingLabel.lowercased()), \(vocabulary.aqiLabel.lowercased()), and temperature context.",
                 useGPSOptionTitle: "Use GPS",
@@ -173,29 +173,29 @@ private struct OnboardingFlowCopy {
                 enterZIPOptionSubtitle: "Best when you want a fixed local baseline.",
                 localInsightsToggleTitle: "Use local insights",
                 healthDataTitle: "Connect your health data",
-                healthDataSubtitle: "Optional, but useful for sleep, heart rate, recovery trends, and faster pattern detection.",
+                healthDataSubtitle: "Optional. Connect Apple Health to include sleep, heart rate, HRV, wrist temperature, and other selected wellness trends.",
                 healthDataHint: tone.resolveCopy(
                     straight: "Choose what Gaia Eyes can import. Leave anything sensitive unchecked.",
                     balanced: "Choose what Gaia Eyes can import. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
                     humorous: "Choose what Gaia Eyes can import. You can leave anything sensitive unchecked and keep the useful stuff."
                 ),
                 healthEmptySelectionBody: "Nothing is selected. Tap Not Now, or check at least one metric to request Health access.",
-                backfillTitle: "Import your last 30 days",
-                backfillSubtitle: "Bring in recent Apple Health history so Gaia Eyes can start spotting patterns sooner.",
-                notificationsTitle: "Would you like helpful alerts?",
+                backfillTitle: "Import up to 30 days of health history",
+                backfillSubtitle: "Recent Apple Health history helps Gaia Eyes build useful baselines and personal patterns sooner.",
+                notificationsTitle: "Choose your alerts",
                 notificationsSubtitle: tone.resolveCopy(
-                    straight: "Choose the alert families you care about.",
-                    balanced: "Choose the alert families you care about. Gaia can stay quiet until something meaningfully changes.",
-                    humorous: "Choose the alert families you care about. Gaia can keep the drama low until something actually changes."
+                    straight: "Turn on only the updates you want. You can change these anytime.",
+                    balanced: "Choose the updates that matter to you. Gaia Eyes will stay quiet until something meaningfully changes.",
+                    humorous: "Choose what deserves a notification. Gaia Eyes can keep the drama low until something actually changes."
                 ),
                 enableNotificationsTitle: "Enable Notifications",
                 signalAlertsTitle: "Earth + Space Alerts",
                 localConditionAlertsTitle: "Local Condition Alerts",
-                personalizedAlertsTitle: "Personalized Alerts",
-                geomagneticAlertTitle: "\(vocabulary.geomagneticLabel) / \(vocabulary.kpLabel)",
-                solarWindAlertTitle: "\(vocabulary.solarWindLabel) / \(vocabulary.bzLabel)",
-                flareAlertTitle: "Flares / \(vocabulary.cmeLabel) / \(vocabulary.sepLabel) / \(vocabulary.drapLabel)",
-                schumannAlertTitle: "\(vocabulary.schumannLabel) spike / elevated",
+                personalizedAlertsTitle: "Personal Pattern Alerts",
+                geomagneticAlertTitle: "\(vocabulary.geomagneticLabel) (\(vocabulary.kpLabel))",
+                solarWindAlertTitle: "\(vocabulary.solarWindLabel) and \(vocabulary.bzLabel)",
+                flareAlertTitle: "Solar flares and solar storms",
+                schumannAlertTitle: "\(vocabulary.schumannLabel) activity",
                 pressureAlertTitle: vocabulary.pressureSwingLabel,
                 aqiAlertTitle: vocabulary.aqiLabel,
                 temperatureAlertTitle: vocabulary.temperatureSwingLabel,
@@ -434,10 +434,9 @@ struct OnboardingFlowView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("What to expect after setup")
                         .font(.headline)
-                    onboardingExpectationRow("Your first dashboard can take a minute while Gaia builds your personal read.")
-                    onboardingExpectationRow("Patterns sharpen over time as you log symptoms and Gaia gathers more history.")
-                    onboardingExpectationRow("Health Status may be blank or limited at first until Health data finishes importing.")
-                    onboardingExpectationRow("Some pages fill in after the first sync finishes.")
+                    onboardingExpectationRow("Your first dashboard may take a minute to gather current conditions.")
+                    onboardingExpectationRow("Apple Health details may fill in gradually after you allow access.")
+                    onboardingExpectationRow("Personal patterns become more useful as you log how you feel.")
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -471,7 +470,7 @@ struct OnboardingFlowView: View {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Account access")
                     .font(.system(size: 30, weight: .bold, design: .rounded))
-                Text("Use Gaia Eyes without an email, or sign in now if you already have an account.")
+                Text("Start without an email, or sign in now if you already have an account.")
                     .font(.headline)
                     .foregroundStyle(.secondary)
 
@@ -523,9 +522,9 @@ struct OnboardingFlowView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("No email required to start")
+                    Text("Start without an email")
                         .font(.headline)
-                    Text("Gaia can create an app-only account now. Add email later for website access, restore, exports, and cross-device sync.")
+                    Text("Gaia Eyes can create an app-only account now. Add an email later for website access, restores, exports, and cross-device sync.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -548,7 +547,7 @@ struct OnboardingFlowView: View {
 
                     Spacer()
 
-                    Button(accountBusy ? "Preparing..." : "Continue without account") {
+                    Button(accountBusy ? "Preparing..." : "Continue without email") {
                         Task {
                             if await onContinueWithoutAccount() {
                                 currentStep = .mode
@@ -896,10 +895,6 @@ struct OnboardingFlowView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Text("Choose what Gaia Eyes can import from Apple Health. You can leave anything private turned off.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 VStack(spacing: 12) {
                     ForEach(HealthPermissionOption.allCases) { option in
                         Button {
@@ -1083,18 +1078,18 @@ struct OnboardingFlowView: View {
                     enabled: $notificationPreferences.personalizedGaugeAlertsEnabled,
                     parentEnabled: notificationPreferences.enabled
                 ) {
-                    Toggle("Gauge spikes", isOn: $notificationPreferences.families.gaugeSpikes)
+                    Toggle("Meaningful gauge changes", isOn: $notificationPreferences.families.gaugeSpikes)
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text(copy.symptomFollowUpTitle)
                         .font(.subheadline.weight(.semibold))
-                    Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
+                    Toggle("Symptom follow-up reminders", isOn: $notificationPreferences.symptomFollowupsEnabled)
                     Text(copy.symptomFollowUpBody)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if notificationPreferences.symptomFollowupsEnabled {
-                        Toggle("Allow symptom follow-up pushes", isOn: $notificationPreferences.symptomFollowupPushEnabled)
+                        Toggle("Allow symptom follow-up notifications", isOn: $notificationPreferences.symptomFollowupPushEnabled)
                         Text("These reminders check back after a symptom log so you can mark whether it improved, continued, or resolved.")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -1112,12 +1107,12 @@ struct OnboardingFlowView: View {
                     Text("Daily Check-In")
                         .font(.subheadline.weight(.semibold))
                     Toggle("Daily check-ins", isOn: $notificationPreferences.dailyCheckinsEnabled)
-                    Text("Keep a fast end-of-day or next-morning feedback loop so Gaia can compare the read with how the day actually felt.")
+                    Text("Get a brief reminder to record how the day felt and keep your personal patterns current.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if notificationPreferences.dailyCheckinsEnabled {
-                        Toggle("Allow daily check-in pushes", isOn: $notificationPreferences.dailyCheckinPushEnabled)
-                        Text("These reminders prompt the daily check-in, separate from symptom follow-ups.")
+                        Toggle("Allow daily check-in notifications", isOn: $notificationPreferences.dailyCheckinPushEnabled)
+                        Text("Daily check-ins are separate from symptom follow-up reminders.")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Picker("Daily check-in cadence", selection: $notificationPreferences.dailyCheckinCadence) {
@@ -1167,37 +1162,25 @@ struct OnboardingFlowView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                HStack {
-                    Button("Continue") {
-                        Task {
-                            await onSaveNotifications()
-                            await onPersistExperience(UserExperienceProfileUpdate(onboardingStep: .activation))
-                            currentStep = .activation
-                        }
+                Button {
+                    Task {
+                        await onSaveNotifications()
+                        await onPersistExperience(UserExperienceProfileUpdate(onboardingStep: .activation))
+                        currentStep = .activation
                     }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
-
-                    Button {
-                        Task {
-                            await onSaveNotifications()
-                            await onPersistExperience(UserExperienceProfileUpdate(onboardingStep: .activation))
-                            currentStep = .activation
+                } label: {
+                    HStack {
+                        if notificationSettingsSaving {
+                            ProgressView()
+                                .scaleEffect(0.9)
                         }
-                    } label: {
-                        HStack {
-                            if notificationSettingsSaving {
-                                ProgressView()
-                                    .scaleEffect(0.9)
-                            }
-                            Text(notificationSettingsSaving ? "Saving..." : "Save Alerts")
-                        }
+                        Text(notificationSettingsSaving ? "Saving..." : "Save and Continue")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(notificationSettingsSaving)
-                    .tint(Color(red: 0.51, green: 0.82, blue: 0.97))
+                    .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(notificationSettingsSaving)
+                .tint(Color(red: 0.51, green: 0.82, blue: 0.97))
             }
         }
     }

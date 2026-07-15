@@ -442,7 +442,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = GaiaExporter/GaiaExporter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6NS4AQC76Y;
 				ENABLE_APP_SANDBOX = YES;
@@ -465,8 +465,8 @@
 				INFOPLIST_KEY_CFBundleName = GaiaEyes;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads the Apple Health categories you select, including heart rate, sleep, HRV, blood oxygen, respiratory rate, steps, blood pressure, and wrist temperature, to show daily wellness trends and personal patterns.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gaia Eyes reads the Apple Health categories you select, including heart rate, sleep, HRV, blood oxygen, respiratory rate, steps, blood pressure, and wrist temperature, to show daily wellness trends and personal patterns.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Gaia Eyes writes health summaries you request to the Health app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Gaia Eyes uses your location to estimate local weather and air quality signals for personalized insights.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -484,7 +484,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporter;
 				PRODUCT_NAME = GaiaEyes;
 				REGISTER_APP_GROUPS = YES;
@@ -505,7 +505,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = GaiaExporter/GaiaExporter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6NS4AQC76Y;
 				ENABLE_APP_SANDBOX = YES;
@@ -528,8 +528,8 @@
 				INFOPLIST_KEY_CFBundleName = GaiaEyes;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads the Apple Health categories you select, including heart rate, sleep, HRV, blood oxygen, respiratory rate, steps, blood pressure, and wrist temperature, to show daily wellness trends and personal patterns.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gaia Eyes reads the Apple Health categories you select, including heart rate, sleep, HRV, blood oxygen, respiratory rate, steps, blood pressure, and wrist temperature, to show daily wellness trends and personal patterns.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Gaia Eyes writes health summaries you request to the Health app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Gaia Eyes uses your location to estimate local weather and air quality signals for personalized insights.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -547,7 +547,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporter;
 				PRODUCT_NAME = GaiaEyes;
 				REGISTER_APP_GROUPS = YES;
@@ -565,13 +565,13 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6NS4AQC76Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporterTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -589,13 +589,13 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6NS4AQC76Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporterTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -612,13 +612,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6NS4AQC76Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporterUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -635,13 +635,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6NS4AQC76Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporterUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;

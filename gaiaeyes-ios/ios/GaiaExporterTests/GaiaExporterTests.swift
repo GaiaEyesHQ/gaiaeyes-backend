@@ -381,12 +381,10 @@ struct SymptomEnvelopeTests {
     func decodesAllDriversSnapshot() throws {
         let payload = """
         {
-            "ok": true,
-            "data": {
-                "generated_at": "2026-03-26T12:00:00Z",
-                "asof": "2026-03-26T11:55:00Z",
-                "day": "2026-03-26",
-                "summary": {
+            "generated_at": "2026-03-26T12:00:00Z",
+            "asof": "2026-03-26T11:55:00Z",
+            "day": "2026-03-26",
+            "summary": {
                     "active_driver_count": 2,
                     "total_count": 3,
                     "strongest_category": "Space",
@@ -446,14 +444,13 @@ struct SymptomEnvelopeTests {
                         "is_objectively_active": true
                     }
                 ],
-                "setup_hints": [
-                    {
-                        "key": "health_data",
-                        "label": "Connect health data",
-                        "reason": "Body context gets better when your baseline data is available."
-                    }
-                ]
-            }
+            "setup_hints": [
+                {
+                    "key": "health_data",
+                    "label": "Connect health data",
+                    "reason": "Body context gets better when your baseline data is available."
+                }
+            ]
         }
         """.data(using: .utf8)!
 
@@ -570,7 +567,7 @@ struct ShareEngineTests {
             state: "High"
         )
 
-        #expect(captions.balanced.contains("See how your own signal mix trends in Gaia Eyes."))
+        #expect(captions.balanced.contains("Track the bigger picture in Gaia Eyes."))
         #expect(captions.scientific.contains("• Signal:"))
         #expect(captions.scientific.contains("Track local air shifts in Gaia Eyes."))
     }

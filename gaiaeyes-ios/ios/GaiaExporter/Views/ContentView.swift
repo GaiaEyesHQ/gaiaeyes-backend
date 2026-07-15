@@ -8761,6 +8761,16 @@ struct ContentView: View {
                 if trimmed.split(separator: " ").count >= 4 {
                     return trimmed
                 }
+                switch trimmed.lowercased() {
+                case "active":
+                    return "\(label) is active right now."
+                case "elevated":
+                    return "\(label) is elevated right now."
+                case "watch":
+                    return "\(label) is at the Watch level right now."
+                default:
+                    break
+                }
             }
             return display
         }
@@ -8785,13 +8795,13 @@ struct ContentView: View {
         let fallbackDrivers = [
             OnboardingActivationDriver(
                 id: "mission_control",
-                title: "\(vocabulary.missionControlLabel) is live",
-                detail: "Gaia is already tracking live space, Earth, and local conditions when they are available."
+                title: "Current conditions are ready",
+                detail: "Gaia Eyes is already tracking space, Earth, and local conditions when they are available."
             ),
             OnboardingActivationDriver(
                 id: "personalization",
-                title: "Personalization is building",
-                detail: "Your sensitivities and context already help Gaia Eyes decide what to show first."
+                title: "Your preferences are ready",
+                detail: "Your selected sensitivities and health context help Gaia Eyes decide what to show first."
             ),
             OnboardingActivationDriver(
                 id: "next_action",
@@ -8801,7 +8811,7 @@ struct ContentView: View {
         ]
         let headline: String
         if let topDriver = liveDrivers.first?.title, !topDriver.isEmpty {
-            headline = "\(topDriver) is one of the strongest things to watch right now."
+            headline = "\(topDriver) stands out among today’s signals."
         } else if let summary = vocabulary.translating(guideEarthscopeSummary), !summary.isEmpty {
             headline = summary
         } else {
@@ -8809,21 +8819,21 @@ struct ContentView: View {
         }
         let explanation: String
         if let syncStamp = experienceProfile.lastBackfillAt, !syncStamp.isEmpty {
-            explanation = "Gaia Eyes already has recent Apple Health data in your live view. Personal patterns will sharpen as you log how you feel."
+            explanation = "Recent Apple Health data is ready. Your personal patterns will become more useful as you continue logging how you feel."
         } else {
-            explanation = "Gaia Eyes can already show the strongest conditions around today. Personal patterns will build as you log symptoms and add more history."
+            explanation = "Gaia Eyes can already show today’s strongest conditions. Personal patterns will build as you log how you feel and add more history."
         }
         let footer: String?
         if notificationPreferences.enabled {
-            footer = "Alerts are ready for the areas you chose here. Log how you feel in \(vocabulary.missionControlLabel) to start building personal patterns."
+            footer = "Your selected alerts are ready. Log how you feel from Home to start building personal patterns."
         } else {
-            footer = "Log how you feel in \(vocabulary.missionControlLabel) to start building personal patterns. You can adjust alerts and imports later in Settings."
+            footer = "Log how you feel from Home to start building personal patterns. You can adjust alerts and health imports later in Settings."
         }
         return OnboardingActivationData(
             headline: headline,
             explanation: explanation,
             drivers: liveDrivers.isEmpty ? fallbackDrivers : liveDrivers,
-            nextActionTitle: "Open \(vocabulary.missionControlLabel)",
+            nextActionTitle: "Open Home",
             secondaryActionTitle: "Finish",
             footer: footer
         )
@@ -21316,10 +21326,10 @@ struct ContentView: View {
                                             .font(.subheadline.weight(.semibold))
                                         Toggle("Earth + space alerts", isOn: $notificationPreferences.signalAlertsEnabled)
                                         if notificationPreferences.signalAlertsEnabled {
-                                            Toggle("Geomagnetic / Kp", isOn: $notificationPreferences.families.geomagnetic)
-                                            Toggle("Solar wind / Bz coupling", isOn: $notificationPreferences.families.solarWind)
-                                            Toggle("Flares / CME / SEP / DRAP", isOn: $notificationPreferences.families.flareCmeSep)
-                                            Toggle("Schumann spike / elevated", isOn: $notificationPreferences.families.schumann)
+                                            Toggle("Geomagnetic activity (Kp)", isOn: $notificationPreferences.families.geomagnetic)
+                                            Toggle("Solar wind and Bz", isOn: $notificationPreferences.families.solarWind)
+                                            Toggle("Solar flares and solar storms", isOn: $notificationPreferences.families.flareCmeSep)
+                                            Toggle("Schumann activity", isOn: $notificationPreferences.families.schumann)
                                         }
                                     }
                                     .disabled(!notificationPreferences.enabled)
@@ -21343,9 +21353,9 @@ struct ContentView: View {
                                     VStack(alignment: .leading, spacing: 8) {
                                         Text("Personalized Alerts")
                                             .font(.subheadline.weight(.semibold))
-                                        Toggle("Personalized gauge alerts", isOn: $notificationPreferences.personalizedGaugeAlertsEnabled)
+                                        Toggle("Personal pattern alerts", isOn: $notificationPreferences.personalizedGaugeAlertsEnabled)
                                         if notificationPreferences.personalizedGaugeAlertsEnabled {
-                                            Toggle("Gauge spikes", isOn: $notificationPreferences.families.gaugeSpikes)
+                                            Toggle("Meaningful gauge changes", isOn: $notificationPreferences.families.gaugeSpikes)
                                         }
                                     }
                                     .disabled(!notificationPreferences.enabled)
@@ -21360,7 +21370,7 @@ struct ContentView: View {
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                         if notificationPreferences.symptomFollowupsEnabled {
-                                            Toggle("Allow symptom follow-up pushes", isOn: $notificationPreferences.symptomFollowupPushEnabled)
+                                            Toggle("Allow symptom follow-up notifications", isOn: $notificationPreferences.symptomFollowupPushEnabled)
                                             Picker("Follow-up cadence", selection: $notificationPreferences.symptomFollowupCadence) {
                                                 Text("Minimal").tag("minimal")
                                                 Text("Balanced").tag("balanced")
@@ -21393,7 +21403,7 @@ struct ContentView: View {
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                         if notificationPreferences.dailyCheckinsEnabled {
-                                            Toggle("Allow daily check-in pushes", isOn: $notificationPreferences.dailyCheckinPushEnabled)
+                                            Toggle("Allow daily check-in notifications", isOn: $notificationPreferences.dailyCheckinPushEnabled)
                                             Picker("Daily check-in cadence", selection: $notificationPreferences.dailyCheckinCadence) {
                                                 Text("Minimal").tag("minimal")
                                                 Text("Balanced").tag("balanced")
