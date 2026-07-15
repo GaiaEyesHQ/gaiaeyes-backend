@@ -187,6 +187,19 @@ def test_reel_story_card_is_vertical_and_readable(tmp_path):
         assert rendered.getbbox() is not None
 
 
+def test_reel_story_layout_keeps_every_word_when_sentence_needs_five_large_lines():
+    canvas = Image.new("RGB", (1080, 1920), (0, 0, 0))
+    draw = reel_builder.ImageDraw.Draw(canvas)
+    font_path = ROOT / "bots" / "earthscope_post" / "fonts" / "BebasNeue.ttf"
+    text = "Brief shifts in pressure or tightness around the head may appear without a clear cause."
+
+    font, wrapped = reel_builder._layout_story_text(draw, text, font_path)
+
+    assert len(wrapped) <= 4
+    assert " ".join(wrapped) == text.upper()
+    assert font.size < 112
+
+
 def test_reel_opening_clip_uses_motion_from_frame_one(monkeypatch, tmp_path):
     captured = []
     monkeypatch.setattr(reel_builder, "run", captured.append)

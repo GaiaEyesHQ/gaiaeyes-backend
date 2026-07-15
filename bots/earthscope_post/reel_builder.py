@@ -516,6 +516,50 @@ def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
     return out_path
 
 
+def _wrap_story_lines(
+    draw: ImageDraw.ImageDraw,
+    source_lines: Sequence[str],
+    font: ImageFont.FreeTypeFont,
+    max_width: int,
+) -> List[str]:
+    wrapped: List[str] = []
+    for source_line in source_lines:
+        current = ""
+        for word in source_line.split():
+            candidate = f"{current} {word}".strip()
+            if current and draw.textbbox((0, 0), candidate, font=font)[2] > max_width:
+                wrapped.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            wrapped.append(current)
+    return wrapped
+
+
+def _layout_story_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font_path: Path,
+    *,
+    max_width: int = 860,
+    max_lines: int = 4,
+) -> tuple[ImageFont.FreeTypeFont, List[str]]:
+    source_lines = [line.strip().upper() for line in str(text or "").splitlines() if line.strip()]
+    if not source_lines:
+        source_lines = ["TODAY'S SIGNALS ARE MOSTLY STEADY"]
+    source_lines = source_lines[:2]
+
+    for size in range(112, 63, -4):
+        font = ImageFont.truetype(str(font_path), size=size)
+        wrapped = _wrap_story_lines(draw, source_lines, font, max_width)
+        if len(wrapped) <= max_lines:
+            return font, wrapped
+
+    font = ImageFont.truetype(str(font_path), size=60)
+    return font, _wrap_story_lines(draw, source_lines, font, max_width)
+
+
 def build_story_card(source: Path, out_path: Path, label: str, text: str) -> Path:
     with Image.open(source) as raw:
         background = raw.convert("RGB")
@@ -531,26 +575,9 @@ def build_story_card(source: Path, out_path: Path, label: str, text: str) -> Pat
     _overlay_wordmark(canvas)
     draw.text((100, 520), label.upper(), font=label_font, fill=(84, 224, 225, 255))
 
-    lines = [line.strip().upper() for line in str(text or "").splitlines() if line.strip()]
-    if not lines:
-        lines = ["TODAY'S SIGNALS ARE MOSTLY STEADY"]
-    wrapped: List[str] = []
-    measure_font = ImageFont.truetype(str(font_path), size=112)
-    for source_line in lines[:2]:
-        current = ""
-        for word in source_line.split():
-            candidate = f"{current} {word}".strip()
-            if current and draw.textbbox((0, 0), candidate, font=measure_font)[2] > 860:
-                wrapped.append(current)
-                current = word
-            else:
-                current = candidate
-        if current:
-            wrapped.append(current)
-    longest = max(wrapped, key=len) if wrapped else lines[0]
-    body_font = _fit_hook_font(draw, longest, font_path, 860)
+    body_font, wrapped = _layout_story_text(draw, text, font_path)
     y = 660
-    for index, line in enumerate(wrapped[:4]):
+    for index, line in enumerate(wrapped):
         if index and index == len(wrapped) // 2:
             y += 36
         draw.text((100, y), line, font=body_font, fill=(255, 255, 255, 255))

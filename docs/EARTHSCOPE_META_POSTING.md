@@ -36,6 +36,8 @@ Each `reel_story` beat must be a complete standalone thought. `signal`,
 `effects`, and `pattern` must serve different roles and must not be progressive
 fragments or near-duplicate versions of the same sentence. The renderer rejects
 stored fragments and falls back to complete, distinct source sentences.
+When a complete beat wraps beyond four lines at the default size, the renderer
+reduces the body font rather than dropping trailing lines.
 
 ## What changed
 
