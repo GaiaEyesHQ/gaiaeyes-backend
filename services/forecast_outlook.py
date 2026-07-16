@@ -130,7 +130,7 @@ DRIVER_LABELS = {
     "radio": "Radio-blackout watch",
     "radiation": "Solar-radiation watch",
     "cme": "CME watch",
-    "flare": "Flare watch",
+    "flare": "Solar flare potential",
 }
 
 DRIVER_ORDER = {
@@ -2098,7 +2098,7 @@ def derive_forecast_drivers(
             value=None,
             unit=None,
             day_key=flare_row.get("day") if isinstance(flare_row.get("day"), date) else None,
-            detail="SWPC is flagging an elevated flare watch.",
+            detail="SWPC is flagging elevated solar flare potential.",
         )
 
     drivers.sort(

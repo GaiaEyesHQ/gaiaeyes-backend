@@ -17,7 +17,7 @@ enum HomePossibleSymptomLabels {
         case "ANXIETY_DAY", "RESTLESSNESS_DAY":
             return ["Restlessness", "Wired"]
         case "POOR_SLEEP_DAY":
-            return ["Poor sleep", "Restless sleep"]
+            return ["Restless sleep"]
         case "FOCUS_FOG_DAY":
             return ["Brain fog", "Focus shifts"]
         case "HRV_DIP_DAY":
@@ -59,12 +59,26 @@ enum HomePossibleSymptomLabels {
 
     private static func normalizedKey(_ raw: String) -> String {
         let key = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return key == "tired" ? "low energy" : key
+        switch key {
+        case "tired":
+            return "low energy"
+        case "poor sleep", "restless sleep":
+            return "restless sleep"
+        default:
+            return key
+        }
     }
 
     private static func canonicalDisplayLabel(_ raw: String) -> String {
         let label = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        return normalizedKey(label) == "low energy" ? "Low energy" : label
+        switch normalizedKey(label) {
+        case "low energy":
+            return "Low energy"
+        case "restless sleep":
+            return "Restless sleep"
+        default:
+            return label
+        }
     }
 }
 

@@ -21,7 +21,7 @@ struct SymptomEnvelopeTests {
     @Test
     func possibleSymptomsKeepAndPrioritizeActiveMatches() {
         let ranked = HomePossibleSymptomLabels.ranked(
-            candidates: ["Tired", "Low energy", "Restless sleep", "Brain fog", "restless sleep"],
+            candidates: ["Tired", "Low energy", "Poor sleep", "Restless sleep", "Brain fog", "restless sleep"],
             activeLabels: [" tired ", "Restless Sleep"]
         )
 
@@ -30,6 +30,11 @@ struct SymptomEnvelopeTests {
             HomePossibleSymptomMatch(label: "Restless sleep", isMatched: true),
             HomePossibleSymptomMatch(label: "Brain fog", isMatched: false),
         ])
+    }
+
+    @Test
+    func poorSleepOutcomeUsesOneSpecificSymptomLabel() {
+        #expect(HomePossibleSymptomLabels.labels(forOutcomeKey: "poor_sleep_day") == ["Restless sleep"])
     }
 
     @Test

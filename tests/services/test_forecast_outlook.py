@@ -612,6 +612,27 @@ Outlook For March 23-29
         self.assertEqual(pressure_driver["severity"], "watch")
         self.assertIn("pressure swing", pressure_driver["detail"].lower())
 
+    def test_build_daily_outlook_names_solar_flare_potential_explicitly(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "flare_watch": True,
+            },
+        ]
+
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 3, 18)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[],
+                gauges={},
+                days=7,
+            )
+
+        self.assertEqual(len(payload), 1)
+        flare_driver = next(item for item in payload[0]["top_drivers"] if item["key"] == "flare")
+        self.assertEqual(flare_driver["label"], "Solar flare potential")
+        self.assertIn("solar flare", flare_driver["detail"].lower())
+
     def test_build_daily_outlook_uses_app_day_when_filtering_future_rows(self) -> None:
         merged_rows = [
             {
