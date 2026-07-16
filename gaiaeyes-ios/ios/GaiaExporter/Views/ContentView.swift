@@ -1940,6 +1940,20 @@ private struct UserOutlookDomain: Codable, Hashable, Identifiable {
     }
 }
 
+enum OutlookDisplayLabels {
+    static func driverLabel(key: String, fallback: String?) -> String {
+        let normalizedKey = key
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: "_")
+            .lowercased()
+        if normalizedKey == "flare" {
+            return "Solar Flare Watch"
+        }
+        return fallback?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfTrimmedEmpty
+            ?? key.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+}
+
 private struct UserOutlookDriver: Codable, Hashable, Identifiable {
     let key: String
     let label: String?
@@ -15402,7 +15416,7 @@ struct ContentView: View {
             LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
                 ForEach(drivers) { driver in
                     LocalConditionsValueChip(
-                        label: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                        label: OutlookDisplayLabels.driverLabel(key: driver.key, fallback: driver.label),
                         value: primary ? driverSeverityValue(driver) : driverValue(driver),
                         tint: GaugePalette.zoneColor(primary ? (driver.severity ?? "watch") : driver.severity)
                     )
@@ -15751,7 +15765,7 @@ struct ContentView: View {
         }
 
         private func dailyDriverLabel(_ driver: UserOutlookDriver) -> String {
-            driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
+            OutlookDisplayLabels.driverLabel(key: driver.key, fallback: driver.label)
         }
 
         private func likelyDomainValue(_ domain: UserOutlookDomain, primary: UserOutlookDriver?) -> String {

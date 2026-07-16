@@ -38,6 +38,11 @@ struct SymptomEnvelopeTests {
     }
 
     @Test
+    func outlookUsesSolarFlareLabelForCachedBackendCopy() {
+        #expect(OutlookDisplayLabels.driverLabel(key: "flare", fallback: "Flare watch") == "Solar Flare Watch")
+    }
+
+    @Test
     func decodesSymptomEnvelope() throws {
         let payload = """
         {

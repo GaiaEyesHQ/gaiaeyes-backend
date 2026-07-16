@@ -630,7 +630,7 @@ Outlook For March 23-29
 
         self.assertEqual(len(payload), 1)
         flare_driver = next(item for item in payload[0]["top_drivers"] if item["key"] == "flare")
-        self.assertEqual(flare_driver["label"], "Solar flare potential")
+        self.assertEqual(flare_driver["label"], "Solar Flare Watch")
         self.assertIn("solar flare", flare_driver["detail"].lower())
 
     def test_build_daily_outlook_uses_app_day_when_filtering_future_rows(self) -> None:
