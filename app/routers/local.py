@@ -76,13 +76,23 @@ async def _attach_forecast_daily(conn, zip_code: str, payload: dict) -> dict:
     return payload
 
 
-async def _attach_forecast_daily_best_effort(zip_code: str, payload: dict) -> dict:
+async def _attach_forecast_daily_best_effort(
+    zip_code: str,
+    payload: dict,
+    *,
+    refresh_if_stale: bool = True,
+) -> dict:
     if not isinstance(payload, dict):
         return payload
 
     try:
         async with asyncio.timeout(LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS):
-            rows = await ensure_local_forecast_daily_via_pool(zip_code=zip_code, lat=None, lon=None)
+            rows = await ensure_local_forecast_daily_via_pool(
+                zip_code=zip_code,
+                lat=None,
+                lon=None,
+                refresh_if_stale=refresh_if_stale,
+            )
             payload["forecast_daily"] = serialize_local_forecast_rows(rows)
             return payload
     except Exception:
@@ -95,16 +105,13 @@ async def check(zip: str = Query(..., min_length=5, max_length=10)):
     if cached:
         had_missing = _weather_needs_repair(cached)
         repaired = ensure_weather_fields(zip, cached)
-        if _aqi_missing(repaired) or _allergens_missing(repaired):
-            try:
-                refreshed = ensure_weather_fields(zip, await assemble_for_zip(zip))
-                repaired = _merge_payload(refreshed, repaired)
-            except Exception:
-                pass
+        if had_missing:
             upsert_zip_payload(zip, repaired)
-        elif had_missing:
-            upsert_zip_payload(zip, repaired)
-        return await _attach_forecast_daily_best_effort(zip, repaired)
+        return await _attach_forecast_daily_best_effort(
+            zip,
+            repaired,
+            refresh_if_stale=False,
+        )
     payload = await assemble_for_zip(zip)
     payload = ensure_weather_fields(zip, payload)
     upsert_zip_payload(zip, payload)

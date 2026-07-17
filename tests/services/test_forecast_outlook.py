@@ -21,6 +21,7 @@ from services.forecast_outlook import (  # noqa: E402
     build_user_outlook_payload_via_pool,
     build_window_outlook,
     ensure_local_forecast_daily,
+    ensure_local_forecast_daily_via_pool,
     ensure_space_forecast_daily,
     parse_swpc_range_forecast,
     parse_swpc_three_day_forecast,
@@ -810,6 +811,38 @@ Outlook For March 23-29
 
 
 class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ensure_local_forecast_daily_via_pool_can_return_cache_without_refresh(self) -> None:
+        conn = object()
+        pool = _FakePool(conn)
+        existing = [
+            {
+                "day": date(2026, 7, 16),
+                "updated_at": datetime.now(UTC) - timedelta(hours=12),
+                "pollen_overall_level": None,
+            }
+        ]
+
+        with (
+            patch("services.forecast_outlook.get_pool", AsyncMock(return_value=pool)),
+            patch(
+                "services.forecast_outlook._fetch_local_forecast_rows",
+                AsyncMock(return_value=existing),
+            ) as fetch_rows,
+            patch.object(nws, "forecast_hourly_by_latlon", AsyncMock()) as fetch_hourly,
+            patch.object(nws, "gridpoints_by_latlon", AsyncMock()) as fetch_grid,
+        ):
+            payload = await ensure_local_forecast_daily_via_pool(
+                zip_code="78754",
+                lat=None,
+                lon=None,
+                refresh_if_stale=False,
+            )
+
+        self.assertEqual(payload, existing)
+        fetch_rows.assert_awaited_once()
+        fetch_hourly.assert_not_awaited()
+        fetch_grid.assert_not_awaited()
+
     async def test_build_user_outlook_payload_prefers_geo_cache_for_gps_profiles(self) -> None:
         conn = object()
         with (

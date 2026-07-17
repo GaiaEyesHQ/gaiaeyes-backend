@@ -184,24 +184,24 @@ def main() -> None:
 
     logger.info("[gauges] scoring users=%d day=%s", len(user_ids), args.day or "per-user-local")
 
-    for uid in _iter_users(sorted(user_ids), args.limit):
-        target_day = date.fromisoformat(args.day) if args.day else _local_day(timezones.get(str(uid)))
-        key = (str(uid), target_day)
-        expected.add(key)
-        try:
-            # A score performs many small queries. Reuse one bounded connection
-            # per user so the 15-minute batch does not pay a new TLS/pool
-            # handshake for every query.
-            with pg.connection_scope():
+    # A score performs many small queries. Reuse one autocommit connection for
+    # the bounded sequential batch so the quarter-hour job does not pay a new
+    # TLS/pool handshake for every user.
+    with pg.connection_scope():
+        for uid in _iter_users(sorted(user_ids), args.limit):
+            target_day = date.fromisoformat(args.day) if args.day else _local_day(timezones.get(str(uid)))
+            key = (str(uid), target_day)
+            expected.add(key)
+            try:
                 result = score_user_day(uid, target_day, force=args.force)
-            if not result.get("ok"):
-                failures.append(f"not_ok:{uid}:{target_day.isoformat()}")
-            elif not result.get("skipped"):
-                refreshed.add(key)
-            logger.info("[gauges] user=%s day=%s ok=%s skipped=%s", uid, target_day, result.get("ok"), result.get("skipped"))
-        except Exception as exc:
-            failures.append(f"exception:{uid}:{target_day.isoformat()}")
-            logger.exception("[gauges] user=%s failed: %s", uid, exc)
+                if not result.get("ok"):
+                    failures.append(f"not_ok:{uid}:{target_day.isoformat()}")
+                elif not result.get("skipped"):
+                    refreshed.add(key)
+                logger.info("[gauges] user=%s day=%s ok=%s skipped=%s", uid, target_day, result.get("ok"), result.get("skipped"))
+            except Exception as exc:
+                failures.append(f"exception:{uid}:{target_day.isoformat()}")
+                logger.exception("[gauges] user=%s failed: %s", uid, exc)
 
     try:
         failures.extend(_verify_outputs(expected, refreshed, started_at))

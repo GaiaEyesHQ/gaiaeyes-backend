@@ -7,13 +7,14 @@ API_KEY = os.getenv("AIRNOW_API_KEY", "")
 ZIP_BASE = "https://www.airnowapi.org/aq/observation/zipCode/current/"
 LATLON_BASE = "https://www.airnowapi.org/aq/observation/latLong/current/"
 DEFAULT_RADIUS_MI = int(os.getenv("LOCAL_SIGNALS_AIRNOW_RADIUS_MI", "25"))
+REQUEST_TIMEOUT_SECONDS = 10.0
 
 
 async def _request(base: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not API_KEY:
         return []
     payload = {"format": "application/json", "API_KEY": API_KEY, **params}
-    async with httpx.AsyncClient(timeout=30.0) as cx:
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as cx:
         r = await cx.get(base, params=payload)
         r.raise_for_status()
         return r.json() if r.text.strip() else []

@@ -106,8 +106,11 @@ async def _fetch_air_quality(zip_code: str, lat: float, lon: float) -> list[dict
         try:
             aq_list = await airnow.current_by_latlon(lat, lon, distance_miles=radius)
         except Exception as e:
-            print(f"[local_signals] AirNow lat/lon error for zip={zip_code} radius={radius}: {e}")
-            aq_list = []
+            print(
+                f"[local_signals] AirNow lat/lon error for zip={zip_code} "
+                f"radius={radius} type={type(e).__name__}: {e!r}; trying ZIP fallback"
+            )
+            break
         if aq_list:
             return aq_list
 

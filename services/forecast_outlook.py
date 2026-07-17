@@ -1325,6 +1325,7 @@ async def ensure_local_forecast_daily_via_pool(
     lon: float | None,
     prefer_geo: bool = False,
     days: int = LOCAL_FORECAST_DAYS,
+    refresh_if_stale: bool = True,
 ) -> list[dict[str, Any]]:
     location_key = build_location_key(zip_code, lat, lon, prefer_geo=prefer_geo)
     if not location_key:
@@ -1336,6 +1337,9 @@ async def ensure_local_forecast_daily_via_pool(
 
     async with pool.connection() as conn:
         existing = await _fetch_local_forecast_rows(conn, location_key, today, days=days)
+
+    if not refresh_if_stale:
+        return existing
 
     if existing:
         newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)

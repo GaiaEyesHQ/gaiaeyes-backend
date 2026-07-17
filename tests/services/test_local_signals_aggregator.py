@@ -73,6 +73,27 @@ async def test_fetch_air_quality_expands_search_before_zip_fallback(monkeypatch)
     ]
 
 
+async def test_fetch_air_quality_switches_to_zip_fallback_after_latlon_error(monkeypatch):
+    calls: list[tuple[str, int]] = []
+    monkeypatch.setattr(aggregator.airnow, "DEFAULT_RADIUS_MI", 25)
+
+    async def _fake_latlon(lat: float, lon: float, distance_miles: int | None = None):  # noqa: ARG001
+        calls.append(("latlon", int(distance_miles or 0)))
+        raise TimeoutError("provider timeout")
+
+    async def _fake_zip(zip_code: str, distance_miles: int | None = None):  # noqa: ARG001
+        calls.append(("zip", int(distance_miles or 0)))
+        return [{"AQI": 48, "ParameterName": "PM2.5"}]
+
+    monkeypatch.setattr(aggregator.airnow, "current_by_latlon", _fake_latlon)
+    monkeypatch.setattr(aggregator.airnow, "current_by_zip", _fake_zip)
+
+    rows = await aggregator._fetch_air_quality("78209", 29.49, -98.46)
+
+    assert rows == [{"AQI": 48, "ParameterName": "PM2.5"}]
+    assert calls == [("latlon", 25), ("zip", 25)]
+
+
 async def test_fetch_pollen_forecast_tries_nearby_coordinates_when_exact_centroid_is_empty(monkeypatch):
     calls: list[tuple[float, float]] = []
     pollen_payload = {
