@@ -199,6 +199,11 @@ def _base_environment() -> dict[str, str]:
     for key in ("SUPABASE_DB_URL", "DATABASE_URL", "DIRECT_URL"):
         if env.get(key):
             env[key] = _normalized_database_url(env[key])
+    if env.get("SUPABASE_DB_URL") and not env.get("DATABASE_URL"):
+        # Some shared modules instantiate app.db.Settings at import time, where
+        # DATABASE_URL remains the required compatibility name. Render cron
+        # services use SUPABASE_DB_URL as their canonical database setting.
+        env["DATABASE_URL"] = env["SUPABASE_DB_URL"]
     return env
 
 

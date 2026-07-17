@@ -48,3 +48,18 @@ def test_normalized_database_url_removes_asyncpg_incompatible_options() -> None:
     assert run_render_cron._normalized_database_url(value) == (
         "postgresql://user:pass@example.com:6543/postgres?sslmode=require"
     )
+
+
+def test_base_environment_aliases_supabase_url_for_shared_settings(monkeypatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv(
+        "SUPABASE_DB_URL",
+        "postgresql://user:pass@example.com:6543/postgres"
+        "?sslmode=require&hostaddr=127.0.0.1&pgbouncer=true",
+    )
+
+    env = run_render_cron._base_environment()
+
+    expected = "postgresql://user:pass@example.com:6543/postgres?sslmode=require"
+    assert env["SUPABASE_DB_URL"] == expected
+    assert env["DATABASE_URL"] == expected
