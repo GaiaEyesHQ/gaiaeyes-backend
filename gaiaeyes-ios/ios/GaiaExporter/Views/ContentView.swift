@@ -17699,7 +17699,8 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
-                        .frame(minHeight: 30, alignment: .topLeading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
                     LocalConditionsBar(progress: stat.progress, tint: stat.tint)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

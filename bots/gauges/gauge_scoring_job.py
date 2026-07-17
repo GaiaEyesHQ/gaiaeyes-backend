@@ -189,7 +189,11 @@ def main() -> None:
         key = (str(uid), target_day)
         expected.add(key)
         try:
-            result = score_user_day(uid, target_day, force=args.force)
+            # A score performs many small queries. Reuse one bounded connection
+            # per user so the 15-minute batch does not pay a new TLS/pool
+            # handshake for every query.
+            with pg.connection_scope():
+                result = score_user_day(uid, target_day, force=args.force)
             if not result.get("ok"):
                 failures.append(f"not_ok:{uid}:{target_day.isoformat()}")
             elif not result.get("skipped"):

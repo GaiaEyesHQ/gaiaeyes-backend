@@ -70,6 +70,10 @@ Render guarantees at most one active run for a given cron service. The runner
 also executes steps sequentially and reports a non-zero lane exit if any step
 fails, while allowing independent later steps to complete.
 
+Gauge scoring remains sequential, but it reuses one bounded database connection
+per user. This keeps connection setup from growing with every scoring query
+while avoiding a single long-lived connection across the full user batch.
+
 ## Dry-run verification
 
 ```bash
