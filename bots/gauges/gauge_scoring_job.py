@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Iterable, Set, Tuple
 from zoneinfo import ZoneInfo
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
 RECENT_ACTIVITY_DAYS = max(1, int(os.getenv("GAIA_GAUGE_RECENT_ACTIVITY_DAYS", "7")))
+DEFAULT_WORKERS = min(8, max(1, int(os.getenv("GAIA_GAUGE_WORKERS", "4"))))
 
 
 def _fetch_user_ids() -> Set[str]:
@@ -159,6 +161,33 @@ def _iter_users(user_ids: Iterable[str], limit: int | None) -> Iterable[str]:
             break
 
 
+def _score_chunk(
+    items: list[Tuple[str, date]],
+    *,
+    force: bool,
+) -> list[Tuple[Tuple[str, date], dict | None, str | None]]:
+    results: list[Tuple[Tuple[str, date], dict | None, str | None]] = []
+    # Keep one connection per worker so concurrency remains bounded and each
+    # user avoids repeated TLS/pool handshakes across the score's small queries.
+    with pg.connection_scope():
+        for uid, target_day in items:
+            key = (uid, target_day)
+            try:
+                result = score_user_day(uid, target_day, force=force)
+                results.append((key, result, None))
+                logger.info(
+                    "[gauges] user=%s day=%s ok=%s skipped=%s",
+                    uid,
+                    target_day,
+                    result.get("ok"),
+                    result.get("skipped"),
+                )
+            except Exception as exc:
+                results.append((key, None, str(exc)))
+                logger.exception("[gauges] user=%s failed: %s", uid, exc)
+    return results
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compute daily gauge scores for users.")
     parser.add_argument(
@@ -182,26 +211,35 @@ def main() -> None:
     refreshed: Set[Tuple[str, date]] = set()
     failures: list[str] = []
 
-    logger.info("[gauges] scoring users=%d day=%s", len(user_ids), args.day or "per-user-local")
+    day_override = date.fromisoformat(args.day) if args.day else None
+    items = [
+        (
+            str(uid),
+            day_override or _local_day(timezones.get(str(uid))),
+        )
+        for uid in _iter_users(sorted(user_ids), args.limit)
+    ]
+    expected.update(items)
+    worker_count = min(DEFAULT_WORKERS, len(items)) if items else 0
+    logger.info(
+        "[gauges] scoring users=%d day=%s workers=%d",
+        len(items),
+        args.day or "per-user-local",
+        worker_count,
+    )
 
-    # A score performs many small queries. Reuse one autocommit connection for
-    # the bounded sequential batch so the quarter-hour job does not pay a new
-    # TLS/pool handshake for every user.
-    with pg.connection_scope():
-        for uid in _iter_users(sorted(user_ids), args.limit):
-            target_day = date.fromisoformat(args.day) if args.day else _local_day(timezones.get(str(uid)))
-            key = (str(uid), target_day)
-            expected.add(key)
-            try:
-                result = score_user_day(uid, target_day, force=args.force)
-                if not result.get("ok"):
-                    failures.append(f"not_ok:{uid}:{target_day.isoformat()}")
-                elif not result.get("skipped"):
-                    refreshed.add(key)
-                logger.info("[gauges] user=%s day=%s ok=%s skipped=%s", uid, target_day, result.get("ok"), result.get("skipped"))
-            except Exception as exc:
-                failures.append(f"exception:{uid}:{target_day.isoformat()}")
-                logger.exception("[gauges] user=%s failed: %s", uid, exc)
+    if items:
+        chunks = [items[index::worker_count] for index in range(worker_count)]
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="gauge") as executor:
+            chunk_results = executor.map(lambda chunk: _score_chunk(chunk, force=args.force), chunks)
+            for results in chunk_results:
+                for (uid, target_day), result, error in results:
+                    if error is not None:
+                        failures.append(f"exception:{uid}:{target_day.isoformat()}")
+                    elif not result or not result.get("ok"):
+                        failures.append(f"not_ok:{uid}:{target_day.isoformat()}")
+                    elif not result.get("skipped"):
+                        refreshed.add((uid, target_day))
 
     try:
         failures.extend(_verify_outputs(expected, refreshed, started_at))

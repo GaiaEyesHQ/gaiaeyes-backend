@@ -16,6 +16,11 @@ manually managed web service, worker, and Valkey instance:
 | `gaiaeyes-daily-derivations` | daily at 10:35 UTC | Local and space forecasts, health reconciliation, daily features, location context, gauges, patterns |
 | `gaiaeyes-ingest-worker` | continuous/event-driven | HealthKit sample queue; refreshes the affected user's daily marts and gauges after ingestion |
 
+Gauge scoring uses a bounded four-worker batch by default (`GAIA_GAUGE_WORKERS`,
+clamped to 1-8). Each worker reuses one autocommit connection for its chunk, so
+the quarter-hour lane can keep up as the user count grows without opening an
+unbounded number of database connections.
+
 All Drivers is assembled on request from these current sources. It does not
 need its own scheduled writer. Dashboard and Drivers responses retain their
 five-minute in-process cache, so a newly ingested global reading can take up to

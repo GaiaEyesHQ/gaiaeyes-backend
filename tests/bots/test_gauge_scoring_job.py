@@ -28,7 +28,7 @@ def test_fetch_user_ids_includes_recent_healthkit_and_app_users(monkeypatch) -> 
     assert gauge_scoring_job._fetch_user_ids() == {"healthkit-user", "recent-app-user"}
 
 
-def test_main_uses_one_connection_scope_for_batch(monkeypatch) -> None:
+def test_main_uses_one_connection_scope_per_bounded_worker(monkeypatch) -> None:
     entered: list[str] = []
 
     @contextmanager
@@ -38,6 +38,7 @@ def test_main_uses_one_connection_scope_for_batch(monkeypatch) -> None:
 
     monkeypatch.setattr(sys, "argv", ["gauge_scoring_job.py"])
     monkeypatch.setattr(gauge_scoring_job.pg, "connection_scope", connection_scope)
+    monkeypatch.setattr(gauge_scoring_job, "DEFAULT_WORKERS", 2)
     monkeypatch.setattr(gauge_scoring_job, "_fetch_user_ids", lambda: {"user-1", "user-2"})
     monkeypatch.setattr(gauge_scoring_job, "_fetch_user_timezones", lambda user_ids: {})
     monkeypatch.setattr(gauge_scoring_job, "_verify_outputs", lambda *args: [])
@@ -49,4 +50,4 @@ def test_main_uses_one_connection_scope_for_batch(monkeypatch) -> None:
 
     gauge_scoring_job.main()
 
-    assert entered == ["entered"]
+    assert entered == ["entered", "entered"]
