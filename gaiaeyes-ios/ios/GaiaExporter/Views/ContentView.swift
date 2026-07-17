@@ -1946,7 +1946,14 @@ enum OutlookDisplayLabels {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "-", with: "_")
             .lowercased()
-        if normalizedKey == "flare" {
+        let normalizedFallback = fallback?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if normalizedKey == "flare"
+            || normalizedKey == "flare_watch"
+            || normalizedKey == "solar_flare"
+            || normalizedKey == "solar_flare_watch"
+            || normalizedFallback == "flare watch" {
             return "Solar Flare Watch"
         }
         return fallback?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfTrimmedEmpty
@@ -14585,14 +14592,14 @@ struct ContentView: View {
         }
 
         private var introTitle: String {
-            showsPersonalCards ? "Start with what matters most." : "Explore broader signal context."
+            showsPersonalCards ? "Start with what matters most." : "Explore the signals around you."
         }
 
         private var introSubtitle: String {
             if showsPersonalCards {
                 return "Open a card for a calm, plain-language read on what may matter for you right now."
             }
-            return "Space, local, and earth context is here when you want a deeper read."
+            return "See the local, Earth, and space conditions Gaia Eyes compares with how you feel."
         }
 
         private var understandingCard: some View {

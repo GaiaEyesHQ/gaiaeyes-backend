@@ -40,6 +40,8 @@ struct SymptomEnvelopeTests {
     @Test
     func outlookUsesSolarFlareLabelForCachedBackendCopy() {
         #expect(OutlookDisplayLabels.driverLabel(key: "flare", fallback: "Flare watch") == "Solar Flare Watch")
+        #expect(OutlookDisplayLabels.driverLabel(key: "flare_watch", fallback: "Flare watch") == "Solar Flare Watch")
+        #expect(OutlookDisplayLabels.driverLabel(key: "forecast_flag", fallback: "Flare watch") == "Solar Flare Watch")
     }
 
     @Test
