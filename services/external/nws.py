@@ -1,6 +1,7 @@
 # services/external/nws.py
-import os
+import asyncio
 import datetime as dt
+import os
 from typing import Any, Dict, Optional
 
 import httpx
@@ -11,6 +12,7 @@ HEADERS = {
     "Accept": "application/geo+json, application/json",
     "User-Agent": WEATHER_UA,
 }
+MAX_OBSERVATION_AGE = dt.timedelta(minutes=30)
 
 
 async def _get_json(url: str) -> Dict[str, Any]:
@@ -72,18 +74,26 @@ def _grid_first_value(props: Dict[str, Any], field: str) -> Optional[float]:
         return None
 
 
+async def _nearby_station_ids(points: Dict[str, Any], *, limit: int = 3) -> list[str]:
+    """Return nearby observation station ids in NWS-provided distance order."""
+    stations_url = points.get("properties", {}).get("observationStations")
+    if not stations_url:
+        return []
+    data = await _get_json(stations_url)
+    stations = data.get("features") or []
+    return [
+        str(station.get("properties", {}).get("stationIdentifier"))
+        for station in stations[:limit]
+        if station.get("properties", {}).get("stationIdentifier")
+    ]
+
+
 async def _nearest_station_id(points: Dict[str, Any]) -> Optional[str]:
     """
     From a /points response, resolve the nearest observation station id (e.g., 'KSAT').
     """
-    stations_url = points.get("properties", {}).get("observationStations")
-    if not stations_url:
-        return None
-    data = await _get_json(stations_url)
-    stations = data.get("features") or []
-    if not stations:
-        return None
-    return stations[0]["properties"]["stationIdentifier"]
+    stations = await _nearby_station_ids(points, limit=1)
+    return stations[0] if stations else None
 
 
 def _extract_pressure_hpa(props: Dict[str, Any]) -> Optional[float]:
@@ -154,6 +164,59 @@ def _parse_obs_props(props: Dict[str, Any]) -> Dict[str, Optional[float | str]]:
     }
 
 
+def _observation_timestamp(candidate: Dict[str, Optional[float | str]]) -> Optional[dt.datetime]:
+    raw = candidate.get("obs_time")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def _has_usable_conditions(candidate: Dict[str, Optional[float | str]]) -> bool:
+    return any(candidate.get(field) is not None for field in ("temp_c", "humidity_pct", "pressure_hpa"))
+
+
+def _is_fresh_observation(
+    candidate: Dict[str, Optional[float | str]],
+    *,
+    now: Optional[dt.datetime] = None,
+) -> bool:
+    observed_at = _observation_timestamp(candidate)
+    if observed_at is None:
+        return False
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)
+    age = current.astimezone(dt.timezone.utc) - observed_at
+    return -dt.timedelta(minutes=5) <= age <= MAX_OBSERVATION_AGE
+
+
+def _freshest_observation(
+    candidates: list[Dict[str, Optional[float | str]]],
+) -> Optional[Dict[str, Optional[float | str]]]:
+    usable = [candidate for candidate in candidates if _has_usable_conditions(candidate)]
+    if not usable:
+        return None
+    return max(
+        usable,
+        key=lambda candidate: _observation_timestamp(candidate) or dt.datetime.min.replace(tzinfo=dt.timezone.utc),
+    )
+
+
+async def _latest_station_observation(station_id: str) -> Optional[Dict[str, Optional[float | str]]]:
+    try:
+        latest = await _get_json(f"{BASE}/stations/{station_id}/observations/latest?require_qc=true")
+    except httpx.HTTPError:
+        return None
+    candidate = _parse_obs_props((latest or {}).get("properties") or {})
+    return candidate if _has_usable_conditions(candidate) else None
+
+
 async def _station_latest_conditions(points: Dict[str, Any]) -> Dict[str, Optional[float | str]]:
     """
     Resolve latest **observed** conditions from the nearest station:
@@ -161,36 +224,41 @@ async def _station_latest_conditions(points: Dict[str, Any]) -> Dict[str, Option
       2) If missing or stale, /observations?require_qc=true&start=now-6h (no end param).
     Returns: { temp_c, humidity_pct, pressure_hpa, obs_time } (all Optional, obs_time is ISO string)
     """
-    sid = await _nearest_station_id(points)
+    station_ids = await _nearby_station_ids(points, limit=3)
     out: Dict[str, Optional[float | str]] = {
         "temp_c": None,
         "humidity_pct": None,
         "pressure_hpa": None,
         "obs_time": None,
     }
-    if not sid:
+    if not station_ids:
         return out
 
-    # First try "latest"
-    try:
-        latest = await _get_json(f"{BASE}/stations/{sid}/observations/latest?require_qc=true")
-        cand = _parse_obs_props((latest or {}).get("properties") or {})
-        if cand.get("temp_c") is not None or cand.get("humidity_pct") is not None:
-            return cand
-    except httpx.HTTPError:
-        pass
+    # Prefer the nearest station while its observation is current. If it has
+    # fallen behind, compare a small nearby set and use the freshest reading.
+    primary = await _latest_station_observation(station_ids[0])
+    if primary is not None and _is_fresh_observation(primary):
+        return primary
+
+    alternates = await asyncio.gather(
+        *(_latest_station_observation(station_id) for station_id in station_ids[1:]),
+    )
+    freshest = _freshest_observation(
+        [candidate for candidate in [primary, *alternates] if candidate is not None]
+    )
+    if freshest is not None:
+        return freshest
 
     # Then try a rolling 6h window (no 'end' → avoids 400s)
     start_iso = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=6)).isoformat()
     try:
-        data = await _get_json(f"{BASE}/stations/{sid}/observations?require_qc=true&start={start_iso}")
+        data = await _get_json(f"{BASE}/stations/{station_ids[0]}/observations?require_qc=true&start={start_iso}")
         feats = (data or {}).get("features") or []
         if feats:
-            # Pick the last (most recent) feature with usable fields
-            for feat in reversed(feats):
-                cand = _parse_obs_props((feat or {}).get("properties") or {})
-                if cand.get("temp_c") is not None or cand.get("humidity_pct") is not None:
-                    return cand
+            candidates = [_parse_obs_props((feat or {}).get("properties") or {}) for feat in feats]
+            freshest = _freshest_observation(candidates)
+            if freshest is not None:
+                return freshest
     except httpx.HTTPError:
         pass
 
