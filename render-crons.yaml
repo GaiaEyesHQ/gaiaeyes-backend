@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: starter
     branch: main
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     schedule: "*/15 * * * *"
     buildCommand: pip install -r requirements.txt && pip install ./bots/schumann
     startCommand: python scripts/run_render_cron.py critical
@@ -37,6 +37,10 @@ services:
         value: "60"
       - key: LOCAL_SIGNALS_AIRNOW_RADIUS_MI
         value: "25"
+      - key: LOCAL_CURRENT_CONCURRENCY
+        value: "4"
+      - key: LOCAL_CURRENT_TIMEOUT_SECONDS
+        value: "60"
       - key: HTTP_USER_AGENT
         value: "GaiaEyes/1.0 (+https://gaiaeyes.com; help@gaiaeyes.com)"
 
@@ -46,7 +50,7 @@ services:
     region: oregon
     plan: starter
     branch: main
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     schedule: "13 */2 * * *"
     buildCommand: pip install -r requirements.txt && pip install -r bots/hazards/requirements.txt
     startCommand: python scripts/run_render_cron.py events
@@ -84,7 +88,7 @@ services:
     region: oregon
     plan: starter
     branch: main
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     schedule: "35 10 * * *"
     buildCommand: pip install -r requirements.txt
     startCommand: python scripts/run_render_cron.py daily

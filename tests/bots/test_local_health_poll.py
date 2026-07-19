@@ -63,3 +63,69 @@ def test_forecast_mode_skips_current_snapshot(monkeypatch) -> None:
 
     assert stats["current_updated"] == 0
     assert stats["forecast_updated"] == 7
+
+
+def test_current_mode_bounds_location_concurrency(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_health_poll.pg,
+        "fetch",
+        lambda *args, **kwargs: [
+            {"zip": f"7875{index}", "lat": 30.3, "lon": -97.6}
+            for index in range(5)
+        ],
+    )
+    monkeypatch.setattr(local_health_poll, "LOCAL_CURRENT_CONCURRENCY", 2)
+    active = 0
+    maximum_active = 0
+
+    async def fake_assemble(zip_code: str):  # noqa: ARG001
+        nonlocal active, maximum_active
+        active += 1
+        maximum_active = max(maximum_active, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return {"asof": "2026-07-19T04:00:00Z"}
+
+    monkeypatch.setattr(local_health_poll, "assemble_for_zip", fake_assemble)
+    monkeypatch.setattr(local_health_poll, "upsert_zip_payload", lambda *args, **kwargs: None)
+
+    stats = asyncio.run(local_health_poll.run("current"))
+
+    assert maximum_active == 2
+    assert stats["current_updated"] == 5
+    assert stats["failures"] == 0
+
+
+def test_current_mode_times_out_one_location_and_finishes_others(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_health_poll.pg,
+        "fetch",
+        lambda *args, **kwargs: [
+            {"zip": "78754", "lat": 30.3, "lon": -97.6},
+            {"zip": "49001", "lat": 42.2, "lon": -85.5},
+        ],
+    )
+    monkeypatch.setattr(local_health_poll, "LOCAL_CURRENT_CONCURRENCY", 2)
+    monkeypatch.setattr(local_health_poll, "LOCAL_CURRENT_TIMEOUT_SECONDS", 0.01)
+    stored: list[str] = []
+
+    async def fake_assemble(zip_code: str):
+        if zip_code == "78754":
+            await asyncio.sleep(0.05)
+        return {"asof": "2026-07-19T04:00:00Z"}
+
+    monkeypatch.setattr(local_health_poll, "assemble_for_zip", fake_assemble)
+    monkeypatch.setattr(
+        local_health_poll,
+        "upsert_zip_payload",
+        lambda zip_code, payload: stored.append(zip_code),
+    )
+
+    try:
+        asyncio.run(local_health_poll.run("current"))
+    except RuntimeError as exc:
+        assert "1 location failure" in str(exc)
+    else:
+        raise AssertionError("a timed-out location should fail the poll after other locations finish")
+
+    assert stored == ["49001"]

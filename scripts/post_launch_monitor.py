@@ -17,6 +17,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
@@ -35,10 +36,40 @@ def _first_token_env(names: Iterable[str]) -> str:
     return value.replace("\n", ",").split(",", 1)[0].strip()
 
 
+def _load_dotenv(path: str = ".env") -> None:
+    dotenv_path = Path(path)
+    if not dotenv_path.exists():
+        return
+
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+
+        name, value = line.split("=", 1)
+        name = name.strip()
+        if not name or name in os.environ:
+            continue
+
+        value = value.strip()
+        if value[:1] == value[-1:] and value[:1] in {"'", '"'}:
+            value = value[1:-1]
+        elif " #" in value:
+            value = value.split(" #", 1)[0].rstrip()
+        os.environ[name] = value
+
+
+_load_dotenv()
+
+
 BASE_URL = (os.getenv("GAIA_MONITOR_BASE_URL") or "https://gaiaeyes-backend.onrender.com").rstrip("/")
 ZIP_CODE = os.getenv("GAIA_MONITOR_ZIP") or "78754"
 TIMEZONE = os.getenv("GAIA_MONITOR_TZ") or "America/Chicago"
-AUTH_BEARER = _first_token_env(("GAIA_MONITOR_AUTH_BEARER", "DEV_BEARER", "WRITE_TOKENS"))
+AUTH_BEARER = _first_token_env(("GAIA_MONITOR_AUTH_BEARER", "WRITE_TOKENS", "DEV_BEARER"))
 DEV_USER_ID = _first_env(
     (
         "GAIA_MONITOR_DEV_USER_ID",
@@ -55,7 +86,6 @@ ADMIN_BEARER = _first_token_env(
         "GAIAEYES_API_ADMIN_BEARER",
         "GAIAEYES_ADMIN_BEARER",
         "ADMIN_TOKEN",
-        "DEV_BEARER",
     )
 )
 REQUEST_TIMEOUT = float(os.getenv("GAIA_MONITOR_TIMEOUT_SECONDS") or "20")

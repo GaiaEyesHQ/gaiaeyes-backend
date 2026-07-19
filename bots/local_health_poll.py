@@ -30,6 +30,23 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
+def _bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+LOCAL_CURRENT_CONCURRENCY = _bounded_env_int("LOCAL_CURRENT_CONCURRENCY", 4, 1, 8)
+LOCAL_CURRENT_TIMEOUT_SECONDS = _bounded_env_int(
+    "LOCAL_CURRENT_TIMEOUT_SECONDS",
+    60,
+    15,
+    180,
+)
+
+
 def _safe_float(value):
     try:
         if value is None:
@@ -192,6 +209,28 @@ def _dedupe_locations(rows: list[dict]) -> list[dict]:
     return list(unique.values())
 
 
+async def _refresh_current_location(zip_code: str, semaphore: asyncio.Semaphore) -> tuple[int, int]:
+    async with semaphore:
+        try:
+            payload = await asyncio.wait_for(
+                assemble_for_zip(zip_code),
+                timeout=LOCAL_CURRENT_TIMEOUT_SECONDS,
+            )
+            upsert_zip_payload(zip_code, payload)
+            logger.info("[poll] cached local snapshot zip=%s", zip_code)
+            return 1, 0
+        except TimeoutError:
+            logger.error(
+                "[poll] current snapshot timed out zip=%s seconds=%s",
+                zip_code,
+                LOCAL_CURRENT_TIMEOUT_SECONDS,
+            )
+            return 0, 1
+        except Exception as exc:
+            logger.exception("[poll] %s failed: %s", zip_code, exc)
+            return 0, 1
+
+
 async def run(mode: str = "both") -> dict[str, int]:
     if mode not in {"current", "forecast", "both"}:
         raise ValueError(f"unsupported local poll mode: {mode}")
@@ -211,6 +250,27 @@ async def run(mode: str = "both") -> dict[str, int]:
         "forecast_updated": 0,
         "failures": 0,
     }
+    if mode == "current":
+        semaphore = asyncio.Semaphore(LOCAL_CURRENT_CONCURRENCY)
+        results = await asyncio.gather(
+            *(
+                _refresh_current_location(str(row.get("zip") or "").strip(), semaphore)
+                for row in rows
+                if str(row.get("zip") or "").strip()
+            )
+        )
+        stats["current_updated"] = sum(updated for updated, _ in results)
+        stats["failures"] = sum(failures for _, failures in results)
+        logger.info(
+            "[poll] current concurrency=%s timeout_seconds=%s",
+            LOCAL_CURRENT_CONCURRENCY,
+            LOCAL_CURRENT_TIMEOUT_SECONDS,
+        )
+        logger.info("[poll] done mode=%s stats=%s", mode, stats)
+        if stats["failures"]:
+            raise RuntimeError(f"local poll completed with {stats['failures']} location failure(s)")
+        return stats
+
     for row in rows:
         zip_code = row.get("zip")
         lat = _safe_float(row.get("lat"))

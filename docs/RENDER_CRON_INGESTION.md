@@ -21,6 +21,16 @@ clamped to 1-8). Each worker reuses one autocommit connection for its chunk, so
 the quarter-hour lane can keep up as the user count grows without opening an
 unbounded number of database connections.
 
+Local-current refreshes also use a bounded four-location batch by default
+(`LOCAL_CURRENT_CONCURRENCY`, clamped to 1-8). Each location is capped at 60
+seconds (`LOCAL_CURRENT_TIMEOUT_SECONDS`, clamped to 15-180) so a stalled
+upstream provider cannot consume the entire critical lane. Completed locations
+are still written before the lane reports any per-location failures.
+
+The cron services deploy on every commit to `main`. Using Render's
+`checksPass` trigger here can leave a cron on an old revision when a commit has
+no detected CI checks.
+
 All Drivers is assembled on request from these current sources. It does not
 need its own scheduled writer. Dashboard and Drivers responses retain their
 five-minute in-process cache, so a newly ingested global reading can take up to
