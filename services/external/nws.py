@@ -12,7 +12,8 @@ HEADERS = {
     "Accept": "application/geo+json, application/json",
     "User-Agent": WEATHER_UA,
 }
-MAX_OBSERVATION_AGE = dt.timedelta(minutes=30)
+MAX_OBSERVATION_AGE = dt.timedelta(minutes=15)
+NEARBY_STATION_LIMIT = 5
 
 
 async def _get_json(url: str) -> Dict[str, Any]:
@@ -224,7 +225,7 @@ async def _station_latest_conditions(points: Dict[str, Any]) -> Dict[str, Option
       2) If missing or stale, /observations?require_qc=true&start=now-6h (no end param).
     Returns: { temp_c, humidity_pct, pressure_hpa, obs_time } (all Optional, obs_time is ISO string)
     """
-    station_ids = await _nearby_station_ids(points, limit=3)
+    station_ids = await _nearby_station_ids(points, limit=NEARBY_STATION_LIMIT)
     out: Dict[str, Optional[float | str]] = {
         "temp_c": None,
         "humidity_pct": None,

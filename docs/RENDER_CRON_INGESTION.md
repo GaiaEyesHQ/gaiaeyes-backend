@@ -27,6 +27,10 @@ seconds (`LOCAL_CURRENT_TIMEOUT_SECONDS`, clamped to 15-180) so a stalled
 upstream provider cannot consume the entire critical lane. Completed locations
 are still written before the lane reports any per-location failures.
 
+For observed weather, the nearest NWS station is preferred only when its latest
+reading is no more than 15 minutes old. Otherwise, the poller compares the five
+nearest stations and uses the freshest usable observation.
+
 The cron services deploy on every commit to `main`. Using Render's
 `checksPass` trigger here can leave a cron on an old revision when a commit has
 no detected CI checks.

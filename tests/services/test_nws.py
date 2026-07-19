@@ -54,9 +54,11 @@ async def test_station_conditions_keep_fresh_nearest_station(monkeypatch):
 async def test_station_conditions_use_freshest_nearby_station_when_nearest_is_stale(monkeypatch):
     now = dt.datetime.now(dt.timezone.utc)
     observations = {
-        "NEAREST": _observation((now - dt.timedelta(minutes=50)).isoformat(), 20.0),
-        "SECOND": _observation((now - dt.timedelta(minutes=8)).isoformat(), 22.0),
-        "THIRD": _observation((now - dt.timedelta(minutes=15)).isoformat(), 23.0),
+        "NEAREST": _observation((now - dt.timedelta(minutes=20)).isoformat(), 20.0),
+        "SECOND": _observation((now - dt.timedelta(minutes=35)).isoformat(), 21.0),
+        "THIRD": _observation((now - dt.timedelta(minutes=25)).isoformat(), 22.0),
+        "FOURTH": _observation((now - dt.timedelta(minutes=18)).isoformat(), 23.0),
+        "FIFTH": _observation((now - dt.timedelta(minutes=8)).isoformat(), 24.0),
     }
 
     async def _fake_get_json(url: str):
@@ -66,6 +68,8 @@ async def test_station_conditions_use_freshest_nearby_station_when_nearest_is_st
                     {"properties": {"stationIdentifier": "NEAREST"}},
                     {"properties": {"stationIdentifier": "SECOND"}},
                     {"properties": {"stationIdentifier": "THIRD"}},
+                    {"properties": {"stationIdentifier": "FOURTH"}},
+                    {"properties": {"stationIdentifier": "FIFTH"}},
                 ]
             }
         station_id = url.split("/stations/", 1)[1].split("/", 1)[0]
@@ -77,8 +81,8 @@ async def test_station_conditions_use_freshest_nearby_station_when_nearest_is_st
         {"properties": {"observationStations": "stations-url"}}
     )
 
-    assert result["temp_c"] == 22.0
-    assert result["obs_time"] == observations["SECOND"]["properties"]["timestamp"]
+    assert result["temp_c"] == 24.0
+    assert result["obs_time"] == observations["FIFTH"]["properties"]["timestamp"]
 
 
 @pytest.mark.anyio
