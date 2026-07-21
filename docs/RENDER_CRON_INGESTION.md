@@ -29,7 +29,9 @@ are still written before the lane reports any per-location failures.
 
 For observed weather, the nearest NWS station is preferred only when its latest
 reading is no more than 15 minutes old. Otherwise, the poller compares the five
-nearest stations and uses the freshest usable observation.
+nearest stations and uses the freshest usable observation. Station reads use
+NWS's official unfiltered latest observation because the optional QC-filtered
+response can lag behind observations the station has already published.
 
 The cron services deploy on every commit to `main`. Using Render's
 `checksPass` trigger here can leave a cron on an old revision when a commit has

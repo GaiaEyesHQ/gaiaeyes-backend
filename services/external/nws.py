@@ -211,7 +211,10 @@ def _freshest_observation(
 
 async def _latest_station_observation(station_id: str) -> Optional[Dict[str, Optional[float | str]]]:
     try:
-        latest = await _get_json(f"{BASE}/stations/{station_id}/observations/latest?require_qc=true")
+        # NWS's QC-filtered `latest` response can lag behind observations already
+        # published by the station. Use the official unfiltered latest reading so
+        # local-current freshness reflects the newest available observation.
+        latest = await _get_json(f"{BASE}/stations/{station_id}/observations/latest")
     except httpx.HTTPError:
         return None
     candidate = _parse_obs_props((latest or {}).get("properties") or {})
@@ -220,9 +223,9 @@ async def _latest_station_observation(station_id: str) -> Optional[Dict[str, Opt
 
 async def _station_latest_conditions(points: Dict[str, Any]) -> Dict[str, Optional[float | str]]:
     """
-    Resolve latest **observed** conditions from the nearest station:
-      1) /observations/latest?require_qc=true
-      2) If missing or stale, /observations?require_qc=true&start=now-6h (no end param).
+    Resolve latest **observed** conditions from nearby stations:
+      1) /observations/latest
+      2) If missing or unusable, /observations?limit=24.
     Returns: { temp_c, humidity_pct, pressure_hpa, obs_time } (all Optional, obs_time is ISO string)
     """
     station_ids = await _nearby_station_ids(points, limit=NEARBY_STATION_LIMIT)
@@ -250,10 +253,10 @@ async def _station_latest_conditions(points: Dict[str, Any]) -> Dict[str, Option
     if freshest is not None:
         return freshest
 
-    # Then try a rolling 6h window (no 'end' → avoids 400s)
-    start_iso = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=6)).isoformat()
+    # Then try a small recent collection. NWS rejects `require_qc` on collection
+    # queries, so keep this fallback consistent with the unfiltered latest path.
     try:
-        data = await _get_json(f"{BASE}/stations/{station_ids[0]}/observations?require_qc=true&start={start_iso}")
+        data = await _get_json(f"{BASE}/stations/{station_ids[0]}/observations?limit=24")
         feats = (data or {}).get("features") or []
         if feats:
             candidates = [_parse_obs_props((feat or {}).get("properties") or {}) for feat in feats]

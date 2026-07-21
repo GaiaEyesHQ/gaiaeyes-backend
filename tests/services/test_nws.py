@@ -47,7 +47,7 @@ async def test_station_conditions_keep_fresh_nearest_station(monkeypatch):
     )
 
     assert result["temp_c"] == 21.0
-    assert station_calls == [f"{nws.BASE}/stations/NEAREST/observations/latest?require_qc=true"]
+    assert station_calls == [f"{nws.BASE}/stations/NEAREST/observations/latest"]
 
 
 @pytest.mark.anyio
@@ -90,11 +90,13 @@ async def test_station_conditions_choose_newest_rolling_observation_regardless_o
     now = dt.datetime.now(dt.timezone.utc)
     older = _observation((now - dt.timedelta(hours=2)).isoformat(), 19.0)
     newer = _observation((now - dt.timedelta(hours=1)).isoformat(), 21.0)
+    requested_urls: list[str] = []
 
     async def _fake_get_json(url: str):
+        requested_urls.append(url)
         if url == "stations-url":
             return {"features": [{"properties": {"stationIdentifier": "NEAREST"}}]}
-        if "/latest?" in url:
+        if url.endswith("/observations/latest"):
             return {"properties": {"timestamp": now.isoformat()}}
         return {"features": [newer, older]}
 
@@ -106,3 +108,4 @@ async def test_station_conditions_choose_newest_rolling_observation_regardless_o
 
     assert result["temp_c"] == 21.0
     assert result["obs_time"] == newer["properties"]["timestamp"]
+    assert requested_urls[-1] == f"{nws.BASE}/stations/NEAREST/observations?limit=24"
