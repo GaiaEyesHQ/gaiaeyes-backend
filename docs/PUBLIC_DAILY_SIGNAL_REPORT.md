@@ -1,4 +1,4 @@
-# Gaia Eyes Daily Signal Report
+# Gaia Eyes Health Snapshot
 
 This pipeline builds a broad public report. It does not read user locations, symptoms, wearables, or personal patterns.
 
@@ -9,7 +9,12 @@ This pipeline builds a broad public report. It does not read user locations, sym
 3. Earth Signal
 4. Major Events, only when selected events qualify
 
-The public name is `Gaia Eyes Daily Signal Report`. Existing `earthscope` code, API fields, and publishing workflows remain unchanged during shadow review.
+The collector supports two editions from the same global observation set:
+
+- `Gaia Eyes U.S. Health Snapshot` includes the 14 U.S. regions. Foreign hazards are excluded unless structured country metadata explicitly marks U.S. impact.
+- `Gaia Eyes Global Health Snapshot` keeps the full 40-region view, including Asia, South America, Australia, and the Philippines.
+
+The U.S. edition does not infer cross-border impact from a title or location string. Canada or Mexico should enter U.S. public copy only after the source provides structured evidence that the condition affects the United States. Existing `earthscope` code, API fields, and publishing workflows remain unchanged during shadow review.
 
 ## Publishing lanes
 
@@ -35,6 +40,16 @@ The command below reads providers and the database, calls the configured public 
 venv/bin/python -m bots.public_signal_report.shadow --date YYYY-MM-DD
 ```
 
+Generate the U.S. edition from the same global collection and context:
+
+```bash
+venv/bin/python -m bots.public_signal_report.shadow \
+  --date YYYY-MM-DD \
+  --edition us
+```
+
+For shadow-only model comparisons, pass `--model MODEL_NAME`. This overrides the configured public writer only for that artifact and does not change production environment settings.
+
 For fixture-only verification without OpenAI:
 
 ```bash
@@ -45,9 +60,32 @@ venv/bin/python -m bots.public_signal_report.shadow \
   --no-writer
 ```
 
-Artifacts default to `tmp/public_signal_report/<day>.json` and always contain `auto_publish: false`.
+Global artifacts default to `tmp/public_signal_report/<day>.json`; U.S. artifacts default to `tmp/public_signal_report/<day>-us.json`. Both retain every collected observation under `review_inputs`, while the report and writer facts contain only edition-qualified regions and events. Artifacts always contain `auto_publish: false`.
 
-The writer uses a strict JSON schema and validates platform word ranges. A draft that misses those ranges receives one complete model revision; a second failure is stored as `invalid` with no platform copy applied to the report. The runner never repairs copy with phrase replacements.
+The writer uses a strict JSON schema and validates platform word ranges. It also returns a five-beat reel story: body-first hook, strongest regions, supported drivers, supported effects, and summary. Non-hook slides must be complete sentences, and near-duplicate slides are rejected. A draft that misses those requirements receives one complete model revision; a second failure is stored as `invalid` with no platform copy applied to the report. The runner never repairs copy with phrase replacements.
+
+## U.S. reel preview and visual preflight
+
+Render the five U.S. slides, a silent-audio MP4 preview, sampled video frames, and a fail-closed preflight manifest:
+
+```bash
+venv/bin/python -m bots.public_signal_report.reel_renderer \
+  --input tmp/public_signal_report/YYYY-MM-DD-us.json \
+  --output-dir tmp/public_signal_report/YYYY-MM-DD-us-reel
+```
+
+The renderer prefers blank local assets named `health_snapshot_1` through `health_snapshot_5` when `--background-dir DIR` is supplied. It accepts `.jpg`, `.jpeg`, `.png`, and `.webp`. Each slide must resolve to a different source. Finished EarthScope cards are not background candidates. When custom assets are unavailable, the renderer uses five distinct Social Alerts bootstrap backgrounds.
+
+The visual preflight checks:
+
+- exactly five 1080x1920 slides;
+- every source word preserved after wrapping;
+- text bounding boxes inside the Meta-safe area;
+- distinct background sources and nonblank slide pixels;
+- one 1080x1920 H.264 video stream and one AAC audio stream;
+- minimum reel duration and five nonblank, visually distinct sampled frames.
+
+The MP4 contains a silent audio placeholder for visual review. VO and music remain a separate promotion step. The command exits nonzero when preflight fails and always keeps publishing disconnected.
 
 ## Promotion boundary
 

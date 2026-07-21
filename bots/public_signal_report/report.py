@@ -55,6 +55,8 @@ DRIVER_RULES: dict[str, dict[str, Any]] = {
     },
 }
 
+US_REGION_PREFIX = "us_"
+
 
 def _float(value: Any) -> float | None:
     try:
@@ -241,22 +243,57 @@ def _major_events(hazards: Iterable[Mapping[str, Any]], *, limit: int = 4) -> li
     return selected[:limit]
 
 
+def _country_codes(value: Any) -> set[str]:
+    if isinstance(value, str):
+        aliases = {
+            "UNITED STATES": "US",
+            "UNITED STATES OF AMERICA": "US",
+        }
+        return {
+            aliases.get(part.strip().upper(), part.strip().upper())
+            for part in value.replace(";", ",").split(",")
+            if part.strip()
+        }
+    if isinstance(value, Mapping):
+        code = value.get("code") or value.get("country_code") or value.get("iso2") or value.get("iso3")
+        return _country_codes(code)
+    if isinstance(value, (list, tuple, set)):
+        return {code for item in value for code in _country_codes(item)}
+    return set()
+
+
+def _hazard_has_us_scope(hazard: Mapping[str, Any]) -> bool:
+    payload = hazard.get("payload") if isinstance(hazard.get("payload"), Mapping) else {}
+    codes: set[str] = set()
+    for source in (hazard, payload):
+        for key in ("country_code", "country_codes", "affected_country_codes", "affected_countries"):
+            codes.update(_country_codes(source.get(key)))
+    return bool(codes & {"US", "USA"})
+
+
 def build_daily_signal_report(
     *,
     day: str | date,
     observations: Iterable[Mapping[str, Any]],
     context: Mapping[str, Any],
     expected_anchor_count: int = 120,
+    edition: str = "global",
     generated_at: datetime | None = None,
 ) -> dict[str, Any]:
     observation_rows = list(observations)
-    report = empty_report(day=day, generated_at=generated_at)
-    successful_weather = sum(bool((row.get("provider_status") or {}).get("weather")) for row in observation_rows)
-    successful_air = sum(bool((row.get("provider_status") or {}).get("air")) for row in observation_rows)
-    successful_pollen = sum(bool((row.get("provider_status") or {}).get("pollen")) for row in observation_rows)
-    regions_seen = {str(row.get("region_key")) for row in observation_rows if row.get("region_key")}
+    report = empty_report(day=day, edition=edition, generated_at=generated_at)
+    scoped_rows = (
+        [row for row in observation_rows if str(row.get("region_key") or "").startswith(US_REGION_PREFIX)]
+        if edition == "us"
+        else observation_rows
+    )
+    scoped_expected_anchor_count = expected_anchor_count
+    successful_weather = sum(bool((row.get("provider_status") or {}).get("weather")) for row in scoped_rows)
+    successful_air = sum(bool((row.get("provider_status") or {}).get("air")) for row in scoped_rows)
+    successful_pollen = sum(bool((row.get("provider_status") or {}).get("pollen")) for row in scoped_rows)
+    regions_seen = {str(row.get("region_key")) for row in scoped_rows if row.get("region_key")}
 
-    regional_items = _regional_evidence(observation_rows)
+    regional_items = _regional_evidence(scoped_rows)
     report["regional_watch"] = {
         "items": regional_items,
         "selection_method": "At least two fixed anchors must support the same driver.",
@@ -266,24 +303,30 @@ def build_daily_signal_report(
         context.get("schumann") if isinstance(context.get("schumann"), Mapping) else {},
         context.get("ulf") if isinstance(context.get("ulf"), Mapping) else {},
     )
+    hazards = context.get("hazards") if isinstance(context.get("hazards"), list) else []
+    scoped_hazards = [hazard for hazard in hazards if _hazard_has_us_scope(hazard)] if edition == "us" else hazards
     report["major_events"] = {
-        "items": _major_events(context.get("hazards") if isinstance(context.get("hazards"), list) else []),
+        "items": _major_events(scoped_hazards),
         "selection_method": "Fresh yellow-or-higher GDACS/USGS events, deduplicated and capped.",
     }
     report["coverage"] = {
-        "expected_anchors": expected_anchor_count,
-        "observed_anchors": len(observation_rows),
+        "expected_anchors": scoped_expected_anchor_count,
+        "observed_anchors": len(scoped_rows),
         "weather_anchors": successful_weather,
         "air_anchors": successful_air,
         "pollen_anchors": successful_pollen,
-        "pollen_configured": any((row.get("provider_status") or {}).get("pollen") is not None for row in observation_rows),
+        "pollen_configured": any((row.get("provider_status") or {}).get("pollen") is not None for row in scoped_rows),
         "regions_observed": len(regions_seen),
-        "weather_ratio": round(successful_weather / expected_anchor_count, 3) if expected_anchor_count else 0.0,
-        "public_global_claims_allowed": bool(expected_anchor_count and successful_weather / expected_anchor_count >= 0.75),
+        "weather_ratio": round(successful_weather / scoped_expected_anchor_count, 3) if scoped_expected_anchor_count else 0.0,
+        "public_global_claims_allowed": bool(
+            edition == "global"
+            and scoped_expected_anchor_count
+            and successful_weather / scoped_expected_anchor_count >= 0.75
+        ),
         "provider_failures": dict(
             Counter(
                 provider
-                for row in observation_rows
+                for row in scoped_rows
                 for provider, ok in (row.get("provider_status") or {}).items()
                 if ok is False
             )

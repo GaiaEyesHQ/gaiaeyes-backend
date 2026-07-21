@@ -84,6 +84,8 @@ PUBLIC_SIGNAL_ANCHORS = tuple(
     for anchor in _anchors(region_key, region_label, macro_region, points)
 )
 
+US_SIGNAL_ANCHORS = tuple(anchor for anchor in PUBLIC_SIGNAL_ANCHORS if anchor.region_key.startswith("us_"))
+
 
 def region_registry_payload() -> list[dict]:
     return [asdict(anchor) for anchor in PUBLIC_SIGNAL_ANCHORS]

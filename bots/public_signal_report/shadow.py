@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from .collector import collect_anchor_observations, collect_existing_public_context
 from .contract import validate_report_contract
-from .regions import PUBLIC_SIGNAL_ANCHORS
+from .regions import PUBLIC_SIGNAL_ANCHORS, US_SIGNAL_ANCHORS
 from .report import build_daily_signal_report
 from .writer import generate_platform_copy
 
@@ -45,7 +45,7 @@ def _apply_copy(report: dict[str, Any], copy: Mapping[str, Any]) -> None:
         "facebook": copy.get("facebook"),
         "instagram": copy.get("instagram"),
         "voiceover": copy.get("voiceover"),
-        "reel_story": copy.get("section_copy"),
+        "reel_story": copy.get("reel_story"),
     }
     sections = copy.get("section_copy") if isinstance(copy.get("section_copy"), Mapping) else {}
     for key in ("regional_watch", "space_watch", "earth_signal", "major_events"):
@@ -54,14 +54,16 @@ def _apply_copy(report: dict[str, Any], copy: Mapping[str, Any]) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate a shadow-only public Gaia Eyes Daily Signal Report.")
+    parser = argparse.ArgumentParser(description="Generate a shadow-only public Gaia Eyes Health Snapshot.")
     parser.add_argument("--date", default=date.today().isoformat())
+    parser.add_argument("--edition", choices=("global", "us"), default="global")
     parser.add_argument("--output", default=None)
     parser.add_argument("--observations-fixture", default=None)
     parser.add_argument("--context-fixture", default=None)
     parser.add_argument("--previous", default=None)
     parser.add_argument("--anchor-limit", type=int, default=0)
     parser.add_argument("--concurrency", type=int, default=8)
+    parser.add_argument("--model", default=None, help="Optional shadow-only OpenAI model override.")
     parser.add_argument("--no-writer", action="store_true")
     return parser
 
@@ -96,25 +98,32 @@ async def run(args: argparse.Namespace) -> Path:
         day=args.date,
         observations=observations,
         context=context,
-        expected_anchor_count=len(PUBLIC_SIGNAL_ANCHORS),
+        expected_anchor_count=len(US_SIGNAL_ANCHORS) if args.edition == "us" else len(PUBLIC_SIGNAL_ANCHORS),
+        edition=args.edition,
     )
     copy = (
         {"status": "not_generated", "reason": "--no-writer"}
         if args.no_writer
-        else generate_platform_copy(report, api_key=os.getenv("OPENAI_API_KEY", "").strip())
+        else generate_platform_copy(
+            report,
+            api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+            model=args.model,
+        )
     )
     _apply_copy(report, copy)
     errors = validate_report_contract(report)
     if errors:
         raise RuntimeError("Invalid report contract: " + "; ".join(errors))
 
-    output = Path(args.output) if args.output else Path("tmp/public_signal_report") / f"{args.date}.json"
+    default_name = f"{args.date}.json" if args.edition == "global" else f"{args.date}-{args.edition}.json"
+    output = Path(args.output) if args.output else Path("tmp/public_signal_report") / default_name
     output.parent.mkdir(parents=True, exist_ok=True)
     bundle = {
         "auto_publish": False,
         "report": report,
         "copy_runtime": dict(copy),
         "review_inputs": {
+            "edition": args.edition,
             "observation_count": len(observations),
             "observations": observations,
             "context": context,

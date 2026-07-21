@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from bots.public_signal_report import collector, writer
 from bots.public_signal_report.contract import SECTION_ORDER, validate_report_contract
-from bots.public_signal_report.regions import PUBLIC_SIGNAL_ANCHORS
+from bots.public_signal_report.regions import PUBLIC_SIGNAL_ANCHORS, US_SIGNAL_ANCHORS
 from bots.public_signal_report.report import build_daily_signal_report
 from bots.public_signal_report.shadow import run
 
@@ -48,6 +48,20 @@ def _context() -> dict:
     }
 
 
+def _reel_summary(
+    regional: str = "Regional heat leads today.",
+    space: str = "Space weather remains low today.",
+    earth: str = "Earth measurements remain available today.",
+    major_event: str = "",
+) -> dict:
+    return {
+        "regional": regional,
+        "space": space,
+        "earth": earth,
+        "major_event": major_event,
+    }
+
+
 def test_region_registry_has_three_anchors_across_40_regions() -> None:
     counts: dict[str, int] = {}
     for anchor in PUBLIC_SIGNAL_ANCHORS:
@@ -56,6 +70,51 @@ def test_region_registry_has_three_anchors_across_40_regions() -> None:
     assert len(PUBLIC_SIGNAL_ANCHORS) == 120
     assert len(counts) == 40
     assert set(counts.values()) == {3}
+    assert len(US_SIGNAL_ANCHORS) == 42
+
+
+def test_us_edition_filters_global_regions_and_requires_structured_us_hazard_scope() -> None:
+    us_rows = [
+        _observation("boston", region_key="us_new_england", region_label="New England", pressure_delta=-6),
+        _observation("portland", region_key="us_new_england", region_label="New England", pressure_delta=-5),
+    ]
+    asia_rows = [
+        _observation("tokyo", region_key="east_asia", region_label="East Asia", pressure_delta=-7),
+        _observation("seoul", region_key="east_asia", region_label="East Asia", pressure_delta=-6),
+    ]
+    context = _context()
+    context["hazards"] = [
+        {
+            "source": "gdacs",
+            "kind": "fire",
+            "title": "Orange U.S. fire",
+            "severity": "orange",
+            "payload": {"id": "us-fire", "affected_country_codes": ["US"]},
+        },
+        {
+            "source": "gdacs",
+            "kind": "earthquake",
+            "title": "Orange Philippines earthquake",
+            "severity": "orange",
+            "payload": {"id": "ph-quake", "country_code": "PH"},
+        },
+    ]
+
+    report = build_daily_signal_report(
+        day="2026-07-19",
+        observations=[*us_rows, *asia_rows],
+        context=context,
+        expected_anchor_count=len(US_SIGNAL_ANCHORS),
+        edition="us",
+    )
+
+    assert report["public_name"] == "Gaia Eyes U.S. Health Snapshot"
+    assert report["geographic_scope"] == "United States"
+    assert [item["region_key"] for item in report["regional_watch"]["items"]] == ["us_new_england"]
+    assert [item["title"] for item in report["major_events"]["items"]] == ["Orange U.S. fire"]
+    assert report["coverage"]["observed_anchors"] == 2
+    assert report["coverage"]["expected_anchors"] == 42
+    assert report["coverage"]["public_global_claims_allowed"] is False
 
 
 def test_report_requires_correlated_regional_driver_and_preserves_flow() -> None:
@@ -189,9 +248,16 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
     output = {
         "headline": "A calmer sky, but regional shifts still matter",
         "quick_read": "A short read.",
-        "facebook": " ".join(["Facebook"] * 250),
+        "facebook": " ".join(["Facebook"] * 225),
         "instagram": " ".join(["Instagram"] * 60),
         "voiceover": " ".join(["Voiceover"] * 55),
+        "reel_story": {
+            "hook": "Head pressure building today?",
+            "where": "New England carries the strongest regional signal today.",
+            "drivers": "Pressure swings are the leading supported environmental driver.",
+            "effects": "Some people may notice headaches or migraine sensitivity.",
+            "summary": _reel_summary(),
+        },
         "section_copy": {
             "regional_watch": "Regional",
             "space_watch": "Space",
@@ -230,6 +296,13 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
     assert "not an activity or intensity score" in captured["messages"][0]["content"]
     assert captured["response_format"]["type"] == "json_schema"
     assert captured["response_format"]["json_schema"]["strict"] is True
+    assert captured["response_format"]["json_schema"]["schema"]["properties"]["reel_story"]["required"] == [
+        "hook",
+        "where",
+        "drivers",
+        "effects",
+        "summary",
+    ]
     supplied_facts = json.loads(captured["messages"][1]["content"])["facts"]
     assert "source_row" not in supplied_facts["space_watch"]
     assert supplied_facts["space_watch"]["current_metrics"]["current_kp"] is None
@@ -266,6 +339,13 @@ def test_writer_revises_copy_once_when_word_ranges_fail(monkeypatch) -> None:
         "facebook": "Too short",
         "instagram": "Too short",
         "voiceover": "Too short",
+        "reel_story": {
+            "hook": "Feeling off?",
+            "where": "Regions are active today.",
+            "drivers": "Pressure is shifting today.",
+            "effects": "Some people may notice headaches.",
+            "summary": _reel_summary(),
+        },
         "section_copy": {
             "regional_watch": "Regional",
             "space_watch": "Space",
@@ -275,7 +355,7 @@ def test_writer_revises_copy_once_when_word_ranges_fail(monkeypatch) -> None:
     }
     valid = {
         **short,
-        "facebook": " ".join(["Facebook"] * 250),
+        "facebook": " ".join(["Facebook"] * 225),
         "instagram": " ".join(["Instagram"] * 60),
         "voiceover": " ".join(["Voiceover"] * 55),
     }
@@ -300,6 +380,191 @@ def test_writer_revises_copy_once_when_word_ranges_fail(monkeypatch) -> None:
     assert "instagram must be 60-110 words" in calls[1]["messages"][-1]["content"]
 
 
+def test_writer_rejects_fragmented_or_duplicate_reel_story(monkeypatch) -> None:
+    invalid = {
+        "headline": "Head pressure building?",
+        "quick_read": "Short read.",
+        "facebook": " ".join(["Facebook"] * 225),
+        "instagram": " ".join(["Instagram"] * 60),
+        "voiceover": " ".join(["Voiceover"] * 55),
+        "reel_story": {
+            "hook": "Head pressure building?",
+            "where": "Pressure shifts across New England",
+            "drivers": "Pressure shifts across New England.",
+            "effects": "Some people may notice headaches.",
+            "summary": _reel_summary(),
+        },
+        "section_copy": {
+            "regional_watch": "Regional",
+            "space_watch": "Space",
+            "earth_signal": "Earth",
+            "major_events": "Events",
+        },
+    }
+    calls: list[dict] = []
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(invalid)))])
+
+    class FakeOpenAI:
+        def __init__(self, *, api_key):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(writer, "OpenAI", FakeOpenAI)
+    result = writer.generate_platform_copy({}, api_key="test-key", model="test-model")
+
+    assert result["status"] == "invalid"
+    assert any("complete sentence" in error for error in result["validation_errors"])
+    assert any("near-duplicates" in error for error in result["validation_errors"])
+    assert len(calls) == 2
+
+
+def test_writer_validation_rejects_unsupported_signal_comparisons() -> None:
+    copy = {
+        "headline": "Heat making everything harder?",
+        "quick_read": "Schumann frequencies tracked near expected values.",
+        "facebook": "Solar wind was modest and steady today.",
+        "instagram": "ULF intensity was modest today.",
+        "voiceover": "Measured signals are available today.",
+        "reel_story": {
+            "hook": "Heat making everything harder?",
+            "where": "The strongest regional signal centers on the Desert Southwest.",
+            "drivers": "Heat and humidity are the leading supported drivers.",
+            "effects": "Some people may notice fatigue or lower exercise tolerance.",
+            "summary": _reel_summary(),
+        },
+        "section_copy": {},
+    }
+
+    errors = writer._copy_validation_errors(copy, {"major_events": {"items": []}})
+
+    assert "copy gives schumann an unsupported qualitative comparison" in errors
+    assert "copy gives ulf an unsupported qualitative comparison" in errors
+    assert "copy gives solar wind an unsupported qualitative comparison" in errors
+
+
+def test_writer_validation_does_not_treat_gulf_as_ulf() -> None:
+    copy = {
+        "headline": "Heavy air slowing you down?",
+        "quick_read": "Heat and humidity were strongest along the Gulf Coast.",
+        "facebook": "Heat and humidity were sampled today.",
+        "instagram": "Heat and humidity were sampled today.",
+        "voiceover": "Heat and humidity were sampled today.",
+        "reel_story": {
+            "hook": "Heavy air slowing you down?",
+            "where": "Heat and humidity were strongest along the Gulf Coast.",
+            "drivers": "Heat and humidity were the leading sampled drivers.",
+            "effects": "Some people may notice fatigue under these conditions.",
+            "summary": _reel_summary(earth="Earth signals use ULF Active (diffuse)."),
+        },
+        "section_copy": {},
+    }
+
+    errors = writer._copy_validation_errors(copy, {"major_events": {"items": []}})
+
+    assert "copy gives ulf an unsupported qualitative comparison" not in errors
+
+
+def test_writer_validation_rejects_internal_summary_notation() -> None:
+    copy = {
+        "headline": "Heavy air slowing you down?",
+        "quick_read": "Heat and humidity were sampled today.",
+        "facebook": "Heat and humidity were sampled today.",
+        "instagram": "Heat and humidity were sampled today.",
+        "voiceover": "Heat and humidity were sampled today.",
+        "reel_story": {
+            "hook": "Heavy air slowing you down?",
+            "where": "Heat was strongest along the Gulf Coast.",
+            "drivers": "Heat and humidity were the leading sampled drivers.",
+            "effects": "Some people may notice fatigue under these conditions.",
+            "summary": _reel_summary(earth="ULF Active (diffuse) was measured."),
+        },
+        "section_copy": {},
+    }
+
+    errors = writer._copy_validation_errors(copy, {"major_events": {"items": []}})
+
+    assert "reel_story.summary.earth must use plain prose without semicolons or parentheses" in errors
+
+
+def test_writer_validation_rejects_unsupplied_ulf_classification_and_low_strength() -> None:
+    copy = {
+        "headline": "Feeling weighed down by heat?",
+        "quick_read": "Space weather is low-strength and ULF was classified today.",
+        "facebook": "Heat and humidity were sampled today.",
+        "instagram": "Heat and humidity were sampled today.",
+        "voiceover": "Heat and humidity were sampled today.",
+        "reel_story": {
+            "hook": "Feeling weighed down by heat?",
+            "where": "Heat was strongest along the Gulf Coast.",
+            "drivers": "Heat and humidity were the leading sampled drivers.",
+            "effects": "Some people may notice fatigue under these conditions.",
+            "summary": _reel_summary(earth="ULF was classified today."),
+        },
+        "section_copy": {},
+    }
+
+    errors = writer._copy_validation_errors(
+        copy,
+        {"major_events": {"items": []}, "earth_signal": {"ulf_usable": False}},
+    )
+
+    assert "copy must not call ULF classified when no usable ULF class is supplied" in errors
+    assert "copy must describe supplied low space activity in plain language" in errors
+
+
+def test_writer_validation_rejects_bare_ulf_classifier_stack() -> None:
+    copy = {
+        "headline": "Is the air feeling heavy?",
+        "quick_read": "Earth signals include Active diffuse ULF.",
+        "facebook": "Heat and humidity were sampled today.",
+        "instagram": "Heat and humidity were sampled today.",
+        "voiceover": "Heat and humidity were sampled today.",
+        "reel_story": {
+            "hook": "Is the air feeling heavy?",
+            "where": "Heat was strongest along the Gulf Coast.",
+            "drivers": "Heat and humidity were the leading sampled drivers.",
+            "effects": "Some people may notice fatigue under these conditions.",
+            "summary": _reel_summary(earth="Earth signals include Active diffuse ULF."),
+        },
+        "section_copy": {},
+    }
+
+    errors = writer._copy_validation_errors(
+        copy,
+        {"major_events": {"items": []}, "earth_signal": {"ulf_usable": True}},
+    )
+
+    assert "copy must translate ULF classifiers into grammatical public prose" in errors
+
+
+def test_writer_validation_rejects_schumann_as_single_summary_score() -> None:
+    copy = {
+        "headline": "Is the air feeling heavy?",
+        "quick_read": "Heat and humidity were sampled today.",
+        "facebook": "Heat and humidity were sampled today.",
+        "instagram": "Heat and humidity were sampled today.",
+        "voiceover": "Heat and humidity were sampled today.",
+        "reel_story": {
+            "hook": "Is the air feeling heavy?",
+            "where": "Heat was strongest along the Gulf Coast.",
+            "drivers": "Heat and humidity were the leading sampled drivers.",
+            "effects": "Some people may notice fatigue under these conditions.",
+            "summary": _reel_summary(earth="Schumann is near 7.67 hertz today."),
+        },
+        "section_copy": {},
+    }
+
+    errors = writer._copy_validation_errors(
+        copy,
+        {"major_events": {"items": []}, "earth_signal": {"ulf_usable": True}},
+    )
+
+    assert "reel_story.summary.earth must describe measured Schumann frequencies, not Schumann as a score" in errors
+
+
 def test_shadow_fixture_writes_review_only_bundle(tmp_path) -> None:
     observations_path = tmp_path / "observations.json"
     context_path = tmp_path / "context.json"
@@ -308,12 +573,14 @@ def test_shadow_fixture_writes_review_only_bundle(tmp_path) -> None:
     context_path.write_text(json.dumps(_context()))
     args = argparse.Namespace(
         date="2026-07-14",
+        edition="global",
         output=str(output_path),
         observations_fixture=str(observations_path),
         context_fixture=str(context_path),
         previous=None,
         anchor_limit=0,
         concurrency=2,
+        model=None,
         no_writer=True,
     )
 
@@ -324,3 +591,30 @@ def test_shadow_fixture_writes_review_only_bundle(tmp_path) -> None:
     assert bundle["report"]["auto_publish"] is False
     assert bundle["copy_runtime"] == {"status": "not_generated", "reason": "--no-writer"}
     assert bundle["review_inputs"]["observation_count"] == 2
+
+
+def test_us_shadow_uses_edition_specific_default_filename(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    observations_path = tmp_path / "observations.json"
+    context_path = tmp_path / "context.json"
+    observations_path.write_text(json.dumps([]))
+    context_path.write_text(json.dumps(_context()))
+    args = argparse.Namespace(
+        date="2026-07-19",
+        edition="us",
+        output=None,
+        observations_fixture=str(observations_path),
+        context_fixture=str(context_path),
+        previous=None,
+        anchor_limit=0,
+        concurrency=2,
+        model=None,
+        no_writer=True,
+    )
+
+    output = asyncio.run(run(args))
+
+    assert output.resolve() == tmp_path / "tmp/public_signal_report/2026-07-19-us.json"
+    bundle = json.loads(output.read_text())
+    assert bundle["review_inputs"]["edition"] == "us"
+    assert bundle["report"]["public_name"] == "Gaia Eyes U.S. Health Snapshot"

@@ -1,0 +1,295 @@
+{
+  "schema_version": "us-health-snapshot-reel-preflight.v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "passed": true,
+  "generated_at": "2026-07-20T04:19:10Z",
+  "source_day": "2026-07-19",
+  "source_public_name": "Gaia Eyes U.S. Health Snapshot",
+  "errors": [],
+  "warnings": [],
+  "slides": [
+    {
+      "index": 1,
+      "key": "hook",
+      "label": "U.S. HEALTH SNAPSHOT",
+      "text": "Is the heat wearing you down?",
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/01-hook.png",
+      "background_source": "bootstrap:social_alerts/migraine_pressure",
+      "background_digest": "5f302256e8caaa39f21aa030d7acd6b32b2a4199e613f201a84a658e9bd4530a",
+      "background_warnings": [],
+      "font_size": 128,
+      "wrapped_lines": [
+        "Is the heat",
+        "wearing you",
+        "down?"
+      ],
+      "text_bbox": [
+        88,
+        690,
+        895,
+        1158
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 2,
+      "key": "where",
+      "label": "WHERE IT'S STRONGEST",
+      "text": "Strongest regions today: the Desert Southwest, Florida and the Gulf Coast, and the Southern Plains.",
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/02-where.png",
+      "background_source": "bootstrap:social_alerts/weather_pressure",
+      "background_digest": "6e50c8a524a0b730141e58a1e612727613bd0c005726ee52962833c8375428d6",
+      "background_warnings": [],
+      "font_size": 70,
+      "wrapped_lines": [
+        "Strongest regions",
+        "today: the Desert",
+        "Southwest, Florida and",
+        "the Gulf Coast, and the",
+        "Southern Plains."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        898,
+        1065
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 3,
+      "key": "drivers",
+      "label": "WHAT'S DRIVING IT",
+      "text": "The leading driver sampled was heat and humidity across key anchors.",
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/03-drivers.png",
+      "background_source": "bootstrap:social_alerts/air_quality_haze",
+      "background_digest": "21e12f93eeac31ee254264c85a28ea96e53ba4f09f844047e6910594a9f96423",
+      "background_warnings": [],
+      "font_size": 92,
+      "wrapped_lines": [
+        "The leading",
+        "driver sampled",
+        "was heat and",
+        "humidity across",
+        "key anchors."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        846,
+        1200
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 4,
+      "key": "effects",
+      "label": "WHAT SOME MAY NOTICE",
+      "text": "Some people may notice fatigue or sleep disruption in these regions.",
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/04-effects.png",
+      "background_source": "bootstrap:social_alerts/nervous_system_static",
+      "background_digest": "a812c4f4d427f132731afd49a7fa452ae3786fd51008544283ba187cd4aee2a0",
+      "background_warnings": [],
+      "font_size": 92,
+      "wrapped_lines": [
+        "Some people",
+        "may notice",
+        "fatigue or sleep",
+        "disruption in",
+        "these regions."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        814,
+        1200
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 5,
+      "key": "summary",
+      "label": "TODAY'S SIGNALS",
+      "text": "Heat and humidity led in three U.S. regions. Space weather stayed low with quiet current readings. Schumann frequencies were measured and ULF was active and diffuse.",
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/05-summary.png",
+      "background_source": "bootstrap:social_alerts/earthscope_cosmic",
+      "background_digest": "b550f91ef48b7d5155f68dda7908ae8ccabdd1e0013a747f6143c6f618f0523b",
+      "background_warnings": [],
+      "font_size": 58,
+      "wrapped_lines": [
+        "Heat and humidity led in",
+        "three U.S. regions.",
+        "Space weather stayed low",
+        "with quiet current readings.",
+        "Schumann frequencies",
+        "were measured and ULF",
+        "was active and diffuse."
+      ],
+      "text_bbox": [
+        88,
+        520,
+        901,
+        1412
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ],
+      "summary_rows": [
+        {
+          "label": "REGIONAL",
+          "key": "regional",
+          "text": "Heat and humidity led in three U.S. regions.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            574,
+            811,
+            714
+          ]
+        },
+        {
+          "label": "SPACE",
+          "key": "space",
+          "text": "Space weather stayed low with quiet current readings.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            888,
+            901,
+            1028
+          ]
+        },
+        {
+          "label": "EARTH",
+          "key": "earth",
+          "text": "Schumann frequencies were measured and ULF was active and diffuse.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            1202,
+            791,
+            1412
+          ]
+        }
+      ]
+    }
+  ],
+  "slide_health": [
+    {
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/01-hook.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 34.46,
+      "variance": 2022.87,
+      "pixel_digest": "e1bf102f1ea224a3358eee86b662ec96a31b3099e1322e9626526b24e3f91caa"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/02-where.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 35.56,
+      "variance": 2006.39,
+      "pixel_digest": "9d28e4b844754e98cd38ba7433c9ce93aec637ee6c2d6b6171731ef54ff8a9c9"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/03-drivers.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 37.37,
+      "variance": 2395.22,
+      "pixel_digest": "ea7dfa0937ef8b8f856864035f595a4835e96114468a734bd8ff84a422013bc4"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/04-effects.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 44.01,
+      "variance": 2373.32,
+      "pixel_digest": "f2bb2f21d0f937fffdb300938ec3aab14da2f5fb3dd78db8529aee7ce818ef1a"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/slides/05-summary.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 39.56,
+      "variance": 2279.82,
+      "pixel_digest": "c13a934c0c9035835d48197d425ad63de40e53e307a9c9f3319ec95e9c187a43"
+    }
+  ],
+  "video": {
+    "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/us-health-snapshot-preview.mp4",
+    "duration_seconds": 15.0,
+    "stream_count": 2,
+    "sampled_frames": [
+      {
+        "timestamp": 1.0,
+        "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/preflight-frames/frame-1.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 33.11,
+        "variance": 1989.81,
+        "pixel_digest": "bacca6957918f0a56104eb63307a42bf748490bc4c26fdac65f249dae5f97fc6"
+      },
+      {
+        "timestamp": 3.55,
+        "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/preflight-frames/frame-2.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 34.18,
+        "variance": 1950.85,
+        "pixel_digest": "440a1f3a84644c9d943cf7075da77c04771856dea1a26c3b9a761c152cb16d8c"
+      },
+      {
+        "timestamp": 6.5,
+        "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/preflight-frames/frame-3.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 35.94,
+        "variance": 2344.6,
+        "pixel_digest": "10cfe5019a60575929ada22a0c11da7ea098f63421b9d0d49307cd59b1c48406"
+      },
+      {
+        "timestamp": 9.45,
+        "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/preflight-frames/frame-4.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 42.67,
+        "variance": 2325.41,
+        "pixel_digest": "3d4c67c10bc50b849aced1cd819ef5106ee46b187e8a4afd728c0bb8060396cb"
+      },
+      {
+        "timestamp": 12.399999999999999,
+        "path": "tmp/public_signal_report/2026-07-19-us-gpt-5-v11-reel/preflight-frames/frame-5.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 38.22,
+        "variance": 2202.64,
+        "pixel_digest": "124676e609ae2f8887f79d6d3b43ed5393b97f41577a846d3b34d98bf4ed9d06"
+      }
+    ]
+  }
+}

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+from difflib import SequenceMatcher
 from typing import Any, Mapping
 
 from openai import OpenAI
@@ -14,6 +16,7 @@ REQUIRED_COPY_KEYS = {
     "facebook",
     "instagram",
     "voiceover",
+    "reel_story",
     "section_copy",
 }
 
@@ -32,6 +35,28 @@ COPY_RESPONSE_FORMAT = {
                 "facebook": {"type": "string"},
                 "instagram": {"type": "string"},
                 "voiceover": {"type": "string"},
+                "reel_story": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["hook", "where", "drivers", "effects", "summary"],
+                    "properties": {
+                        "hook": {"type": "string"},
+                        "where": {"type": "string"},
+                        "drivers": {"type": "string"},
+                        "effects": {"type": "string"},
+                        "summary": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["regional", "space", "earth", "major_event"],
+                            "properties": {
+                                "regional": {"type": "string"},
+                                "space": {"type": "string"},
+                                "earth": {"type": "string"},
+                                "major_event": {"type": "string"},
+                            },
+                        },
+                    },
+                },
                 "section_copy": {
                     "type": "object",
                     "additionalProperties": False,
@@ -65,6 +90,8 @@ def _writer_facts(report: Mapping[str, Any]) -> dict[str, Any]:
 
     return {
         "day": report.get("day"),
+        "edition": report.get("edition"),
+        "geographic_scope": report.get("geographic_scope"),
         "coverage": report.get("coverage"),
         "regional_watch": report.get("regional_watch"),
         "space_watch": {
@@ -112,16 +139,29 @@ def _writer_facts(report: Mapping[str, Any]) -> dict[str, Any]:
 
 def writer_payload(report: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        "task": "Write the public Gaia Eyes Daily Signal Report from this factual report object.",
-        "report_name": "Gaia Eyes Daily Signal Report",
+        "task": f"Write the public {report.get('public_name') or 'Gaia Eyes Health Snapshot'} from this factual report object.",
+        "report_name": report.get("public_name") or "Gaia Eyes Health Snapshot",
+        "geographic_scope": report.get("geographic_scope") or "global",
         "required_flow": ["Regional Watch", "Space Watch", "Earth Signal", "Major Events when present"],
         "facts": _writer_facts(report),
         "outputs": {
             "headline": "A plain-English emotional or body-first hook, no more than 12 words.",
             "quick_read": "Two or three sentences that give the useful rundown first.",
-            "facebook": "A readable 250-450 word report with the quick read followed by the required sections.",
-            "instagram": "A summary of at least 60 and no more than 110 words, naming only the strongest regional and global signals and ending with 'Full daily report: gaiaeyes.com'.",
+            "facebook": "A readable 200-450 word report with the quick read followed by the required sections.",
+            "instagram": "A summary of at least 60 and no more than 110 words, naming only the strongest in-scope regional, space, and Earth signals and ending with 'Full daily report: gaiaeyes.com'.",
             "voiceover": "A natural 55-75 word reel script that opens with an emotional or body-first hook and has no CTA or wellness-tip ending.",
+            "reel_story": {
+                "hook": "Slide 1: a concrete body-first question, no more than 8 words.",
+                "where": "Slide 2: one complete sentence naming the strongest one to three in-scope regions.",
+                "drivers": "Slide 3: one complete sentence naming the strongest supported environmental drivers.",
+                "effects": "Slide 4: one complete sentence naming only supported things some people may notice.",
+                "summary": {
+                    "regional": "Slide 5 Regional row: one plain-English complete sentence of 4-12 words.",
+                    "space": "Slide 5 Space row: one plain-English complete sentence of 4-12 words.",
+                    "earth": "Slide 5 Earth row: one plain-English complete sentence of 4-12 words.",
+                    "major_event": "Slide 5 optional Major Event row: one complete sentence of up to 12 words, or an empty string when none is supplied.",
+                },
+            },
             "section_copy": {
                 "regional_watch": "Two to five concise regional paragraphs.",
                 "space_watch": "One concise paragraph.",
@@ -132,10 +172,10 @@ def writer_payload(report: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _copy_validation_errors(copy: Mapping[str, Any]) -> list[str]:
+def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] | None = None) -> list[str]:
     errors: list[str] = []
     ranges = {
-        "facebook": (250, 450),
+        "facebook": (200, 450),
         "instagram": (60, 110),
         "voiceover": (55, 75),
     }
@@ -146,6 +186,88 @@ def _copy_validation_errors(copy: Mapping[str, Any]) -> list[str]:
     headline_count = len(str(copy.get("headline") or "").split())
     if not 1 <= headline_count <= 12:
         errors.append(f"headline must be 1-12 words; received {headline_count}")
+    reel_story = copy.get("reel_story") if isinstance(copy.get("reel_story"), Mapping) else {}
+    slide_ranges = {
+        "hook": (1, 8),
+        "where": (3, 24),
+        "drivers": (3, 24),
+        "effects": (3, 24),
+    }
+    normalized_slides: list[tuple[str, str]] = []
+    for key, (minimum, maximum) in slide_ranges.items():
+        text = str(reel_story.get(key) or "").strip()
+        count = len(text.split())
+        if not minimum <= count <= maximum:
+            errors.append(f"reel_story.{key} must be {minimum}-{maximum} words; received {count}")
+        if key != "hook" and text and text[-1] not in ".?!":
+            errors.append(f"reel_story.{key} must be a complete sentence ending in punctuation")
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", text.lower())
+        normalized_slides.append((key, " ".join(normalized.split())))
+    summary = reel_story.get("summary") if isinstance(reel_story.get("summary"), Mapping) else {}
+    for key in ("regional", "space", "earth"):
+        text = str(summary.get(key) or "").strip()
+        count = len(text.split())
+        if not 4 <= count <= 12:
+            errors.append(f"reel_story.summary.{key} must be 4-12 words; received {count}")
+        if text and text[-1] not in ".?!":
+            errors.append(f"reel_story.summary.{key} must be a complete sentence ending in punctuation")
+        if ";" in text or "(" in text or ")" in text:
+            errors.append(f"reel_story.summary.{key} must use plain prose without semicolons or parentheses")
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", text.lower())
+        normalized_slides.append((f"summary.{key}", " ".join(normalized.split())))
+    major_event_text = str(summary.get("major_event") or "").strip()
+    if len(major_event_text.split()) > 12:
+        errors.append("reel_story.summary.major_event must be no more than 12 words")
+    if major_event_text and major_event_text[-1] not in ".?!":
+        errors.append("reel_story.summary.major_event must be a complete sentence ending in punctuation")
+    for index, (left_key, left) in enumerate(normalized_slides):
+        for right_key, right in normalized_slides[index + 1 :]:
+            if left and right and SequenceMatcher(None, left, right).ratio() >= 0.8:
+                errors.append(f"reel_story.{left_key} and reel_story.{right_key} are near-duplicates")
+    major_events = report.get("major_events") if isinstance(report, Mapping) else {}
+    event_items = major_events.get("items") if isinstance(major_events, Mapping) else None
+    if event_items == []:
+        public_fields = [
+            str(copy.get(key) or "")
+            for key in ("quick_read", "facebook", "instagram", "voiceover")
+        ]
+        public_fields.extend(str(reel_story.get(key) or "") for key in slide_ranges)
+        public_fields.extend(str(summary.get(key) or "") for key in ("regional", "space", "earth", "major_event"))
+        if any("major event" in text.lower() for text in public_fields):
+            errors.append("copy must omit Major Events when no qualifying events are supplied")
+        if major_event_text:
+            errors.append("reel_story.summary.major_event must be empty when no qualifying event is supplied")
+    factual_text = "\n".join(
+        [str(copy.get(key) or "") for key in ("quick_read", "facebook", "instagram", "voiceover")]
+        + [str(reel_story.get(key) or "") for key in slide_ranges]
+        + [str(summary.get(key) or "") for key in ("regional", "space", "earth", "major_event")]
+    )
+    earth_signal = report.get("earth_signal") if isinstance(report, Mapping) else {}
+    if isinstance(earth_signal, Mapping) and earth_signal.get("ulf_usable") is not True:
+        if re.search(r"\bulf\b[^.!?\n]*\bclassified\b", factual_text, flags=re.IGNORECASE):
+            errors.append("copy must not call ULF classified when no usable ULF class is supplied")
+    if re.search(r"\blow-strength\b", factual_text, flags=re.IGNORECASE):
+        errors.append("copy must describe supplied low space activity in plain language")
+    if re.search(r"\b(?:active|quiet|variable)\s+(?:diffuse|coherent)\s+ulf\b", factual_text, flags=re.IGNORECASE):
+        errors.append("copy must translate ULF classifiers into grammatical public prose")
+    earth_summary = str(summary.get("earth") or "")
+    if re.search(r"\bschumann\s+is\b", earth_summary, flags=re.IGNORECASE):
+        errors.append("reel_story.summary.earth must describe measured Schumann frequencies, not Schumann as a score")
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", factual_text.lower())
+    unsupported_comparisons = {
+        "schumann": ("expected", "normal", "typical", "aligned", "tracked", "steady", "stable"),
+        "ulf": ("modest", "weak", "strong", "unusual"),
+        "solar wind": ("modest", "weak", "strong", "normal", "typical", "steady", "stable"),
+    }
+    for subject, descriptors in unsupported_comparisons.items():
+        subject_pattern = re.compile(rf"\b{re.escape(subject)}\b")
+        descriptor_patterns = [re.compile(rf"\b{re.escape(descriptor)}\w*\b") for descriptor in descriptors]
+        if any(
+            subject_pattern.search(sentence)
+            and any(pattern.search(sentence) for pattern in descriptor_patterns)
+            for sentence in sentences
+        ):
+            errors.append(f"copy gives {subject} an unsupported qualitative comparison")
     return errors
 
 
@@ -162,7 +284,7 @@ def generate_platform_copy(
         return {"status": "not_generated", "reason": "public writer model missing"}
 
     system = (
-        "You are the Gaia Eyes public Daily Signal Report writer. Use only supplied facts. "
+        "You are the Gaia Eyes public Health Snapshot writer. Use only supplied facts and stay inside the supplied geographic_scope. "
         "Write the report in this exact order: Regional Watch, Space Watch, Earth Signal, then Major Events when present. "
         "The headline and voiceover must open with a natural emotional or body-first hook, not a list of conditions, metrics, or regions. Avoid vague metaphors. "
         "Facebook must also open with the emotional or body-first hook before its quick rundown. "
@@ -172,13 +294,19 @@ def generate_platform_copy(
         "Regional health language may say 'may', 'can', or 'some people notice' and must stay within each region's supplied health_context. "
         "Choose only the most relevant one or two supplied health effects per regional paragraph; do not reproduce symptom lists. "
         "Earth Signal may describe possible human effects with 'may', 'can', or 'some people notice' only when its supplied measurement is marked usable and earth_signal includes an explicit health_context. Without that list, describe only the measured field pattern. If ULF is unusable, do not interpret its class, numbers, or human effects. "
-        "Schumann harmonic values are frequency measurements, not an activity or intensity score. Do not call them steady, elevated, active, calm, or unusual unless comparative evidence is explicitly supplied. "
+        "Schumann harmonic values are frequency measurements, not an activity or intensity score. State measured frequencies only. Do not call them expected, normal, typical, aligned, tracked, steady, stable, elevated, active, calm, or unusual unless comparative evidence is explicitly supplied. "
+        "For ULF, use a supplied context_class verbatim. Do not characterize raw intensity, coherence, or persistence values as modest, elevated, strong, weak, or unusual unless comparative thresholds are supplied. "
+        "For solar wind, use supplied measurements and signal_strength only. Do not call it modest, strong, weak, normal, typical, steady, or stable without supplied comparative evidence. "
+        "Say space weather is low, moderate, or high as supplied; never write low-strength. If ULF is unusable, say it is unavailable and never call it classified. If ULF is usable, name its supplied context_class whenever saying it is classified. "
+        "Translate supplied ULF classifiers into natural public prose, such as 'an active, diffuse ULF pattern'; never stack bare internal labels such as 'Active diffuse ULF'. "
+        "In the reel summary Earth row, write that Schumann frequencies were measured; never write 'Schumann is' followed by a value or state. When both Schumann and ULF are present, omit raw Schumann values from that short row so both measurements fit naturally. "
         "Do not append a disclaimer, caveat paragraph, or research defense to Earth Signal. "
         "Use recovery or recoup language only when space_watch.recovery_frame is true. When it is false, describe current versus daily activity without a recovery claim. "
         "When Earth measurements are unavailable, state that once in plain English without exposing internal confidence-threshold language. "
         "Distinguish daily space peaks from current readings. Do not mention a CME catalog count as an active impact unless Earth-directed or impact evidence is supplied. "
         "Use reader-friendly metric names rather than source field identifiers. Do not invent active weather, AQI, pollen, hazards, health effects, measurements, locations, or causality. "
         "Major Events is conditional and must not list events absent from the supplied facts. "
+        "The five reel_story slides must be complete, distinct thoughts. Never split one sentence across slides or repeat the same statement with one changed word. Slide 5 uses separate complete Regional, Space, and Earth rows, plus Major Event only when supplied; do not compress those rows into classifier fragments. "
         "Facebook may end with 'Full report: gaiaeyes.com' and 'Personalized patterns: gaiaeyes.com/app'. "
         "Voiceover must end on the factual rundown, with no CTA, advice, wellness tip, reflection prompt, or filler sign-off. No emojis. Return only JSON."
     )
@@ -202,7 +330,7 @@ def generate_platform_copy(
                 return {"status": "invalid", "reason": "writer response missing required keys", "raw": obj}
             if not isinstance(obj.get("section_copy"), dict):
                 return {"status": "invalid", "reason": "section_copy must be an object", "raw": obj}
-            errors = _copy_validation_errors(obj)
+            errors = _copy_validation_errors(obj, report)
             if not errors:
                 return {"status": "generated", "model": selected_model, "writer_attempts": attempt + 1, **obj}
             if attempt == 0:
@@ -223,6 +351,7 @@ def generate_platform_copy(
             return {
                 "status": "invalid",
                 "reason": "writer copy failed editorial validation",
+                "model": selected_model,
                 "validation_errors": errors,
                 "raw": obj,
             }
