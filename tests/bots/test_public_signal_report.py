@@ -253,8 +253,8 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
         "voiceover": " ".join(["Voiceover"] * 55),
         "reel_story": {
             "hook": "Head pressure building today?",
-            "where": "New England carries the strongest regional signal today.",
-            "drivers": "Pressure swings are the leading supported environmental driver.",
+            "where": "New England may feel the biggest shift today.",
+            "drivers": "Changing air pressure is the main condition behind it.",
             "effects": "Some people may notice headaches or migraine sensitivity.",
             "summary": _reel_summary(),
         },
@@ -294,6 +294,11 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
     assert "no CTA, advice, wellness tip, reflection prompt" in captured["messages"][0]["content"]
     assert "includes an explicit health_context" in captured["messages"][0]["content"]
     assert "not an activity or intensity score" in captured["messages"][0]["content"]
+    assert "general adult reader with no science" in captured["messages"][0]["content"]
+    assert "Do not sound like a dashboard" in captured["messages"][0]["content"]
+    assert "Do not merely delete technical terms or invent abstract synonyms" in captured["messages"][0]["content"]
+    assert "longer Facebook report and detailed section_copy may name relevant technical measurements" in captured["messages"][0]["content"]
+    assert "without mystical heartbeat, energy, or beneath-our-feet metaphors" in captured["messages"][0]["content"]
     assert captured["response_format"]["type"] == "json_schema"
     assert captured["response_format"]["json_schema"]["strict"] is True
     assert captured["response_format"]["json_schema"]["schema"]["properties"]["reel_story"]["required"] == [
@@ -303,7 +308,12 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
         "effects",
         "summary",
     ]
-    supplied_facts = json.loads(captured["messages"][1]["content"])["facts"]
+    supplied_payload = json.loads(captured["messages"][1]["content"])
+    assert supplied_payload["audience_and_voice"]["reader"] == "A general adult reader with no science or weather background."
+    assert "without substituting new abstract terms" in supplied_payload["audience_and_voice"]["short_form_rule"]
+    assert "Do not mention sampling, anchors, coverage, or signals" in supplied_payload["outputs"]["reel_story"]["where"]
+    assert "omit acronyms, raw values, and specialist classifier words" in supplied_payload["outputs"]["reel_story"]["summary"]["earth"]
+    supplied_facts = supplied_payload["facts"]
     assert "source_row" not in supplied_facts["space_watch"]
     assert supplied_facts["space_watch"]["current_metrics"]["current_kp"] is None
     assert supplied_facts["earth_signal"]["ulf"] == {

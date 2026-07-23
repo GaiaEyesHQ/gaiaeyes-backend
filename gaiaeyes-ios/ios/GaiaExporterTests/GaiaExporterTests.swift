@@ -276,6 +276,10 @@ struct SymptomEnvelopeTests {
         #expect(snapshot.items.first?.likelyDrivers.first?.key == "pressure")
         #expect(snapshot.followUpSettings.enabled == true)
         #expect(snapshot.followUpSettings.pushEnabled == true)
+
+        let cachedData = try JSONEncoder().encode(snapshot)
+        let cachedSnapshot = try JSONDecoder().decode(CurrentSymptomsSnapshot.self, from: cachedData)
+        #expect(cachedSnapshot == snapshot)
     }
 
     @Test

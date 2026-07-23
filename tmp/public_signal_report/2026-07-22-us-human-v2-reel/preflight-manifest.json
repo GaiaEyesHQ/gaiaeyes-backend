@@ -1,0 +1,293 @@
+{
+  "schema_version": "us-health-snapshot-reel-preflight.v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "passed": true,
+  "generated_at": "2026-07-23T03:37:19Z",
+  "source_day": "2026-07-22",
+  "source_public_name": "Gaia Eyes U.S. Health Snapshot",
+  "errors": [],
+  "warnings": [],
+  "slides": [
+    {
+      "index": 1,
+      "key": "hook",
+      "label": "U.S. HEALTH SNAPSHOT",
+      "text": "Hot, sticky, and worn out?",
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/01-hook.png",
+      "background_source": "bootstrap:social_alerts/migraine_pressure",
+      "background_digest": "5f302256e8caaa39f21aa030d7acd6b32b2a4199e613f201a84a658e9bd4530a",
+      "background_warnings": [],
+      "font_size": 128,
+      "wrapped_lines": [
+        "Hot, sticky,",
+        "and worn",
+        "out?"
+      ],
+      "text_bbox": [
+        88,
+        690,
+        790,
+        1158
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 2,
+      "key": "where",
+      "label": "WHERE IT'S STRONGEST",
+      "text": "The Desert Southwest, including Phoenix and Las Vegas, stood out today.",
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/02-where.png",
+      "background_source": "bootstrap:social_alerts/weather_pressure",
+      "background_digest": "6e50c8a524a0b730141e58a1e612727613bd0c005726ee52962833c8375428d6",
+      "background_warnings": [],
+      "font_size": 90,
+      "wrapped_lines": [
+        "The Desert",
+        "Southwest,",
+        "including Phoenix",
+        "and Las Vegas,",
+        "stood out today."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        901,
+        1185
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 3,
+      "key": "drivers",
+      "label": "WHAT'S DRIVING IT",
+      "text": "Heat and humidity led conditions there today.",
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/03-drivers.png",
+      "background_source": "bootstrap:social_alerts/air_quality_haze",
+      "background_digest": "21e12f93eeac31ee254264c85a28ea96e53ba4f09f844047e6910594a9f96423",
+      "background_warnings": [],
+      "font_size": 92,
+      "wrapped_lines": [
+        "Heat and",
+        "humidity led",
+        "conditions there",
+        "today."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        849,
+        1088
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 4,
+      "key": "effects",
+      "label": "WHAT SOME MAY NOTICE",
+      "text": "Some people may feel more tired or sleep poorly, and effort can feel harder.",
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/04-effects.png",
+      "background_source": "bootstrap:social_alerts/nervous_system_static",
+      "background_digest": "a812c4f4d427f132731afd49a7fa452ae3786fd51008544283ba187cd4aee2a0",
+      "background_warnings": [],
+      "font_size": 92,
+      "wrapped_lines": [
+        "Some people",
+        "may feel more",
+        "tired or sleep",
+        "poorly, and effort",
+        "can feel harder."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        888,
+        1200
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 5,
+      "key": "summary",
+      "label": "TODAY'S SIGNALS",
+      "text": "Heat and humidity led the day. Space weather moved at a moderate clip. Earth’s background signals were active and spread out.",
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/05-summary.png",
+      "background_source": "bootstrap:social_alerts/earthscope_cosmic",
+      "background_digest": "b550f91ef48b7d5155f68dda7908ae8ccabdd1e0013a747f6143c6f618f0523b",
+      "background_warnings": [],
+      "font_size": 58,
+      "wrapped_lines": [
+        "Heat and humidity led the",
+        "day.",
+        "Space weather moved at a",
+        "moderate clip.",
+        "Earth’s background signals",
+        "were active and spread out."
+      ],
+      "text_bbox": [
+        88,
+        520,
+        906,
+        1342
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ],
+      "summary_rows": [
+        {
+          "label": "REGIONAL",
+          "key": "regional",
+          "text": "Heat and humidity led the day.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            574,
+            852,
+            714
+          ]
+        },
+        {
+          "label": "SPACE",
+          "key": "space",
+          "text": "Space weather moved at a moderate clip.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            888,
+            876,
+            1028
+          ]
+        },
+        {
+          "label": "EARTH",
+          "key": "earth",
+          "text": "Earth’s background signals were active and spread out.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            1202,
+            906,
+            1342
+          ]
+        }
+      ]
+    }
+  ],
+  "slide_health": [
+    {
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/01-hook.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 32.94,
+      "variance": 1687.13,
+      "pixel_digest": "52a14dda412473292a9e6643a7cb7b23bf66bdc1ebb74b5b7c6fcc0ca06d1f93"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/02-where.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 37.01,
+      "variance": 2343.85,
+      "pixel_digest": "486d88d839b55689911cf25bb44b6d47bc47097faae2b0c7777a44265166759b"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/03-drivers.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 34.27,
+      "variance": 1701.14,
+      "pixel_digest": "d988290384e41cfd5ea154afd071e3c22c9205862a27282144c62944dd2e84ff"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/04-effects.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 44.62,
+      "variance": 2509.03,
+      "pixel_digest": "2aee1ee4b213e4a76f2e22ca73175a188c8d21643ecccd40bb0c5a66ee97f139"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/slides/05-summary.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 37.67,
+      "variance": 1864.53,
+      "pixel_digest": "1d391a99b10925b2c1705f96373d0153854dfa59428549897919ffcf42612eb6"
+    }
+  ],
+  "video": {
+    "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/us-health-snapshot-preview.mp4",
+    "duration_seconds": 15.0,
+    "stream_count": 2,
+    "sampled_frames": [
+      {
+        "timestamp": 1.0,
+        "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/preflight-frames/frame-1.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 31.61,
+        "variance": 1658.83,
+        "pixel_digest": "87c55db745b534aad725bfe5bfd899fe39279f1d1066a9a2f44be753a940cd10"
+      },
+      {
+        "timestamp": 3.55,
+        "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/preflight-frames/frame-2.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 35.65,
+        "variance": 2296.39,
+        "pixel_digest": "92fb173606db65f45e5b7dbd52d764225fe6dae83c6daf3decf8eedd325a3a08"
+      },
+      {
+        "timestamp": 6.5,
+        "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/preflight-frames/frame-3.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 32.86,
+        "variance": 1669.91,
+        "pixel_digest": "93cf5b6f76a45de8d46eeacc7053df816640b3974f044768e590fd9c7332cad9"
+      },
+      {
+        "timestamp": 9.45,
+        "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/preflight-frames/frame-4.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 43.3,
+        "variance": 2457.4,
+        "pixel_digest": "3f94656cc4d36b889ef987185f5992aab07f6f52c43c68f21128e6def436ef5c"
+      },
+      {
+        "timestamp": 12.399999999999999,
+        "path": "tmp/public_signal_report/2026-07-22-us-human-v2-reel/preflight-frames/frame-5.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 36.35,
+        "variance": 1803.7,
+        "pixel_digest": "32a4087d072ef55c71a4796c2bf5483f477bee4b5a5549af1fd642df62b1202a"
+      }
+    ]
+  }
+}

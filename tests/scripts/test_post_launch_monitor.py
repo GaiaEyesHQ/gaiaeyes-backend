@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from http.client import IncompleteRead
 from datetime import datetime, timezone
 
 from scripts import post_launch_monitor as monitor
@@ -80,3 +81,33 @@ def test_user_outlook_skips_without_dev_user_id(monkeypatch):
 
     assert result.status == "skip"
     assert "GAIA_MONITOR_DEV_USER_ID" in result.detail
+
+
+def test_get_json_retries_incomplete_read_once(monkeypatch):
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"ok": true}'
+
+    attempts = {"count": 0}
+
+    def _fake_urlopen(request, timeout):  # noqa: ARG001
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise IncompleteRead(b"partial", 5)
+        return _Response()
+
+    monkeypatch.setattr(monitor, "REQUEST_RETRIES", 2)
+    monkeypatch.setattr(monitor, "REQUEST_RETRY_BACKOFF_SECONDS", 0.0)
+    monkeypatch.setattr(monitor.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(monitor.urllib.request, "urlopen", _fake_urlopen)
+
+    result = monitor._get_json("/health")
+
+    assert result == {"ok": True}
+    assert attempts["count"] == 2

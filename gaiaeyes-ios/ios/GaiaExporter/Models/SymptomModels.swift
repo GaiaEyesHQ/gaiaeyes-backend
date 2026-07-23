@@ -120,7 +120,7 @@ enum CurrentSymptomState: String, Codable, CaseIterable, Hashable {
     case resolved
 }
 
-struct CurrentSymptomFollowUpPrompt: Decodable, Identifiable, Hashable {
+struct CurrentSymptomFollowUpPrompt: Codable, Identifiable, Hashable {
     let id: String
     let episodeId: String
     let symptomCode: String
@@ -134,7 +134,7 @@ struct CurrentSymptomFollowUpPrompt: Decodable, Identifiable, Hashable {
     let pushDeliveryEnabled: Bool
 }
 
-struct CurrentSymptomDriver: Decodable, Identifiable, Hashable {
+struct CurrentSymptomDriver: Codable, Identifiable, Hashable {
     let key: String
     let label: String
     let severity: String?
@@ -148,7 +148,7 @@ struct CurrentSymptomDriver: Decodable, Identifiable, Hashable {
     var id: String { key }
 }
 
-struct CurrentSymptomPatternHint: Decodable, Identifiable, Hashable {
+struct CurrentSymptomPatternHint: Codable, Identifiable, Hashable {
     let id: String
     let signalKey: String
     let signal: String
@@ -158,7 +158,7 @@ struct CurrentSymptomPatternHint: Decodable, Identifiable, Hashable {
     let text: String?
 }
 
-struct CurrentSymptomItem: Decodable, Identifiable, Hashable {
+struct CurrentSymptomItem: Codable, Identifiable, Hashable {
     let id: String
     let symptomCode: String
     let label: String
@@ -176,7 +176,7 @@ struct CurrentSymptomItem: Decodable, Identifiable, Hashable {
     let pendingFollowUp: CurrentSymptomFollowUpPrompt?
 }
 
-struct CurrentSymptomsSummary: Decodable, Hashable {
+struct CurrentSymptomsSummary: Codable, Hashable {
     let activeCount: Int
     let newCount: Int
     let ongoingCount: Int
@@ -186,7 +186,7 @@ struct CurrentSymptomsSummary: Decodable, Hashable {
     let followUpAvailable: Bool
 }
 
-struct CurrentSymptomsFollowUpSettings: Decodable, Hashable {
+struct CurrentSymptomsFollowUpSettings: Codable, Hashable {
     let notificationsEnabled: Bool
     let enabled: Bool
     let notificationFamilyEnabled: Bool
@@ -196,7 +196,7 @@ struct CurrentSymptomsFollowUpSettings: Decodable, Hashable {
     let symptomCodes: [String]
 }
 
-struct CurrentSymptomsVoiceSemanticFacts: Decodable, Hashable {
+struct CurrentSymptomsVoiceSemanticFacts: Codable, Hashable {
     let activeCount: Int?
     let activeLabels: [String]?
     let contributingDriverLabels: [String]?
@@ -204,7 +204,7 @@ struct CurrentSymptomsVoiceSemanticFacts: Decodable, Hashable {
     let followUpEnabled: Bool?
 }
 
-struct CurrentSymptomsVoiceSemanticInterpretation: Decodable, Hashable {
+struct CurrentSymptomsVoiceSemanticInterpretation: Codable, Hashable {
     let headerSummary: String?
     let activeSummary: String?
     let emptyState: String?
@@ -213,22 +213,22 @@ struct CurrentSymptomsVoiceSemanticInterpretation: Decodable, Hashable {
     let followUpSummary: String?
 }
 
-struct CurrentSymptomsVoiceSemanticAction: Decodable, Hashable {
+struct CurrentSymptomsVoiceSemanticAction: Codable, Hashable {
     let label: String?
 }
 
-struct CurrentSymptomsVoiceSemanticActions: Decodable, Hashable {
+struct CurrentSymptomsVoiceSemanticActions: Codable, Hashable {
     let primary: [CurrentSymptomsVoiceSemanticAction]?
 }
 
-struct CurrentSymptomsVoiceSemantic: Decodable, Hashable {
+struct CurrentSymptomsVoiceSemantic: Codable, Hashable {
     let kind: String?
     let facts: CurrentSymptomsVoiceSemanticFacts?
     let interpretation: CurrentSymptomsVoiceSemanticInterpretation?
     let actions: CurrentSymptomsVoiceSemanticActions?
 }
 
-struct CurrentSymptomsSnapshot: Decodable, Hashable {
+struct CurrentSymptomsSnapshot: Codable, Hashable {
     let generatedAt: String
     let windowHours: Int
     let summary: CurrentSymptomsSummary

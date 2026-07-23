@@ -143,22 +143,28 @@ def writer_payload(report: Mapping[str, Any]) -> dict[str, Any]:
         "report_name": report.get("public_name") or "Gaia Eyes Health Snapshot",
         "geographic_scope": report.get("geographic_scope") or "global",
         "required_flow": ["Regional Watch", "Space Watch", "Earth Signal", "Major Events when present"],
+        "audience_and_voice": {
+            "reader": "A general adult reader with no science or weather background.",
+            "voice": "Warm, clear, conversational, and useful; like a trusted daily health-and-environment update.",
+            "short_form_rule": "Reel slides, Instagram, and voiceover must state what is happening in everyday language and sound natural when spoken aloud, without substituting new abstract terms for source jargon.",
+            "detail_rule": "The longer Facebook report may name relevant measurements after first explaining what they mean in plain English.",
+        },
         "facts": _writer_facts(report),
         "outputs": {
             "headline": "A plain-English emotional or body-first hook, no more than 12 words.",
             "quick_read": "Two or three sentences that give the useful rundown first.",
-            "facebook": "A readable 200-450 word report with the quick read followed by the required sections.",
-            "instagram": "A summary of at least 60 and no more than 110 words, naming only the strongest in-scope regional, space, and Earth signals and ending with 'Full daily report: gaiaeyes.com'.",
-            "voiceover": "A natural 55-75 word reel script that opens with an emotional or body-first hook and has no CTA or wellness-tip ending.",
+            "facebook": "A readable 200-450 word report with the quick read followed by the required sections. Explain the public meaning before naming technical measurements.",
+            "instagram": "A conversational summary of 60-110 words, naming only the strongest in-scope regional, space, and Earth conditions in everyday language and ending with 'Full daily report: gaiaeyes.com'.",
+            "voiceover": "A natural 55-75 word spoken reel script for a general audience. Open with an emotional or body-first hook, translate technical evidence into everyday language, and do not end with a CTA or wellness tip.",
             "reel_story": {
-                "hook": "Slide 1: a concrete body-first question, no more than 8 words.",
-                "where": "Slide 2: one complete sentence naming the strongest one to three in-scope regions.",
-                "drivers": "Slide 3: one complete sentence naming the strongest supported environmental drivers.",
-                "effects": "Slide 4: one complete sentence naming only supported things some people may notice.",
+                "hook": "Slide 1: a concrete, human body-first question, no more than 8 words.",
+                "where": "Slide 2: one natural complete sentence naming the strongest one to three in-scope regions. Do not mention sampling, anchors, coverage, or signals.",
+                "drivers": "Slide 3: one natural complete sentence stating the actual environmental conditions behind the day, such as heat, humidity, storms, pressure changes, smoke, or poor air. Use the condition itself, not an abstract synonym such as push, factor, or influence.",
+                "effects": "Slide 4: one warm, direct complete sentence naming only supported things some people may notice.",
                 "summary": {
-                    "regional": "Slide 5 Regional row: one plain-English complete sentence of 4-12 words.",
-                    "space": "Slide 5 Space row: one plain-English complete sentence of 4-12 words.",
-                    "earth": "Slide 5 Earth row: one plain-English complete sentence of 4-12 words.",
+                    "regional": "Slide 5 Regional row: one everyday-language complete sentence of 4-12 words.",
+                    "space": "Slide 5 Space row: one everyday-language complete sentence of 4-12 words. Describe the practical pace of space weather, not readings or metrics.",
+                    "earth": "Slide 5 Earth row: one everyday-language complete sentence of 4-12 words. Give the simple public takeaway about Earth's background signals; omit acronyms, raw values, and specialist classifier words.",
                     "major_event": "Slide 5 optional Major Event row: one complete sentence of up to 12 words, or an empty string when none is supplied.",
                 },
             },
@@ -285,11 +291,16 @@ def generate_platform_copy(
 
     system = (
         "You are the Gaia Eyes public Health Snapshot writer. Use only supplied facts and stay inside the supplied geographic_scope. "
+        "Write for a general adult reader with no science, space-weather, or meteorology background. The voice should feel warm, clear, conversational, and human, like a trusted daily health-and-environment update. "
+        "Do not sound like a dashboard, lab report, data analyst, forecast discussion, or internal note. Prefer familiar words and short spoken sentences. "
+        "Reel slides, Instagram, and voiceover are short-form public copy: translate the evidence into what an ordinary person can understand without exposing collection or processing language. "
+        "In short-form copy, avoid terms such as sampled, anchors, coverage, supported drivers, current readings, harmonics, context class, ULF, Kp, Bz, low-frequency, and diffuse. Do not merely delete technical terms or invent abstract synonyms such as push, factor, or influence; state the actual condition or simple public takeaway naturally. "
+        "The longer Facebook report and detailed section_copy may name relevant technical measurements, including Schumann frequencies or ULF, after first explaining their plain-English meaning. "
         "Write the report in this exact order: Regional Watch, Space Watch, Earth Signal, then Major Events when present. "
         "The headline and voiceover must open with a natural emotional or body-first hook, not a list of conditions, metrics, or regions. Avoid vague metaphors. "
         "Facebook must also open with the emotional or body-first hook before its quick rundown. "
         "Do not say readings explain why someone feels a certain way; say supplied conditions may be part of what they notice. "
-        "Give the rundown before details. Name regions precisely; never broaden one event to a continent or the whole world. Say conditions were sampled or detected, not reported by a region. "
+        "Give the rundown before details. Name regions precisely; never broaden one event to a continent or the whole world. In detailed report copy, say conditions were observed across a region rather than reported by the region. "
         "Do not call regional conditions global, widespread, or worldwide unless coverage.public_global_claims_allowed is true. "
         "Regional health language may say 'may', 'can', or 'some people notice' and must stay within each region's supplied health_context. "
         "Choose only the most relevant one or two supplied health effects per regional paragraph; do not reproduce symptom lists. "
@@ -298,8 +309,8 @@ def generate_platform_copy(
         "For ULF, use a supplied context_class verbatim. Do not characterize raw intensity, coherence, or persistence values as modest, elevated, strong, weak, or unusual unless comparative thresholds are supplied. "
         "For solar wind, use supplied measurements and signal_strength only. Do not call it modest, strong, weak, normal, typical, steady, or stable without supplied comparative evidence. "
         "Say space weather is low, moderate, or high as supplied; never write low-strength. If ULF is unusable, say it is unavailable and never call it classified. If ULF is usable, name its supplied context_class whenever saying it is classified. "
-        "Translate supplied ULF classifiers into natural public prose, such as 'an active, diffuse ULF pattern'; never stack bare internal labels such as 'Active diffuse ULF'. "
-        "In the reel summary Earth row, write that Schumann frequencies were measured; never write 'Schumann is' followed by a value or state. When both Schumann and ULF are present, omit raw Schumann values from that short row so both measurements fit naturally. "
+        "In detailed report copy, translate supplied ULF classifiers into natural prose, such as 'an active pattern spread across the measured frequencies'; never stack bare internal labels such as 'Active diffuse ULF'. Explain Earth measurements concretely without mystical heartbeat, energy, or beneath-our-feet metaphors. "
+        "In the reel summary Earth row, translate available Schumann and ULF evidence into a simple description of Earth's background signals. A natural construction is 'Earth's background signals were active and spread out.' Do not use the words Schumann, ULF, low-frequency, or diffuse there, and never write 'Schumann is' followed by a value or state. "
         "Do not append a disclaimer, caveat paragraph, or research defense to Earth Signal. "
         "Use recovery or recoup language only when space_watch.recovery_frame is true. When it is false, describe current versus daily activity without a recovery claim. "
         "When Earth measurements are unavailable, state that once in plain English without exposing internal confidence-threshold language. "

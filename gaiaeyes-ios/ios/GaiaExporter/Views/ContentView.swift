@@ -3474,7 +3474,8 @@ struct ContentView: View {
         !userOutlookCacheJSON.isEmpty ||
         !userPatternsCacheJSON.isEmpty ||
         !dashboardPayloadCacheJSON.isEmpty ||
-        !allDriversCacheJSON.isEmpty
+        !allDriversCacheJSON.isEmpty ||
+        !currentSymptomsCacheJSON.isEmpty
     }
 
     @MainActor
@@ -3591,6 +3592,7 @@ struct ContentView: View {
         symptomsToday = []
         symptomDaily = []
         symptomDiagnostics = []
+        currentSymptomsCacheJSON = ""
         currentSymptomsSnapshot = nil
         currentSymptomsError = nil
         currentSymptomsLoading = false
@@ -3711,6 +3713,7 @@ struct ContentView: View {
     @State private var symptomsToday: [SymptomEventToday] = []
     @State private var symptomDaily: [SymptomDailySummary] = []
     @State private var symptomDiagnostics: [SymptomDiagSummary] = []
+    @AppStorage("current_symptoms_cache_json") private var currentSymptomsCacheJSON: String = ""
     @State private var currentSymptomsSnapshot: CurrentSymptomsSnapshot? = nil
     @State private var currentSymptomsLoading: Bool = false
     @State private var currentSymptomsError: String? = nil
@@ -3805,6 +3808,20 @@ struct ContentView: View {
         guard !allDriversCacheJSON.isEmpty,
               let data = allDriversCacheJSON.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(AllDriversSnapshot.self, from: data)
+    }
+
+    private func decodeCachedCurrentSymptomsSnapshot() -> CurrentSymptomsSnapshot? {
+        guard !currentSymptomsCacheJSON.isEmpty,
+              let data = currentSymptomsCacheJSON.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(CurrentSymptomsSnapshot.self, from: data)
+    }
+
+    @MainActor
+    private func persistCachedCurrentSymptomsSnapshot(_ snapshot: CurrentSymptomsSnapshot) {
+        guard let data = try? JSONEncoder().encode(snapshot),
+              let json = String(data: data, encoding: .utf8) else { return }
+        markUserScopedCacheOwner()
+        currentSymptomsCacheJSON = json
     }
 
     @MainActor
@@ -9944,10 +9961,13 @@ struct ContentView: View {
 
     private func fetchCurrentSymptomsSummary(api override: APIClient? = nil) async {
         let api = override ?? state.apiWithAuth()
-        await MainActor.run {
+        let shouldStart = await MainActor.run { () -> Bool in
+            guard !currentSymptomsLoading else { return false }
             currentSymptomsLoading = true
             currentSymptomsError = nil
+            return true
         }
+        guard shouldStart else { return }
         do {
             let envelope = try await api.fetchCurrentSymptoms()
             if envelope.ok == false, envelope.data == nil {
@@ -9960,12 +9980,12 @@ struct ContentView: View {
             if let payload = envelope.payload {
                 await MainActor.run {
                     currentSymptomsSnapshot = payload
+                    persistCachedCurrentSymptomsSnapshot(payload)
                     currentSymptomsLoading = false
                 }
                 appLog("[UI] current symptoms ok: active=\(payload.summary.activeCount)")
             } else {
                 await MainActor.run {
-                    currentSymptomsSnapshot = nil
                     currentSymptomsLoading = false
                 }
             }
@@ -13438,7 +13458,18 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
 
-                if activeChips.isEmpty {
+                if currentSymptomsSnapshot == nil {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Refreshing active symptoms…")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else if activeChips.isEmpty {
                     Text("Nothing active is logged right now.")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -19553,6 +19584,10 @@ struct ContentView: View {
                     }
                     appLog("[UI] preloaded mission drivers preview from persisted snapshot")
                 }
+                if currentSymptomsSnapshot == nil, let cached = decodeCachedCurrentSymptomsSnapshot() {
+                    currentSymptomsSnapshot = cached
+                    appLog("[UI] preloaded current symptoms from persisted snapshot active=\(cached.summary.activeCount)")
+                }
                 if hasStoredAuthSession && !hadOnboardingOpen && !onboardingCompleted {
                     showOnboardingFlow = false
                     appLog("[UI] onboarding presentation deferred until stored account profile loads")
@@ -19589,7 +19624,8 @@ struct ContentView: View {
                             async let healthEvidenceRefresh: Void = state.refreshHealthReadAccessEvidence(reason: "became active")
                             async let homeFeedRefresh: Void = fetchHomeFeed()
                             async let pushRegistrationRefresh: Void = reconcilePushRegistration(reason: "became active")
-                            _ = await (dashboardRefresh, healthKick, healthEvidenceRefresh, schumannRefresh, noticeRefresh, homeFeedRefresh, pushRegistrationRefresh)
+                            async let currentSymptomsRefresh: Void = fetchCurrentSymptomsSummary(api: api)
+                            _ = await (dashboardRefresh, healthKick, healthEvidenceRefresh, schumannRefresh, noticeRefresh, homeFeedRefresh, pushRegistrationRefresh, currentSymptomsRefresh)
                         } else {
                             _ = await (schumannRefresh, noticeRefresh)
                         }

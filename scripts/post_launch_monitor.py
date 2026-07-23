@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
+from http.client import IncompleteRead
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -89,6 +91,8 @@ ADMIN_BEARER = _first_token_env(
     )
 )
 REQUEST_TIMEOUT = float(os.getenv("GAIA_MONITOR_TIMEOUT_SECONDS") or "20")
+REQUEST_RETRIES = max(1, int(os.getenv("GAIA_MONITOR_REQUEST_RETRIES") or "2"))
+REQUEST_RETRY_BACKOFF_SECONDS = float(os.getenv("GAIA_MONITOR_REQUEST_RETRY_BACKOFF_SECONDS") or "1.0")
 LAST_PROBE_WARN_MS = int(os.getenv("GAIA_MONITOR_LAST_PROBE_WARN_MS") or "60000")
 ANALYTICS_MIN_EVENTS_24H = int(os.getenv("GAIA_MONITOR_ANALYTICS_MIN_EVENTS_24H") or "1")
 QUEUE_DEPTH_WARN = int(os.getenv("GAIA_MONITOR_QUEUE_DEPTH_WARN") or "0")
@@ -120,15 +124,25 @@ def _url(path: str, params: Mapping[str, Any] | None = None) -> str:
 
 def _get_json(path: str, *, params: Mapping[str, Any] | None = None, bearer: str = "") -> dict[str, Any]:
     request = urllib.request.Request(_url(path, params), headers=_headers(bearer=bearer))
-    try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body) if body else {}
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {exc.code}: {body[:240]}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(str(exc.reason)) from exc
+    last_error: Exception | None = None
+    for attempt in range(1, REQUEST_RETRIES + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+                body = response.read().decode("utf-8")
+                return json.loads(body) if body else {}
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"HTTP {exc.code}: {body[:240]}") from exc
+        except (urllib.error.URLError, TimeoutError, IncompleteRead) as exc:
+            last_error = exc
+            if attempt >= REQUEST_RETRIES:
+                break
+            time.sleep(REQUEST_RETRY_BACKOFF_SECONDS * attempt)
+    if isinstance(last_error, urllib.error.URLError):
+        raise RuntimeError(str(last_error.reason)) from last_error
+    if last_error is not None:
+        raise RuntimeError(str(last_error)) from last_error
+    raise RuntimeError("request failed without an error")
 
 
 def _result(name: str, status: str, detail: str) -> CheckResult:
