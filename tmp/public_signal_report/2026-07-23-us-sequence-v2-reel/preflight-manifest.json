@@ -1,0 +1,281 @@
+{
+  "schema_version": "us-health-snapshot-reel-preflight.v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "passed": true,
+  "generated_at": "2026-07-23T06:00:09Z",
+  "source_day": "2026-07-23",
+  "source_public_name": "Gaia Eyes U.S. Health Snapshot",
+  "errors": [],
+  "warnings": [],
+  "slides": [
+    {
+      "index": 1,
+      "key": "hook",
+      "label": "U.S. HEALTH SNAPSHOT",
+      "text": "Feeling drained for no clear reason?",
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/01-hook.png",
+      "background_source": "bootstrap:social_alerts/migraine_pressure",
+      "background_digest": "5f302256e8caaa39f21aa030d7acd6b32b2a4199e613f201a84a658e9bd4530a",
+      "background_warnings": [],
+      "font_size": 114,
+      "wrapped_lines": [
+        "Feeling",
+        "drained for no",
+        "clear reason?"
+      ],
+      "text_bbox": [
+        88,
+        690,
+        907,
+        1107
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 2,
+      "key": "drivers",
+      "label": "WHY IT MAY FEEL THAT WAY",
+      "text": "Thick heat and moisture in the air may be part of it.",
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/02-drivers.png",
+      "background_source": "bootstrap:social_alerts/weather_pressure",
+      "background_digest": "6e50c8a524a0b730141e58a1e612727613bd0c005726ee52962833c8375428d6",
+      "background_warnings": [],
+      "font_size": 92,
+      "wrapped_lines": [
+        "Thick heat and",
+        "moisture in the",
+        "air may be part",
+        "of it."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        809,
+        1088
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 3,
+      "key": "effects",
+      "label": "WHAT SOME MAY NOTICE",
+      "text": "Some people notice extra fatigue and quicker breath during activity.",
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/03-effects.png",
+      "background_source": "bootstrap:social_alerts/air_quality_haze",
+      "background_digest": "21e12f93eeac31ee254264c85a28ea96e53ba4f09f844047e6910594a9f96423",
+      "background_warnings": [],
+      "font_size": 92,
+      "wrapped_lines": [
+        "Some people",
+        "notice extra",
+        "fatigue and",
+        "quicker breath",
+        "during activity."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        793,
+        1200
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 4,
+      "key": "where",
+      "label": "WHERE IT'S STRONGEST",
+      "text": "It’s strongest today in the Desert Southwest, including Phoenix and Las Vegas.",
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/04-where.png",
+      "background_source": "bootstrap:social_alerts/nervous_system_static",
+      "background_digest": "a812c4f4d427f132731afd49a7fa452ae3786fd51008544283ba187cd4aee2a0",
+      "background_warnings": [],
+      "font_size": 90,
+      "wrapped_lines": [
+        "It’s strongest",
+        "today in the",
+        "Desert Southwest,",
+        "including Phoenix",
+        "and Las Vegas."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        909,
+        1185
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 5,
+      "key": "summary",
+      "label": "BEYOND THE WEATHER",
+      "text": "The solar wind is faster now and geomagnetic activity is lower. Natural atmospheric tones were detected by sensors today.",
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/05-summary.png",
+      "background_source": "bootstrap:social_alerts/earthscope_cosmic",
+      "background_digest": "b550f91ef48b7d5155f68dda7908ae8ccabdd1e0013a747f6143c6f618f0523b",
+      "background_warnings": [],
+      "font_size": 58,
+      "wrapped_lines": [
+        "The solar wind is faster now",
+        "and geomagnetic activity",
+        "is lower.",
+        "Natural atmospheric tones",
+        "were detected by sensors",
+        "today."
+      ],
+      "text_bbox": [
+        88,
+        520,
+        900,
+        1256
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ],
+      "summary_rows": [
+        {
+          "label": "SPACE WEATHER",
+          "key": "space",
+          "text": "The solar wind is faster now and geomagnetic activity is lower.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            574,
+            900,
+            784
+          ]
+        },
+        {
+          "label": "EARTH SENSORS",
+          "key": "earth",
+          "text": "Natural atmospheric tones were detected by sensors today.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            1046,
+            880,
+            1256
+          ]
+        }
+      ]
+    }
+  ],
+  "slide_health": [
+    {
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/01-hook.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 33.98,
+      "variance": 1918.8,
+      "pixel_digest": "31691059f28a6ed91d43f3426c78e3eeddf71586c26f6e4e2ce377f7a9a27d66"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/02-drivers.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 34.5,
+      "variance": 1778.43,
+      "pixel_digest": "b80fd12d910c89344eedfc6114e25c47843377b6238578e3e054afc39d3d3d94"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/03-effects.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 37.35,
+      "variance": 2382.45,
+      "pixel_digest": "1119068aff1ce4e55f13ce5f30d59774337656d6a9b511d4fda77a5656685143"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/04-where.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 44.53,
+      "variance": 2493.66,
+      "pixel_digest": "c98e80a6d6b366cc764c12dff011a0900e21d236f6004f33b0fa2a22418fe295"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/slides/05-summary.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 37.63,
+      "variance": 1814.96,
+      "pixel_digest": "5c9ac429f12172674805998e9b237ab4e7bb2b5265379c10f496dd216eb72615"
+    }
+  ],
+  "video": {
+    "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/us-health-snapshot-preview.mp4",
+    "duration_seconds": 15.0,
+    "stream_count": 2,
+    "sampled_frames": [
+      {
+        "timestamp": 1.0,
+        "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/preflight-frames/frame-1.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 32.63,
+        "variance": 1884.48,
+        "pixel_digest": "d975da2e85213c2d0dc0b9fd80a6002e681cfbc3f4dc3eaad6ebe51ec17d26ac"
+      },
+      {
+        "timestamp": 3.55,
+        "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/preflight-frames/frame-2.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 33.15,
+        "variance": 1740.69,
+        "pixel_digest": "202b75a4b1025619eed070b395a37c3f5959ee38a30c9ea8dfaf799242d4a409"
+      },
+      {
+        "timestamp": 6.5,
+        "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/preflight-frames/frame-3.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 35.92,
+        "variance": 2331.75,
+        "pixel_digest": "1656ece9cca356b242e2ba9ccbbb42c4fc5f7fcaa9ba9cddc449476078c3ff17"
+      },
+      {
+        "timestamp": 9.45,
+        "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/preflight-frames/frame-4.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 43.19,
+        "variance": 2441.17,
+        "pixel_digest": "6c0e0c0d2c007817d4358ed680e881f65c70dac95e8dd328b668e6f308fa235a"
+      },
+      {
+        "timestamp": 12.399999999999999,
+        "path": "tmp/public_signal_report/2026-07-23-us-sequence-v2-reel/preflight-frames/frame-5.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 36.31,
+        "variance": 1754.79,
+        "pixel_digest": "342e751579378c30ee04c12b552aa5aea829b91cb62f83dc133c7d95224babe4"
+      }
+    ]
+  }
+}

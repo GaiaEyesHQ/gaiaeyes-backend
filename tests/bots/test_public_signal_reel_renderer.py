@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from bots.public_signal_report import reel_renderer
 
@@ -20,13 +20,12 @@ def _bundle() -> dict:
             "platform_copy": {
                 "reel_story": {
                     "hook": "Feeling heavy and slow today?",
-                    "where": "The strongest signals centered on the Desert Southwest, Mountain West, and Southern Plains.",
-                    "drivers": "Heat and humidity were the primary sampled drivers across these regions.",
-                    "effects": "Some people may notice fatigue or sleep disruption under these conditions.",
+                    "drivers": "Heat and humidity may be adding to that worn-out feeling.",
+                    "effects": "Some people may sleep poorly, feel drained, or find effort harder.",
+                    "where": "The Desert Southwest, including Phoenix and Las Vegas, is seeing the worst of it.",
                     "summary": {
-                        "regional": "Heat and humidity lead regionally today.",
-                        "space": "Space weather remains low today.",
-                        "earth": "Earth measurements show a Quiet ULF pattern.",
+                        "space": "Conditions were moderate earlier and are quieter now.",
+                        "earth": "Ground sensors detected an active, spread‑out pattern.",
                         "major_event": "",
                     },
                 }
@@ -70,6 +69,28 @@ def test_five_slides_use_distinct_blank_backgrounds_and_keep_text_safe(tmp_path)
     story = _bundle()["report"]["platform_copy"]["reel_story"]
     rendered = []
 
+    assert [key for key, _label, _filename in reel_renderer.SLIDE_SPECS] == [
+        "hook",
+        "drivers",
+        "effects",
+        "where",
+        "summary",
+    ]
+    assert reel_renderer.SLIDE_SPECS[-1][1] == "WIDER PICTURE"
+    label_canvas = Image.new("RGB", reel_renderer.CANVAS)
+    label_draw = ImageDraw.Draw(label_canvas)
+    for _key, label, _filename in reel_renderer.SLIDE_SPECS:
+        label_font = reel_renderer._fit_single_line_font(
+            label_draw,
+            label,
+            path=reel_renderer.DISPLAY_FONT,
+            max_width=reel_renderer.CANVAS[0] - 176,
+            maximum_size=reel_renderer.LABEL_MAX_SIZE,
+            minimum_size=reel_renderer.LABEL_MIN_SIZE,
+        )
+        assert label_font.size >= 62
+        assert label_draw.textbbox((88, 400), label, font=label_font)[2] <= reel_renderer.CANVAS[0] - 88
+
     for index, (key, label, filename) in enumerate(reel_renderer.SLIDE_SPECS, start=1):
         if key == "summary":
             rendered.append(
@@ -96,11 +117,16 @@ def test_five_slides_use_distinct_blank_backgrounds_and_keep_text_safe(tmp_path)
     for slide in rendered:
         with Image.open(slide["path"]) as image:
             assert image.size == reel_renderer.CANVAS
-        assert " ".join(slide["wrapped_lines"]) == slide["text"]
+        assert slide["brand_font_size"] == 44
+        assert slide["label_font_size"] >= 62
+        assert " ".join(slide["wrapped_lines"]) == reel_renderer._display_text(slide["text"])
         left, top, right, bottom = slide["text_bbox"]
         safe_left, safe_top, safe_right, safe_bottom = reel_renderer.SAFE_TEXT_BOX
         assert safe_left <= left < right <= safe_right
         assert safe_top <= top < bottom <= safe_bottom
+    assert [row["label"] for row in rendered[-1]["summary_rows"]] == ["SPACE WEATHER", "EARTH SENSORS"]
+    assert rendered[-1]["summary_row_label_font_size"] == 44
+    assert rendered[-1]["summary_rows"][-1]["text"] == "Ground sensors detected an active, spread-out pattern."
 
 
 @pytest.mark.skipif(not reel_renderer._ffmpeg_executable(), reason="ffmpeg required")

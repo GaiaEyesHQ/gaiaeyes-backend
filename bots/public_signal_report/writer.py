@@ -47,9 +47,8 @@ COPY_RESPONSE_FORMAT = {
                         "summary": {
                             "type": "object",
                             "additionalProperties": False,
-                            "required": ["regional", "space", "earth", "major_event"],
+                            "required": ["space", "earth", "major_event"],
                             "properties": {
-                                "regional": {"type": "string"},
                                 "space": {"type": "string"},
                                 "earth": {"type": "string"},
                                 "major_event": {"type": "string"},
@@ -158,13 +157,12 @@ def writer_payload(report: Mapping[str, Any]) -> dict[str, Any]:
             "voiceover": "A natural 55-75 word spoken reel script for a general audience. Open with an emotional or body-first hook, translate technical evidence into everyday language, and do not end with a CTA or wellness tip.",
             "reel_story": {
                 "hook": "Slide 1: a concrete, human body-first question, no more than 8 words.",
-                "where": "Slide 2: one natural complete sentence naming the strongest one to three in-scope regions. Do not mention sampling, anchors, coverage, or signals.",
-                "drivers": "Slide 3: one natural complete sentence stating the actual environmental conditions behind the day, such as heat, humidity, storms, pressure changes, smoke, or poor air. Use the condition itself, not an abstract synonym such as push, factor, or influence.",
-                "effects": "Slide 4: one warm, direct complete sentence naming only supported things some people may notice.",
+                "drivers": "Slide 2: directly answer the hook with one natural complete sentence linking the actual environmental conditions to what the hook describes, using cautious language such as may be contributing or may be part of it. Do not name the region yet, and do not imply conditions are building, rising, or worsening without supplied trend evidence.",
+                "effects": "Slide 3: continue the same thought with one warm, direct complete sentence naming only supplied health effects. Faithfully simplify them when needed, such as effort may feel harder for lower exercise tolerance, but do not invent a new bodily sensation.",
+                "where": "Slide 4: complete the regional story with one natural sentence naming where the conditions are strongest. Do not mention sampling, anchors, coverage, or signals.",
                 "summary": {
-                    "regional": "Slide 5 Regional row: one everyday-language complete sentence of 4-12 words.",
-                    "space": "Slide 5 Space row: one everyday-language complete sentence of 4-12 words. Describe the practical pace of space weather, not readings or metrics.",
-                    "earth": "Slide 5 Earth row: one everyday-language complete sentence of 4-12 words. Give the simple public takeaway about Earth's background signals; omit acronyms, raw values, and specialist classifier words.",
+                    "space": "Slide 5 Space Weather row: one concrete everyday-language sentence of 4-12 words. When current and daily measurements are both supplied, report the most useful change between earlier and now instead of a generic activity label.",
+                    "earth": "Slide 5 Earth Sensors row: one concrete everyday-language sentence of 4-12 words saying what sensors detected. Prefer natural atmospheric tones or a ground-sensor pattern over unexplained terms such as resonance, frequency, or classifiers; omit acronyms and raw values.",
                     "major_event": "Slide 5 optional Major Event row: one complete sentence of up to 12 words, or an empty string when none is supplied.",
                 },
             },
@@ -210,7 +208,7 @@ def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] |
         normalized = re.sub(r"[^a-z0-9 ]+", " ", text.lower())
         normalized_slides.append((key, " ".join(normalized.split())))
     summary = reel_story.get("summary") if isinstance(reel_story.get("summary"), Mapping) else {}
-    for key in ("regional", "space", "earth"):
+    for key in ("space", "earth"):
         text = str(summary.get(key) or "").strip()
         count = len(text.split())
         if not 4 <= count <= 12:
@@ -238,7 +236,7 @@ def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] |
             for key in ("quick_read", "facebook", "instagram", "voiceover")
         ]
         public_fields.extend(str(reel_story.get(key) or "") for key in slide_ranges)
-        public_fields.extend(str(summary.get(key) or "") for key in ("regional", "space", "earth", "major_event"))
+        public_fields.extend(str(summary.get(key) or "") for key in ("space", "earth", "major_event"))
         if any("major event" in text.lower() for text in public_fields):
             errors.append("copy must omit Major Events when no qualifying events are supplied")
         if major_event_text:
@@ -246,7 +244,7 @@ def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] |
     factual_text = "\n".join(
         [str(copy.get(key) or "") for key in ("quick_read", "facebook", "instagram", "voiceover")]
         + [str(reel_story.get(key) or "") for key in slide_ranges]
-        + [str(summary.get(key) or "") for key in ("regional", "space", "earth", "major_event")]
+        + [str(summary.get(key) or "") for key in ("space", "earth", "major_event")]
     )
     earth_signal = report.get("earth_signal") if isinstance(report, Mapping) else {}
     if isinstance(earth_signal, Mapping) and earth_signal.get("ulf_usable") is not True:
@@ -301,23 +299,24 @@ def generate_platform_copy(
         "Facebook must also open with the emotional or body-first hook before its quick rundown. "
         "Do not say readings explain why someone feels a certain way; say supplied conditions may be part of what they notice. "
         "Give the rundown before details. Name regions precisely; never broaden one event to a continent or the whole world. In detailed report copy, say conditions were observed across a region rather than reported by the region. "
+        "Do not say a condition is building, rising, worsening, easing, or improving unless the supplied facts include evidence for that direction. "
         "Do not call regional conditions global, widespread, or worldwide unless coverage.public_global_claims_allowed is true. "
         "Regional health language may say 'may', 'can', or 'some people notice' and must stay within each region's supplied health_context. "
-        "Choose only the most relevant one or two supplied health effects per regional paragraph; do not reproduce symptom lists. "
+        "Choose only the most relevant one or two supplied health effects per regional paragraph; do not reproduce symptom lists. Plain-language paraphrases must preserve the supplied meaning and must not add a new bodily sensation, such as breath changes, that is absent from health_context. "
         "Earth Signal may describe possible human effects with 'may', 'can', or 'some people notice' only when its supplied measurement is marked usable and earth_signal includes an explicit health_context. Without that list, describe only the measured field pattern. If ULF is unusable, do not interpret its class, numbers, or human effects. "
         "Schumann harmonic values are frequency measurements, not an activity or intensity score. State measured frequencies only. Do not call them expected, normal, typical, aligned, tracked, steady, stable, elevated, active, calm, or unusual unless comparative evidence is explicitly supplied. "
         "For ULF, use a supplied context_class verbatim. Do not characterize raw intensity, coherence, or persistence values as modest, elevated, strong, weak, or unusual unless comparative thresholds are supplied. "
         "For solar wind, use supplied measurements and signal_strength only. Do not call it modest, strong, weak, normal, typical, steady, or stable without supplied comparative evidence. "
         "Say space weather is low, moderate, or high as supplied; never write low-strength. If ULF is unusable, say it is unavailable and never call it classified. If ULF is usable, name its supplied context_class whenever saying it is classified. "
         "In detailed report copy, translate supplied ULF classifiers into natural prose, such as 'an active pattern spread across the measured frequencies'; never stack bare internal labels such as 'Active diffuse ULF'. Explain Earth measurements concretely without mystical heartbeat, energy, or beneath-our-feet metaphors. "
-        "In the reel summary Earth row, translate available Schumann and ULF evidence into a simple description of Earth's background signals. A natural construction is 'Earth's background signals were active and spread out.' Do not use the words Schumann, ULF, low-frequency, or diffuse there, and never write 'Schumann is' followed by a value or state. "
+        "In the reel summary Earth Sensors row, state what was actually detected instead of saying only that background signals were active. A natural construction is 'Ground sensors detected an active, spread-out pattern.' Do not use the words Schumann, ULF, low-frequency, or diffuse there, and never write 'Schumann is' followed by a value or state. "
         "Do not append a disclaimer, caveat paragraph, or research defense to Earth Signal. "
         "Use recovery or recoup language only when space_watch.recovery_frame is true. When it is false, describe current versus daily activity without a recovery claim. "
         "When Earth measurements are unavailable, state that once in plain English without exposing internal confidence-threshold language. "
         "Distinguish daily space peaks from current readings. Do not mention a CME catalog count as an active impact unless Earth-directed or impact evidence is supplied. "
         "Use reader-friendly metric names rather than source field identifiers. Do not invent active weather, AQI, pollen, hazards, health effects, measurements, locations, or causality. "
         "Major Events is conditional and must not list events absent from the supplied facts. "
-        "The five reel_story slides must be complete, distinct thoughts. Never split one sentence across slides or repeat the same statement with one changed word. Slide 5 uses separate complete Regional, Space, and Earth rows, plus Major Event only when supplied; do not compress those rows into classifier fragments. "
+        "The five reel_story slides must form one clear reading sequence: body-first hook, direct environmental answer without a location, what some people may notice, then where it is strongest. Each slide must be a complete, distinct thought; never split one sentence across slides or repeat the same statement with one changed word. Slide 5 is a separate 'Beyond the Weather' view with concrete Space Weather and Earth Sensors rows, plus Major Event only when supplied. The Space Weather row should prioritize a meaningful earlier-versus-now change when both are supplied. The Earth Sensors row should say what was detected in familiar words, such as natural atmospheric tones or a ground-sensor pattern. It must add information rather than recap slides 1-4, and must not compress rows into classifier fragments. "
         "Facebook may end with 'Full report: gaiaeyes.com' and 'Personalized patterns: gaiaeyes.com/app'. "
         "Voiceover must end on the factual rundown, with no CTA, advice, wellness tip, reflection prompt, or filler sign-off. No emojis. Return only JSON."
     )

@@ -403,6 +403,7 @@ jobs:
   reel:
     name: Build Reel → Supabase
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: render
     permissions:
       contents: read
@@ -439,8 +440,8 @@ jobs:
             exit 0
           fi
           export DEBIAN_FRONTEND=noninteractive
-          sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 update
-          sudo apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends ffmpeg jq
+          timeout 10m sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 update
+          timeout 10m sudo apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends ffmpeg jq
 
       - name: Set up Python
         uses: actions/setup-python@v6

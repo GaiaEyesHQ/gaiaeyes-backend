@@ -31,6 +31,8 @@ from bots.earthscope_post.earthscope_generate import (
     _polish_public_caption,
     _select_best_rewrite_candidate,
     _summarize_context,
+    _rewrite_reel_from_final_caption,
+    _validate_reel_spine,
     _validate_rewrite,
     _voiceover_caption_from_variants,
     _rewrite_facebook_caption_from_spine,
@@ -520,7 +522,7 @@ def test_reel_voiceover_uses_long_explicit_script_when_available():
     voiceover = _build_reel_voiceover_text(
         ctx={"kp_max_24h": 4.5, "bz_min": -7},
         title="Body Buzzing For No Reason?",
-        caption="Take short movement breaks and sip water today.",
+        caption="Body buzzing for no clear reason? Take short movement breaks and sip water today.",
         snapshot="Solar wind is elevated today.",
         affects="Some people may notice restless energy.",
         playbook="- Do 3 minutes of easy movement",
@@ -547,7 +549,7 @@ def test_reel_voiceover_accepts_complete_writer_script_below_old_word_floor():
     voiceover = _build_reel_voiceover_text(
         ctx={"kp_max_24h": 2.3, "bz_min": -5.6},
         title="Feeling Off For No Reason?",
-        caption="A different Facebook caption that should not replace the writer script.",
+        caption="Feeling off for no clear reason? A steadier day may leave more room to reset.",
         snapshot="Mostly quiet space conditions.",
         affects="Some people may notice changes.",
         playbook="- Keep notes",
@@ -555,6 +557,26 @@ def test_reel_voiceover_accepts_complete_writer_script_below_old_word_floor():
     )
 
     assert voiceover == script
+
+
+def test_reel_voiceover_rejects_writer_script_with_different_caption_hook():
+    voiceover = _build_reel_voiceover_text(
+        ctx={"kp_max_24h": 2.3, "bz_min": -5.6},
+        title="Unrelated Generated Title",
+        caption="A quieter day to catch your breath? Keep the pace gentle.",
+        snapshot="Space activity has settled since yesterday.",
+        affects="Some people may feel steadier and clearer.",
+        playbook="- Keep plans light",
+        rewrite={
+            "voiceover": (
+                "Feeling wired for no reason? Solar wind is still moving quickly today. "
+                "Some people may notice uneven energy before things settle again."
+            )
+        },
+    )
+
+    assert voiceover.startswith("A quieter day to catch your breath?")
+    assert not voiceover.startswith("Feeling wired")
 
 
 def test_quiet_neutral_facts_keep_count_only_cme_in_background():
@@ -632,6 +654,114 @@ def test_reel_story_uses_writer_fields_without_changing_web_sections():
     assert story["signal"] == "Solar wind is elevated"
     assert story["effects"].splitlines() == ["Restless or jittery", "Energy may spike, then dip"]
     assert story["pattern"] == "An uneven-energy day"
+
+
+def test_reel_story_uses_final_caption_hook_instead_of_separate_title():
+    story = _build_reel_story(
+        title="Head Pressure Building?",
+        caption="A quieter day to catch your breath? Keep plans light.",
+        snapshot="Space activity has settled.",
+        affects="Some people may feel steadier. A little fatigue may linger.",
+        voiceover="A quieter day to catch your breath? Space activity has settled.",
+        rewrite={
+            "reel_signal": "Space activity has settled",
+            "reel_effects": "More room to reset",
+            "reel_pattern": "Some fatigue may still linger",
+        },
+    )
+
+    assert story["hook"] == "A quieter day to catch your breath?"
+
+
+def test_validate_reel_spine_requires_evidence_for_carryover_language():
+    caption = "A quieter day to catch your breath? Keep plans light."
+    candidate = {
+        "voiceover": (
+            "A quieter day to catch your breath? Space activity has settled into a calmer range today. "
+            "That quieter backdrop may leave more room to reset, while some people may still notice "
+            "leftover fatigue from yesterday's stronger activity."
+        ),
+        "reel_signal": "Space activity has settled into a calmer range",
+        "reel_effects": "Some people may feel steadier today",
+        "reel_pattern": "Leftover fatigue may still linger",
+    }
+
+    assert _validate_reel_spine(
+        candidate,
+        caption=caption,
+        facts={"recent_signal_history": []},
+    ) is None
+    assert _validate_reel_spine(
+        candidate,
+        caption=caption,
+        facts={
+            "recent_signal_history": [
+                {
+                    "day": "2026-07-24",
+                    "kp_max_24h": 4.0,
+                    "solar_wind_kms": 604.9,
+                    "bz_min": -6.62,
+                    "bands": {"kp": "active", "sw": "high", "bz": "southward"},
+                }
+            ]
+        },
+    ) is not None
+
+
+def test_rewrite_reel_from_final_caption_passes_history_and_returns_aligned_spine(monkeypatch):
+    captured = {}
+
+    def fake_chat_create(_client, **kwargs):
+        captured.update(kwargs)
+        message = types.SimpleNamespace(
+            content=json.dumps(
+                {
+                    "voiceover": (
+                        "A quieter day to catch your breath? Space activity has settled after yesterday's busier "
+                        "stretch, although solar wind is still moving fast. That quieter backdrop may leave more "
+                        "room to reset, while some people may still notice leftover fatigue."
+                    ),
+                    "reel_signal": "Space activity has settled since yesterday",
+                    "reel_effects": "More room to reset today",
+                    "reel_pattern": "Some leftover fatigue may linger",
+                }
+            )
+        )
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    monkeypatch.setattr(earthscope_generate, "_chat_create_compat", fake_chat_create)
+    monkeypatch.setattr(earthscope_generate, "_writer_model", lambda: "test-model")
+    ctx = {
+        "day": "2026-07-25",
+        "platform": "default",
+        "kp_max_24h": 2.33,
+        "solar_wind_kms": 505.75,
+        "bz_min": -3.64,
+        "recent_signal_history": [
+            {
+                "day": "2026-07-24",
+                "kp_max_24h": 4.0,
+                "solar_wind_kms": 604.9,
+                "bz_min": -6.62,
+                "bands": {"kp": "active", "sw": "high", "bz": "southward"},
+            }
+        ],
+    }
+
+    result = _rewrite_reel_from_final_caption(
+        object(),
+        ctx=ctx,
+        caption="A quieter day to catch your breath? Keep plans light.",
+        snapshot="Geomagnetic activity is quiet, while solar wind remains elevated.",
+        affects="Some people may feel steadier. Some fatigue may linger.",
+    )
+
+    supplied = json.loads(captured["messages"][1]["content"])
+    assert supplied["required_exact_hook"] == "A quieter day to catch your breath?"
+    assert supplied["carryover_supported"] is True
+    assert supplied["recent_signal_history"][0]["day"] == "2026-07-24"
+    assert result is not None
+    assert result["voiceover"].startswith(supplied["required_exact_hook"])
 
 
 def test_reel_story_fallback_uses_complete_distinct_sentences():

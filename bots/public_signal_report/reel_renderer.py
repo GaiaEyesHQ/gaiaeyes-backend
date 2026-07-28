@@ -23,10 +23,10 @@ FPS = 30
 
 SLIDE_SPECS = (
     ("hook", "U.S. HEALTH SNAPSHOT", "01-hook.png"),
-    ("where", "WHERE IT'S STRONGEST", "02-where.png"),
-    ("drivers", "WHAT'S DRIVING IT", "03-drivers.png"),
-    ("effects", "WHAT SOME MAY NOTICE", "04-effects.png"),
-    ("summary", "TODAY'S SIGNALS", "05-summary.png"),
+    ("drivers", "WHAT MAY BE BEHIND IT", "02-drivers.png"),
+    ("effects", "WHAT SOME MAY NOTICE", "03-effects.png"),
+    ("where", "WHERE IT'S STRONGEST", "04-where.png"),
+    ("summary", "WIDER PICTURE", "05-summary.png"),
 )
 
 BOOTSTRAP_BACKGROUNDS = (
@@ -41,6 +41,24 @@ FONT_DIR = Path(__file__).resolve().parents[1] / "earthscope_post" / "fonts"
 DISPLAY_FONT = FONT_DIR / "BebasNeue.ttf"
 BODY_FONT = FONT_DIR / "Poppins" / "Poppins-SemiBold.ttf"
 BRAND_FONT = FONT_DIR / "Poppins" / "Poppins-Regular.ttf"
+BRAND_FONT_SIZE = 44
+LABEL_MAX_SIZE = 76
+LABEL_MIN_SIZE = 62
+SUMMARY_ROW_LABEL_SIZE = 44
+DISPLAY_TRANSLATION = str.maketrans(
+    {
+        "\u2010": "-",
+        "\u2011": "-",
+        "\u2012": "-",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2212": "-",
+    }
+)
+
+
+def _display_text(text: str) -> str:
+    return text.translate(DISPLAY_TRANSLATION)
 
 
 def _run(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -81,8 +99,8 @@ def _validate_input(bundle: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mappi
     for key, _label, _filename in SLIDE_SPECS:
         if key == "summary":
             summary = story.get("summary") if isinstance(story.get("summary"), Mapping) else {}
-            if not all(str(summary.get(row) or "").strip() for row in ("regional", "space", "earth")):
-                errors.append("missing reel_story.summary Regional, Space, or Earth row")
+            if not all(str(summary.get(row) or "").strip() for row in ("space", "earth")):
+                errors.append("missing reel_story.summary Space Weather or Earth Sensors row")
         elif not str(story.get(key) or "").strip():
             errors.append(f"missing reel_story.{key}")
     if errors:
@@ -166,6 +184,22 @@ def _fit_text(
     raise ValueError(f"slide text cannot fit safely without dropping words: {text}")
 
 
+def _fit_single_line_font(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    *,
+    path: Path,
+    max_width: int,
+    maximum_size: int,
+    minimum_size: int,
+) -> ImageFont.FreeTypeFont:
+    for size in range(maximum_size, minimum_size - 1, -2):
+        font = _font(path, size)
+        if draw.textbbox((0, 0), text, font=font)[2] <= max_width:
+            return font
+    raise ValueError(f"label cannot fit safely on one line: {text}")
+
+
 def _text_bbox(
     draw: ImageDraw.ImageDraw,
     lines: Sequence[str],
@@ -187,15 +221,23 @@ def _render_slide(
     index: int,
     background_dir: Path | None,
 ) -> dict[str, Any]:
+    text = _display_text(text)
     background, background_source, warnings = _background(index, background_dir)
     canvas = _prepare_background(background)
     background_digest = hashlib.sha256(canvas.convert("RGB").resize((64, 64)).tobytes()).hexdigest()
     draw = ImageDraw.Draw(canvas)
 
-    brand_font = _font(BRAND_FONT, 30)
-    label_font = _font(DISPLAY_FONT, 54)
-    draw.text((88, 312), "GAIA EYES", font=brand_font, fill=(224, 240, 248, 205))
-    draw.text((88, 414), label, font=label_font, fill=(78, 224, 230, 255))
+    brand_font = _font(BRAND_FONT, BRAND_FONT_SIZE)
+    label_font = _fit_single_line_font(
+        draw,
+        label,
+        path=DISPLAY_FONT,
+        max_width=CANVAS[0] - 176,
+        maximum_size=LABEL_MAX_SIZE,
+        minimum_size=LABEL_MIN_SIZE,
+    )
+    draw.text((88, 286), "GAIA EYES", font=brand_font, fill=(224, 240, 248, 220))
+    draw.text((88, 400), label, font=label_font, fill=(78, 224, 230, 255))
 
     left, top, right, bottom = SAFE_TEXT_BOX
     maximum_size = 128 if index == 1 else (92 if index < 5 else 76)
@@ -228,6 +270,8 @@ def _render_slide(
         "background_source": background_source,
         "background_digest": background_digest,
         "background_warnings": warnings,
+        "brand_font_size": brand_font.size,
+        "label_font_size": label_font.size,
         "font_size": body_font.size,
         "wrapped_lines": lines,
         "text_bbox": list(bbox),
@@ -246,10 +290,20 @@ def _render_summary_slide(
     canvas = _prepare_background(background)
     background_digest = hashlib.sha256(canvas.convert("RGB").resize((64, 64)).tobytes()).hexdigest()
     draw = ImageDraw.Draw(canvas)
-    draw.text((88, 312), "GAIA EYES", font=_font(BRAND_FONT, 30), fill=(224, 240, 248, 205))
-    draw.text((88, 414), "TODAY'S SIGNALS", font=_font(DISPLAY_FONT, 54), fill=(78, 224, 230, 255))
+    brand_font = _font(BRAND_FONT, BRAND_FONT_SIZE)
+    draw.text((88, 286), "GAIA EYES", font=brand_font, fill=(224, 240, 248, 220))
+    summary_label = SLIDE_SPECS[-1][1]
+    label_font = _fit_single_line_font(
+        draw,
+        summary_label,
+        path=DISPLAY_FONT,
+        max_width=CANVAS[0] - 176,
+        maximum_size=LABEL_MAX_SIZE,
+        minimum_size=LABEL_MIN_SIZE,
+    )
+    draw.text((88, 400), summary_label, font=label_font, fill=(78, 224, 230, 255))
 
-    rows = [("REGIONAL", "regional"), ("SPACE", "space"), ("EARTH", "earth")]
+    rows = [("SPACE WEATHER", "space"), ("EARTH SENSORS", "earth")]
     if str(summary.get("major_event") or "").strip():
         rows.append(("MAJOR EVENT", "major_event"))
     left, top, right, bottom = SAFE_TEXT_BOX
@@ -260,15 +314,16 @@ def _render_summary_slide(
     rendered_rows: list[dict[str, Any]] = []
     right_edge = left
     bottom_edge = top
+    row_label_font = _font(DISPLAY_FONT, SUMMARY_ROW_LABEL_SIZE)
     for label, key in rows:
-        text = str(summary.get(key) or "").strip()
-        draw.text((left, y), label, font=_font(DISPLAY_FONT, 36), fill=(78, 224, 230, 255))
-        text_y = y + 54
+        text = _display_text(str(summary.get(key) or "").strip())
+        draw.text((left, y), label, font=row_label_font, fill=(78, 224, 230, 255))
+        text_y = y + 64
         font, lines, line_height = _fit_text(
             draw,
             text,
             max_width=right - left,
-            max_height=row_height - 54,
+            max_height=row_height - 64,
             max_lines=3,
             maximum_size=58,
             minimum_size=40,
@@ -285,16 +340,19 @@ def _render_summary_slide(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(output_path, "PNG", optimize=True)
-    source_text = " ".join(str(summary.get(key) or "").strip() for _label, key in rows)
+    source_text = " ".join(_display_text(str(summary.get(key) or "").strip()) for _label, key in rows)
     return {
         "index": index,
         "key": "summary",
-        "label": "TODAY'S SIGNALS",
+        "label": summary_label,
         "text": source_text,
         "path": str(output_path),
         "background_source": background_source,
         "background_digest": background_digest,
         "background_warnings": warnings,
+        "brand_font_size": brand_font.size,
+        "label_font_size": label_font.size,
+        "summary_row_label_font_size": row_label_font.size,
         "font_size": min(row["font_size"] for row in rendered_rows),
         "wrapped_lines": all_lines,
         "text_bbox": [left, top, right_edge, bottom_edge],

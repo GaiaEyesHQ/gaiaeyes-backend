@@ -794,6 +794,44 @@ def _recent_platform_captions(platform: str, limit: int = 5, before_day: Optiona
     return out[:limit]
 
 
+def _recent_signal_history(platform: str, limit: int = 3, before_day: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Return a compact recent-day signal history for recovery/carryover framing."""
+    plat = (platform or "default").strip() or "default"
+    try:
+        q = (
+            SB.schema(POSTS_SCHEMA)
+              .table(POSTS_TABLE)
+              .select("day,title,caption,metrics_json")
+              .eq("platform", plat)
+        )
+        if before_day:
+            q = q.lt("day", before_day)
+        res = q.order("day", desc=True).limit(limit).execute()
+        rows = res.data or []
+    except Exception:
+        rows = []
+
+    history: List[Dict[str, Any]] = []
+    for row in rows:
+        metrics = row.get("metrics_json") if isinstance(row.get("metrics_json"), dict) else {}
+        bands = metrics.get("bands") if isinstance(metrics.get("bands"), dict) else {}
+        history.append(
+            {
+                "day": row.get("day"),
+                "hook": _first_sentence(str(row.get("caption") or row.get("title") or "")),
+                "kp_max_24h": metrics.get("kp_max_24h"),
+                "solar_wind_kms": metrics.get("solar_wind_kms"),
+                "bz_min": metrics.get("bz_min"),
+                "bands": {
+                    "kp": bands.get("kp"),
+                    "sw": bands.get("sw"),
+                    "bz": bands.get("bz"),
+                },
+            }
+        )
+    return history
+
+
 def _normalize_for_similarity(text: str) -> str:
     s = (text or "").lower()
     s = re.sub(r"[^a-z0-9\s]", " ", s)
@@ -1291,6 +1329,7 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "metaphor_hint": ctx.get("metaphor_hint"),
         "metaphor_pool": ctx.get("metaphor_pool") or [],
         "recent_analogies": ctx.get("recent_analogies") or [],
+        "recent_signal_history": ctx.get("recent_signal_history") or [],
         "template_id": ctx.get("template_id"),
         "platform": _ctx_platform(ctx),
         "hook_lane_brief": _hook_lane_brief(ctx),
@@ -3013,6 +3052,136 @@ def _voiceover_caption_from_variants(social_variants: Dict[str, Dict[str, str]],
     return fb_caption or str(default_caption or "").strip()
 
 
+def _recent_history_supports_carryover(history: Any) -> bool:
+    if not isinstance(history, list):
+        return False
+    for item in history[:3]:
+        if not isinstance(item, dict):
+            continue
+        kp = to_float(item.get("kp_max_24h"))
+        wind = to_float(item.get("solar_wind_kms"))
+        bz = to_float(item.get("bz_min"))
+        bands = item.get("bands") if isinstance(item.get("bands"), dict) else {}
+        if (
+            (kp is not None and kp >= 4.0)
+            or (wind is not None and wind >= 500.0)
+            or (bz is not None and bz <= -6.0)
+            or str(bands.get("kp") or "").lower() in {"active", "storm", "stormy"}
+            or str(bands.get("sw") or "").lower() in {"elevated", "high"}
+        ):
+            return True
+    return False
+
+
+def _validate_reel_spine(
+    obj: Any,
+    *,
+    caption: str,
+    facts: Dict[str, Any],
+) -> Optional[Dict[str, str]]:
+    if not isinstance(obj, dict):
+        return None
+    required = ("voiceover", "reel_signal", "reel_effects", "reel_pattern")
+    if not all(isinstance(obj.get(key), str) and obj.get(key).strip() for key in required):
+        return None
+
+    out = {key: _sanitize_caption(str(obj[key])) for key in required}
+    hook = _first_sentence(_sanitize_caption(caption))
+    voiceover = out["voiceover"]
+    if not hook or not voiceover.lower().startswith(hook.lower()):
+        return None
+    if not 35 <= len(voiceover.split()) <= 65:
+        return None
+    if re.search(r"\b(follow gaia eyes|download (?:gaia eyes|the app)|gaiaeyes\.com)\b", voiceover, re.I):
+        return None
+
+    beats = [out["reel_signal"], out["reel_effects"], out["reel_pattern"]]
+    if any(len(beat.split()) > 12 or _reel_text_is_fragment(beat) for beat in beats):
+        return None
+    for index, beat in enumerate(beats):
+        for other in beats[index + 1:]:
+            if _reel_text_similarity(beat, other) >= 0.7:
+                return None
+
+    carryover_terms = r"\b(carryover|lingering|leftover|recent days?|yesterday|still settling)\b"
+    combined = " ".join(out.values())
+    if re.search(carryover_terms, combined, re.I) and not _recent_history_supports_carryover(
+        facts.get("recent_signal_history")
+    ):
+        return None
+    return out
+
+
+def _rewrite_reel_from_final_caption(
+    client: Optional["OpenAI"],
+    *,
+    ctx: Dict[str, Any],
+    caption: str,
+    snapshot: str,
+    affects: str,
+) -> Optional[Dict[str, str]]:
+    """Write one coherent reel/VO spine after the final platform caption exists."""
+    if not client or not _writer_model():
+        return None
+    facts = _build_facts(ctx)
+    hook = _first_sentence(_sanitize_caption(caption))
+    if not hook:
+        return None
+
+    system_msg = (
+        "You are writing one coherent Gaia Eyes reel and voiceover from an already-approved Facebook caption. "
+        "Do not rewrite the caption hook. The voiceover must begin with that exact hook, word for word. "
+        "Build one narrative in this order: the hook, a plain-English environmental answer, the primary possible "
+        "body pattern, then one distinct secondary interpretation. Slide two must answer the hook instead of merely "
+        "announcing a technical status. Keep the most likely interpretation primary; do not present opposite effects "
+        "as equally likely. On a quiet day, frame recovery room first. Mention carryover, lingering effects, yesterday, "
+        "or recent days only when recent_signal_history contains elevated activity that supports it. "
+        "Write like a person speaking to the public, not an internal content note. Do not answer the hook with 'Yes' "
+        "or 'No'. Prefer concrete everyday phrases such as 'your body may feel steadier,' 'energy may feel lower,' or "
+        "'some tiredness may hang around.' Avoid abstract shorthand such as 'systems reset,' 'low-drive pause,' "
+        "'genuine recovery space,' or 'signal mix.' "
+        "Do not invent local weather, allergens, symptoms, or events. Do not imply that a space signal causes a health "
+        "effect. Explain any necessary space-weather term in ordinary language. "
+        "Return only JSON with exactly these string keys: voiceover, reel_signal, reel_effects, reel_pattern. "
+        "Voiceover: 45-60 spoken words, exact caption hook first, no advice, metrics, hashtags, follow CTA, or app CTA. "
+        "Each reel field: one complete standalone thought, 4-12 words, no bullets or newline. "
+        "reel_signal answers why the hook fits today. reel_effects gives one primary possible felt pattern. "
+        "reel_pattern gives one secondary interpretation and must not repeat or reverse reel_effects."
+    )
+    payload = {
+        "approved_caption": caption,
+        "required_exact_hook": hook,
+        "current_facts": facts,
+        "current_snapshot": snapshot,
+        "current_affects": affects,
+        "recent_signal_history": facts.get("recent_signal_history") or [],
+        "carryover_supported": _recent_history_supports_carryover(facts.get("recent_signal_history")),
+    }
+    try:
+        resp = _chat_create_compat(
+            client,
+            model=_writer_model(),
+            temperature=0.7,
+            top_p=0.9,
+            presence_penalty=0.1,
+            frequency_penalty=0.2,
+            reasoning_effort="low",
+            max_completion_tokens=1800,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+            ],
+        )
+        raw = _extract_first_json_object(_chat_text(resp).strip())
+        if not raw:
+            return None
+        return _validate_reel_spine(json.loads(raw), caption=caption, facts=facts)
+    except Exception as exc:
+        _dbg(f"reel_spine: OpenAI call failed: {exc}")
+        return None
+
+
 def _first_playbook_action(playbook: str) -> str:
     for raw in str(playbook or "").splitlines():
         line = re.sub(r"^(?:[-*•]|\d+[.)])\s*", "", raw.strip()).strip()
@@ -3063,10 +3232,23 @@ def _build_reel_voiceover_text(
     rewrite: Optional[Dict[str, str]] = None,
 ) -> str:
     explicit = _sanitize_caption(str((rewrite or {}).get("voiceover") or ""))
-    if explicit and len(explicit.split()) >= 24 and len(_split_text_sentences(explicit)) >= 2:
+    caption_hook = _first_sentence(_sanitize_caption(caption))
+    caption_opens_as_hook = bool(
+        caption_hook and (_hook_lane_for_text(caption_hook) or caption_hook.endswith(("?", "!")))
+    )
+    expected_hook = caption_hook if caption_opens_as_hook else _first_sentence(
+        _caption_voiceover_lead(caption, title)
+    )
+    if (
+        explicit
+        and expected_hook
+        and explicit.lower().startswith(expected_hook.lower())
+        and len(explicit.split()) >= 24
+        and len(_split_text_sentences(explicit)) >= 2
+    ):
         return _scrub_banned_phrases(explicit)
 
-    lead = _first_sentence(_caption_voiceover_lead(caption, title))
+    lead = expected_hook or caption_hook
     if not lead:
         preferred = _preferred_hook_lanes(ctx, limit=1)
         if preferred:
@@ -3126,6 +3308,7 @@ def _reel_fallback_sentence(text: str, index: int = 0) -> str:
 def _build_reel_story(
     *,
     title: str,
+    caption: Optional[str] = None,
     snapshot: str,
     affects: str,
     voiceover: str,
@@ -3141,8 +3324,14 @@ def _build_reel_story(
         pattern = _reel_fallback_sentence(affects, 1)
     if not pattern or _reel_text_similarity(pattern, effects) >= 0.7:
         pattern = _reel_fallback_sentence(affects, 2)
+    caption_hook = _first_sentence(str(caption or ""))
+    hook_source = (
+        caption_hook
+        if caption_hook and (_hook_lane_for_text(caption_hook) or caption_hook.endswith(("?", "!")))
+        else title
+    )
     return {
-        "hook": _compact_reel_text(title, max_words=12) or _reel_fallback_sentence(title),
+        "hook": _compact_reel_text(hook_source, max_words=16) or _reel_fallback_sentence(hook_source),
         "signal": signal,
         "effects": effects,
         "pattern": pattern,
@@ -3681,6 +3870,7 @@ def main():
     ctx["banned_openers"] = _recent_platform_openers(args.platform, limit=3, before_day=day)
     recent_captions = _recent_platform_captions(args.platform, limit=EARTHSCOPE_SIM_RECENT, before_day=day)
     ctx["recent_captions"] = recent_captions
+    ctx["recent_signal_history"] = _recent_signal_history(args.platform, limit=3, before_day=day)
     ctx["intro_hint"] = _select_intro_line(day, args.platform, ctx.get("banned_openers"))
     ctx["metaphor_hint"] = _select_metaphor_hint(day, args.platform)
     ctx["metaphor_pool"] = _select_metaphor_pool(day, args.platform, size=8)
@@ -3795,6 +3985,14 @@ def main():
     )
     vo_caption = _voiceover_caption_from_variants(social_variants, short_caption)
     rewrite_for_reel = _REWRITE_CACHE.get(_rewrite_cache_key(ctx)[0])
+    aligned_reel_rewrite = _rewrite_reel_from_final_caption(
+        client,
+        ctx=ctx,
+        caption=vo_caption,
+        snapshot=snapshot,
+        affects=affects,
+    )
+    rewrite_for_reel = aligned_reel_rewrite or rewrite_for_reel
     voiceover = _build_reel_voiceover_text(
         ctx=ctx,
         title=title,
@@ -3808,6 +4006,7 @@ def main():
         sections_struct["voiceover"] = voiceover
     sections_struct["reel_story"] = _build_reel_story(
         title=title,
+        caption=vo_caption,
         snapshot=snapshot,
         affects=affects,
         voiceover=voiceover,

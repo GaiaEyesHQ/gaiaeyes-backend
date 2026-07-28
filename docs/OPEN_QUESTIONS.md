@@ -59,3 +59,23 @@
 15. **HRV baseline contract for Body and recovery-oriented gauges**
    - **Why needed**: The Body page currently receives `hrv_avg` but no user-baseline delta, while HRV contributes internally to Health Status only. Product intent is for a below-usual HRV day to inform Heart, Energy, and Recovery Load, but the bounded weights and minimum baseline requirements are not yet defined. Adding those score effects without an explicit rule would turn a historical association into an unreviewed causal adjustment.
    - **Where to fill**: Product/science decision in `bots/definitions/gauge_logic_base_v1.json`, followed by a shared baseline field in `/v1/features/today`, focused scorer tests, and matching iOS Body copy.
+
+16. **Historical import sample formats and legal review**
+   - **Why needed**: The retention and user-deletion defaults are now recorded, but adapters still require real redacted exports, field/version mapping, provider permitted-use review, and confirmation that the raw-file recovery window and archival policy meet privacy obligations.
+   - **Where to fill**: Collect samples from Migraine Buddy, Bearable, MigraInsight, HeadShot, and Prevent Headache; record findings in the canonical import specification; obtain privacy/legal review before storing production import files.
+
+17. **Community consent legal review and published-snapshot withdrawal**
+   - **Why needed**: Minimum cohort and geographic suppression defaults are recorded, but counsel still needs to approve the consent text and decide how a later withdrawal affects an aggregate snapshot that users have already seen.
+   - **Where to fill**: Privacy/legal/research review before community data collection or aggregate display.
+
+18. **Geoelectric and land-surface-temperature provider hypotheses**
+   - **Why needed**: The roadmap now distinguishes regional geoelectric field/ground conductivity from TEC and separates health-oriented land-surface temperature from volcano monitoring. Gaia Eyes still needs a specific user question, provider, spatial resolution, historical coverage, and evidence boundary for each.
+   - **Where to fill**: Product/research spike before provider integration or ingestion work.
+
+19. **Condition-specific product/science advisory panel**
+   - **Why needed**: Predictive notices and community evidence claims need headache/autonomic clinical review, longitudinal-statistics review, health-literacy review, and compensated patient input. No reviewers or sign-off process have been selected yet.
+   - **Where to fill**: Recruit through recognized specialty directories and academic programs; record credentials, conflicts, scope, compensation, and versioned sign-off in the research framework.
+
+20. **AI Guide privacy and evidence contract**
+   - **Why needed**: An AI Guide could receive sensitive health context and produce unsupported medical-sounding claims unless retrieval sources, data minimization, retention, refusal behavior, and deterministic fallback are defined first.
+   - **Where to fill**: Privacy/legal/product/engineering review after deterministic Guide evidence objects and help content are stable.

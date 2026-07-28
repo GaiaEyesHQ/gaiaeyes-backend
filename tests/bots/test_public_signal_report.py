@@ -49,13 +49,11 @@ def _context() -> dict:
 
 
 def _reel_summary(
-    regional: str = "Regional heat leads today.",
-    space: str = "Space weather remains low today.",
-    earth: str = "Earth measurements remain available today.",
+    space: str = "Space weather is quiet right now.",
+    earth: str = "Ground sensors detected a spread-out pattern.",
     major_event: str = "",
 ) -> dict:
     return {
-        "regional": regional,
         "space": space,
         "earth": earth,
         "major_event": major_event,
@@ -299,6 +297,10 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
     assert "Do not merely delete technical terms or invent abstract synonyms" in captured["messages"][0]["content"]
     assert "longer Facebook report and detailed section_copy may name relevant technical measurements" in captured["messages"][0]["content"]
     assert "without mystical heartbeat, energy, or beneath-our-feet metaphors" in captured["messages"][0]["content"]
+    assert "body-first hook, direct environmental answer" in captured["messages"][0]["content"]
+    assert "separate 'Beyond the Weather' view" in captured["messages"][0]["content"]
+    assert "Do not say a condition is building, rising, worsening" in captured["messages"][0]["content"]
+    assert "must not add a new bodily sensation" in captured["messages"][0]["content"]
     assert captured["response_format"]["type"] == "json_schema"
     assert captured["response_format"]["json_schema"]["strict"] is True
     assert captured["response_format"]["json_schema"]["schema"]["properties"]["reel_story"]["required"] == [
@@ -308,11 +310,19 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
         "effects",
         "summary",
     ]
+    assert captured["response_format"]["json_schema"]["schema"]["properties"]["reel_story"]["properties"]["summary"]["required"] == [
+        "space",
+        "earth",
+        "major_event",
+    ]
     supplied_payload = json.loads(captured["messages"][1]["content"])
     assert supplied_payload["audience_and_voice"]["reader"] == "A general adult reader with no science or weather background."
     assert "without substituting new abstract terms" in supplied_payload["audience_and_voice"]["short_form_rule"]
-    assert "Do not mention sampling, anchors, coverage, or signals" in supplied_payload["outputs"]["reel_story"]["where"]
-    assert "omit acronyms, raw values, and specialist classifier words" in supplied_payload["outputs"]["reel_story"]["summary"]["earth"]
+    assert "Do not name the region yet" in supplied_payload["outputs"]["reel_story"]["drivers"]
+    assert "effort may feel harder for lower exercise tolerance" in supplied_payload["outputs"]["reel_story"]["effects"]
+    assert supplied_payload["outputs"]["reel_story"]["where"].startswith("Slide 4: complete the regional story")
+    assert "most useful change between earlier and now" in supplied_payload["outputs"]["reel_story"]["summary"]["space"]
+    assert "Prefer natural atmospheric tones or a ground-sensor pattern" in supplied_payload["outputs"]["reel_story"]["summary"]["earth"]
     supplied_facts = supplied_payload["facts"]
     assert "source_row" not in supplied_facts["space_watch"]
     assert supplied_facts["space_watch"]["current_metrics"]["current_kp"] is None
