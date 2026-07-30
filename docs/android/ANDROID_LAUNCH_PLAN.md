@@ -1,10 +1,10 @@
 # Android Launch Plan
 
-Last reviewed: 2026-05-03
+Last reviewed: 2026-07-28
 
 ## Decision
 
-Build Gaia Eyes for Android as a native Kotlin + Jetpack Compose app after the first 7 stable days of iOS launch monitoring. The Android package name is `com.gaiaeyes.app`.
+Build Gaia Eyes for Android as a native Kotlin + Jetpack Compose app. The Android package name is `com.gaiaeyes.app`.
 
 The first Android release should reuse the existing backend and launch US-first. It should not introduce a new backend schema, new billing source of truth, or a broader health-data scope than the app can justify in Google Play review.
 
@@ -15,8 +15,8 @@ The first Android release should reuse the existing backend and launch US-first.
 - Native Kotlin + Jetpack Compose app in a future `gaiaeyes-android/` directory.
 - Package name: `com.gaiaeyes.app`.
 - Minimum SDK: 28, because Health Connect supports Android 9/API 28+ devices with Google Play services.
-- Target SDK: latest Google Play-required target at implementation time. As of this review, new apps and app updates must target Android 15/API 35 or higher.
-- Supabase anonymous onboarding and email/password account sessions.
+- Target SDK: Android 16/API 36 or higher. Google Play requires this for new apps and updates beginning August 31, 2026.
+- Supabase account sessions using the same identity and backend authorization model as iOS. The Android sign-in UX must be settled before scaffolding; do not introduce a parallel account model.
 - Backend authenticated reads and writes using Supabase access tokens.
 - RevenueCat Android SDK with Google Play Billing products mapped to the same Plus entitlement model.
 - Optional Health Connect read flow for the minimum useful body-data set.
@@ -98,15 +98,17 @@ Onboarding should clearly state Health Connect is optional. If skipped or denied
 
 ## Rollout phases
 
-1. Android docs and backend contract tests now.
-2. Wait for 7 stable days of iOS launch telemetry.
-3. Scaffold `gaiaeyes-android/` with Kotlin + Compose, no secrets committed.
+1. Complete the Android contract/dependency readiness pass now.
+2. Install Android Studio, the API 36 SDK, and a Google Play-enabled emulator.
+3. Scaffold `gaiaeyes-android/` with Kotlin + Compose after dependency approval, with no secrets committed.
 4. Implement auth, API client, cache/store layer, and core read-only surfaces.
-5. Add Health Connect import and WorkManager upload drain.
-6. Add RevenueCat/Google Play Billing purchase and restore flow.
-7. Run internal QA, then Play internal testing.
-8. If Play Console requires it for the account, complete the required closed test before production access.
-9. Release US-first with staged rollout.
+5. Add symptom, exposure, and daily check-in writes.
+6. Add Health Connect import and WorkManager upload drain after the HRV contract decision.
+7. Create the Google Play organization account and listing after the LLC/D-U-N-S prerequisites are complete.
+8. Add RevenueCat/Google Play Billing purchase and restore flow after Play products exist.
+9. Run internal QA, then Play internal testing.
+10. Complete any account-specific testing requirement before production access.
+11. Release US-first with staged rollout.
 
 ## External requirements checked
 

@@ -51,6 +51,34 @@ BAN_PHRASES = [
     "reinforce rhythm rather than chase change",
 ]
 
+PUBLIC_WRITER_VOICE_REFERENCE = {
+    "golden": {
+        "title_shape": "Brain Fog Comes In Waves",
+        "caption_excerpt": (
+            "Can't sleep even when your bed is perfect? That thin, jittery restlessness some nights "
+            "comes from outside-the-body variability. If your evenings feel frayed, prioritize the "
+            "ritual side of wind-down and treat tonight like a soft experiment night."
+        ),
+        "strengths": [
+            "opens with a recognizable human problem",
+            "uses one specific felt texture instead of generic wellness language",
+            "connects the environmental read to the body in plain but distinctive language",
+            "gives a practical ritual with a reason behind it",
+            "sounds authored rather than assembled from stock phrases",
+        ],
+    },
+    "anti_patterns": [
+        "room to recoup with a small buzz still hanging on",
+        "keep plans gentle and take short breaks",
+        "quiet and steady up there",
+        "a vague question that could fit almost any day",
+    ],
+    "instruction": (
+        "Learn the qualities, cadence, and specificity of the golden example. Do not copy its phrases, "
+        "sleep lane, claims, or advice unless today's evidence and content spine support them."
+    ),
+}
+
 import requests
 from dotenv import load_dotenv
 
@@ -507,16 +535,19 @@ def _platform_caption_profile(platform: str) -> Dict[str, Any]:
     if plat in {"fb", "facebook"}:
         return {
             "platform": "facebook",
-            "caption_sentences": [4, 6],
-            "caption_words": [70, 120],
+            "caption_sentences": [5, 8],
+            "caption_words": [110, 180],
             "caption_instruction": (
-                "4-6 sentences, about 70-120 words. Write a concise Facebook-style mini post: "
-                "lead with a human body/mood/sleep/focus hook instead of a space-weather label, add one plain-language "
-                "why-it-matters paragraph, give one practical pacing note, and end with one simple audience question "
-                "using only the felt effects already present in the content spine. "
+                "5-8 sentences, about 110-180 words, split into 2-3 short paragraphs. Write an authored Facebook-style "
+                "mini post: lead with a human body/mood/sleep/focus hook instead of a space-weather label, use one "
+                "specific felt texture, explain the environmental context in plain language, and give one practical ritual or "
+                "pacing note with a reason behind it. An audience question is optional and should appear only when it "
+                "adds something natural. "
+                "Let the paragraphs flow without lead-in labels or internal scaffolding such as 'Why it matters,' "
+                "'Big picture,' or 'Pacing note.' "
                 "Do not open with 'Neutral energy', 'near-Earth field', or metric-report language. "
                 "For calm or neutral days, keep CME counts on the stats card unless explicit Earth-directed/arrival context exists. "
-                "It can be reflective or lightly funny, but should not feel like a report."
+                "It can be reflective or lightly funny, but should not feel like a report or interchangeable wellness copy."
             ),
             "max_caption_chars": 1600,
         }
@@ -1057,7 +1088,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
         "Avoid these fallback labels and vague metaphors: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note, Is Your Body Running Loud, Head Pressure Asking For Space. "
-        "Good shapes: 'Body Buzzing Today?', 'Feeling Jittery Today?', 'Feeling Squirrely Today?', 'Brain Fog On A Loop?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
+        "Use both clear statements and natural questions. Good shapes: 'Brain Fog Comes In Waves', 'Body Buzzing Today?', 'Feeling Jittery Today?', 'Feeling Squirrely Today?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
     )
@@ -1110,6 +1141,18 @@ def _sanitize_caption(txt: str) -> str:
     # collapse whitespace
     s = re.sub(r"\s+", " ", s).strip()
     return s
+
+
+def _sanitize_paragraph_caption(txt: str) -> str:
+    if not txt:
+        return ""
+    text = EMOJI_RE.sub("", str(txt)).replace("\r\n", "\n").replace("\r", "\n")
+    paragraphs = [
+        re.sub(r"\s+", " ", paragraph).strip()
+        for paragraph in re.split(r"\n\s*\n", text)
+        if paragraph.strip()
+    ]
+    return "\n\n".join(paragraphs)
 
 
 def _caption_starts_repetitive(caption: str) -> bool:
@@ -1167,8 +1210,13 @@ def _caption_context_lead(ctx: Dict[str, Any]) -> str:
     return "Let the signal shape the plan, not the whole day."
 
 
-def _polish_public_caption(caption: str, ctx: Dict[str, Any]) -> str:
-    cap = _sanitize_caption(caption)
+def _polish_public_caption(
+    caption: str,
+    ctx: Dict[str, Any],
+    *,
+    preserve_paragraphs: bool = False,
+) -> str:
+    cap = _sanitize_paragraph_caption(caption) if preserve_paragraphs else _sanitize_caption(caption)
     if _caption_starts_repetitive(cap):
         parts = re.split(r"(?<=\.)\s+", cap, maxsplit=1)
         rest = parts[1].strip() if len(parts) > 1 else cap
@@ -1758,20 +1806,19 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
     system_msg = (
         "You are Gaia Eyes’ daily weather desk: viral, practical, and lightly funny. "
         "Interpret today’s space/earth conditions for humans. "
-        "Write for a wide social audience at about a 3rd-grade reading level: short words, short sentences, no medical/science lecture voice. "
-        "The first sentence must not start with or center on HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. Plain phrases such as 'room to recover' or 'time to recoup' are welcome on quiet days. Lead with an everyday feeling instead. Use hook_lane_brief to choose the opening lane. "
+        "Write in clear public language without flattening the voice: vary sentence length, use concrete words, and avoid medical/science lecture voice. "
+        "The first sentence must not start with or center on HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. Lead with an everyday feeling instead. Use hook_lane_brief to choose the opening lane. "
         "Sleep is allowed when it is the best lane, but do not default to sleep because a previous sleep post performed well. "
         "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes, e.g. 'Plain English: HRV = small changes between heartbeats that can reflect body stress.' "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin or press release). Avoid sterile or overly technical phrasing (e.g., 'inward-pointing field component'). Prefer plain equivalents like 'southward field orientation' or 'field leaning south'. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
-        "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, lead with the welcome chance to recoup while still pacing gently. Explain that quiet space conditions do not erase carryover or local influences. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
+        "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, choose a specific human angle supported by the content rather than automatically using recovery, recoup, gentle-plan, or lingering-buzz language. Explain that quiet space conditions do not erase carryover or local influences when the supplied history supports that distinction. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
         "Humor is optional. If you use an analogy, keep it to one sentence max and do not use the phrase 'Think of it like'. Vary phrasing. Never start a sentence with 'Think of it like'. You may use metaphor_pool as guidance or invent a fresh analogy. Do not reuse any recent_analogies. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. A natural opening question is allowed when it fits the hook lane; do not turn statements into fake questions. "
-        "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
         "Use natural everyday grammar: when two feelings happen together, use 'and' instead of a contrast word like 'but' unless there is a real contrast. "
         "Say 'slow breaths' or 'slow breathing', not 'slow breath'. "
         "Never claim deterministic health effects; use 'some may', 'can', 'for some'. "
@@ -1793,6 +1840,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "draft": draft,
         "style": {
             "persona": "researcher-coach-comedian",
+            "public_voice_reference": PUBLIC_WRITER_VOICE_REFERENCE,
             "audience": "people noticing sleep, pain, mood, headaches, migraine patterns, chronic illness flares, low energy, brain fog, and body-pattern changes",
             "opener_palette": HOOKS.get(facts.get("tone") or "neutral", HOOKS["neutral"]),
             "ban_phrases": BAN_PHRASES,
@@ -1973,18 +2021,17 @@ def _rewrite_json_candidates(
         "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
-        "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, lead with the welcome chance to recoup while still pacing gently. Explain that quiet space conditions do not erase carryover or local influences. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
+        "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, choose a specific human angle supported by the content rather than automatically using recovery, recoup, gentle-plan, or lingering-buzz language. Explain that quiet space conditions do not erase carryover or local influences when supplied history supports it. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
         "Lead with a felt human hook before explaining the signal context. Use hook_lane_brief to choose the doorway across quiet-day breathing room, trouble sleeping, wired/tired, brain fog, headache, migraine, chronic illness flare, head pressure, pain flare, low energy, restless body, mood, and scattered focus. "
         "Do not make sleep the default just because a sleep hook performed well before; sleep must earn its place from today's facts and recent lane history. "
         "Do not make focus/productivity the default. "
-        "Do not open with HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. Plain phrases such as 'room to recover' or 'time to recoup' are welcome on quiet days. "
-        "Write for a wide social audience at about a 3rd-grade reading level: short words, short sentences, no medical/science lecture voice. "
+        "Do not open with HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. "
+        "Write in clear public language without flattening the voice: vary sentence length, use concrete words, and avoid medical/science lecture voice. "
         "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes. "
         "You may use a question as the opening hook if it feels natural. Humor is welcome when warm and grounded. "
         "Avoid report-like openings, labels, and repeated phrasing. Do not reuse recent_openers. "
         "Avoid overusing work-block advice. If you mention focus, make it feel like body-pattern guidance, not productivity coaching. "
         "Avoid the ban_phrases exactly; choose natural wording instead of trying to synonym-swap them. "
-        "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
         "Use natural everyday grammar: when two feelings happen together, use 'and' instead of a contrast word like 'but' unless there is a real contrast. "
         "Say 'slow breaths' or 'slow breathing', not 'slow breath'. "
         "Use evidence-scaled language: may, can, for some, tends to. No diagnosis, certainty, detox, cure, or treatment claims. "
@@ -2000,11 +2047,12 @@ def _rewrite_json_candidates(
         "voice": {
             "audience": "people noticing sleep, pain, mood, headaches, migraine patterns, chronic illness flares, low energy, brain fog, and body-pattern changes",
             "style": "human, emotionally relatable, curious, practical, sometimes funny",
+            "public_voice_reference": PUBLIC_WRITER_VOICE_REFERENCE,
             "target_platform": caption_profile["platform"],
             "hook_lane_brief": facts.get("hook_lane_brief"),
             "hook_doorways_to_rotate": [
                 "follow hook_lane_brief.preferred_lanes first",
-                "quiet-day breathing room or time to recoup",
+                "a specific quiet-day body pattern supported by the supplied context",
                 "sleep or bedtime routine",
                 "wired/tired or body stress",
                 "mood or restlessness",
@@ -2029,7 +2077,7 @@ def _rewrite_json_candidates(
             ],
         },
         "candidate_requirements": {
-            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, a recovery score, parasympathetic, or autonomic. Ordinary phrases such as room to recover or time to recoup are allowed.",
+            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, a recovery score, parasympathetic, or autonomic. Preserve one specific felt texture and avoid the anti-pattern cadence in public_voice_reference.",
             "snapshot": "2-4 plain-language sentences with no numeric space-weather measurements.",
             "affects": "2-4 sentences about possible felt patterns without certainty.",
             "playbook": "3-5 short bullets.",
@@ -2945,15 +2993,25 @@ def _rewrite_facebook_caption_from_spine(
         "The editorial read of the day is already selected in the content spine. Preserve its dominant felt-effect lane, "
         "emotional hook, intensity, symptom scope, and practical advice. Do not reinterpret the signals, choose a different "
         "hook lane, introduce new symptoms, or make the day sound calmer or more active than the spine. "
+        "Preserve the spine's meaning, not its sentences. Rewrite stock wording from the spine instead of expanding or "
+        "echoing phrases such as 'room to recoup,' 'chance to recover,' 'light buzz,' 'small buzz,' 'mild headwind,' "
+        "'keep plans gentle,' or 'take short breaks.' Do not synonym-swap those phrases; find a fresher, specific way "
+        "to express the supported human pattern. "
         "Expand only for Facebook: add useful context, natural paragraphing, at most one fitting analogy, a practical pacing "
-        "note, and one low-friction audience question tied to the existing felt effects. Keep the founder voice human, lightly "
-        "playful, grounded, and non-fearful. "
+        "or ritual note with a reason behind it. Keep the founder voice human, lightly playful, grounded, and non-fearful. "
+        "Use one specific felt texture and one natural Gaia Eyes identity line when they fit. An audience question is optional. "
+        "Study public_voice_reference for quality and cadence, but do not copy its wording, sleep lane, claims, or advice. "
+        "Do not add paragraph labels or internal scaffolding such as 'Why it matters,' 'Big picture,' or 'Pacing note.' "
+        "Use evidence-scaled phrases such as "
+        "'some people may' instead of broad claims such as 'many of us feel.' An identity line should describe what "
+        "Gaia Eyes watches or compares, not say 'we are Gaia Eyes.' "
         "Do not include measurements, a metric footer, a download/follow CTA, or hashtags inside the caption. "
         "Return ONLY a compact JSON object with the string keys caption and hashtags."
     )
     user_msg = {
         "task": "Expand the approved content spine into a Facebook caption without changing its message.",
         "facebook_brief": profile["caption_instruction"],
+        "public_voice_reference": PUBLIC_WRITER_VOICE_REFERENCE,
         "content_spine": {
             "title": str(title or "").strip(),
             "caption": str(default_caption or "").strip(),
@@ -2966,6 +3024,9 @@ def _rewrite_facebook_caption_from_spine(
             "preserve_hook_lane": True,
             "preserve_day_intensity": True,
             "new_symptoms_allowed": False,
+            "preserve_wording": False,
+            "rewrite_stock_wording": True,
+            "forbidden_paragraph_labels": ["Why it matters", "Big picture", "Pacing note"],
             "caption_sentences": profile["caption_sentences"],
             "caption_words": profile["caption_words"],
         },
@@ -2992,12 +3053,13 @@ def _rewrite_facebook_caption_from_spine(
         obj = json.loads(raw)
         if not isinstance(obj, dict):
             return None
-        caption = _sanitize_caption(str(obj.get("caption") or ""))
+        caption = _sanitize_paragraph_caption(str(obj.get("caption") or ""))
         if not caption:
             return None
+        hashtags = obj.get("hashtags")
         return {
             "caption": caption,
-            "hashtags": str(obj.get("hashtags") or default_hashtags or "").strip(),
+            "hashtags": hashtags.strip() if isinstance(hashtags, str) else str(default_hashtags or "").strip(),
         }
     except Exception:
         return None
@@ -3038,7 +3100,9 @@ def _build_social_caption_variants(
         sections=sections,
     )
     if fb_out and fb_out.get("caption"):
-        fb_caption = _scrub_banned_phrases(_polish_public_caption(str(fb_out["caption"]), fb_ctx))
+        fb_caption = _scrub_banned_phrases(
+            _polish_public_caption(str(fb_out["caption"]), fb_ctx, preserve_paragraphs=True)
+        )
         if fb_caption:
             variants["fb"] = {
                 "caption": fb_caption,
@@ -3134,16 +3198,19 @@ def _rewrite_reel_from_final_caption(
         "Build one narrative in this order: the hook, a plain-English environmental answer, the primary possible "
         "body pattern, then one distinct secondary interpretation. Slide two must answer the hook instead of merely "
         "announcing a technical status. Keep the most likely interpretation primary; do not present opposite effects "
-        "as equally likely. On a quiet day, frame recovery room first. Mention carryover, lingering effects, yesterday, "
+        "as equally likely. On a quiet day, follow the approved caption's primary human pattern; use recovery framing "
+        "only when the content spine supports it. Mention carryover, lingering effects, yesterday, "
         "or recent days only when recent_signal_history contains elevated activity that supports it. "
         "Write like a person speaking to the public, not an internal content note. Do not answer the hook with 'Yes' "
         "or 'No'. Prefer concrete everyday phrases such as 'your body may feel steadier,' 'energy may feel lower,' or "
         "'some tiredness may hang around.' Avoid abstract shorthand such as 'systems reset,' 'low-drive pause,' "
         "'genuine recovery space,' or 'signal mix.' "
+        "Carry forward the caption's most distinctive concrete image or felt texture when it remains accurate. Avoid "
+        "generic filler such as 'a little buzz,' 'room to recoup,' or 'keep it gentle' unless that exact idea is essential. "
         "Do not invent local weather, allergens, symptoms, or events. Do not imply that a space signal causes a health "
         "effect. Explain any necessary space-weather term in ordinary language. "
         "Return only JSON with exactly these string keys: voiceover, reel_signal, reel_effects, reel_pattern. "
-        "Voiceover: 45-60 spoken words, exact caption hook first, no advice, metrics, hashtags, follow CTA, or app CTA. "
+        "Voiceover: 45-65 spoken words, exact caption hook first, no advice, metrics, hashtags, follow CTA, or app CTA. "
         "Each reel field: one complete standalone thought, 4-12 words, no bullets or newline. "
         "reel_signal answers why the hook fits today. reel_effects gives one primary possible felt pattern. "
         "reel_pattern gives one secondary interpretation and must not repeat or reverse reel_effects."
@@ -3315,9 +3382,9 @@ def _build_reel_story(
     rewrite: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
     rewrite = rewrite or {}
-    signal = _compact_reel_text(str(rewrite.get("reel_signal") or ""), max_words=8)
-    effects = _compact_reel_text(str(rewrite.get("reel_effects") or ""), max_words=6, max_lines=2)
-    pattern = _compact_reel_text(str(rewrite.get("reel_pattern") or ""), max_words=7)
+    signal = _compact_reel_text(str(rewrite.get("reel_signal") or ""), max_words=12)
+    effects = _compact_reel_text(str(rewrite.get("reel_effects") or ""), max_words=12, max_lines=2)
+    pattern = _compact_reel_text(str(rewrite.get("reel_pattern") or ""), max_words=12)
     signal = signal or _reel_fallback_sentence(snapshot)
     effects = effects or _reel_fallback_sentence(affects)
     if not pattern or _reel_text_similarity(pattern, effects) >= 0.7:

@@ -38,7 +38,8 @@ Create a native Android app for Gaia Eyes using Kotlin + Jetpack Compose with pa
    - `REVENUECAT_ANDROID_API_KEY`
    - `REVENUECAT_PLUS_MONTHLY_PRODUCT_ID`
    - `REVENUECAT_PLUS_YEARLY_PRODUCT_ID`
-3. Implement Supabase anonymous and email/password auth.
+3. Mirror iOS Supabase email magic-link/session auth. Do not add an Android-only
+   anonymous or email/password identity path.
 4. Implement encrypted token/session storage.
 5. Implement a single authenticated backend API client with token refresh and reauth notice behavior.
 6. Implement app-scoped caches for features, dashboard, gauges, drivers, outlook, symptoms, profile, and Health Connect diagnostics.

@@ -63,6 +63,80 @@ def test_merge_payload_preserves_cached_air_details_when_refresh_is_partial():
 
 
 @pytest.mark.anyio
+async def test_local_check_restores_missing_cached_sections_from_previous_payload(monkeypatch, client: AsyncClient):
+    cached_payload = {
+        "ok": True,
+        "where": {"zip": "78754", "lat": 30.3, "lon": -97.6},
+        "weather": {
+            "temp_c": 36.0,
+            "temp_delta_24h_c": -1.0,
+            "humidity_pct": 41.8,
+            "precip_prob_pct": 0.0,
+            "pressure_hpa": 1012.5,
+            "baro_delta_24h_hpa": 2.0,
+            "baro_trend": "steady",
+        },
+        "air": {"aqi": None, "category": None, "pollutant": None},
+        "allergens": {},
+        "health": {"flags": {"aqi_flag": None, "allergen_state": None}, "messages": ["Full Moon"]},
+        "asof": "2026-07-29T21:15:00+00:00",
+    }
+    previous_payload = {
+        "ok": True,
+        "air": {"aqi": 64, "category": "Moderate", "pollutant": "PM2.5"},
+        "allergens": {
+            "source": "google-pollen:forecast",
+            "state": "moderate",
+            "primary_type": "grass",
+            "primary_label": "Grass pollen",
+        },
+        "health": {
+            "flags": {
+                "aqi_flag": "moderate",
+                "allergen_state": "moderate",
+                "allergen_primary_type": "grass",
+                "allergen_relevance_score": 0.7,
+            },
+            "messages": ["Air quality Moderate"],
+        },
+    }
+    persisted: list[dict] = []
+
+    async def _fake_attach_forecast_daily_best_effort(
+        zip_code: str,  # noqa: ARG001
+        payload: dict,
+        *,
+        refresh_if_stale: bool = True,  # noqa: ARG001
+    ):
+        return payload
+
+    async def _fake_assemble_for_zip(zip_code: str):  # noqa: ARG001
+        raise AssertionError("cached repair must not call live providers")
+
+    monkeypatch.setattr(local, "latest_for_zip", lambda zip_code: cached_payload)  # noqa: ARG005
+    monkeypatch.setattr(local, "_previous_cached_payload", lambda zip_code: previous_payload)  # noqa: ARG005
+    monkeypatch.setattr(local, "assemble_for_zip", _fake_assemble_for_zip)
+    monkeypatch.setattr(local, "_attach_forecast_daily_best_effort", _fake_attach_forecast_daily_best_effort)
+    monkeypatch.setattr(local, "upsert_zip_payload", lambda zip_code, payload: persisted.append(payload))  # noqa: ARG005
+
+    response = await client.get(
+        "/v1/local/check",
+        headers={"Authorization": "Bearer test-token"},
+        params={"zip": "78754"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["air"]["aqi"] == 64
+    assert data["air"]["category"] == "Moderate"
+    assert data["allergens"]["source"] == "google-pollen:forecast"
+    assert data["health"]["flags"]["aqi_flag"] == "moderate"
+    assert data["health"]["flags"]["allergen_state"] == "moderate"
+    assert len(persisted) == 1
+    assert persisted[0]["air"]["aqi"] == 64
+
+
+@pytest.mark.anyio
 async def test_local_check_returns_cached_payload_without_live_aqi_refresh(monkeypatch, client: AsyncClient):
     cached_payload = {
         "ok": True,

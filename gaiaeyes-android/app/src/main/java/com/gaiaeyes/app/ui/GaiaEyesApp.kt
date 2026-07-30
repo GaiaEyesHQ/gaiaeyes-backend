@@ -1,0 +1,2774 @@
+package com.gaiaeyes.app.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gaiaeyes.app.core.auth.AuthRepository
+import com.gaiaeyes.app.core.auth.AuthState
+import com.gaiaeyes.app.core.network.DashboardGaugesResponse
+import com.gaiaeyes.app.core.network.DriverItem
+import com.gaiaeyes.app.core.network.FeaturesTodayResponse
+import com.gaiaeyes.app.core.network.OutlookDay
+import com.gaiaeyes.app.core.network.OutlookDomain
+import com.gaiaeyes.app.core.network.OutlookDriver
+import com.gaiaeyes.app.core.network.PatternCard
+import com.gaiaeyes.app.data.BodyRepository
+import com.gaiaeyes.app.data.BodySource
+import com.gaiaeyes.app.data.DashboardRepository
+import com.gaiaeyes.app.data.DashboardSource
+import com.gaiaeyes.app.data.HealthRepository
+import com.gaiaeyes.app.data.HomeContextRepository
+import com.gaiaeyes.app.data.HomeContextSource
+import com.gaiaeyes.app.data.OutlookRepository
+import com.gaiaeyes.app.data.OutlookSource
+import com.gaiaeyes.app.data.PatternsRepository
+import com.gaiaeyes.app.data.PatternsSource
+import com.gaiaeyes.app.ui.theme.GaiaAmber
+import com.gaiaeyes.app.ui.theme.GaiaBlue
+import com.gaiaeyes.app.ui.theme.GaiaGreen
+import com.gaiaeyes.app.ui.theme.GaiaNavy
+import com.gaiaeyes.app.ui.theme.GaiaPanel
+import com.gaiaeyes.app.ui.theme.GaiaRose
+import kotlin.math.roundToInt
+
+@Composable
+fun GaiaEyesApp(
+    authRepository: AuthRepository,
+    bodyRepository: BodyRepository,
+    dashboardRepository: DashboardRepository,
+    healthRepository: HealthRepository,
+    homeContextRepository: HomeContextRepository,
+    outlookRepository: OutlookRepository,
+    patternsRepository: PatternsRepository,
+    modifier: Modifier = Modifier,
+) {
+    val viewModel: HomeViewModel = viewModel(
+        factory = HomeViewModel.Factory(
+            authRepository = authRepository,
+            bodyRepository = bodyRepository,
+            dashboardRepository = dashboardRepository,
+            healthRepository = healthRepository,
+            homeContextRepository = homeContextRepository,
+            outlookRepository = outlookRepository,
+            patternsRepository = patternsRepository,
+        ),
+    )
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    when (val authState = uiState.authState) {
+        AuthState.Initializing -> LoadingScreen(modifier)
+        AuthState.Unavailable -> ConfigurationScreen(
+            uiState = uiState,
+            onRetry = viewModel::refresh,
+            modifier = modifier,
+        )
+        AuthState.SignedOut -> SignInScreen(
+            uiState = uiState,
+            onEmailChanged = viewModel::onEmailChanged,
+            onSendMagicLink = viewModel::sendMagicLink,
+            onDismissMessage = viewModel::dismissMessage,
+            onRetry = viewModel::refresh,
+            modifier = modifier,
+        )
+        is AuthState.SessionProblem -> SignInScreen(
+            uiState = uiState.copy(authMessage = uiState.authMessage ?: authState.message),
+            onEmailChanged = viewModel::onEmailChanged,
+            onSendMagicLink = viewModel::sendMagicLink,
+            onDismissMessage = viewModel::dismissMessage,
+            onRetry = viewModel::refresh,
+            modifier = modifier,
+        )
+        is AuthState.SignedIn -> when (uiState.selectedPage) {
+            SignedInPage.HOME -> HomeScreen(
+                uiState = uiState,
+                account = authState,
+                onRefresh = viewModel::refresh,
+                onSignOut = viewModel::signOut,
+                onDismissMessage = viewModel::dismissMessage,
+                onSelectPage = viewModel::selectPage,
+                modifier = modifier,
+            )
+            SignedInPage.BODY -> BodyScreen(
+                uiState = uiState,
+                account = authState,
+                onRefresh = viewModel::refresh,
+                onSignOut = viewModel::signOut,
+                onDismissMessage = viewModel::dismissMessage,
+                onSelectPage = viewModel::selectPage,
+                modifier = modifier,
+            )
+            SignedInPage.PATTERNS -> PatternsScreen(
+                uiState = uiState,
+                account = authState,
+                onRefresh = viewModel::refresh,
+                onSignOut = viewModel::signOut,
+                onDismissMessage = viewModel::dismissMessage,
+                onSelectPage = viewModel::selectPage,
+                modifier = modifier,
+            )
+            SignedInPage.OUTLOOK -> OutlookScreen(
+                uiState = uiState,
+                account = authState,
+                onRefresh = viewModel::refresh,
+                onSignOut = viewModel::signOut,
+                onDismissMessage = viewModel::dismissMessage,
+                onSelectPage = viewModel::selectPage,
+                modifier = modifier,
+            )
+            SignedInPage.EXPLORE -> ExploreScreen(
+                uiState = uiState,
+                account = authState,
+                onRefresh = viewModel::refresh,
+                onSignOut = viewModel::signOut,
+                onDismissMessage = viewModel::dismissMessage,
+                onSelectPage = viewModel::selectPage,
+                modifier = modifier,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LoadingScreen(modifier: Modifier = Modifier) {
+    ScreenFrame(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            GaiaMark()
+            CircularProgressIndicator(color = GaiaBlue)
+            Text(
+                text = "Opening Gaia Eyes",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConfigurationScreen(
+    uiState: HomeUiState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ScreenFrame(modifier = modifier) {
+        ContentColumn {
+            Header(subtitle = "Android preview")
+            Spacer(modifier = Modifier.height(34.dp))
+            Text(
+                text = "Account setup is not configured",
+                color = Color.White,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "This local build needs the Gaia Eyes Supabase URL and public anon key before secure sign-in can begin.",
+                color = Color(0xFFADB7C5),
+                fontSize = 17.sp,
+                lineHeight = 25.sp,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Spacer(modifier = Modifier.height(22.dp))
+            BackendCard(uiState = uiState, onRetry = onRetry)
+        }
+    }
+}
+
+@Composable
+private fun SignInScreen(
+    uiState: HomeUiState,
+    onEmailChanged: (String) -> Unit,
+    onSendMagicLink: () -> Unit,
+    onDismissMessage: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ScreenFrame(modifier = modifier) {
+        ContentColumn {
+            Header(subtitle = "Secure account access")
+            Spacer(modifier = Modifier.height(34.dp))
+            Text(
+                text = "Welcome back.",
+                color = Color.White,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "Use the same email as Gaia Eyes on iPhone. We’ll send a secure link—no password needed.",
+                color = Color(0xFFADB7C5),
+                fontSize = 17.sp,
+                lineHeight = 25.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+                shape = RoundedCornerShape(26.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    OutlinedTextField(
+                        value = uiState.email,
+                        onValueChange = onEmailChanged,
+                        label = { Text("Email") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = onSendMagicLink,
+                        enabled = !uiState.isSendingMagicLink,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GaiaBlue,
+                            contentColor = GaiaNavy,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (uiState.isSendingMagicLink) {
+                            CircularProgressIndicator(
+                                color = GaiaNavy,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        } else {
+                            Text(
+                                text = if (uiState.magicLinkSent) "Send another link" else "Email me a sign-in link",
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                    uiState.authMessage?.let { message ->
+                        MessageCard(
+                            message = message,
+                            positive = uiState.magicLinkSent,
+                            onDismiss = onDismissMessage,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(18.dp))
+            BackendCard(uiState = uiState, onRetry = onRetry)
+        }
+    }
+}
+
+@Composable
+private fun HomeScreen(
+    uiState: HomeUiState,
+    account: AuthState.SignedIn,
+    onRefresh: () -> Unit,
+    onSignOut: () -> Unit,
+    onDismissMessage: () -> Unit,
+    onSelectPage: (SignedInPage) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showAllGauges by rememberSaveable { mutableStateOf(false) }
+
+    ScreenFrame(modifier = modifier) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val columns = if (maxWidth > 660.dp) 4 else 2
+            ContentColumn(bottomPadding = 104.dp) {
+                Header(
+                    subtitle = account.email ?: "Signed in",
+                    trailing = {
+                        TextButton(
+                            onClick = onSignOut,
+                            enabled = !uiState.isSigningOut,
+                        ) {
+                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Your body, in context.",
+                            color = Color.White,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = dashboardFreshnessText(uiState),
+                            color = dashboardFreshnessColor(uiState),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 5.dp),
+                        )
+                    }
+                    TextButton(
+                        onClick = onRefresh,
+                        enabled = !uiState.isLoadingDashboard,
+                    ) {
+                        Text(if (uiState.isLoadingDashboard) "Refreshing…" else "Refresh")
+                    }
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                GaugeGrid(
+                    dashboard = uiState.dashboard?.dashboard,
+                    columns = columns,
+                    showAll = showAllGauges,
+                )
+                TextButton(
+                    onClick = { showAllGauges = !showAllGauges },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text(
+                        text = if (showAllGauges) "Show fewer gauges ↑" else "Show all 8 gauges ↓",
+                        color = GaiaBlue,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                uiState.dashboardMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = uiState.dashboard != null,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+                uiState.homeContextMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = uiState.currentSymptoms != null || uiState.drivers != null,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+                uiState.authMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = false,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                TodayReadCard(
+                    uiState = uiState,
+                    columns = if (columns == 4) 3 else 2,
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                SignalsToWatchCard(uiState = uiState)
+                Spacer(modifier = Modifier.height(18.dp))
+                BackendCard(uiState = uiState, onRetry = onRefresh)
+            }
+            SignedInNavigation(
+                selectedPage = SignedInPage.HOME,
+                onSelectPage = onSelectPage,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BodyScreen(
+    uiState: HomeUiState,
+    account: AuthState.SignedIn,
+    onRefresh: () -> Unit,
+    onSignOut: () -> Unit,
+    onDismissMessage: () -> Unit,
+    onSelectPage: (SignedInPage) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ScreenFrame(modifier = modifier) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val wide = maxWidth > 660.dp
+            ContentColumn(bottomPadding = 104.dp) {
+                Header(
+                    subtitle = account.email ?: "Signed in",
+                    trailing = {
+                        TextButton(
+                            onClick = onSignOut,
+                            enabled = !uiState.isSigningOut,
+                        ) {
+                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Body",
+                            color = Color.White,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = bodyFreshnessText(uiState),
+                            color = bodyFreshnessColor(uiState),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 5.dp),
+                        )
+                    }
+                    TextButton(
+                        onClick = onRefresh,
+                        enabled = !uiState.isLoadingBody,
+                    ) {
+                        Text(if (uiState.isLoadingBody) "Refreshing…" else "Refresh")
+                    }
+                }
+
+                uiState.bodyMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = uiState.body != null,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+                uiState.authMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = false,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+                val features = uiState.body?.features
+                when {
+                    features != null -> {
+                        SleepSummaryCard(features = features, wide = wide)
+                        Spacer(modifier = Modifier.height(18.dp))
+                        HealthStatsCard(features = features, wide = wide)
+                    }
+                    uiState.isLoadingBody -> BodyLoadingCard()
+                    else -> BodyEmptyCard()
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                BackendCard(uiState = uiState, onRetry = onRefresh)
+            }
+            SignedInNavigation(
+                selectedPage = SignedInPage.BODY,
+                onSelectPage = onSelectPage,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PatternsScreen(
+    uiState: HomeUiState,
+    account: AuthState.SignedIn,
+    onRefresh: () -> Unit,
+    onSignOut: () -> Unit,
+    onDismissMessage: () -> Unit,
+    onSelectPage: (SignedInPage) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ScreenFrame(modifier = modifier) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val columns = if (maxWidth > 660.dp) 2 else 1
+            ContentColumn(bottomPadding = 104.dp) {
+                Header(
+                    subtitle = account.email ?: "Signed in",
+                    trailing = {
+                        TextButton(
+                            onClick = onSignOut,
+                            enabled = !uiState.isSigningOut,
+                        ) {
+                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Patterns",
+                            color = Color.White,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = patternsFreshnessText(uiState),
+                            color = patternsFreshnessColor(uiState),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 5.dp),
+                        )
+                    }
+                    TextButton(
+                        onClick = onRefresh,
+                        enabled = !uiState.isLoadingPatterns,
+                    ) {
+                        Text(if (uiState.isLoadingPatterns) "Refreshing…" else "Refresh")
+                    }
+                }
+
+                uiState.patternsMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = uiState.patterns != null,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+                uiState.authMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = false,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+                val patterns = uiState.patterns?.patterns
+                when {
+                    patterns != null -> {
+                        PatternsOverviewCard(
+                            overview = patternOverviewText(patterns),
+                            isPartial = patterns.partial,
+                        )
+                        patternSections(patterns).forEach { section ->
+                            Spacer(modifier = Modifier.height(18.dp))
+                            PatternSectionCard(
+                                section = section,
+                                columns = columns,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(18.dp))
+                        Text(
+                            text = patterns.disclaimer
+                                ?.trim()
+                                ?.takeIf(String::isNotEmpty)
+                                ?: "Patterns show associations in your history. They do not diagnose conditions or prove causes.",
+                            color = Color(0xFF8994A3),
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                    }
+                    uiState.isLoadingPatterns -> PatternsLoadingCard()
+                    else -> PatternsEmptyCard()
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                BackendCard(uiState = uiState, onRetry = onRefresh)
+            }
+            SignedInNavigation(
+                selectedPage = SignedInPage.PATTERNS,
+                onSelectPage = onSelectPage,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PatternsOverviewCard(
+    overview: String,
+    isPartial: Boolean,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaBlue.copy(alpha = 0.10f)),
+        border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.30f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "What your history is showing",
+                color = Color.White,
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = overview,
+                color = Color(0xFFC4CCD7),
+                fontSize = 16.sp,
+                lineHeight = 23.sp,
+            )
+            if (isPartial) {
+                Text(
+                    text = "Loading the rest of your pattern details…",
+                    color = GaiaAmber,
+                    fontSize = 13.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PatternSectionCard(
+    section: PatternSectionModel,
+    columns: Int,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = section.title,
+                color = Color.White,
+                fontSize = 23.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = section.subtitle,
+                color = Color(0xFF9BA6B4),
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+            )
+            if (section.cards.isEmpty()) {
+                Text(
+                    text = section.emptyMessage,
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    section.cards.chunked(columns).forEach { cards ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            cards.forEach { card ->
+                                PatternResultCard(
+                                    card = card,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            repeat(columns - cards.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PatternResultCard(
+    card: PatternCard,
+    modifier: Modifier = Modifier,
+) {
+    val confidenceColor = patternConfidenceColor(card.confidence)
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = confidenceColor.copy(alpha = 0.08f),
+        ),
+        border = BorderStroke(1.dp, confidenceColor.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(22.dp),
+        modifier = modifier.heightIn(min = 220.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = card.outcome.ifBlank { "Personal pattern" },
+                        color = Color.White,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (card.signal.isNotBlank()) {
+                        Text(
+                            text = card.signal,
+                            color = Color(0xFF9BA6B4),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 3.dp),
+                        )
+                    }
+                }
+                card.confidence?.trim()?.takeIf(String::isNotEmpty)?.let { confidence ->
+                    PatternPill(
+                        label = confidence,
+                        color = confidenceColor,
+                    )
+                }
+            }
+
+            if (card.usedToday) {
+                PatternPill(
+                    label = card.usedTodayLabel?.trim()?.takeIf(String::isNotEmpty)
+                        ?: "Active now",
+                    color = GaiaGreen,
+                )
+            }
+
+            Text(
+                text = patternExplanation(card),
+                color = Color(0xFFC4CCD7),
+                fontSize = 15.sp,
+                lineHeight = 21.sp,
+            )
+            Text(
+                text = patternEvidence(card),
+                color = confidenceColor,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = patternBaseline(card),
+                color = Color(0xFF8994A3),
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+            )
+            if (card.usedToday) {
+                card.voiceSemantic
+                    ?.interpretation
+                    ?.activeTodaySummary
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?.let { activeSummary ->
+                        Text(
+                            text = activeSummary,
+                            color = GaiaGreen,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                        )
+                    }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PatternPill(
+    label: String,
+    color: Color,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.16f)),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Text(
+            text = label,
+            color = color,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun PatternsLoadingCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(modifier = Modifier.padding(20.dp)) {
+            ContextLoadingRow(message = "Comparing your saved history…")
+        }
+    }
+}
+
+@Composable
+private fun PatternsEmptyCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "Patterns will appear as Gaia Eyes finds enough overlap in your history.",
+            color = Color(0xFFB7C0CC),
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            modifier = Modifier.padding(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun OutlookScreen(
+    uiState: HomeUiState,
+    account: AuthState.SignedIn,
+    onRefresh: () -> Unit,
+    onSignOut: () -> Unit,
+    onDismissMessage: () -> Unit,
+    onSelectPage: (SignedInPage) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ScreenFrame(modifier = modifier) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val columns = if (maxWidth > 660.dp) 2 else 1
+            ContentColumn(bottomPadding = 104.dp) {
+                Header(
+                    subtitle = account.email ?: "Signed in",
+                    trailing = {
+                        TextButton(
+                            onClick = onSignOut,
+                            enabled = !uiState.isSigningOut,
+                        ) {
+                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Outlook",
+                            color = Color.White,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = outlookFreshnessText(uiState),
+                            color = outlookFreshnessColor(uiState),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 5.dp),
+                        )
+                    }
+                    TextButton(
+                        onClick = onRefresh,
+                        enabled = !uiState.isLoadingOutlook,
+                    ) {
+                        Text(if (uiState.isLoadingOutlook) "Refreshing…" else "Refresh")
+                    }
+                }
+
+                uiState.outlookMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = uiState.outlook != null,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+                uiState.authMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = false,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+                Text(
+                    text = "7-Day Forecast",
+                    color = Color.White,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Signals that may be useful to keep in view.",
+                    color = Color(0xFF9BA6B4),
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 5.dp),
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                val outlook = uiState.outlook?.outlook
+                when {
+                    outlook?.dailyOutlook?.isNotEmpty() == true -> {
+                        OutlookDayGrid(
+                            days = outlook.dailyOutlook,
+                            columns = columns,
+                        )
+                    }
+                    uiState.isLoadingOutlook -> OutlookLoadingCard()
+                    else -> OutlookEmptyCard(
+                        message = outlook
+                            ?.voiceSemantics
+                            ?.overview
+                            ?.interpretation
+                            ?.emptyState,
+                    )
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                Text(
+                    text = "Outlook highlights context to watch. It does not diagnose symptoms or predict a medical event.",
+                    color = Color(0xFF8994A3),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                BackendCard(uiState = uiState, onRetry = onRefresh)
+            }
+            SignedInNavigation(
+                selectedPage = SignedInPage.OUTLOOK,
+                onSelectPage = onSelectPage,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExploreScreen(
+    uiState: HomeUiState,
+    account: AuthState.SignedIn,
+    onRefresh: () -> Unit,
+    onSignOut: () -> Unit,
+    onDismissMessage: () -> Unit,
+    onSelectPage: (SignedInPage) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ScreenFrame(modifier = modifier) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val columns = if (maxWidth > 660.dp) 2 else 1
+            ContentColumn(bottomPadding = 104.dp) {
+                Header(
+                    subtitle = account.email ?: "Signed in",
+                    trailing = {
+                        TextButton(
+                            onClick = onSignOut,
+                            enabled = !uiState.isSigningOut,
+                        ) {
+                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Explore",
+                            color = Color.White,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = exploreFreshnessText(uiState),
+                            color = exploreFreshnessColor(uiState),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 5.dp),
+                        )
+                    }
+                    TextButton(
+                        onClick = onRefresh,
+                        enabled = !uiState.isLoadingHomeContext,
+                    ) {
+                        Text(if (uiState.isLoadingHomeContext) "Refreshing…" else "Refresh")
+                    }
+                }
+
+                uiState.homeContextMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = uiState.drivers != null,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+                uiState.authMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = false,
+                        onDismiss = onDismissMessage,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+                Text(
+                    text = "Explore the signals around you.",
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "See the local, Earth, space, and body-context signals Gaia Eyes is comparing for you right now.",
+                    color = Color(0xFF9BA6B4),
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    modifier = Modifier.padding(top = 7.dp),
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+
+                val response = uiState.drivers?.drivers
+                when {
+                    response?.drivers?.isNotEmpty() == true -> {
+                        ExploreSummaryCard(response = response)
+                        Spacer(modifier = Modifier.height(18.dp))
+                        Text(
+                            text = "All Drivers",
+                            color = Color.White,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "Shown in Gaia Eyes’ current relevance order.",
+                            color = Color(0xFF9BA6B4),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 5.dp, bottom = 14.dp),
+                        )
+                        ExploreDriverGrid(
+                            drivers = exploreDrivers(response),
+                            columns = columns,
+                        )
+                    }
+                    uiState.isLoadingHomeContext -> ExploreLoadingCard()
+                    else -> ExploreEmptyCard()
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+                Text(
+                    text = "Drivers are context, not proof of cause. Personal pattern notes describe associations in your history and are not a diagnosis.",
+                    color = Color(0xFF8994A3),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                BackendCard(uiState = uiState, onRetry = onRefresh)
+            }
+            SignedInNavigation(
+                selectedPage = SignedInPage.EXPLORE,
+                onSelectPage = onSelectPage,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExploreSummaryCard(
+    response: com.gaiaeyes.app.core.network.AllDriversResponse,
+) {
+    val counts = driverRoleCounts(response)
+    val visible = exploreDrivers(response).size
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaBlue.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "All Drivers",
+                        color = Color.White,
+                        fontSize = 23.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = response.summary.note
+                            ?.trim()
+                            ?.takeIf(String::isNotEmpty)
+                            ?: "See the signals Gaia Eyes is comparing for you right now.",
+                        color = Color(0xFFB7C0CC),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        modifier = Modifier.padding(top = 5.dp),
+                    )
+                }
+                DriverPill(
+                    label = if (response.summary.activeDriverCount > 0) {
+                        "${response.summary.activeDriverCount} active"
+                    } else {
+                        "Current order"
+                    },
+                    color = if (response.summary.activeDriverCount > 0) GaiaGreen else GaiaBlue,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                DriverMetric("Visible", visible, Modifier.weight(1f))
+                DriverMetric("Leading", counts.leading, Modifier.weight(1f))
+                DriverMetric("Supporting", counts.supporting, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DriverMetric(
+    label: String,
+    value: Int,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f)),
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp)) {
+            Text(
+                text = label.uppercase(),
+                color = Color(0xFF8F9AA9),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = value.toString(),
+                color = Color.White,
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExploreDriverGrid(
+    drivers: List<DriverItem>,
+    columns: Int,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        drivers.chunked(columns).forEach { rowDrivers ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                rowDrivers.forEach { driver ->
+                    ExploreDriverCard(
+                        driver = driver,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(columns - rowDrivers.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExploreDriverCard(
+    driver: DriverItem,
+    modifier: Modifier = Modifier,
+) {
+    val tint = driverCategoryColor(driver)
+    val reason = driverDisplayReason(driver)
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(24.dp),
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = driver.label.ifBlank { "Current signal" },
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = listOfNotNull(
+                            driver.categoryLabel?.trim()?.takeIf(String::isNotEmpty),
+                            driver.roleLabel?.trim()?.takeIf(String::isNotEmpty),
+                        ).joinToString(" • ").ifBlank { "Current context" },
+                        color = tint,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
+                DriverPill(
+                    label = driver.stateLabel
+                        ?.trim()
+                        ?.takeIf(String::isNotEmpty)
+                        ?: driver.state.ifBlank { "Current" },
+                    color = tint,
+                )
+            }
+
+            driver.reading
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.let { reading ->
+                    Text(
+                        text = reading,
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+            LinearProgressIndicator(
+                progress = { driverSignalProgress(driver) },
+                color = tint,
+                trackColor = Color.White.copy(alpha = 0.09f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp),
+            )
+
+            if (reason.isNotEmpty()) {
+                Text(
+                    text = reason,
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+            }
+
+            if (driver.currentSymptoms.isNotEmpty()) {
+                Text(
+                    text = "Active symptoms: ${driver.currentSymptoms.take(3).joinToString()}",
+                    color = GaiaRose,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            val patternLabel = driver.patternStatusLabel
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+            val patternSummary = driver.patternSummary
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.takeUnless { it.equals(reason, ignoreCase = true) }
+                ?.takeUnless { it == "We’re still learning how this tends to affect you." }
+            if (patternLabel != null || patternSummary != null) {
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                patternLabel?.let {
+                    Text(
+                        text = it,
+                        color = GaiaGreen,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                patternSummary?.let {
+                    Text(
+                        text = it,
+                        color = Color(0xFF9BA6B4),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DriverPill(
+    label: String,
+    color: Color,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.16f)),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Text(
+            text = label,
+            color = color,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun ExploreLoadingCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(modifier = Modifier.padding(20.dp)) {
+            ContextLoadingRow(message = "Comparing current signals…")
+        }
+    }
+}
+
+@Composable
+private fun ExploreEmptyCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "Drivers will appear after Gaia Eyes finishes loading your current context.",
+            color = Color(0xFFB7C0CC),
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            modifier = Modifier.padding(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun OutlookDayGrid(
+    days: List<OutlookDay>,
+    columns: Int,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        days.chunked(columns).forEach { rowDays ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                rowDays.forEach { day ->
+                    OutlookDayCard(
+                        day = day,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(columns - rowDays.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutlookDayCard(
+    day: OutlookDay,
+    modifier: Modifier = Modifier,
+) {
+    val drivers = visibleOutlookDrivers(day)
+    val state = outlookDayState(day)
+    val tint = outlookStatusColor(state)
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.30f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = outlookDayTitle(day),
+                        color = Color.White,
+                        fontSize = 23.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = outlookDayDate(day),
+                        color = Color(0xFF9BA6B4),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
+                OutlookPill(label = state, color = tint)
+            }
+
+            if (drivers.isNotEmpty()) {
+                Text(
+                    text = "Signals in view",
+                    color = Color(0xFF9BA6B4),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                drivers.forEach { driver ->
+                    OutlookDriverRow(driver = driver)
+                }
+            }
+
+            if (day.likelyElevatedDomains.isNotEmpty()) {
+                Text(
+                    text = "Possible symptoms",
+                    color = Color(0xFF9BA6B4),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                OutlookDomainGrid(
+                    domains = day.likelyElevatedDomains,
+                    drivers = drivers,
+                )
+            }
+
+            if (drivers.isEmpty() && day.likelyElevatedDomains.isEmpty()) {
+                Text(
+                    text = day.voiceSemantic
+                        ?.interpretation
+                        ?.emptyState
+                        ?.trim()
+                        ?.takeIf(String::isNotEmpty)
+                        ?: "No strong signal stands out for this day.",
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutlookDriverRow(driver: OutlookDriver) {
+    val tint = outlookStatusColor(driver.severity)
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = outlookDriverLabel(driver),
+                color = Color(0xFFC4CCD7),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = outlookDriverValue(driver),
+                color = tint,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.End,
+            )
+        }
+        LinearProgressIndicator(
+            progress = { outlookDriverProgress(driver) },
+            color = tint,
+            trackColor = Color.White.copy(alpha = 0.10f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(7.dp),
+        )
+    }
+}
+
+@Composable
+private fun OutlookDomainGrid(
+    domains: List<OutlookDomain>,
+    drivers: List<OutlookDriver>,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        domains.chunked(2).forEach { rowDomains ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowDomains.forEach { domain ->
+                    val tint = outlookStatusColor(domain.likelihood)
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = tint.copy(alpha = 0.10f),
+                        ),
+                        border = BorderStroke(1.dp, tint.copy(alpha = 0.24f)),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = outlookDomainLabel(domain, drivers),
+                            color = Color(0xFFD2D8E1),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 19.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        )
+                    }
+                }
+                repeat(2 - rowDomains.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutlookPill(
+    label: String,
+    color: Color,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.18f)),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Text(
+            text = label,
+            color = color,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+        )
+    }
+}
+
+@Composable
+private fun OutlookLoadingCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(modifier = Modifier.padding(20.dp)) {
+            ContextLoadingRow(message = "Building your latest Outlook…")
+        }
+    }
+}
+
+@Composable
+private fun OutlookEmptyCard(message: String?) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = message
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?: "Your Outlook will appear when forecast context is ready.",
+            color = Color(0xFFB7C0CC),
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            modifier = Modifier.padding(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun SleepSummaryCard(
+    features: FeaturesTodayResponse,
+    wide: Boolean,
+) {
+    val efficiency = sleepEfficiencyPercent(features.sleepEfficiency)
+    val stages = sleepStages(features)
+    val columns = if (wide) 4 else 2
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.22f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = if (features.day.isNotBlank()) {
+                        "Sleep (Today)"
+                    } else {
+                        "Sleep"
+                    },
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                efficiency?.let {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = GaiaBlue.copy(alpha = 0.13f),
+                        ),
+                        shape = RoundedCornerShape(18.dp),
+                    ) {
+                        Text(
+                            text = "$it%",
+                            color = GaiaBlue,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        )
+                    }
+                }
+            }
+            Text(
+                text = sleepDurationText(features.sleepTotalMinutes),
+                color = Color.White,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                stages.chunked(columns).forEach { rowStages ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        rowStages.forEach { stage ->
+                            SleepStageCard(
+                                stage = stage,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        repeat(columns - rowStages.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SleepStageCard(
+    stage: SleepStageModel,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.18f)),
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.heightIn(min = 108.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stage.label,
+                color = Color(0xFF9BA6B4),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = if (stage.minutes > 0) "${stage.minutes}m" else "—",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            LinearProgressIndicator(
+                progress = { stage.progress },
+                color = GaiaBlue,
+                trackColor = Color.White.copy(alpha = 0.10f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HealthStatsCard(
+    features: FeaturesTodayResponse,
+    wide: Boolean,
+) {
+    val stats = bodyHealthStats(features)
+    val columns = if (wide) 3 else 2
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaGreen.copy(alpha = 0.06f)),
+        border = BorderStroke(1.dp, GaiaGreen.copy(alpha = 0.24f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = "Health Stats",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                stats.chunked(columns).forEach { rowStats ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        rowStats.forEach { stat ->
+                            BodyStatCard(
+                                stat = stat,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        repeat(columns - rowStats.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                SupportingStatChip(
+                    label = "STEPS",
+                    value = features.stepsTotal.takeIf { it > 0 }?.toString() ?: "—",
+                    modifier = Modifier.weight(1f),
+                )
+                SupportingStatChip(
+                    label = "HEART RANGE",
+                    value = heartRangeText(features) ?: "—",
+                    modifier = Modifier.weight(1.45f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BodyStatCard(
+    stat: BodyStatModel,
+    modifier: Modifier = Modifier,
+) {
+    val tint = when (stat.tone) {
+        BodyStatTone.LOW -> GaiaGreen
+        BodyStatTone.MILD -> GaiaAmber
+        BodyStatTone.ELEVATED -> Color(0xFFD69A5A)
+    }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.16f)),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.24f)),
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.heightIn(min = 142.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Text(
+                text = stat.label,
+                color = Color(0xFF9BA6B4),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+            )
+            Text(
+                text = stat.value,
+                color = Color.White,
+                fontSize = 21.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+            Text(
+                text = stat.detail,
+                color = Color(0xFF9BA6B4),
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                maxLines = 2,
+                modifier = Modifier.heightIn(min = 32.dp),
+            )
+            LinearProgressIndicator(
+                progress = { stat.progress },
+                color = tint,
+                trackColor = Color.White.copy(alpha = 0.10f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SupportingStatChip(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaGreen.copy(alpha = 0.10f)),
+        border = BorderStroke(1.dp, GaiaGreen.copy(alpha = 0.25f)),
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.heightIn(min = 78.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                text = label,
+                color = Color(0xFF9BA6B4),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = value,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BodyLoadingCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(modifier = Modifier.padding(20.dp)) {
+            ContextLoadingRow(
+                message = "Loading today’s sleep and health stats…",
+            )
+        }
+    }
+}
+
+@Composable
+private fun BodyEmptyCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "Body data will appear after your Gaia Eyes health history finishes syncing.",
+            color = Color(0xFFB7C0CC),
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            modifier = Modifier.padding(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun SignedInNavigation(
+    selectedPage: SignedInPage,
+    onSelectPage: (SignedInPage) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xF21A1E24)),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+        shape = RoundedCornerShape(28.dp),
+        modifier = modifier
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .widthIn(max = 460.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            SignedInNavigationItem(
+                label = "Home",
+                selected = selectedPage == SignedInPage.HOME,
+                onClick = { onSelectPage(SignedInPage.HOME) },
+                modifier = Modifier.weight(1f),
+            )
+            SignedInNavigationItem(
+                label = "Body",
+                selected = selectedPage == SignedInPage.BODY,
+                onClick = { onSelectPage(SignedInPage.BODY) },
+                modifier = Modifier.weight(1f),
+            )
+            SignedInNavigationItem(
+                label = "Patterns",
+                selected = selectedPage == SignedInPage.PATTERNS,
+                onClick = { onSelectPage(SignedInPage.PATTERNS) },
+                modifier = Modifier.weight(1f),
+            )
+            SignedInNavigationItem(
+                label = "Outlook",
+                selected = selectedPage == SignedInPage.OUTLOOK,
+                onClick = { onSelectPage(SignedInPage.OUTLOOK) },
+                modifier = Modifier.weight(1f),
+            )
+            SignedInNavigationItem(
+                label = "Explore",
+                selected = selectedPage == SignedInPage.EXPLORE,
+                onClick = { onSelectPage(SignedInPage.EXPLORE) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SignedInNavigationItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tint = if (selected) GaiaBlue else Color(0xFFADB7C5)
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) GaiaBlue.copy(alpha = 0.16f) else Color.Transparent,
+        ),
+        shape = RoundedCornerShape(22.dp),
+        modifier = modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = label,
+            color = tint,
+            fontSize = 15.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 13.dp),
+        )
+    }
+}
+
+@Composable
+private fun TodayReadCard(
+    uiState: HomeUiState,
+    columns: Int,
+) {
+    val activeLabels = uiState.currentSymptoms
+        ?.symptoms
+        ?.items
+        .orEmpty()
+        .map { it.label.trim() }
+        .filter(String::isNotEmpty)
+        .distinctBy { it.lowercase() }
+    val possibleSymptoms = derivePossibleSymptoms(
+        dashboard = uiState.dashboard?.dashboard,
+        drivers = uiState.drivers?.drivers,
+        activeLabels = activeLabels,
+    )
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = "Today’s Read",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            ContextSectionHeading(
+                title = "Possible Symptoms",
+                detail = "Based on current signals.",
+            )
+            when {
+                possibleSymptoms.isNotEmpty() -> {
+                    SymptomGrid(
+                        symptoms = possibleSymptoms.map {
+                            SymptomChipModel(
+                                label = it.label,
+                                isMatched = it.isMatched,
+                                isActive = false,
+                            )
+                        },
+                        columns = columns,
+                    )
+                }
+                uiState.isLoadingHomeContext -> ContextLoadingRow("Reading today’s signals…")
+                else -> Text(
+                    text = "No strong symptom signal stands out right now.",
+                    color = Color(0xFF9BA6B4),
+                    fontSize = 14.sp,
+                )
+            }
+
+            HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+            ContextSectionHeading(
+                title = "Active Symptoms",
+                detail = when {
+                    activeLabels.isNotEmpty() -> "${activeLabels.size} active"
+                    uiState.currentSymptoms == null && uiState.isLoadingHomeContext ->
+                        "Checking recent logs…"
+                    else -> "Nothing is active right now."
+                },
+            )
+            if (activeLabels.isNotEmpty()) {
+                SymptomGrid(
+                    symptoms = activeLabels.take(6).map {
+                        SymptomChipModel(
+                            label = it,
+                            isMatched = false,
+                            isActive = true,
+                        )
+                    },
+                    columns = columns,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignalsToWatchCard(uiState: HomeUiState) {
+    val driverResponse = uiState.drivers?.drivers
+    val drivers = relevantDrivers(driverResponse).take(3)
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = GaiaBlue.copy(alpha = 0.08f),
+        ),
+        border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.25f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Signals to Watch",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "Context clues, not a diagnosis.",
+                color = Color(0xFF9BA6B4),
+                fontSize = 14.sp,
+            )
+            driverResponse?.summary?.note
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.let { summary ->
+                    Text(
+                        text = summary,
+                        color = Color(0xFFC4CCD7),
+                        fontSize = 15.sp,
+                        lineHeight = 21.sp,
+                    )
+                }
+
+            when {
+                drivers.isNotEmpty() -> drivers.forEach { DriverPreviewRow(it) }
+                uiState.isLoadingHomeContext -> ContextLoadingRow("Checking current conditions…")
+                else -> Text(
+                    text = "No strong signal stands out right now.",
+                    color = Color(0xFF9BA6B4),
+                    fontSize = 14.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContextSectionHeading(
+    title: String,
+    detail: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = detail,
+            color = Color(0xFF8F9AA9),
+            fontSize = 13.sp,
+        )
+    }
+}
+
+private data class SymptomChipModel(
+    val label: String,
+    val isMatched: Boolean,
+    val isActive: Boolean,
+)
+
+@Composable
+private fun SymptomGrid(
+    symptoms: List<SymptomChipModel>,
+    columns: Int,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        symptoms.chunked(columns).forEach { rowSymptoms ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowSymptoms.forEach { symptom ->
+                    SymptomChip(
+                        symptom = symptom,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(columns - rowSymptoms.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SymptomChip(
+    symptom: SymptomChipModel,
+    modifier: Modifier = Modifier,
+) {
+    val tint = if (symptom.isActive) GaiaRose else GaiaBlue
+    Card(
+        colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.12f)),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.26f)),
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.heightIn(min = 52.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 13.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = if (symptom.isMatched) "✓" else "•",
+                color = tint,
+                fontWeight = FontWeight.Bold,
+            )
+            Column {
+                Text(
+                    text = symptom.label,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                )
+                if (symptom.isMatched) {
+                    Text(
+                        text = "Matched",
+                        color = tint,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DriverPreviewRow(driver: DriverItem) {
+    val tint = when (driver.category.lowercase()) {
+        "space" -> GaiaBlue
+        "local" -> GaiaGreen
+        else -> GaiaAmber
+    }
+    val reason = driver.personalReason
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?: driver.shortReason.trim()
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.10f)),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(15.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = driver.label.ifBlank { "Current signal" },
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    driver.roleLabel
+                        ?.trim()
+                        ?.takeIf(String::isNotEmpty)
+                        ?.let {
+                            Text(
+                                text = it,
+                                color = tint,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = driver.stateLabel?.takeIf(String::isNotBlank) ?: driver.state,
+                        color = tint,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    driver.reading
+                        ?.takeIf(String::isNotBlank)
+                        ?.let {
+                            Text(
+                                text = it,
+                                color = Color(0xFFADB7C5),
+                                fontSize = 12.sp,
+                            )
+                        }
+                }
+            }
+            if (reason.isNotEmpty()) {
+                Text(
+                    text = reason,
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContextLoadingRow(message: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        CircularProgressIndicator(
+            color = GaiaBlue,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = message,
+            color = Color(0xFF9BA6B4),
+            fontSize = 14.sp,
+        )
+    }
+}
+
+@Composable
+private fun ScreenFrame(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(GaiaNavy)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+        content = content,
+    )
+}
+
+@Composable
+private fun ContentColumn(
+    bottomPadding: Dp = 24.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = 760.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+            .padding(top = 18.dp, bottom = bottomPadding),
+        content = content,
+    )
+}
+
+@Composable
+private fun Header(
+    subtitle: String,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            GaiaMark()
+            Column {
+                Text(
+                    text = "Gaia Eyes",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = subtitle,
+                    color = Color(0xFF8F9AA9),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+        trailing?.invoke()
+    }
+}
+
+@Composable
+private fun GaiaMark() {
+    Box(
+        modifier = Modifier
+            .background(GaiaBlue.copy(alpha = 0.16f), CircleShape)
+            .padding(12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "✦",
+            color = GaiaBlue,
+            fontSize = 24.sp,
+        )
+    }
+}
+
+private data class GaugeDefinition(
+    val key: String,
+    val fallbackLabel: String,
+    val color: Color,
+)
+
+@Composable
+private fun GaugeGrid(
+    dashboard: DashboardGaugesResponse?,
+    columns: Int,
+    showAll: Boolean,
+) {
+    val allDefinitions = listOf(
+        GaugeDefinition("pain", "Pain", GaiaRose),
+        GaugeDefinition("focus", "Focus", GaiaBlue),
+        GaugeDefinition("heart", "Heart", GaiaGreen),
+        GaugeDefinition("stamina", "Recovery Load", GaiaAmber),
+        GaugeDefinition("energy", "Energy", GaiaAmber),
+        GaugeDefinition("sleep", "Sleep", Color(0xFFA282E0)),
+        GaugeDefinition("mood", "Mood", GaiaBlue),
+        GaugeDefinition("health_status", "Health Status", GaiaGreen),
+    )
+    val definitions = if (showAll) allDefinitions else allDefinitions.take(4)
+    val rows = (definitions.size + columns - 1) / columns
+    val gridHeight = (rows * 164 + (rows - 1).coerceAtLeast(0) * 10).dp
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(columns),
+        userScrollEnabled = false,
+        contentPadding = PaddingValues(0.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.height(gridHeight),
+    ) {
+        items(definitions, key = { it.key }) { definition ->
+            GaugeCard(
+                definition = definition,
+                value = dashboard?.gauges?.get(definition.key),
+                delta = dashboard?.gaugesDelta?.get(definition.key),
+                displayLabel = dashboard?.gaugeLabels?.get(definition.key)
+                    ?: definition.fallbackLabel,
+                zoneLabel = dashboard?.gaugesMeta?.get(definition.key)?.label,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GaugeCard(
+    definition: GaugeDefinition,
+    value: Double?,
+    delta: Int?,
+    displayLabel: String,
+    zoneLabel: String?,
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = definition.color.copy(alpha = 0.09f),
+        ),
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = androidx.compose.ui.graphics.SolidColor(
+                definition.color.copy(alpha = 0.35f),
+            ),
+        ),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.height(164.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = displayLabel,
+                color = definition.color,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+            )
+            Box(
+                modifier = Modifier
+                    .padding(top = 7.dp)
+                    .size(68.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    progress = { ((value ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f) },
+                    color = definition.color,
+                    trackColor = Color.White.copy(alpha = 0.10f),
+                    strokeWidth = 7.dp,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = value?.roundToInt()?.toString() ?: "—",
+                        color = Color.White,
+                        fontSize = 23.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    delta?.let {
+                        Text(
+                            text = if (it > 0) "+$it" else it.toString(),
+                            color = definition.color,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+            Text(
+                text = zoneLabel ?: if (value == null) "Loading" else "Current",
+                color = Color(0xFF9BA6B4),
+                fontSize = 12.sp,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BackendCard(
+    uiState: HomeUiState,
+    onRetry: () -> Unit,
+) {
+    val statusColor = when (uiState.backendAvailable) {
+        true -> GaiaGreen
+        false -> GaiaRose
+        null -> GaiaAmber
+    }
+    val statusText = when {
+        uiState.isCheckingBackend -> "Checking live service"
+        uiState.backendAvailable == true -> "Live data service connected"
+        else -> "Live data service unavailable"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(statusColor.copy(alpha = 0.18f), CircleShape)
+                    .padding(10.dp),
+            ) {
+                Text(
+                    text = if (uiState.backendAvailable == true) "✓" else "•",
+                    color = statusColor,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = statusText,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 17.sp,
+                )
+                Text(
+                    text = uiState.backendDetail,
+                    color = Color(0xFF9AA5B3),
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            if (uiState.backendAvailable == false && !uiState.isCheckingBackend) {
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = statusColor.copy(alpha = 0.2f),
+                        contentColor = statusColor,
+                    ),
+                ) {
+                    Text("Retry")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageCard(
+    message: String,
+    positive: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val color = if (positive) GaiaGreen else GaiaAmber
+    Card(
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.10f)),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, top = 12.dp, end = 6.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = message,
+                color = Color(0xFFC4CCD7),
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDismiss) {
+                Text("Dismiss", color = color)
+            }
+        }
+    }
+}
+
+private fun dashboardFreshnessText(uiState: HomeUiState): String {
+    val snapshot = uiState.dashboard
+    return when {
+        snapshot == null && uiState.isLoadingDashboard -> "Loading your latest dashboard…"
+        snapshot == null -> "Your dashboard will appear here."
+        snapshot.source == DashboardSource.CACHE -> "Saved dashboard • refreshing live data"
+        snapshot.dashboard.stale -> "Live data is reconnecting"
+        snapshot.dashboard.day.isNotBlank() -> "Updated for ${snapshot.dashboard.day}"
+        else -> "Live dashboard"
+    }
+}
+
+private fun dashboardFreshnessColor(uiState: HomeUiState): Color {
+    val snapshot = uiState.dashboard
+    return if (snapshot?.source == DashboardSource.NETWORK && !snapshot.dashboard.stale) {
+        GaiaGreen
+    } else {
+        GaiaAmber
+    }
+}
+
+private fun bodyFreshnessText(uiState: HomeUiState): String {
+    val snapshot = uiState.body
+    return when {
+        snapshot == null && uiState.isLoadingBody -> "Loading today’s Body data…"
+        snapshot == null -> "Your sleep and health stats will appear here."
+        snapshot.source == BodySource.CACHE -> "Saved Body data • refreshing live details"
+        snapshot.features.day.isNotBlank() -> "Updated for ${snapshot.features.day}"
+        else -> "Live Body data"
+    }
+}
+
+private fun bodyFreshnessColor(uiState: HomeUiState): Color {
+    return if (uiState.body?.source == BodySource.NETWORK) GaiaGreen else GaiaAmber
+}
+
+private fun patternsFreshnessText(uiState: HomeUiState): String {
+    val snapshot = uiState.patterns
+    return when {
+        snapshot == null && uiState.isLoadingPatterns -> "Loading your personal patterns…"
+        snapshot == null -> "Your personal patterns will appear here."
+        snapshot.source == PatternsSource.CACHE -> "Saved patterns • refreshing live details"
+        snapshot.patterns.partial -> "Your clearest patterns are ready • loading more"
+        snapshot.patterns.generatedAt?.isNotBlank() == true -> "Your latest pattern read"
+        else -> "Personal patterns"
+    }
+}
+
+private fun patternsFreshnessColor(uiState: HomeUiState): Color {
+    return if (
+        uiState.patterns?.source == PatternsSource.NETWORK &&
+        uiState.patterns.patterns.partial.not()
+    ) {
+        GaiaGreen
+    } else {
+        GaiaAmber
+    }
+}
+
+private fun outlookFreshnessText(uiState: HomeUiState): String {
+    val snapshot = uiState.outlook
+    return when {
+        snapshot == null && uiState.isLoadingOutlook -> "Loading your latest Outlook…"
+        snapshot == null -> "Your forecast context will appear here."
+        snapshot.source == OutlookSource.CACHE -> "Saved Outlook • refreshing live details"
+        snapshot.outlook.generatedAt?.isNotBlank() == true -> "Latest forecast context"
+        else -> "Outlook"
+    }
+}
+
+private fun outlookFreshnessColor(uiState: HomeUiState): Color {
+    return if (uiState.outlook?.source == OutlookSource.NETWORK) GaiaGreen else GaiaAmber
+}
+
+private fun exploreFreshnessText(uiState: HomeUiState): String {
+    val snapshot = uiState.drivers
+    return when {
+        snapshot == null && uiState.isLoadingHomeContext -> "Loading current drivers…"
+        snapshot == null -> "Your current drivers will appear here."
+        snapshot.source == HomeContextSource.CACHE -> "Saved drivers • refreshing live details"
+        snapshot.drivers.asof?.isNotBlank() == true -> "Latest driver context"
+        else -> "Current drivers"
+    }
+}
+
+private fun exploreFreshnessColor(uiState: HomeUiState): Color {
+    return if (uiState.drivers?.source == HomeContextSource.NETWORK) GaiaGreen else GaiaAmber
+}
+
+private fun driverCategoryColor(driver: DriverItem): Color {
+    return when (driver.category.trim().lowercase()) {
+        "space" -> GaiaBlue
+        "earth" -> Color(0xFFA8B66E)
+        "local" -> GaiaAmber
+        "body_context" -> GaiaRose
+        else -> GaiaGreen
+    }
+}
+
+private fun outlookStatusColor(status: String?): Color {
+    return when (status?.trim()?.lowercase()) {
+        "high", "strong", "elevated", "active" -> GaiaRose
+        "watch", "moderate", "medium" -> GaiaAmber
+        "quiet", "low", "mild", "steady" -> GaiaGreen
+        else -> GaiaBlue
+    }
+}
+
+private fun patternConfidenceColor(confidence: String?): Color {
+    return when (confidence?.trim()?.lowercase()) {
+        "strong", "clear", "high" -> GaiaGreen
+        "emerging", "moderate", "medium" -> GaiaAmber
+        "weak", "low" -> GaiaRose
+        else -> GaiaBlue
+    }
+}

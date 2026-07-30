@@ -629,8 +629,9 @@ def test_facebook_caption_profile_is_longer_than_instagram():
     assert fb["caption_words"][1] > ig["caption_words"][1]
     assert "Facebook-style mini post" in fb["caption_instruction"]
     assert "compact for Instagram" in ig["caption_instruction"]
-    assert fb["caption_words"] == [70, 120]
-    assert "audience question" in fb["caption_instruction"]
+    assert fb["caption_words"] == [110, 180]
+    assert "2-3 short paragraphs" in fb["caption_instruction"]
+    assert "question is optional" in fb["caption_instruction"]
 
 
 def test_public_generation_uses_one_canonical_platform():
@@ -654,6 +655,24 @@ def test_reel_story_uses_writer_fields_without_changing_web_sections():
     assert story["signal"] == "Solar wind is elevated"
     assert story["effects"].splitlines() == ["Restless or jittery", "Energy may spike, then dip"]
     assert story["pattern"] == "An uneven-energy day"
+
+
+def test_reel_story_keeps_valid_twelve_word_writer_beats():
+    story = _build_reel_story(
+        title="Brain Fog Comes In Waves",
+        snapshot="A full technical fallback sentence should not replace the writer beat.",
+        affects="A long effects fallback sentence should not replace the approved writer beat.",
+        voiceover="Brain fog comes in waves. The environmental pattern is shifting today.",
+        rewrite={
+            "reel_signal": "The magnetic field is shifting more than it did yesterday",
+            "reel_effects": "Focus may arrive in shorter, less predictable bursts today",
+            "reel_pattern": "Recovery may feel uneven without making the whole day difficult",
+        },
+    )
+
+    assert story["signal"] == "The magnetic field is shifting more than it did yesterday"
+    assert story["effects"] == "Focus may arrive in shorter, less predictable bursts today"
+    assert story["pattern"] == "Recovery may feel uneven without making the whole day difficult"
 
 
 def test_reel_story_uses_final_caption_hook_instead_of_separate_title():
@@ -816,11 +835,11 @@ def test_facebook_caption_rewrite_receives_finished_content_spine(monkeypatch):
                     "caption": (
                         "Body buzzing for no clear reason? Some people may feel jumpy and drained today. "
                         "The signal mix is quiet overall with a faint jitter underneath it. "
-                        "That can make focus skate between sharp and foggy without turning the whole day into a wash. "
+                        "That can make focus skate between sharp and foggy without turning the whole day into a wash.\n\n"
                         "Try three minutes of slow breathing when the squirrel energy shows up. "
                         "Gaia Eyes keeps watching how these signals overlap with your patterns."
                     ),
-                    "hashtags": "#GaiaEyes #WiredTired",
+                    "hashtags": ["#GaiaEyes", "#WiredTired"],
                 }
             )
         )
@@ -845,10 +864,20 @@ def test_facebook_caption_rewrite_receives_finished_content_spine(monkeypatch):
     prompt = json.loads(captured["messages"][1]["content"])
     assert prompt["content_spine"]["title"] == "Body Buzzing For No Clear Reason?"
     assert prompt["content_spine"]["felt_effects"].startswith("You may feel jumpy and drained")
+    assert prompt["public_voice_reference"]["golden"]["title_shape"] == "Brain Fog Comes In Waves"
     assert prompt["constraints"]["preserve_hook_lane"] is True
     assert prompt["constraints"]["new_symptoms_allowed"] is False
+    assert prompt["constraints"]["preserve_wording"] is False
+    assert prompt["constraints"]["rewrite_stock_wording"] is True
+    assert prompt["constraints"]["forbidden_paragraph_labels"] == [
+        "Why it matters",
+        "Big picture",
+        "Pacing note",
+    ]
     assert result is not None
     assert result["caption"].startswith("Body buzzing for no clear reason?")
+    assert "\n\nTry three minutes" in result["caption"]
+    assert result["hashtags"] == "#GaiaEyes"
 
 
 def test_social_variants_expand_spine_instead_of_starting_second_interpretation(monkeypatch):

@@ -1,6 +1,14 @@
 # Google Play Checklist
 
-Last reviewed: 2026-05-03
+Last reviewed: 2026-07-28
+
+## Organization account prerequisites
+
+- Wait for the LLC's legal name and address to be final.
+- Obtain or confirm the organization's D-U-N-S number. The legal name and address entered in Play Console must match the Dun & Bradstreet record.
+- Prepare the organization's website, public phone number, developer contact information, and an authorized representative's identity verification.
+- Create the Google Play organization developer account and pay the registration fee.
+- These items gate Play Console setup and publishing. They do not gate local Android development, emulator testing, backend integration, or generation of unsigned/debug build artifacts.
 
 ## App setup
 
@@ -10,7 +18,7 @@ Last reviewed: 2026-05-03
 - Category: Health & Fitness, with Weather/environmental context reflected in the listing copy.
 - Privacy policy URL: `https://gaiaeyes.com/privacy-policy/`.
 - Terms URL: `https://gaiaeyes.com/terms/`.
-- Target SDK: Android 15/API 35 or higher unless Google Play raises the requirement before Android submission.
+- Target SDK: Android 16/API 36 or higher for submission on or after August 31, 2026.
 - Minimum SDK: 28.
 
 ## Store listing
