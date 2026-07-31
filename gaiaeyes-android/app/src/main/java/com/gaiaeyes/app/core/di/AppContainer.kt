@@ -3,6 +3,7 @@ package com.gaiaeyes.app.core.di
 import android.content.Context
 import com.gaiaeyes.app.core.auth.AuthRepository
 import com.gaiaeyes.app.core.network.GaiaApiClient
+import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
 import com.gaiaeyes.app.data.BodyCache
 import com.gaiaeyes.app.data.BodyRepository
 import com.gaiaeyes.app.data.DashboardCache
@@ -24,6 +25,7 @@ class AppContainer(
     supabaseAnonKey: String,
 ) {
     private val apiClient = GaiaApiClient(apiBase = apiBase)
+    val quickLogCoordinator = QuickLogCoordinator()
 
     val authRepository = AuthRepository(
         context = context,

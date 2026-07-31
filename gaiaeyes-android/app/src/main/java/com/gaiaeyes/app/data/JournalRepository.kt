@@ -38,13 +38,18 @@ class JournalRepository(
         symptomCode: String,
         severity: Int,
         note: String?,
+        timestampUtc: String = Instant.now().toString(),
+        sourceTag: String? = null,
     ): JournalWriteResult {
         val request = SymptomEventRequest(
             symptomCode = symptomCode,
-            timestampUtc = Instant.now().toString(),
+            timestampUtc = timestampUtc.cleaned() ?: Instant.now().toString(),
             severity = severity.coerceIn(0, 10),
             note = note.cleaned(),
-            tags = listOf("android"),
+            tags = buildList {
+                add("android")
+                sourceTag.cleaned()?.let(::add)
+            },
         )
         queue.enqueue(
             accountId,

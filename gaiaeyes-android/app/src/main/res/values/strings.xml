@@ -1,4 +1,12 @@
 <resources>
     <string name="app_name">Gaia Eyes</string>
+    <string name="shortcut_log_migraine_short">Log migraine</string>
+    <string name="shortcut_log_migraine_long">Log a migraine in Gaia Eyes</string>
+    <string-array name="log_migraine_queries">
+        <item>log a migraine</item>
+        <item>start a migraine</item>
+        <item>I am having a migraine</item>
+        <item>my migraine is starting</item>
+        <item>start migraine tracking</item>
+    </string-array>
 </resources>
-

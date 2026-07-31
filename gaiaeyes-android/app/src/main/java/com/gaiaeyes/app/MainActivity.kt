@@ -18,8 +18,7 @@ class MainActivity : ComponentActivity() {
         )
 
         val container = (application as GaiaEyesApplication).container
-        container.authRepository.handleDeepLink(intent)
-        intent.data = null
+        routeIntent(intent)
         setContent {
             GaiaEyesTheme {
                 GaiaEyesApp(
@@ -31,6 +30,7 @@ class MainActivity : ComponentActivity() {
                     journalRepository = container.journalRepository,
                     outlookRepository = container.outlookRepository,
                     patternsRepository = container.patternsRepository,
+                    quickLogCoordinator = container.quickLogCoordinator,
                 )
             }
         }
@@ -38,8 +38,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        (application as GaiaEyesApplication).container.authRepository.handleDeepLink(intent)
-        intent.data = null
+        routeIntent(intent)
         setIntent(intent)
+    }
+
+    private fun routeIntent(intent: Intent) {
+        val container = (application as GaiaEyesApplication).container
+        val handledAsQuickLog = container.quickLogCoordinator.handleIntent(intent)
+        if (!handledAsQuickLog) {
+            container.authRepository.handleDeepLink(intent)
+        }
+        intent.data = null
+        intent.action = Intent.ACTION_MAIN
     }
 }

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <capability
+        android:name="custom.actions.intent.LOG_MIGRAINE"
+        app:queryPatterns="@array/log_migraine_queries">
+        <intent
+            android:action="com.gaiaeyes.app.action.LOG_MIGRAINE"
+            android:data="gaiaeyes://log/migraine"
+            android:targetClass="com.gaiaeyes.app.MainActivity"
+            android:targetPackage="com.gaiaeyes.app" />
+    </capability>
+
+    <shortcut
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="log_migraine"
+        android:shortcutLongLabel="@string/shortcut_log_migraine_long"
+        android:shortcutShortLabel="@string/shortcut_log_migraine_short">
+        <intent
+            android:action="com.gaiaeyes.app.action.LOG_MIGRAINE"
+            android:data="gaiaeyes://log/migraine"
+            android:targetClass="com.gaiaeyes.app.MainActivity"
+            android:targetPackage="com.gaiaeyes.app" />
+        <capability-binding android:key="custom.actions.intent.LOG_MIGRAINE" />
+    </shortcut>
+</shortcuts>

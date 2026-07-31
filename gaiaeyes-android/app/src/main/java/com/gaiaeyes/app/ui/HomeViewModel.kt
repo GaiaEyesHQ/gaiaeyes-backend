@@ -8,6 +8,8 @@ import com.gaiaeyes.app.core.auth.AuthState
 import com.gaiaeyes.app.core.network.DailyCheckInStatus
 import com.gaiaeyes.app.core.network.ExposureCatalogOption
 import com.gaiaeyes.app.core.network.SymptomCodeOption
+import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
+import com.gaiaeyes.app.core.quicklog.QuickLogRequest
 import com.gaiaeyes.app.data.BodyRepository
 import com.gaiaeyes.app.data.BodySnapshot
 import com.gaiaeyes.app.data.DashboardRepository
@@ -21,6 +23,7 @@ import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSnapshot
 import com.gaiaeyes.app.data.PatternsRepository
 import com.gaiaeyes.app.data.PatternsSnapshot
+import java.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +39,7 @@ class HomeViewModel(
     private val journalRepository: JournalRepository,
     private val outlookRepository: OutlookRepository,
     private val patternsRepository: PatternsRepository,
+    private val quickLogCoordinator: QuickLogCoordinator,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -46,6 +50,7 @@ class HomeViewModel(
     private var outlookJob: Job? = null
     private var patternsJob: Job? = null
     private var loadedAccountId: String? = null
+    private var processingQuickLogId: String? = null
 
     init {
         refreshHealth()
@@ -58,6 +63,9 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(authMessage = message)
                 }
             }
+        }
+        viewModelScope.launch {
+            quickLogCoordinator.pending.collect(::maybeHandleQuickLog)
         }
     }
 
@@ -303,8 +311,11 @@ class HomeViewModel(
                 loadedAccountId = authState.accountId
                 loadDashboard(authState.accountId, showCachedFirst = true)
                 loadHomeContext(authState.accountId, showCachedFirst = true)
-                retryJournalWrites(authState.accountId, showSuccessMessage = false)
+                if (quickLogCoordinator.pending.value == null) {
+                    retryJournalWrites(authState.accountId, showSuccessMessage = false)
+                }
             }
+            maybeHandleQuickLog(quickLogCoordinator.pending.value)
             return
         }
 
@@ -342,7 +353,83 @@ class HomeViewModel(
             isSubmittingJournal = false,
             journalMessage = null,
             pendingJournalWrites = 0,
+            authMessage = if (
+                authState is AuthState.SignedOut &&
+                quickLogCoordinator.pending.value != null
+            ) {
+                "Sign in to log your migraine hands-free."
+            } else {
+                _uiState.value.authMessage
+            },
         )
+    }
+
+    private fun maybeHandleQuickLog(request: QuickLogRequest?) {
+        request ?: return
+        if (processingQuickLogId == request.id || _uiState.value.isSubmittingJournal) return
+
+        val account = _uiState.value.authState as? AuthState.SignedIn
+        if (account == null) {
+            if (_uiState.value.authState is AuthState.SignedOut) {
+                _uiState.value = _uiState.value.copy(
+                    authMessage = "Sign in to log your migraine hands-free.",
+                )
+            }
+            return
+        }
+
+        processingQuickLogId = request.id
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                selectedPage = SignedInPage.HOME,
+                isSubmittingJournal = true,
+                journalDialog = null,
+                journalMessage = null,
+            )
+            runCatching {
+                journalRepository.submitSymptom(
+                    accountId = account.accountId,
+                    symptomCode = request.kind.symptomCode,
+                    severity = request.kind.defaultSeverity,
+                    note = null,
+                    timestampUtc = Instant.ofEpochMilli(request.requestedAtEpochMillis).toString(),
+                    sourceTag = "assistant",
+                )
+            }.onSuccess { result ->
+                quickLogCoordinator.consume(request.id)
+                processingQuickLogId = null
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingJournal = false,
+                        pendingJournalWrites = result.pendingCount,
+                        journalMessage = if (result.pendingCount == 0) {
+                            "Migraine logged. Rest—you can add details later."
+                        } else {
+                            "Migraine saved on this device. Gaia Eyes will sync it when your connection returns."
+                        },
+                    )
+                    loadDashboard(account.accountId, showCachedFirst = false)
+                    loadHomeContext(account.accountId, showCachedFirst = false)
+                }
+            }.onFailure {
+                val pending = journalRepository.pendingCount(account.accountId)
+                if (pending > 0) {
+                    quickLogCoordinator.consume(request.id)
+                }
+                processingQuickLogId = null
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingJournal = false,
+                        pendingJournalWrites = pending,
+                        journalMessage = if (pending > 0) {
+                            "Migraine saved on this device. Gaia Eyes will sync it when your connection returns."
+                        } else {
+                            "Your migraine wasn't logged. Open Gaia Eyes and try again."
+                        },
+                    )
+                }
+            }
+        }
     }
 
     private fun submitJournalWrite(
@@ -373,6 +460,7 @@ class HomeViewModel(
                     loadDashboard(account.accountId, showCachedFirst = false)
                     loadHomeContext(account.accountId, showCachedFirst = false)
                 }
+                maybeHandleQuickLog(quickLogCoordinator.pending.value)
             }.onFailure {
                 if (isCurrentAccount(account.accountId)) {
                     viewModelScope.launch {
@@ -387,6 +475,7 @@ class HomeViewModel(
                                 "That entry couldn't be saved. Check your connection and try again."
                             },
                         )
+                        maybeHandleQuickLog(quickLogCoordinator.pending.value)
                     }
                 }
             }
@@ -691,6 +780,7 @@ class HomeViewModel(
         private val journalRepository: JournalRepository,
         private val outlookRepository: OutlookRepository,
         private val patternsRepository: PatternsRepository,
+        private val quickLogCoordinator: QuickLogCoordinator,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -704,6 +794,7 @@ class HomeViewModel(
                 journalRepository = journalRepository,
                 outlookRepository = outlookRepository,
                 patternsRepository = patternsRepository,
+                quickLogCoordinator = quickLogCoordinator,
             ) as T
         }
     }

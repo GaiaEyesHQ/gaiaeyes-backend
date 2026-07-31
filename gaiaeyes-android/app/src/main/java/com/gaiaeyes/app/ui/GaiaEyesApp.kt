@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gaiaeyes.app.core.auth.AuthRepository
+import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
 import com.gaiaeyes.app.core.auth.AuthState
 import com.gaiaeyes.app.core.network.DashboardGaugesResponse
 import com.gaiaeyes.app.core.network.DriverItem
@@ -95,6 +96,7 @@ fun GaiaEyesApp(
     journalRepository: JournalRepository,
     outlookRepository: OutlookRepository,
     patternsRepository: PatternsRepository,
+    quickLogCoordinator: QuickLogCoordinator,
     modifier: Modifier = Modifier,
 ) {
     val viewModel: HomeViewModel = viewModel(
@@ -107,6 +109,7 @@ fun GaiaEyesApp(
             journalRepository = journalRepository,
             outlookRepository = outlookRepository,
             patternsRepository = patternsRepository,
+            quickLogCoordinator = quickLogCoordinator,
         ),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
