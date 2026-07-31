@@ -228,6 +228,10 @@ class GaiaApiClient(
         header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
         contentType(ContentType.Application.Json)
         setBody(request)
+        timeout {
+            requestTimeoutMillis = JOURNAL_WRITE_TIMEOUT_MILLIS
+            socketTimeoutMillis = JOURNAL_WRITE_TIMEOUT_MILLIS
+        }
     }.also(::throwIfUnauthorizedOrFailed)
 
     private fun requiredToken(accessToken: String): String {
@@ -304,6 +308,7 @@ class GaiaApiClient(
         }
 
         private const val DEFAULT_TIMEOUT_MILLIS = 15_000L
+        private const val JOURNAL_WRITE_TIMEOUT_MILLIS = 60_000L
         private const val DRIVERS_TIMEOUT_MILLIS = 60_000L
         private const val PATTERNS_TIMEOUT_MILLIS = 30_000L
         private const val OUTLOOK_TIMEOUT_MILLIS = 30_000L
