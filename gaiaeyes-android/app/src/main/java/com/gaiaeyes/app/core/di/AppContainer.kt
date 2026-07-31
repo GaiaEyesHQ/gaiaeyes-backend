@@ -10,6 +10,8 @@ import com.gaiaeyes.app.data.DashboardRepository
 import com.gaiaeyes.app.data.HealthRepository
 import com.gaiaeyes.app.data.HomeContextCache
 import com.gaiaeyes.app.data.HomeContextRepository
+import com.gaiaeyes.app.data.JournalRepository
+import com.gaiaeyes.app.data.JournalWriteQueue
 import com.gaiaeyes.app.data.OutlookCache
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.PatternsCache
@@ -53,5 +55,10 @@ class AppContainer(
         authRepository = authRepository,
         apiClient = apiClient,
         cache = OutlookCache(context.applicationContext),
+    )
+    val journalRepository = JournalRepository(
+        authRepository = authRepository,
+        apiClient = apiClient,
+        queue = JournalWriteQueue(context.applicationContext),
     )
 }

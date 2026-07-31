@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
                     dashboardRepository = container.dashboardRepository,
                     healthRepository = container.healthRepository,
                     homeContextRepository = container.homeContextRepository,
+                    journalRepository = container.journalRepository,
                     outlookRepository = container.outlookRepository,
                     patternsRepository = container.patternsRepository,
                 )

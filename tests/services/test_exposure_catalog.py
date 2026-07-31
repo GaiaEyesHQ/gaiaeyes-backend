@@ -1,9 +1,10 @@
+import asyncio
 from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
 
-from app.routers.exposures import _normalize_exposure_key
+from app.routers.exposures import _normalize_exposure_key, list_exposure_catalog
 from app.routers.feedback import _EXPOSURE_VALUES
 from services.exposures.catalog import ALL_EXPOSURE_KEYS, EVERYDAY_EXPOSURE_KEYS
 
@@ -27,3 +28,13 @@ def test_exposure_migration_matches_backend_allowlist():
 
 def test_daily_checkin_feedback_accepts_same_exposure_keys():
     assert _EXPOSURE_VALUES == set(ALL_EXPOSURE_KEYS)
+
+
+def test_exposure_catalog_endpoint_uses_shared_labels():
+    response = asyncio.run(list_exposure_catalog())
+
+    assert {item.exposure_key for item in response.data} == set(ALL_EXPOSURE_KEYS)
+    rapid_change = next(
+        item for item in response.data if item.exposure_key == "rapid_temperature_change"
+    )
+    assert rapid_change.label == "Rapid temperature change"

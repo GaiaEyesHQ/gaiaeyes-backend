@@ -21,14 +21,16 @@ Native Android foundation for Gaia Eyes.
 - Cache-first read-only Explore / All Drivers page with shared relevance order,
   current signal strength, personal pattern context, active symptoms, and
   responsive phone/tablet cards
+- Authenticated symptom, exposure, and daily check-in writes from Home
+- Account-scoped persistent write queue with stable retry payloads and
+  foreground/session-refresh draining
 - Real unauthenticated `GET /health` check against the Gaia Eyes backend
 - Manual dependency wiring ready for Supabase auth, Room, DataStore,
   WorkManager, and Health Connect
 
-The next vertical slice adds authenticated symptom, exposure, and daily
-check-in writes with safe retry. Health Connect uploads remain blocked on the
-explicit RMSSD contract; RMSSD must not be written as the existing SDNN sample
-type.
+The next vertical slice adds Health Connect import and WorkManager background
+draining after the explicit RMSSD contract decision. RMSSD must not be written
+as the existing SDNN sample type.
 
 ## Open and run
 

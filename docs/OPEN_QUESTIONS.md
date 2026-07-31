@@ -79,3 +79,23 @@
 20. **AI Guide privacy and evidence contract**
    - **Why needed**: An AI Guide could receive sensitive health context and produce unsupported medical-sounding claims unless retrieval sources, data minimization, retention, refusal behavior, and deterministic fallback are defined first.
    - **Where to fill**: Privacy/legal/product/engineering review after deterministic Guide evidence objects and help content are stable.
+
+21. **Gaia Home Rev A hardware reviewer**
+   - **Why needed**: Flux can assist with the schematic and layout, but a named reviewer still needs to approve the power budget, protection, footprints, antenna keep-out, airflow, thermals, test access, and manufacturing package before boards are ordered.
+   - **Where to fill**: Confirm the engineer responsible for the schematic gate and layout/manufacturing gate in `docs/gaia-home/FLUX_HANDOFF.md`.
+
+22. **Gaia Home assembler and design rules**
+   - **Why needed**: PCB stack-up, trace/spacing limits, available parts, customer-supplied SEN66 handling, connector assembly, test services, duties, and minimum economical quantity depend on the selected assembler.
+   - **Where to fill**: Obtain prototype quotes for two populated units plus spare bare boards, then attach the selected assembler's current rules to the Flux project.
+
+23. **Gaia Home device authentication and claiming**
+   - **Why needed**: Each unit needs a unique revocable credential and secure account-claiming flow without embedding a shared production secret. The exact certificate/key injection and recovery process is not selected.
+   - **Where to fill**: Backend, firmware, and manufacturing security design before implementing the ingest endpoint or ordering a pilot build.
+
+24. **Gaia Home sampling and offline-retention targets**
+   - **Why needed**: The initial proposal uses one-minute analysis records, but native sensor cadence, flash endurance, batch size, retry behavior, and required offline days must be fixed together.
+   - **Where to fill**: Firmware and data review using the current SEN66 cadence and expected Gaia Eyes database volume.
+
+25. **Gaia Home enclosure and product-cost target**
+   - **Why needed**: Airflow, temperature bias, bedroom noise, antenna performance, mechanical stability, manufacturing method, landed cost, and retail margin depend on an enclosure concept developed with the PCB.
+   - **Where to fill**: Industrial design and mechanical review before PCB placement is frozen; preserve separate Rev A validation and later retail targets.

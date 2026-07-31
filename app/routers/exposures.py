@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
-from services.exposures.catalog import ALL_EXPOSURE_KEYS
+from services.exposures.catalog import ALL_EXPOSURE_KEYS, exposure_label
 
 
 router = APIRouter(prefix="/v1/exposures", tags=["exposures"])
@@ -100,6 +100,15 @@ class ExposureListEnvelope(ExposureEnvelope):
     data: List[ExposureEventOut] = Field(default_factory=list)
 
 
+class ExposureCatalogItem(BaseModel):
+    exposure_key: str
+    label: str
+
+
+class ExposureCatalogEnvelope(ExposureEnvelope):
+    data: List[ExposureCatalogItem] = Field(default_factory=list)
+
+
 def _row_to_event(row: dict[str, Any]) -> ExposureEventOut:
     return ExposureEventOut(
         id=str(row.get("id") or ""),
@@ -109,6 +118,16 @@ def _row_to_event(row: dict[str, Any]) -> ExposureEventOut:
         source=str(row.get("source") or "manual"),
         note_text=(str(row.get("note_text")).strip() if row.get("note_text") else None),
         created_at=_serialize_ts(row.get("created_at")),
+    )
+
+
+@router.get("/catalog", response_model=ExposureCatalogEnvelope, dependencies=[Depends(require_read_auth)])
+async def list_exposure_catalog():
+    return ExposureCatalogEnvelope(
+        data=[
+            ExposureCatalogItem(exposure_key=key, label=exposure_label(key))
+            for key in sorted(_ALLOWED_EXPOSURE_KEYS, key=exposure_label)
+        ]
     )
 
 
@@ -157,18 +176,45 @@ async def create_exposure(
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
-            insert into raw.user_exposure_events (
+            with existing as (
+                select id, exposure_key, intensity, event_ts_utc, source, note_text, created_at
+                  from raw.user_exposure_events
+                 where %s::timestamptz is not null
+                   and user_id = %s
+                   and exposure_key = %s
+                   and event_ts_utc = %s
+                 limit 1
+            ),
+            inserted as (
+                insert into raw.user_exposure_events (
+                    user_id,
+                    exposure_key,
+                    intensity,
+                    event_ts_utc,
+                    source,
+                    note_text
+                )
+                select %s, %s, %s, %s, %s, %s
+                 where not exists (select 1 from existing)
+                returning id, exposure_key, intensity, event_ts_utc, source, note_text, created_at
+            )
+            select * from inserted
+            union all
+            select * from existing
+            limit 1
+            """,
+            (
+                payload.event_ts_utc,
                 user_id,
                 exposure_key,
-                intensity,
-                event_ts_utc,
+                event_ts,
+                user_id,
+                exposure_key,
+                int(payload.intensity),
+                event_ts,
                 source,
-                note_text
-            )
-            values (%s, %s, %s, %s, %s, %s)
-            returning id, exposure_key, intensity, event_ts_utc, source, note_text, created_at
-            """,
-            (user_id, exposure_key, int(payload.intensity), event_ts, source, note_text),
+                note_text,
+            ),
             prepare=False,
         )
         row = await cur.fetchone()

@@ -102,7 +102,9 @@ Onboarding should clearly state Health Connect is optional. If skipped or denied
 2. Install Android Studio, the API 36 SDK, and a Google Play-enabled emulator.
 3. Scaffold `gaiaeyes-android/` with Kotlin + Compose after dependency approval, with no secrets committed.
 4. Implement auth, API client, cache/store layer, and core read-only surfaces.
-5. Add symptom, exposure, and daily check-in writes.
+5. Add symptom, exposure, and daily check-in writes. **Completed locally:
+   authenticated writes, stable retry payloads, and account-scoped persistent
+   foreground/session-refresh draining are implemented.**
 6. Add Health Connect import and WorkManager upload drain after the HRV contract decision.
 7. Create the Google Play organization account and listing after the LLC/D-U-N-S prerequisites are complete.
 8. Add RevenueCat/Google Play Billing purchase and restore flow after Play products exist.

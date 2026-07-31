@@ -72,6 +72,7 @@ import com.gaiaeyes.app.data.DashboardSource
 import com.gaiaeyes.app.data.HealthRepository
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.HomeContextSource
+import com.gaiaeyes.app.data.JournalRepository
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSource
 import com.gaiaeyes.app.data.PatternsRepository
@@ -91,6 +92,7 @@ fun GaiaEyesApp(
     dashboardRepository: DashboardRepository,
     healthRepository: HealthRepository,
     homeContextRepository: HomeContextRepository,
+    journalRepository: JournalRepository,
     outlookRepository: OutlookRepository,
     patternsRepository: PatternsRepository,
     modifier: Modifier = Modifier,
@@ -102,6 +104,7 @@ fun GaiaEyesApp(
             dashboardRepository = dashboardRepository,
             healthRepository = healthRepository,
             homeContextRepository = homeContextRepository,
+            journalRepository = journalRepository,
             outlookRepository = outlookRepository,
             patternsRepository = patternsRepository,
         ),
@@ -139,6 +142,9 @@ fun GaiaEyesApp(
                 onSignOut = viewModel::signOut,
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
+                onLogSymptom = viewModel::openSymptomLog,
+                onLogExposure = viewModel::openExposureLog,
+                onDailyCheckIn = viewModel::openDailyCheckIn,
                 modifier = modifier,
             )
             SignedInPage.BODY -> BodyScreen(
@@ -179,6 +185,14 @@ fun GaiaEyesApp(
             )
         }
     }
+
+    JournalDialogHost(
+        uiState = uiState,
+        onDismiss = viewModel::dismissJournal,
+        onSubmitSymptom = viewModel::submitSymptom,
+        onSubmitExposure = viewModel::submitExposure,
+        onSubmitDailyCheckIn = viewModel::submitDailyCheckIn,
+    )
 }
 
 @Composable
@@ -321,6 +335,9 @@ private fun HomeScreen(
     onSignOut: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
+    onLogSymptom: () -> Unit,
+    onLogExposure: () -> Unit,
+    onDailyCheckIn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showAllGauges by rememberSaveable { mutableStateOf(false) }
@@ -407,10 +424,21 @@ private fun HomeScreen(
                         onDismiss = onDismissMessage,
                     )
                 }
+                uiState.journalMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = !message.contains("couldn't"),
+                        onDismiss = onDismissMessage,
+                    )
+                }
                 Spacer(modifier = Modifier.height(18.dp))
                 TodayReadCard(
                     uiState = uiState,
                     columns = if (columns == 4) 3 else 2,
+                    onLogSymptom = onLogSymptom,
+                    onLogExposure = onLogExposure,
+                    onDailyCheckIn = onDailyCheckIn,
                 )
                 Spacer(modifier = Modifier.height(18.dp))
                 SignalsToWatchCard(uiState = uiState)
@@ -2029,6 +2057,9 @@ private fun SignedInNavigationItem(
 private fun TodayReadCard(
     uiState: HomeUiState,
     columns: Int,
+    onLogSymptom: () -> Unit,
+    onLogExposure: () -> Unit,
+    onDailyCheckIn: () -> Unit,
 ) {
     val activeLabels = uiState.currentSymptoms
         ?.symptoms
@@ -2105,7 +2136,61 @@ private fun TodayReadCard(
                     columns = columns,
                 )
             }
+            HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+            Text(
+                text = if (uiState.pendingJournalWrites > 0) {
+                    "${uiState.pendingJournalWrites} saved ${if (uiState.pendingJournalWrites == 1) "entry" else "entries"} waiting to sync"
+                } else {
+                    "Add today’s context"
+                },
+                color = Color(0xFF9BA6B4),
+                fontSize = 14.sp,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                JournalActionButton(
+                    label = "Symptom",
+                    onClick = onLogSymptom,
+                    modifier = Modifier.weight(1f),
+                )
+                JournalActionButton(
+                    label = "Exposure",
+                    onClick = onLogExposure,
+                    modifier = Modifier.weight(1f),
+                )
+                JournalActionButton(
+                    label = "Check-in",
+                    onClick = onDailyCheckIn,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun JournalActionButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = GaiaBlue.copy(alpha = 0.18f),
+            contentColor = GaiaBlue,
+        ),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
 

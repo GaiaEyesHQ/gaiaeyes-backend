@@ -9,9 +9,13 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.URLProtocol
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -146,6 +150,100 @@ class GaiaApiClient(
             "Outlook was unavailable"
         }
         return outlook
+    }
+
+    suspend fun symptomCodes(accessToken: String): List<SymptomCodeOption> {
+        val response = authenticatedGet("/v1/symptoms/codes", accessToken)
+        val envelope = response.body<SymptomCodeEnvelope>()
+        check(envelope.ok) {
+            envelope.friendlyError ?: envelope.error ?: "Symptom choices were unavailable"
+        }
+        return envelope.data.filter(SymptomCodeOption::isActive)
+    }
+
+    suspend fun createSymptom(
+        accessToken: String,
+        request: SymptomEventRequest,
+    ): SymptomEventData {
+        val response = authenticatedPost("/v1/symptoms", accessToken, request)
+        val envelope = response.body<SymptomEventEnvelope>()
+        check(envelope.ok && envelope.data != null) {
+            envelope.friendlyError ?: envelope.error ?: "The symptom could not be saved"
+        }
+        return requireNotNull(envelope.data)
+    }
+
+    suspend fun exposureCatalog(accessToken: String): List<ExposureCatalogOption> {
+        val response = authenticatedGet("/v1/exposures/catalog", accessToken)
+        val envelope = response.body<ExposureCatalogEnvelope>()
+        check(envelope.ok) {
+            envelope.friendlyError ?: envelope.error ?: "Exposure choices were unavailable"
+        }
+        return envelope.data
+    }
+
+    suspend fun createExposure(
+        accessToken: String,
+        request: ExposureEventRequest,
+    ): ExposureEventData {
+        val response = authenticatedPost("/v1/exposures", accessToken, request)
+        val envelope = response.body<ExposureEventEnvelope>()
+        check(envelope.ok && envelope.data != null) {
+            envelope.friendlyError ?: envelope.error ?: "The exposure could not be saved"
+        }
+        return requireNotNull(envelope.data)
+    }
+
+    suspend fun dailyCheckInStatus(accessToken: String): DailyCheckInStatus {
+        val response = authenticatedGet("/v1/feedback/daily-checkin", accessToken)
+        val envelope = response.body<DailyCheckInStatusEnvelope>()
+        check(envelope.ok && envelope.data != null) {
+            envelope.friendlyError ?: envelope.error ?: "The daily check-in was unavailable"
+        }
+        return requireNotNull(envelope.data)
+    }
+
+    suspend fun submitDailyCheckIn(
+        accessToken: String,
+        request: DailyCheckInRequest,
+    ): DailyCheckInEntry {
+        val response = authenticatedPost("/v1/feedback/daily-checkin", accessToken, request)
+        val envelope = response.body<DailyCheckInEntryEnvelope>()
+        check(envelope.ok && envelope.data != null) {
+            envelope.friendlyError ?: envelope.error ?: "The daily check-in could not be saved"
+        }
+        return requireNotNull(envelope.data)
+    }
+
+    private suspend fun authenticatedGet(path: String, accessToken: String) =
+        httpClient.get(path) {
+            header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
+        }.also(::throwIfUnauthorizedOrFailed)
+
+    private suspend inline fun <reified T> authenticatedPost(
+        path: String,
+        accessToken: String,
+        request: T,
+    ) = httpClient.post(path) {
+        header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
+        contentType(ContentType.Application.Json)
+        setBody(request)
+    }.also(::throwIfUnauthorizedOrFailed)
+
+    private fun requiredToken(accessToken: String): String {
+        require(accessToken.isNotBlank()) {
+            "An authenticated session is required"
+        }
+        return accessToken
+    }
+
+    private fun throwIfUnauthorizedOrFailed(response: io.ktor.client.statement.HttpResponse) {
+        if (response.status == HttpStatusCode.Unauthorized) {
+            throw ApiUnauthorizedException()
+        }
+        check(response.status.isSuccess()) {
+            "Gaia Eyes returned ${response.status.value}"
+        }
     }
 
     private suspend fun authenticatedPatternsRequest(

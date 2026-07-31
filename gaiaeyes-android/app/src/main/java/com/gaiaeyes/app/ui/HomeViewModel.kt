@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.gaiaeyes.app.core.auth.AuthRepository
 import com.gaiaeyes.app.core.auth.AuthState
+import com.gaiaeyes.app.core.network.DailyCheckInStatus
+import com.gaiaeyes.app.core.network.ExposureCatalogOption
+import com.gaiaeyes.app.core.network.SymptomCodeOption
 import com.gaiaeyes.app.data.BodyRepository
 import com.gaiaeyes.app.data.BodySnapshot
 import com.gaiaeyes.app.data.DashboardRepository
@@ -13,6 +16,7 @@ import com.gaiaeyes.app.data.DriversSnapshot
 import com.gaiaeyes.app.data.HealthRepository
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.CurrentSymptomsSnapshot
+import com.gaiaeyes.app.data.JournalRepository
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSnapshot
 import com.gaiaeyes.app.data.PatternsRepository
@@ -29,6 +33,7 @@ class HomeViewModel(
     private val dashboardRepository: DashboardRepository,
     private val healthRepository: HealthRepository,
     private val homeContextRepository: HomeContextRepository,
+    private val journalRepository: JournalRepository,
     private val outlookRepository: OutlookRepository,
     private val patternsRepository: PatternsRepository,
 ) : ViewModel() {
@@ -100,6 +105,7 @@ class HomeViewModel(
     fun refresh() {
         refreshHealth()
         val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        retryJournalWrites(account.accountId, showSuccessMessage = false)
         when (_uiState.value.selectedPage) {
             SignedInPage.HOME -> {
                 loadDashboard(account.accountId, showCachedFirst = false)
@@ -142,6 +148,7 @@ class HomeViewModel(
                 dashboardRepository.clear(account.accountId)
                 bodyRepository.clear(account.accountId)
                 homeContextRepository.clear(account.accountId)
+                journalRepository.clear(account.accountId)
                 outlookRepository.clear(account.accountId)
                 patternsRepository.clear(account.accountId)
                 authRepository.signOut()
@@ -163,7 +170,126 @@ class HomeViewModel(
             homeContextMessage = null,
             outlookMessage = null,
             patternsMessage = null,
+            journalMessage = null,
         )
+    }
+
+    fun openSymptomLog() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        _uiState.value = _uiState.value.copy(
+            journalDialog = JournalDialog.SYMPTOM,
+            journalMessage = null,
+        )
+        if (_uiState.value.symptomCatalog.isEmpty()) {
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(isLoadingJournal = true)
+                runCatching {
+                    journalRepository.symptomCatalog()
+                }.onSuccess { catalog ->
+                    if (isCurrentAccount(account.accountId)) {
+                        _uiState.value = _uiState.value.copy(
+                            symptomCatalog = catalog.sortedBy { it.label.lowercase() },
+                            isLoadingJournal = false,
+                        )
+                    }
+                }.onFailure {
+                    journalLoadFailed(account.accountId, "Symptom choices couldn't load.")
+                }
+            }
+        }
+    }
+
+    fun openExposureLog() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        _uiState.value = _uiState.value.copy(
+            journalDialog = JournalDialog.EXPOSURE,
+            journalMessage = null,
+        )
+        if (_uiState.value.exposureCatalog.isEmpty()) {
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(isLoadingJournal = true)
+                runCatching {
+                    journalRepository.exposureCatalog()
+                }.onSuccess { catalog ->
+                    if (isCurrentAccount(account.accountId)) {
+                        _uiState.value = _uiState.value.copy(
+                            exposureCatalog = catalog.sortedBy { it.label.lowercase() },
+                            isLoadingJournal = false,
+                        )
+                    }
+                }.onFailure {
+                    journalLoadFailed(account.accountId, "Exposure choices couldn't load.")
+                }
+            }
+        }
+    }
+
+    fun openDailyCheckIn() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        _uiState.value = _uiState.value.copy(
+            journalDialog = JournalDialog.DAILY_CHECK_IN,
+            journalMessage = null,
+            isLoadingJournal = true,
+        )
+        viewModelScope.launch {
+            runCatching {
+                journalRepository.dailyCheckInStatus()
+            }.onSuccess { status ->
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        dailyCheckInStatus = status,
+                        isLoadingJournal = false,
+                    )
+                }
+            }.onFailure {
+                journalLoadFailed(account.accountId, "Today's check-in couldn't load.")
+            }
+        }
+    }
+
+    fun dismissJournal() {
+        if (_uiState.value.isSubmittingJournal) return
+        _uiState.value = _uiState.value.copy(
+            journalDialog = null,
+            isLoadingJournal = false,
+        )
+    }
+
+    fun submitSymptom(symptomCode: String, severity: Int, note: String?) {
+        submitJournalWrite("Symptom saved.") { accountId ->
+            journalRepository.submitSymptom(accountId, symptomCode, severity, note)
+        }
+    }
+
+    fun submitExposure(exposureKey: String, intensity: Int, note: String?) {
+        submitJournalWrite("Exposure saved.") { accountId ->
+            journalRepository.submitExposure(accountId, exposureKey, intensity, note)
+        }
+    }
+
+    fun submitDailyCheckIn(
+        comparedToYesterday: String,
+        energyLevel: String,
+        usableEnergy: String,
+        systemLoad: String,
+        painLevel: String,
+        moodLevel: String,
+        note: String?,
+    ) {
+        val status = _uiState.value.dailyCheckInStatus ?: return
+        submitJournalWrite("Daily check-in saved.") { accountId ->
+            journalRepository.submitDailyCheckIn(
+                accountId = accountId,
+                status = status,
+                comparedToYesterday = comparedToYesterday,
+                energyLevel = energyLevel,
+                usableEnergy = usableEnergy,
+                systemLoad = systemLoad,
+                painLevel = painLevel,
+                moodLevel = moodLevel,
+                note = note,
+            )
+        }
     }
 
     private fun handleAuthState(authState: AuthState) {
@@ -177,6 +303,7 @@ class HomeViewModel(
                 loadedAccountId = authState.accountId
                 loadDashboard(authState.accountId, showCachedFirst = true)
                 loadHomeContext(authState.accountId, showCachedFirst = true)
+                retryJournalWrites(authState.accountId, showSuccessMessage = false)
             }
             return
         }
@@ -210,6 +337,97 @@ class HomeViewModel(
             outlook = null,
             isLoadingOutlook = false,
             outlookMessage = null,
+            journalDialog = null,
+            isLoadingJournal = false,
+            isSubmittingJournal = false,
+            journalMessage = null,
+            pendingJournalWrites = 0,
+        )
+    }
+
+    private fun submitJournalWrite(
+        successMessage: String,
+        write: suspend (String) -> com.gaiaeyes.app.data.JournalWriteResult,
+    ) {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.isSubmittingJournal) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isSubmittingJournal = true,
+                journalMessage = null,
+            )
+            runCatching {
+                write(account.accountId)
+            }.onSuccess { result ->
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        journalDialog = null,
+                        isSubmittingJournal = false,
+                        pendingJournalWrites = result.pendingCount,
+                        journalMessage = if (result.pendingCount == 0) {
+                            successMessage
+                        } else {
+                            "Saved securely on this device. Gaia Eyes will retry when your connection returns."
+                        },
+                    )
+                    loadDashboard(account.accountId, showCachedFirst = false)
+                    loadHomeContext(account.accountId, showCachedFirst = false)
+                }
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    viewModelScope.launch {
+                        val pending = journalRepository.pendingCount(account.accountId)
+                        _uiState.value = _uiState.value.copy(
+                            journalDialog = null,
+                            isSubmittingJournal = false,
+                            pendingJournalWrites = pending,
+                            journalMessage = if (pending > 0) {
+                                "Saved securely on this device. Gaia Eyes will retry when your connection returns."
+                            } else {
+                                "That entry couldn't be saved. Check your connection and try again."
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun retryJournalWrites(accountId: String, showSuccessMessage: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                journalRepository.drain(accountId)
+            }.onSuccess { result ->
+                if (isCurrentAccount(accountId)) {
+                    val previouslyPending = _uiState.value.pendingJournalWrites
+                    _uiState.value = _uiState.value.copy(
+                        pendingJournalWrites = result.pendingCount,
+                        journalMessage = when {
+                            showSuccessMessage && result.deliveredCount > 0 -> "Saved entries are now up to date."
+                            previouslyPending > 0 && result.pendingCount == 0 -> "Saved entries are now up to date."
+                            else -> _uiState.value.journalMessage
+                        },
+                    )
+                    if (result.deliveredCount > 0) {
+                        loadDashboard(accountId, showCachedFirst = false)
+                        loadHomeContext(accountId, showCachedFirst = false)
+                    }
+                }
+            }.onFailure {
+                if (isCurrentAccount(accountId)) {
+                    val pending = journalRepository.pendingCount(accountId)
+                    _uiState.value = _uiState.value.copy(pendingJournalWrites = pending)
+                }
+            }
+        }
+    }
+
+    private fun journalLoadFailed(accountId: String, message: String) {
+        if (!isCurrentAccount(accountId)) return
+        _uiState.value = _uiState.value.copy(
+            journalDialog = null,
+            isLoadingJournal = false,
+            journalMessage = message,
         )
     }
 
@@ -470,6 +688,7 @@ class HomeViewModel(
         private val dashboardRepository: DashboardRepository,
         private val healthRepository: HealthRepository,
         private val homeContextRepository: HomeContextRepository,
+        private val journalRepository: JournalRepository,
         private val outlookRepository: OutlookRepository,
         private val patternsRepository: PatternsRepository,
     ) : ViewModelProvider.Factory {
@@ -482,6 +701,7 @@ class HomeViewModel(
                 dashboardRepository = dashboardRepository,
                 healthRepository = healthRepository,
                 homeContextRepository = homeContextRepository,
+                journalRepository = journalRepository,
                 outlookRepository = outlookRepository,
                 patternsRepository = patternsRepository,
             ) as T
@@ -513,10 +733,24 @@ data class HomeUiState(
     val outlook: OutlookSnapshot? = null,
     val isLoadingOutlook: Boolean = false,
     val outlookMessage: String? = null,
+    val journalDialog: JournalDialog? = null,
+    val symptomCatalog: List<SymptomCodeOption> = emptyList(),
+    val exposureCatalog: List<ExposureCatalogOption> = emptyList(),
+    val dailyCheckInStatus: DailyCheckInStatus? = null,
+    val isLoadingJournal: Boolean = false,
+    val isSubmittingJournal: Boolean = false,
+    val journalMessage: String? = null,
+    val pendingJournalWrites: Int = 0,
     val isCheckingBackend: Boolean = false,
     val backendAvailable: Boolean? = null,
     val backendDetail: String = "Checking the Gaia Eyes data service",
 )
+
+enum class JournalDialog {
+    SYMPTOM,
+    EXPOSURE,
+    DAILY_CHECK_IN,
+}
 
 enum class SignedInPage {
     HOME,

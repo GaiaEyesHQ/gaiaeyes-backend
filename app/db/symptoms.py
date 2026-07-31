@@ -105,24 +105,46 @@ async def insert_symptom_event(
     tags: Optional[Iterable[str]] = None,
 ) -> dict:
     sql = """
-    insert into raw.user_symptom_events (
-        user_id,
-        symptom_code,
-        ts_utc,
-        severity,
-        free_text,
-        tags
-    ) values (%s, %s, coalesce(%s, now()), %s, %s, %s)
-    returning id, ts_utc
+    with existing as (
+        select id, ts_utc
+          from raw.user_symptom_events
+         where %s::timestamptz is not null
+           and user_id = %s
+           and symptom_code = %s
+           and ts_utc = %s
+         limit 1
+    ),
+    inserted as (
+        insert into raw.user_symptom_events (
+            user_id,
+            symptom_code,
+            ts_utc,
+            severity,
+            free_text,
+            tags
+        )
+        select %s, %s, coalesce(%s, now()), %s, %s, %s
+         where not exists (select 1 from existing)
+        returning id, ts_utc
+    )
+    select id, ts_utc from inserted
+    union all
+    select id, ts_utc from existing
+    limit 1
     """
 
+    normalized_ts = _normalize_ts(ts_utc)
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             sql,
             (
+                normalized_ts,
                 user_id,
                 symptom_code,
-                _normalize_ts(ts_utc),
+                normalized_ts,
+                user_id,
+                symptom_code,
+                normalized_ts,
                 severity,
                 free_text,
                 _prepare_tags(tags),
