@@ -17,6 +17,7 @@ import com.gaiaeyes.app.data.OutlookCache
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.PatternsCache
 import com.gaiaeyes.app.data.PatternsRepository
+import com.gaiaeyes.app.core.work.JournalDrainScheduler
 
 class AppContainer(
     context: Context,
@@ -62,5 +63,8 @@ class AppContainer(
         authRepository = authRepository,
         apiClient = apiClient,
         queue = JournalWriteQueue(context.applicationContext),
+        scheduleBackgroundDrain = {
+            JournalDrainScheduler.enqueueNow(context.applicationContext)
+        },
     )
 }

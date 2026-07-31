@@ -12,12 +12,17 @@ import com.gaiaeyes.app.core.network.SymptomEventRequest
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class JournalRepository(
     private val authRepository: AuthRepository,
     private val apiClient: GaiaApiClient,
     private val queue: JournalWriteQueue,
+    private val scheduleBackgroundDrain: () -> Unit = {},
 ) {
+    private val drainMutex = Mutex()
+
     suspend fun symptomCatalog(): List<SymptomCodeOption> =
         authenticatedRequest {
             apiClient.symptomCodes(authRepository.accessToken())
@@ -60,7 +65,7 @@ class JournalRepository(
                 createdAtEpochMillis = System.currentTimeMillis(),
             ),
         )
-        return drain(accountId)
+        return drainAfterEnqueue(accountId)
     }
 
     suspend fun submitExposure(
@@ -84,7 +89,7 @@ class JournalRepository(
                 createdAtEpochMillis = System.currentTimeMillis(),
             ),
         )
-        return drain(accountId)
+        return drainAfterEnqueue(accountId)
     }
 
     suspend fun submitDailyCheckIn(
@@ -123,12 +128,12 @@ class JournalRepository(
                 createdAtEpochMillis = System.currentTimeMillis(),
             ),
         )
-        return drain(accountId)
+        return drainAfterEnqueue(accountId)
     }
 
     suspend fun pendingCount(accountId: String): Int = queue.read(accountId).size
 
-    suspend fun drain(accountId: String): JournalWriteResult {
+    suspend fun drain(accountId: String): JournalWriteResult = drainMutex.withLock {
         var delivered = 0
         for (item in queue.read(accountId)) {
             val succeeded = runCatching {
@@ -154,7 +159,7 @@ class JournalRepository(
             queue.remove(accountId, item.id)
             delivered += 1
         }
-        return JournalWriteResult(
+        JournalWriteResult(
             deliveredCount = delivered,
             pendingCount = queue.read(accountId).size,
         )
@@ -162,6 +167,14 @@ class JournalRepository(
 
     suspend fun clear(accountId: String) {
         queue.clear(accountId)
+    }
+
+    private suspend fun drainAfterEnqueue(accountId: String): JournalWriteResult {
+        return drain(accountId).also { result ->
+            if (result.pendingCount > 0) {
+                scheduleBackgroundDrain()
+            }
+        }
     }
 
     private suspend fun <T> authenticatedRequest(block: suspend () -> T): T {

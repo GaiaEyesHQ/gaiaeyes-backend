@@ -23,14 +23,16 @@ Native Android foundation for Gaia Eyes.
   responsive phone/tablet cards
 - Authenticated symptom, exposure, and daily check-in writes from Home
 - Account-scoped persistent write queue with stable retry payloads and
-  foreground/session-refresh draining
+  serialized foreground/session-refresh draining
+- Network-constrained WorkManager retry after failed foreground delivery plus
+  a 15-minute safety drain for pending journal writes
 - Real unauthenticated `GET /health` check against the Gaia Eyes backend
-- Manual dependency wiring ready for Supabase auth, Room, DataStore,
-  WorkManager, and Health Connect
+- Manual dependency wiring for Supabase auth, Room, DataStore, WorkManager,
+  and the pending Health Connect slice
 
-The next vertical slice adds Health Connect import and WorkManager background
-draining after the explicit RMSSD contract decision. RMSSD must not be written
-as the existing SDNN sample type.
+The next vertical slice adds Health Connect import for the approved v1 signals.
+HRV remains deferred: RMSSD must not be written as the existing SDNN sample
+type.
 
 ## Open and run
 

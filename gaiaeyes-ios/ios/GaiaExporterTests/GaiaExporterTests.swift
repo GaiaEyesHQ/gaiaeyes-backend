@@ -484,6 +484,153 @@ struct SymptomEnvelopeTests {
     }
 }
 
+struct HandsFreeSymptomLoggerTests {
+    private enum TestError: Error {
+        case rejected
+    }
+
+    @Test
+    func migraineRequestUsesCanonicalPayloadDefaults() {
+        let date = Date(timeIntervalSince1970: 1_722_000_000)
+        let event = HandsFreeSymptomLogRequest.migraine.event(at: date)
+
+        #expect(event.symptomCode == "MIGRAINE")
+        #expect(event.severity == 5)
+        #expect(event.tsUtc == date)
+        #expect(event.freeText == nil)
+        #expect(event.tags == nil)
+    }
+
+    @Test
+    func authenticatedIntentSubmitsThroughCanonicalWriter() async {
+        let suiteName = "HandsFreeSymptomLoggerTests.submit.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let capture = SymptomEventCapture()
+        let logger = HandsFreeSymptomLogger(
+            defaults: defaults,
+            tokenProvider: { "valid-token" },
+            submitter: { event, token in
+                await capture.record(event: event, token: token)
+            },
+            enqueuer: { _ in
+                Issue.record("A successful request must not be queued")
+            }
+        )
+
+        let result = await logger.log(.migraine)
+        let recorded = await capture.value
+
+        #expect(result == .submitted)
+        #expect(recorded?.event.symptomCode == "MIGRAINE")
+        #expect(recorded?.event.severity == 5)
+        #expect(recorded?.token == "valid-token")
+    }
+
+    @Test
+    func signedOutIntentDoesNotSubmitOrQueue() async {
+        let suiteName = "HandsFreeSymptomLoggerTests.auth.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let logger = HandsFreeSymptomLogger(
+            defaults: defaults,
+            tokenProvider: { nil },
+            submitter: { _, _ in
+                Issue.record("A signed-out request must not submit")
+            },
+            enqueuer: { _ in
+                Issue.record("A signed-out request must not queue")
+            }
+        )
+
+        #expect(await logger.log(.migraine) == .signedOut)
+    }
+
+    @Test
+    func offlineIntentQueuesAndReportsSaved() async {
+        let suiteName = "HandsFreeSymptomLoggerTests.offline.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let capture = QueuedSymptomCapture()
+        let logger = HandsFreeSymptomLogger(
+            defaults: defaults,
+            tokenProvider: { "valid-token" },
+            submitter: { _, _ in throw URLError(.notConnectedToInternet) },
+            enqueuer: { event in await capture.record(event) }
+        )
+
+        let result = await logger.log(.migraine)
+
+        #expect(result == .queued)
+        #expect(await capture.value?.symptomCode == "MIGRAINE")
+    }
+
+    @Test
+    func rejectedIntentDoesNotQueueOrClaimSuccess() async {
+        let suiteName = "HandsFreeSymptomLoggerTests.rejected.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let logger = HandsFreeSymptomLogger(
+            defaults: defaults,
+            tokenProvider: { "valid-token" },
+            submitter: { _, _ in throw TestError.rejected },
+            enqueuer: { _ in
+                Issue.record("A rejected request must not be queued as an offline write")
+            }
+        )
+
+        #expect(await logger.log(.migraine) == .failed)
+    }
+
+    @Test
+    func retryWithinDuplicateWindowDoesNotSubmitTwice() async {
+        let suiteName = "HandsFreeSymptomLoggerTests.duplicate.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let capture = SubmissionCount()
+        let date = Date(timeIntervalSince1970: 1_722_000_000)
+        let logger = HandsFreeSymptomLogger(
+            duplicateWindow: 30,
+            defaults: defaults,
+            now: { date },
+            tokenProvider: { "valid-token" },
+            submitter: { _, _ in await capture.increment() },
+            enqueuer: { _ in }
+        )
+
+        let first = await logger.log(.migraine)
+        let retry = await logger.log(.migraine)
+
+        #expect(first == .submitted)
+        #expect(retry == .duplicate)
+        #expect(await capture.value == 1)
+    }
+}
+
+private actor SymptomEventCapture {
+    private(set) var value: (event: SymptomQueuedEvent, token: String)?
+
+    func record(event: SymptomQueuedEvent, token: String) {
+        value = (event, token)
+    }
+}
+
+private actor QueuedSymptomCapture {
+    private(set) var value: SymptomQueuedEvent?
+
+    func record(_ event: SymptomQueuedEvent) {
+        value = event
+    }
+}
+
+private actor SubmissionCount {
+    private(set) var value = 0
+
+    func increment() {
+        value += 1
+    }
+}
+
 struct SignalBarSnapshotTests {
 
     @Test

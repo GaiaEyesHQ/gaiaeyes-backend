@@ -1,6 +1,6 @@
 # Android Launch Plan
 
-Last reviewed: 2026-07-28
+Last reviewed: 2026-07-31
 
 ## Decision
 
@@ -103,9 +103,11 @@ Onboarding should clearly state Health Connect is optional. If skipped or denied
 3. Scaffold `gaiaeyes-android/` with Kotlin + Compose after dependency approval, with no secrets committed.
 4. Implement auth, API client, cache/store layer, and core read-only surfaces.
 5. Add symptom, exposure, and daily check-in writes. **Completed locally:
-   authenticated writes, stable retry payloads, and account-scoped persistent
-   foreground/session-refresh draining are implemented.**
-6. Add Health Connect import and WorkManager upload drain after the HRV contract decision.
+   authenticated writes, stable retry payloads, account-scoped persistence,
+   serialized foreground draining, and network-constrained WorkManager retry
+   are implemented.**
+6. Add Health Connect import for the approved v1 set. Keep HRV deferred until
+   the RMSSD/SDNN contract is explicitly resolved.
 7. Create the Google Play organization account and listing after the LLC/D-U-N-S prerequisites are complete.
 8. Add RevenueCat/Google Play Billing purchase and restore flow after Play products exist.
 9. Run internal QA, then Play internal testing.

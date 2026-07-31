@@ -1,5 +1,6 @@
 import SwiftUI
 import BackgroundTasks
+import AppIntents
 
 @main
 struct GaiaEyesApp: App {
@@ -8,6 +9,7 @@ struct GaiaEyesApp: App {
     @StateObject private var auth = AuthManager.shared
 
     init() {
+        GaiaEyesAppShortcuts.updateAppShortcutParameters()
         // Register BG task and schedule the first refresh
         HealthKitBackgroundSync.shared.registerBGTask()
         HealthKitBackgroundSync.shared.registerProcessingTask()

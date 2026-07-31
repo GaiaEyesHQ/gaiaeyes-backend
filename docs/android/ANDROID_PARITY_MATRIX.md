@@ -1,6 +1,6 @@
 # Android Parity Matrix
 
-Last reviewed: 2026-07-30
+Last reviewed: 2026-07-31
 
 This matrix defines Android v1 parity against the live iOS app. It is intentionally scoped to a practical first Android release, not every iOS-only or future feature.
 
@@ -14,10 +14,10 @@ This matrix defines Android v1 parity against the live iOS app. It is intentiona
 | Patterns | Required | `/v1/patterns`, `/v1/patterns/summary` | Read-only cache-first parity is implemented with a fast summary, expanded background refresh, shared confidence/evidence language, and responsive phone/tablet cards. Deeper drilldowns and subscription presentation can follow. |
 | Outlook | Required | `/v1/users/me/outlook`, `/v1/space/forecast/outlook` | Read-only cache-first parity is implemented with the shared daily signal cards, likely symptom domains, corrected signal labels, and responsive phone/tablet layouts. Narrative summary blocks removed from iOS remain omitted. |
 | Explore / All Drivers | Required | `/v1/users/me/drivers`, public space/earth/local endpoints | Read-only cache-first parity is implemented from the shared ranked driver payload, including current role/state, signal strength, personal pattern context, active symptoms, summary counts, and responsive phone/tablet cards. |
-| Symptoms | Required | `/v1/symptoms/codes`, `/v1/symptoms` | Implemented with server-driven choices, authenticated writes, and an account-scoped persistent retry queue. |
+| Symptoms | Required | `/v1/symptoms/codes`, `/v1/symptoms` | Implemented with server-driven choices, authenticated writes, and an account-scoped persistent queue with WorkManager background retry. |
 | Hands-free migraine log | Required | `/v1/symptoms` | Android V1 accepts an Assistant/App Action or `gaiaeyes://log/migraine`, records the invocation time with the shared `MIGRAINE` code and default severity 5, and uses the existing persistent symptom queue. It opens Gaia Eyes for confirmation; Android does not guarantee invisible background fulfillment. |
-| Exposures | Required | `/v1/exposures/catalog`, `/v1/exposures` | Implemented with the shared backend allowlist, authenticated writes, and the same persistent retry queue. The catalog endpoint must be deployed before production end-to-end testing. |
-| Daily check-in | Required | `/v1/feedback/daily-checkin` | Implemented with the backend-selected target day, authenticated upsert, and persistent retry. |
+| Exposures | Required | `/v1/exposures/catalog`, `/v1/exposures` | Implemented with the shared backend allowlist, authenticated writes, and the same persistent queue with WorkManager background retry. The catalog endpoint must be deployed before production end-to-end testing. |
+| Daily check-in | Required | `/v1/feedback/daily-checkin` | Implemented with the backend-selected target day, authenticated upsert, and persistent foreground/background retry. |
 | Guide | Required | bundled/app API content | Include launch welcome notice and app guidance. |
 | Settings | Required | profile, auth, diagnostics | Include account, units, guide/mode/tone, privacy links, and diagnostics export. |
 | Subscribe / Restore | Required | RevenueCat Android, `/v1/billing/entitlements` | Plus monthly/yearly only for v1 unless product strategy changes. |
@@ -57,9 +57,11 @@ Android must not blank core surfaces at day rollover or during transient backend
 If a new live fetch fails, keep the previous cache and show a small stale/fallback notice rather than replacing content with an empty state.
 
 Journal writes are persisted before the network request and drained while an
-authenticated session is active, including account refresh/reconnect. A
-WorkManager background drain remains part of phase 6; it is not required for
-the current foreground-safe retry behavior.
+authenticated session is active, including account refresh/reconnect. A shared
+mutex serializes foreground and background delivery. WorkManager retries a
+failed foreground delivery once the network is connected and also runs a
+15-minute safety drain; an expired or absent session does not create a retry
+storm.
 
 ## Website parity note
 
