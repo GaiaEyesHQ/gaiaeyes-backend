@@ -2159,24 +2159,92 @@ async def ingest_magnetometer(
         )
 
 
+_FEED_NAMES = (
+    "enlil",
+    "sep",
+    "radiation",
+    "xray",
+    "aurora",
+    "coronal",
+    "scoreboard",
+    "drap",
+    "solar",
+    "bulletins",
+    "alerts",
+    "magnetometer",
+)
+
+
+async def _run_feed(
+    name: str,
+    client: httpx.AsyncClient,
+    writer: SupabaseWriter,
+    days: int,
+) -> None:
+    if name == "enlil":
+        await ingest_enlil(client, writer, days)
+    elif name == "sep":
+        await ingest_sep_flux(client, writer, days)
+    elif name == "radiation":
+        await ingest_radiation_belts(client, writer, days)
+    elif name == "xray":
+        await ingest_xray_flux(client, writer, days)
+    elif name == "aurora":
+        await ingest_aurora(client, writer)
+    elif name == "coronal":
+        await ingest_coronal_hole(client, writer, days)
+    elif name == "scoreboard":
+        await ingest_cme_scoreboard(client, writer, days)
+    elif name == "drap":
+        await ingest_drap(client, writer, days)
+    elif name == "solar":
+        await ingest_solar_cycle(client, writer)
+    elif name == "bulletins":
+        await ingest_swpc_bulletins(client, writer)
+    elif name == "alerts":
+        await ingest_swpc_alerts(client, writer)
+    elif name == "magnetometer":
+        await ingest_magnetometer(client, writer, days)
+    else:  # pragma: no cover - selection validation prevents this path
+        raise ValueError(f"unknown feed: {name}")
+
+
+async def _run_selected_feeds(
+    selected: set[str],
+    *,
+    client: httpx.AsyncClient,
+    writer: SupabaseWriter,
+    days: int,
+) -> None:
+    succeeded: list[str] = []
+    failed: list[str] = []
+
+    for name in _FEED_NAMES:
+        if name not in selected:
+            continue
+        try:
+            await _run_feed(name, client, writer, days)
+        except Exception:
+            failed.append(name)
+            logger.exception("[feed] failed name=%s", name)
+        else:
+            succeeded.append(name)
+            logger.info("[feed] completed name=%s", name)
+
+    if failed and not succeeded:
+        raise RuntimeError(f"all selected space forecast feeds failed: {', '.join(failed)}")
+    if failed:
+        logger.warning(
+            "[feed] partial failures failed=%s succeeded=%s",
+            ",".join(failed),
+            ",".join(succeeded),
+        )
+
+
 async def run_ingestion(args: argparse.Namespace) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    feeds = {
-        "enlil": ingest_enlil,
-        "sep": ingest_sep_flux,
-        "radiation": ingest_radiation_belts,
-        "xray": ingest_xray_flux,
-        "aurora": ingest_aurora,
-        "coronal": ingest_coronal_hole,
-        "scoreboard": ingest_cme_scoreboard,
-        "drap": ingest_drap,
-        "solar": ingest_solar_cycle,
-        "bulletins": ingest_swpc_bulletins,
-        "alerts": ingest_swpc_alerts,
-        "magnetometer": ingest_magnetometer,
-    }
-    selected = set(args.only or feeds.keys())
-    invalid = selected - feeds.keys()
+    selected = set(args.only or _FEED_NAMES)
+    invalid = selected - set(_FEED_NAMES)
     if invalid:
         raise SystemExit(f"Unknown feed(s): {', '.join(sorted(invalid))}")
 
@@ -2186,30 +2254,12 @@ async def run_ingestion(args: argparse.Namespace) -> None:
 
     async with SupabaseWriter(dsn, dry_run=args.dry_run) as writer:
         async with httpx.AsyncClient() as client:
-            if "enlil" in selected:
-                await ingest_enlil(client, writer, args.days)
-            if "sep" in selected:
-                await ingest_sep_flux(client, writer, args.days)
-            if "radiation" in selected:
-                await ingest_radiation_belts(client, writer, args.days)
-            if "xray" in selected:
-                await ingest_xray_flux(client, writer, args.days)
-            if "aurora" in selected:
-                await ingest_aurora(client, writer)
-            if "coronal" in selected:
-                await ingest_coronal_hole(client, writer, args.days)
-            if "scoreboard" in selected:
-                await ingest_cme_scoreboard(client, writer, args.days)
-            if "drap" in selected:
-                await ingest_drap(client, writer, args.days)
-            if "solar" in selected:
-                await ingest_solar_cycle(client, writer)
-            if "bulletins" in selected:
-                await ingest_swpc_bulletins(client, writer)
-            if "alerts" in selected:
-                await ingest_swpc_alerts(client, writer)
-            if "magnetometer" in selected:
-                await ingest_magnetometer(client, writer, args.days)
+            await _run_selected_feeds(
+                selected,
+                client=client,
+                writer=writer,
+                days=args.days,
+            )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

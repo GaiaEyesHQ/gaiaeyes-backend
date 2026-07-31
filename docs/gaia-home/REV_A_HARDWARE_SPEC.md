@@ -44,9 +44,9 @@ mechanical, firmware, accuracy, sourcing, and data-contract effects.
 
 ## Excluded from Rev A
 
-- display;
 - battery and charge controller;
 - microphone;
+- speaker and on-device voice recognition;
 - GPS;
 - magnetometer or EMF sensing;
 - radon;
@@ -56,6 +56,32 @@ mechanical, firmware, accuracy, sourcing, and data-contract effects.
 - touch controls;
 - custom RF design;
 - bare ESP32-S3 implementation.
+
+## Optional Display Decision
+
+A small glanceable display remains under product and mechanical review.
+
+If included, its V1 purpose is limited to:
+
+- current room;
+- selected environmental readings and trends;
+- device, Wi-Fi, and sensor status;
+- confirmation that synchronization is current;
+- simple handoff to Gaia Eyes.
+
+The display must not become the source of truth, require a microphone, or
+create a second full app interface. Touch input and symptom logging on the
+device are not Rev A requirements.
+
+Before PCB placement is frozen, the reviewer must decide whether Rev A:
+
+1. populates a selected display;
+2. reserves a documented display connector and power budget; or
+3. omits display hardware entirely.
+
+Any populated display requires review of power, heat, light-sensor
+contamination, enclosure visibility, firmware memory, accessibility, and unit
+economics.
 
 ## Power Requirements
 
@@ -194,4 +220,3 @@ Current manufacturer documentation is authoritative over this summary:
   https://www.espressif.com/en/module/esp32-s3-wroom-1-en
 
 The exact revisions used for design review must be recorded in the project.
-

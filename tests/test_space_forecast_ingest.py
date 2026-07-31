@@ -18,6 +18,7 @@ from scripts.ingest_space_forecasts_step1 import (
     _parse_float,
     _radiation_risk,
     _region_from_station,
+    _run_selected_feeds,
     _s_scale_from_flux,
     ingest_aurora,
     ingest_drap,
@@ -136,6 +137,49 @@ def test_region_from_station(station, expected):
 )
 def test_aurora_headline(power, kp, headline):
     assert _aurora_headline(power, kp) == headline
+
+
+def test_selected_feeds_continue_after_one_failure(monkeypatch):
+    from scripts import ingest_space_forecasts_step1 as module
+
+    calls: list[str] = []
+
+    async def fake_run_feed(name, client, writer, days):  # noqa: ARG001
+        calls.append(name)
+        if name == "xray":
+            raise json.JSONDecodeError("bad", "}{", 1)
+
+    monkeypatch.setattr(module, "_run_feed", fake_run_feed)
+
+    asyncio.run(
+        _run_selected_feeds(
+            {"sep", "xray", "aurora"},
+            client=None,  # type: ignore[arg-type]
+            writer=None,  # type: ignore[arg-type]
+            days=1,
+        )
+    )
+
+    assert calls == ["sep", "xray", "aurora"]
+
+
+def test_selected_feeds_fail_when_every_feed_fails(monkeypatch):
+    from scripts import ingest_space_forecasts_step1 as module
+
+    async def fake_run_feed(name, client, writer, days):  # noqa: ARG001
+        raise httpx.TimeoutException(f"{name} timed out")
+
+    monkeypatch.setattr(module, "_run_feed", fake_run_feed)
+
+    with pytest.raises(RuntimeError, match="all selected space forecast feeds failed"):
+        asyncio.run(
+            _run_selected_feeds(
+                {"sep", "xray"},
+                client=None,  # type: ignore[arg-type]
+                writer=None,  # type: ignore[arg-type]
+                days=1,
+            )
+        )
 
 
 def test_ingest_aurora_parses_summary(monkeypatch):

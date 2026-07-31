@@ -73,6 +73,28 @@ The backend adds `received_at_utc`, authenticated owner, request identity, and
 ingest-version metadata. Device-provided ownership or room fields are never
 trusted as authorization.
 
+## Phone Voice-Assistant Events
+
+Voice entry is a Gaia Eyes client surface, not a Gaia Home measurement path.
+The authenticated iOS or Android client converts a supported voice shortcut
+into the same canonical symptom or exposure request used by the app.
+
+The event should preserve:
+
+- authenticated user;
+- canonical symptom or exposure code;
+- user-confirmed timestamp;
+- optional severity and structured detail;
+- source surface such as `ios_voice_shortcut` or
+  `android_voice_shortcut`;
+- confirmation, correction, and undo state;
+- scheduled follow-up metadata where applicable.
+
+Raw audio, voiceprints, and inferred speaker identity are not part of the Gaia
+Home or Gaia Eyes data contract. Environmental context is joined later by time,
+device coverage, and effective-dated room assignment rather than copied into
+the symptom event.
+
 ## Sampling and Upload
 
 - Hardware should sample at the native useful cadence of each sensor.
@@ -187,4 +209,3 @@ remain retrospective and observational.
 - Factory reset clears device credentials and local buffered records according
   to the documented reset contract.
 - Research or aggregate use requires a separate consent and withdrawal model.
-

@@ -35,6 +35,26 @@ copy, charts, and candidate patterns, not the underlying measurements.
 
 ## V1 User Experience
 
+### Voice-entry boundary
+
+Gaia Home V1 does not contain a microphone or perform voice recognition.
+Hands-free symptom and exposure entry should use the authenticated Gaia Eyes
+app through supported phone voice-assistant and system-shortcut surfaces.
+
+This keeps speaker identity, account ownership, privacy controls, and detailed
+editing on the user's personal device. A voice-created event follows the same
+canonical symptom or exposure contract as an in-app event and records its
+source without changing the event's meaning.
+
+Example:
+
+> "Log a migraine in Gaia Eyes."
+
+The phone authenticates the user, records the event, confirms the result, and
+may schedule a deterministic follow-up. Gaia Home measurements remain separate
+time-series observations and are aligned to the event by time and room during
+analysis.
+
 ### Setup
 
 1. User claims the device in Gaia Eyes.
@@ -122,6 +142,8 @@ Not allowed:
 ## Privacy Requirements
 
 - No microphone or camera in Rev A.
+- Voice-assistant audio is handled by the user's phone/platform rather than
+  Gaia Home hardware.
 - No audio recording or inference.
 - Device credentials are unique and revocable.
 - Wi-Fi credentials never leave the device except as required by the
@@ -136,7 +158,9 @@ Not allowed:
 The target retail product should:
 
 - provide meaningful value with one full device;
-- avoid requiring a screen;
+- remain fully functional through Gaia Eyes without requiring a device screen;
+- treat a small glanceable display as an optional product feature, not the
+  source of truth or the only control surface;
 - use the existing Gaia Eyes app as its primary interface;
 - avoid a battery in the first stationary product;
 - support over-the-air firmware updates;
@@ -159,4 +183,3 @@ Rev A supports moving toward Rev B when:
 - Gaia Eyes can generate useful retrospective context without overstating
   evidence;
 - the likely retail cost supports a viable margin and support reserve.
-

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from bots import local_health_poll
 
 
@@ -115,6 +117,7 @@ def test_current_mode_times_out_one_location_and_finishes_others(monkeypatch) ->
         return {"asof": "2026-07-19T04:00:00Z"}
 
     monkeypatch.setattr(local_health_poll, "assemble_for_zip", fake_assemble)
+    monkeypatch.setattr(local_health_poll, "latest_for_zip", lambda zip_code: {"zip": zip_code})
     monkeypatch.setattr(
         local_health_poll,
         "upsert_zip_payload",
@@ -129,3 +132,75 @@ def test_current_mode_times_out_one_location_and_finishes_others(monkeypatch) ->
         raise AssertionError("a timed-out location should fail the poll after other locations finish")
 
     assert stored == ["49001"]
+
+
+def test_current_mode_tolerates_small_cached_partial_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_health_poll.pg,
+        "fetch",
+        lambda *args, **kwargs: [
+            {"zip": f"787{index:02d}", "lat": 30.3, "lon": -97.6}
+            for index in range(26)
+        ],
+    )
+
+    async def fake_assemble(zip_code: str):
+        if zip_code in {"78700", "78701", "78702"}:
+            raise TimeoutError
+        return {"asof": "2026-07-30T20:00:00Z"}
+
+    monkeypatch.setattr(local_health_poll, "assemble_for_zip", fake_assemble)
+    monkeypatch.setattr(local_health_poll, "latest_for_zip", lambda zip_code: {"zip": zip_code})
+    monkeypatch.setattr(local_health_poll, "upsert_zip_payload", lambda *args, **kwargs: None)
+
+    stats = asyncio.run(local_health_poll.run("current"))
+
+    assert stats["current_updated"] == 23
+    assert stats["failures"] == 3
+    assert stats["cached_fallbacks"] == 3
+
+
+def test_current_mode_rejects_partial_failure_without_cached_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_health_poll.pg,
+        "fetch",
+        lambda *args, **kwargs: [
+            {"zip": f"787{index:02d}", "lat": 30.3, "lon": -97.6}
+            for index in range(26)
+        ],
+    )
+
+    async def fake_assemble(zip_code: str):
+        if zip_code == "78700":
+            raise TimeoutError
+        return {"asof": "2026-07-30T20:00:00Z"}
+
+    monkeypatch.setattr(local_health_poll, "assemble_for_zip", fake_assemble)
+    monkeypatch.setattr(local_health_poll, "latest_for_zip", lambda zip_code: None)
+    monkeypatch.setattr(local_health_poll, "upsert_zip_payload", lambda *args, **kwargs: None)
+
+    with pytest.raises(RuntimeError, match="1 without cached fallback"):
+        asyncio.run(local_health_poll.run("current"))
+
+
+def test_current_mode_rejects_cached_failures_above_absolute_limit(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_health_poll.pg,
+        "fetch",
+        lambda *args, **kwargs: [
+            {"zip": f"787{index:02d}", "lat": 30.3, "lon": -97.6}
+            for index in range(26)
+        ],
+    )
+
+    async def fake_assemble(zip_code: str):
+        if zip_code in {"78700", "78701", "78702", "78703"}:
+            raise TimeoutError
+        return {"asof": "2026-07-30T20:00:00Z"}
+
+    monkeypatch.setattr(local_health_poll, "assemble_for_zip", fake_assemble)
+    monkeypatch.setattr(local_health_poll, "latest_for_zip", lambda zip_code: {"zip": zip_code})
+    monkeypatch.setattr(local_health_poll, "upsert_zip_payload", lambda *args, **kwargs: None)
+
+    with pytest.raises(RuntimeError, match="4 location failure"):
+        asyncio.run(local_health_poll.run("current"))

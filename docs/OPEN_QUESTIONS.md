@@ -97,5 +97,9 @@
    - **Where to fill**: Firmware and data review using the current SEN66 cadence and expected Gaia Eyes database volume.
 
 25. **Gaia Home enclosure and product-cost target**
-   - **Why needed**: Airflow, temperature bias, bedroom noise, antenna performance, mechanical stability, manufacturing method, landed cost, and retail margin depend on an enclosure concept developed with the PCB.
-   - **Where to fill**: Industrial design and mechanical review before PCB placement is frozen; preserve separate Rev A validation and later retail targets.
+   - **Why needed**: Airflow, temperature bias, bedroom noise, antenna performance, mechanical stability, manufacturing method, landed cost, and retail margin depend on an enclosure concept developed with the PCB. A small glanceable display is still under consideration, but touch logging and on-device voice are not Rev A requirements.
+   - **Where to fill**: Industrial design and mechanical review before PCB placement is frozen. Decide whether Rev A populates a display, reserves a connector and power budget, or omits it; preserve separate Rev A validation and later retail targets.
+
+26. **Gaia Eyes phone voice-assistant entry contract**
+   - **Why needed**: Siri/Google-style symptom and exposure entry is preferable to an always-listening Gaia Home microphone, but the supported commands, authentication behavior, confirmation, undo, failure handling, follow-up timing, privacy copy, and iOS/Android parity are not yet defined.
+   - **Where to fill**: iOS/Android product and privacy design using the existing canonical symptom/exposure APIs before advertising hands-free logging.

@@ -20,7 +20,7 @@ from services.forecast_outlook import (
 )
 from services.geo.zip_lookup import zip_to_latlon
 from services.local_signals.aggregator import assemble_for_zip
-from services.local_signals.cache import upsert_zip_payload
+from services.local_signals.cache import latest_for_zip, upsert_zip_payload
 
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL)
@@ -44,6 +44,18 @@ LOCAL_CURRENT_TIMEOUT_SECONDS = _bounded_env_int(
     60,
     15,
     180,
+)
+LOCAL_CURRENT_MAX_PARTIAL_FAILURES = _bounded_env_int(
+    "LOCAL_CURRENT_MAX_PARTIAL_FAILURES",
+    3,
+    0,
+    20,
+)
+LOCAL_CURRENT_MAX_PARTIAL_FAILURE_PERCENT = _bounded_env_int(
+    "LOCAL_CURRENT_MAX_PARTIAL_FAILURE_PERCENT",
+    25,
+    0,
+    100,
 )
 
 
@@ -209,7 +221,23 @@ def _dedupe_locations(rows: list[dict]) -> list[dict]:
     return list(unique.values())
 
 
-async def _refresh_current_location(zip_code: str, semaphore: asyncio.Semaphore) -> tuple[int, int]:
+def _has_cached_current(zip_code: str) -> bool:
+    try:
+        return latest_for_zip(zip_code) is not None
+    except Exception as exc:
+        logger.warning("[poll] cached fallback check failed zip=%s error=%s", zip_code, exc)
+        return False
+
+
+def _current_failure_allowance(attempted: int) -> int:
+    allowed_by_percent = attempted * LOCAL_CURRENT_MAX_PARTIAL_FAILURE_PERCENT // 100
+    return min(LOCAL_CURRENT_MAX_PARTIAL_FAILURES, allowed_by_percent)
+
+
+async def _refresh_current_location(
+    zip_code: str,
+    semaphore: asyncio.Semaphore,
+) -> tuple[int, int, int]:
     async with semaphore:
         try:
             payload = await asyncio.wait_for(
@@ -218,17 +246,17 @@ async def _refresh_current_location(zip_code: str, semaphore: asyncio.Semaphore)
             )
             upsert_zip_payload(zip_code, payload)
             logger.info("[poll] cached local snapshot zip=%s", zip_code)
-            return 1, 0
+            return 1, 0, 0
         except TimeoutError:
             logger.error(
                 "[poll] current snapshot timed out zip=%s seconds=%s",
                 zip_code,
                 LOCAL_CURRENT_TIMEOUT_SECONDS,
             )
-            return 0, 1
+            return 0, 1, int(_has_cached_current(zip_code))
         except Exception as exc:
             logger.exception("[poll] %s failed: %s", zip_code, exc)
-            return 0, 1
+            return 0, 1, int(_has_cached_current(zip_code))
 
 
 async def run(mode: str = "both") -> dict[str, int]:
@@ -249,6 +277,7 @@ async def run(mode: str = "both") -> dict[str, int]:
         "current_updated": 0,
         "forecast_updated": 0,
         "failures": 0,
+        "cached_fallbacks": 0,
     }
     if mode == "current":
         semaphore = asyncio.Semaphore(LOCAL_CURRENT_CONCURRENCY)
@@ -259,8 +288,9 @@ async def run(mode: str = "both") -> dict[str, int]:
                 if str(row.get("zip") or "").strip()
             )
         )
-        stats["current_updated"] = sum(updated for updated, _ in results)
-        stats["failures"] = sum(failures for _, failures in results)
+        stats["current_updated"] = sum(updated for updated, _, _ in results)
+        stats["failures"] = sum(failures for _, failures, _ in results)
+        stats["cached_fallbacks"] = sum(cached for _, _, cached in results)
         logger.info(
             "[poll] current concurrency=%s timeout_seconds=%s",
             LOCAL_CURRENT_CONCURRENCY,
@@ -268,7 +298,23 @@ async def run(mode: str = "both") -> dict[str, int]:
         )
         logger.info("[poll] done mode=%s stats=%s", mode, stats)
         if stats["failures"]:
-            raise RuntimeError(f"local poll completed with {stats['failures']} location failure(s)")
+            attempted = stats["current_updated"] + stats["failures"]
+            allowance = _current_failure_allowance(attempted)
+            uncached_failures = stats["failures"] - stats["cached_fallbacks"]
+            if uncached_failures or stats["failures"] > allowance:
+                raise RuntimeError(
+                    "local poll completed with "
+                    f"{stats['failures']} location failure(s), "
+                    f"{uncached_failures} without cached fallback"
+                )
+            logger.warning(
+                "[poll] tolerated partial current failures=%s attempted=%s "
+                "cached_fallbacks=%s allowance=%s",
+                stats["failures"],
+                attempted,
+                stats["cached_fallbacks"],
+                allowance,
+            )
         return stats
 
     for row in rows:

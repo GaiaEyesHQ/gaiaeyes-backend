@@ -25,7 +25,17 @@ Local-current refreshes also use a bounded four-location batch by default
 (`LOCAL_CURRENT_CONCURRENCY`, clamped to 1-8). Each location is capped at 60
 seconds (`LOCAL_CURRENT_TIMEOUT_SECONDS`, clamped to 15-180) so a stalled
 upstream provider cannot consume the entire critical lane. Completed locations
-are still written before the lane reports any per-location failures.
+are still written before the lane reports any per-location failures. Up to
+three failed locations can reuse an existing cached snapshot without failing
+the entire lane, provided failures remain at or below 25 percent of attempted
+locations. These limits can be tightened with
+`LOCAL_CURRENT_MAX_PARTIAL_FAILURES` and
+`LOCAL_CURRENT_MAX_PARTIAL_FAILURE_PERCENT`. Any uncached location failure or
+broader partial outage still fails the step.
+
+The multi-feed space-context step also isolates provider failures. A malformed
+or temporarily unavailable feed is logged by name while the remaining selected
+feeds continue. The step still exits non-zero if every selected feed fails.
 
 For observed weather, the nearest NWS station is preferred only when its latest
 reading is no more than 15 minutes old. Otherwise, the poller compares the five

@@ -102,6 +102,31 @@ Verify:
 - pattern calculations preserve lag and sample counts;
 - user-facing copy remains observational.
 
+Phone voice-assistant entry is validated separately from Gaia Home hardware:
+
+- the authenticated phone selects the correct Gaia Eyes user;
+- the command writes the same canonical event as manual app entry;
+- the user receives an unambiguous confirmation;
+- correction and undo are available;
+- a failed or ambiguous command does not create a silent health event;
+- environmental measurements are aligned by timestamp rather than duplicated
+  into the event;
+- no audio or voiceprint enters the Gaia Home data stream.
+
+## Optional Display Validation
+
+If Rev A includes a display, verify:
+
+- it remains readable in expected bedroom and office lighting;
+- it can be dimmed or turned off for sleep;
+- it does not contaminate OPT3001 readings;
+- its heat does not materially bias temperature or humidity;
+- it does not obstruct SEN66 airflow or ESP32 antenna performance;
+- it communicates room, freshness, and device status without becoming a
+  duplicate app interface;
+- Gaia Home continues collecting and synchronizing normally if the display
+  fails.
+
 ## Acceptance Targets
 
 Targets must be finalized with the hardware reviewer before testing. At minimum:
@@ -158,4 +183,3 @@ Proceed only when the validation report identifies:
 - remaining certification and privacy work;
 - evidence that the single-device room-profile experience is understandable
   and useful.
-
