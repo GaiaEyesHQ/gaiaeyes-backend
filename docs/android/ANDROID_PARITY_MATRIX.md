@@ -19,10 +19,10 @@ This matrix defines Android v1 parity against the live iOS app. It is intentiona
 | Exposures | Required | `/v1/exposures/catalog`, `/v1/exposures` | Implemented with the shared backend allowlist, authenticated writes, and the same persistent queue with WorkManager background retry. The catalog endpoint must be deployed before production end-to-end testing. |
 | Daily check-in | Required | `/v1/feedback/daily-checkin` | Implemented with the backend-selected target day, authenticated upsert, and persistent foreground/background retry. |
 | Guide | Required | bundled/app API content | Include launch welcome notice and app guidance. |
-| Settings | Required | profile, auth, diagnostics | Include account, units, guide/mode/tone, privacy links, and diagnostics export. |
+| Settings | Required | profile, auth, diagnostics | Launch slice implemented with account/sign-out, data-service and Health Connect status, pending journal/health queue counts, refresh, support/privacy/terms links, and privacy-safe diagnostics sharing. Units, guide/mode/tone, and subscription management remain follow-ups. |
 | Subscribe / Restore | Required | RevenueCat Android, `/v1/billing/entitlements` | Plus monthly/yearly only for v1 unless product strategy changes. |
 | Share cards | Required | local rendering + current app data | Match current iOS social share direction; no backend dependency required beyond source data. |
-| Diagnostics bundle | Required | `/health`, `/v1/diag/features`, cached local state | Must include auth, billing, Health Connect, cache, and queue status. |
+| Diagnostics bundle | Required | `/health`, cached local state | Initial redacted status share is implemented with app version, backend/Health Connect state, queue counts, and cache-loaded flags. It explicitly excludes email, account ID, access credentials, and raw health readings. Billing and richer support metadata remain follow-ups. |
 | Push alerts | Deferred | FCM, backend notification jobs | Keep out of v1 to reduce Play review and delivery risk. |
 | BLE/Polar | Deferred | BLE permissions, ingest | Not user-facing in Android v1. |
 | Camera | Deferred | Camera permissions | Not user-facing in Android v1. |

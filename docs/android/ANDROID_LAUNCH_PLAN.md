@@ -110,12 +110,20 @@ Onboarding should clearly state Health Connect is optional. If skipped or denied
    optional permissions, 30-day reads for the six approved signals, shared
    sample-contract uploads, durable account-scoped batching, and
    network-constrained retry are implemented. HRV remains deferred until the
-   RMSSD/SDNN contract is explicitly resolved.**
-7. Create the Google Play organization account and listing after the LLC/D-U-N-S prerequisites are complete.
-8. Add RevenueCat/Google Play Billing purchase and restore flow after Play products exist.
-9. Run internal QA, then Play internal testing.
-10. Complete any account-specific testing requirement before production access.
-11. Release US-first with staged rollout.
+   RMSSD/SDNN contract is explicitly resolved. Emulator verification on
+   August 1, 2026 used Google's Health Connect Toolbox to seed sleep, steps,
+   heart rate, resting heart rate, respiratory rate, and oxygen saturation;
+   Gaia Eyes imported the records, cleared its durable queue, and the backend
+   stored Android `health_connect` samples.**
+7. Add a launch-safe Settings and Diagnostics surface. **Completed locally:
+   account/sign-out, live connection and queue status, support/privacy/terms
+   links, and a privacy-safe diagnostic share are implemented. Diagnostics
+   exclude account identifiers, access credentials, and raw health readings.**
+8. Create the Google Play organization account and listing after the LLC/D-U-N-S prerequisites are complete.
+9. Add RevenueCat/Google Play Billing purchase and restore flow after Play products exist.
+10. Run internal QA, then Play internal testing.
+11. Complete any account-specific testing requirement before production access.
+12. Release US-first with staged rollout.
 
 ## External requirements checked
 

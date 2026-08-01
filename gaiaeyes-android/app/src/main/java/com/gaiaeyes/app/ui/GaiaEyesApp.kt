@@ -1,5 +1,7 @@
 package com.gaiaeyes.app.ui
 
+import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.BorderStroke
@@ -48,6 +50,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -57,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gaiaeyes.app.BuildConfig
 import com.gaiaeyes.app.core.auth.AuthRepository
 import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
 import com.gaiaeyes.app.core.auth.AuthState
@@ -118,6 +123,7 @@ fun GaiaEyesApp(
         ),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         contract = healthConnectRepository.permissionContract(),
         onResult = { viewModel.refreshHealthConnect() },
@@ -146,12 +152,24 @@ fun GaiaEyesApp(
             onRetry = viewModel::refresh,
             modifier = modifier,
         )
-        is AuthState.SignedIn -> when (uiState.selectedPage) {
+        is AuthState.SignedIn -> if (showSettings) {
+            SettingsScreen(
+                uiState = uiState,
+                account = authState,
+                onBack = { showSettings = false },
+                onRefresh = viewModel::refresh,
+                onSignOut = {
+                    showSettings = false
+                    viewModel.signOut()
+                },
+                modifier = modifier,
+            )
+        } else when (uiState.selectedPage) {
             SignedInPage.HOME -> HomeScreen(
                 uiState = uiState,
                 account = authState,
                 onRefresh = viewModel::refresh,
-                onSignOut = viewModel::signOut,
+                onOpenSettings = { showSettings = true },
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
                 onLogSymptom = viewModel::openSymptomLog,
@@ -163,7 +181,7 @@ fun GaiaEyesApp(
                 uiState = uiState,
                 account = authState,
                 onRefresh = viewModel::refresh,
-                onSignOut = viewModel::signOut,
+                onOpenSettings = { showSettings = true },
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
                 onConnectHealth = {
@@ -176,7 +194,7 @@ fun GaiaEyesApp(
                 uiState = uiState,
                 account = authState,
                 onRefresh = viewModel::refresh,
-                onSignOut = viewModel::signOut,
+                onOpenSettings = { showSettings = true },
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
                 modifier = modifier,
@@ -185,7 +203,7 @@ fun GaiaEyesApp(
                 uiState = uiState,
                 account = authState,
                 onRefresh = viewModel::refresh,
-                onSignOut = viewModel::signOut,
+                onOpenSettings = { showSettings = true },
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
                 modifier = modifier,
@@ -194,7 +212,7 @@ fun GaiaEyesApp(
                 uiState = uiState,
                 account = authState,
                 onRefresh = viewModel::refresh,
-                onSignOut = viewModel::signOut,
+                onOpenSettings = { showSettings = true },
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
                 modifier = modifier,
@@ -344,11 +362,259 @@ private fun SignInScreen(
 }
 
 @Composable
+private fun SettingsScreen(
+    uiState: HomeUiState,
+    account: AuthState.SignedIn,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onBack)
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val diagnostics = androidDiagnosticsSummary(uiState)
+
+    ScreenFrame(modifier = modifier) {
+        ContentColumn {
+            Header(
+                subtitle = "Settings and diagnostics",
+                trailing = {
+                    TextButton(onClick = onBack) {
+                        Text("Back")
+                    }
+                },
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Settings",
+                color = Color.White,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "Manage your account, connections, and support information.",
+                color = Color(0xFF9BA6B4),
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+            SettingsSectionCard(title = "Account") {
+                SettingsStatusRow(
+                    label = "Signed in as",
+                    value = account.email ?: "Gaia Eyes account",
+                    positive = true,
+                )
+                TextButton(
+                    onClick = onSignOut,
+                    enabled = !uiState.isSigningOut,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsSectionCard(title = "Connections") {
+                SettingsStatusRow(
+                    label = "Gaia Eyes data service",
+                    value = when (uiState.backendAvailable) {
+                        true -> "Connected"
+                        false -> "Needs attention"
+                        null -> "Checking"
+                    },
+                    positive = uiState.backendAvailable == true,
+                )
+                SettingsStatusRow(
+                    label = "Health Connect",
+                    value = healthConnectStatusLabel(uiState.healthConnectStatus),
+                    positive = uiState.healthConnectStatus == HealthConnectStatus.READY,
+                )
+                SettingsStatusRow(
+                    label = "Saved entries waiting to sync",
+                    value = uiState.pendingJournalWrites.toString(),
+                    positive = uiState.pendingJournalWrites == 0,
+                )
+                SettingsStatusRow(
+                    label = "Health batches waiting to sync",
+                    value = uiState.pendingHealthSampleBatches.toString(),
+                    positive = uiState.pendingHealthSampleBatches == 0,
+                )
+                TextButton(
+                    onClick = onRefresh,
+                    enabled = !uiState.isCheckingBackend,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(if (uiState.isCheckingBackend) "Checking…" else "Refresh status")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsSectionCard(title = "Privacy and support") {
+                SettingsLink(label = "Help and support") {
+                    uriHandler.openUri("https://gaiaeyes.com/support/")
+                }
+                SettingsLink(label = "Privacy policy") {
+                    uriHandler.openUri("https://gaiaeyes.com/privacy-policy/")
+                }
+                SettingsLink(label = "Terms of use") {
+                    uriHandler.openUri("https://gaiaeyes.com/terms/")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsSectionCard(title = "Diagnostics") {
+                Text(
+                    text = "Share a status summary with support. It excludes your email, account ID, access credentials, and health readings.",
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                )
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Gaia Eyes Android diagnostics")
+                            putExtra(Intent.EXTRA_TEXT, diagnostics)
+                        }
+                        context.startActivity(
+                            Intent.createChooser(intent, "Share Gaia Eyes diagnostics"),
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GaiaBlue,
+                        contentColor = GaiaNavy,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Share diagnostics", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSectionCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingsStatusRow(
+    label: String,
+    value: String,
+    positive: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = label,
+            color = Color(0xFFB7C0CC),
+            fontSize = 15.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            color = if (positive) GaiaGreen else GaiaAmber,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp),
+        )
+    }
+}
+
+@Composable
+private fun SettingsLink(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = "$label  ›",
+        color = GaiaBlue,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+    )
+}
+
+@Composable
+private fun SettingsButton(onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Text("Settings")
+    }
+}
+
+internal fun androidDiagnosticsSummary(uiState: HomeUiState): String {
+    fun loaded(value: Any?): String = if (value == null) "no" else "yes"
+
+    return buildString {
+        appendLine("Gaia Eyes Android diagnostics")
+        appendLine("App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+        appendLine("Data service: ${when (uiState.backendAvailable) {
+            true -> "connected"
+            false -> "needs attention"
+            null -> "checking"
+        }}")
+        appendLine("Health Connect: ${healthConnectStatusLabel(uiState.healthConnectStatus)}")
+        appendLine("Pending journal entries: ${uiState.pendingJournalWrites}")
+        appendLine("Pending health batches: ${uiState.pendingHealthSampleBatches}")
+        appendLine("Dashboard loaded: ${loaded(uiState.dashboard)}")
+        appendLine("Body loaded: ${loaded(uiState.body)}")
+        appendLine("Current symptoms loaded: ${loaded(uiState.currentSymptoms)}")
+        appendLine("Drivers loaded: ${loaded(uiState.drivers)}")
+        appendLine("Patterns loaded: ${loaded(uiState.patterns)}")
+        appendLine("Outlook loaded: ${loaded(uiState.outlook)}")
+    }.trim()
+}
+
+internal fun healthConnectStatusLabel(status: HealthConnectStatus): String {
+    return when (status) {
+        HealthConnectStatus.CHECKING -> "Checking"
+        HealthConnectStatus.UNAVAILABLE -> "Unavailable"
+        HealthConnectStatus.UPDATE_REQUIRED -> "Update required"
+        HealthConnectStatus.PERMISSIONS_REQUIRED -> "Permission required"
+        HealthConnectStatus.READY -> "Connected"
+    }
+}
+
+@Composable
 private fun HomeScreen(
     uiState: HomeUiState,
     account: AuthState.SignedIn,
     onRefresh: () -> Unit,
-    onSignOut: () -> Unit,
+    onOpenSettings: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
     onLogSymptom: () -> Unit,
@@ -364,14 +630,7 @@ private fun HomeScreen(
             ContentColumn(bottomPadding = 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
-                    trailing = {
-                        TextButton(
-                            onClick = onSignOut,
-                            enabled = !uiState.isSigningOut,
-                        ) {
-                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
-                        }
-                    },
+                    trailing = { SettingsButton(onClick = onOpenSettings) },
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
@@ -475,7 +734,7 @@ private fun BodyScreen(
     uiState: HomeUiState,
     account: AuthState.SignedIn,
     onRefresh: () -> Unit,
-    onSignOut: () -> Unit,
+    onOpenSettings: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
     onConnectHealth: () -> Unit,
@@ -488,14 +747,7 @@ private fun BodyScreen(
             ContentColumn(bottomPadding = 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
-                    trailing = {
-                        TextButton(
-                            onClick = onSignOut,
-                            enabled = !uiState.isSigningOut,
-                        ) {
-                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
-                        }
-                    },
+                    trailing = { SettingsButton(onClick = onOpenSettings) },
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
@@ -576,7 +828,7 @@ private fun PatternsScreen(
     uiState: HomeUiState,
     account: AuthState.SignedIn,
     onRefresh: () -> Unit,
-    onSignOut: () -> Unit,
+    onOpenSettings: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
     modifier: Modifier = Modifier,
@@ -587,14 +839,7 @@ private fun PatternsScreen(
             ContentColumn(bottomPadding = 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
-                    trailing = {
-                        TextButton(
-                            onClick = onSignOut,
-                            enabled = !uiState.isSigningOut,
-                        ) {
-                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
-                        }
-                    },
+                    trailing = { SettingsButton(onClick = onOpenSettings) },
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
@@ -927,7 +1172,7 @@ private fun OutlookScreen(
     uiState: HomeUiState,
     account: AuthState.SignedIn,
     onRefresh: () -> Unit,
-    onSignOut: () -> Unit,
+    onOpenSettings: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
     modifier: Modifier = Modifier,
@@ -938,14 +1183,7 @@ private fun OutlookScreen(
             ContentColumn(bottomPadding = 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
-                    trailing = {
-                        TextButton(
-                            onClick = onSignOut,
-                            enabled = !uiState.isSigningOut,
-                        ) {
-                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
-                        }
-                    },
+                    trailing = { SettingsButton(onClick = onOpenSettings) },
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
@@ -1049,7 +1287,7 @@ private fun ExploreScreen(
     uiState: HomeUiState,
     account: AuthState.SignedIn,
     onRefresh: () -> Unit,
-    onSignOut: () -> Unit,
+    onOpenSettings: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
     modifier: Modifier = Modifier,
@@ -1060,14 +1298,7 @@ private fun ExploreScreen(
             ContentColumn(bottomPadding = 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
-                    trailing = {
-                        TextButton(
-                            onClick = onSignOut,
-                            enabled = !uiState.isSigningOut,
-                        ) {
-                            Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
-                        }
-                    },
+                    trailing = { SettingsButton(onClick = onOpenSettings) },
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(

@@ -99,6 +99,19 @@ Source: <https://support.google.com/googleplay/android-developer/answer/14151465
 - Redis ingest queue depth remains healthy during import tests.
 - Tablet/foldable responsive smoke.
 
+### Samsung phone/watch acceptance pass
+
+When the physical Samsung phone and watch are available:
+
+- Install the current debug/internal build and sign in to the existing Gaia Eyes account.
+- Confirm Samsung Health writes the approved signals into Health Connect; do not assume Samsung Health data is shared until each permission is enabled.
+- Grant Gaia Eyes only sleep, steps, heart rate, resting heart rate, respiratory rate, and oxygen saturation.
+- Import recent health data from Body and confirm the pending-upload count returns to zero.
+- Compare the newest supported readings with Samsung Health, allowing for provider aggregation and sync delay.
+- Reopen Gaia Eyes after backgrounding and a device restart to confirm the account, cached Body data, and permission state persist.
+- Deny and then restore one Health Connect permission to verify the app remains useful and explains the limited state without blanking core surfaces.
+- Capture diagnostics and logcat if Samsung Health exposes a supported type that Gaia Eyes does not import.
+
 ## Launch gate
 
 Do not submit to production until:
