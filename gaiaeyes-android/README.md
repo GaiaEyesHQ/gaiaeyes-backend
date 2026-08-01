@@ -26,13 +26,18 @@ Native Android foundation for Gaia Eyes.
   serialized foreground/session-refresh draining
 - Network-constrained WorkManager retry after failed foreground delivery plus
   a 15-minute safety drain for pending journal writes
+- Optional Health Connect connection on Body with a 30-day import for sleep,
+  steps, heart rate, resting heart rate, respiratory rate, and oxygen
+  saturation
+- Account-scoped durable Health Connect upload batches with immediate and
+  15-minute network-constrained retry
 - Real unauthenticated `GET /health` check against the Gaia Eyes backend
 - Manual dependency wiring for Supabase auth, Room, DataStore, WorkManager,
-  and the pending Health Connect slice
+  and Health Connect
 
-The next vertical slice adds Health Connect import for the approved v1 signals.
-HRV remains deferred: RMSSD must not be written as the existing SDNN sample
-type.
+HRV remains deferred: Health Connect RMSSD must not be written as Gaia Eyes'
+existing SDNN sample type. The Health Connect import is opt-in and the rest of
+the app remains usable when access is skipped or unavailable.
 
 ## Open and run
 
@@ -55,6 +60,27 @@ The debug APK is written to:
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
+
+## Emulator Health Connect seed QA
+
+Use Google's [Health Connect Toolbox](https://developer.android.com/health-and-fitness/health-connect/test/health-connect-toolbox)
+to exercise the real Android read and upload path before testing on a physical
+device. Keep these records synthetic and confined to the emulator.
+
+1. Download the Toolbox APK linked from the Android documentation and install
+   it with `adb install HealthConnectToolbox-*.apk`.
+2. In the Toolbox, request all Health Connect permissions and insert recent
+   records for sleep, steps, heart rate, resting heart rate, respiratory rate,
+   and oxygen saturation. Representative QA values are 4,321 steps, 72 bpm,
+   64 resting bpm, 14.2 breaths/min, and 98% SpO2.
+3. Open Gaia Eyes, sign in, and use **Body > Health Connect > Import recent
+   health data**.
+4. Confirm the import reports readings, the pending-sync count clears, and the
+   backend receives `device_os=android`, `source=health_connect` rows for all
+   six supported sample families.
+
+The number Gaia Eyes reads can be slightly higher than the number inserted in
+the database because the backend idempotently skips duplicate sample keys.
 
 ## Local configuration
 

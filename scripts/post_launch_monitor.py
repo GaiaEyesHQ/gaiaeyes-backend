@@ -96,6 +96,7 @@ REQUEST_RETRY_BACKOFF_SECONDS = float(os.getenv("GAIA_MONITOR_REQUEST_RETRY_BACK
 LAST_PROBE_WARN_MS = int(os.getenv("GAIA_MONITOR_LAST_PROBE_WARN_MS") or "60000")
 ANALYTICS_MIN_EVENTS_24H = int(os.getenv("GAIA_MONITOR_ANALYTICS_MIN_EVENTS_24H") or "1")
 QUEUE_DEPTH_WARN = int(os.getenv("GAIA_MONITOR_QUEUE_DEPTH_WARN") or "0")
+LOCAL_OUTLOOK_DRIVER_KEYS = {"pressure", "temp", "humidity", "aqi", "allergens"}
 
 
 @dataclass
@@ -313,10 +314,15 @@ def check_user_outlook() -> CheckResult:
         for driver in (day.get("top_drivers") or [])
         if isinstance(driver, dict)
     }
-    local_keys = driver_keys & {"pressure", "temp", "humidity", "aqi", "allergens"}
-    if not local_keys:
-        return _result("user_outlook", "warn", f"outlook_days={len(days)} but no local driver keys surfaced")
-    return _result("user_outlook", "pass", f"days={len(days)} drivers={','.join(sorted(driver_keys))}")
+    if not driver_keys:
+        return _result("user_outlook", "warn", f"outlook_days={len(days)} but no driver keys surfaced")
+    local_keys = driver_keys & LOCAL_OUTLOOK_DRIVER_KEYS
+    domain = "mixed" if local_keys and len(local_keys) != len(driver_keys) else ("local" if local_keys else "space")
+    return _result(
+        "user_outlook",
+        "pass",
+        f"days={len(days)} domain={domain} drivers={','.join(sorted(driver_keys))}",
+    )
 
 
 def check_analytics() -> CheckResult:

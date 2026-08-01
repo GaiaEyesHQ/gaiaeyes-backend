@@ -607,11 +607,193 @@ struct HandsFreeSymptomLoggerTests {
     }
 }
 
+struct HandsFreeMigraineResolverTests {
+    private enum TestError: Error {
+        case unavailable
+    }
+
+    @Test
+    func resolvesMostRecentlyLoggedActiveMigraine() async {
+        let suiteName = "HandsFreeMigraineResolverTests.resolve.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let capture = MigraineResolutionCapture()
+        let resolutionDate = Date(timeIntervalSince1970: 1_722_000_000)
+        let snapshot = currentSymptomsSnapshot(items: [
+            currentSymptom(id: "older", code: "MIGRAINE", loggedAt: "2026-07-31T10:00:00Z"),
+            currentSymptom(id: "headache", code: "HEADACHE", loggedAt: "2026-07-31T12:00:00Z"),
+            currentSymptom(id: "newer", code: "MIGRAINE", loggedAt: "2026-07-31T11:00:00Z"),
+        ])
+        let resolver = HandsFreeMigraineResolver(
+            defaults: defaults,
+            now: { resolutionDate },
+            tokenProvider: { "valid-token" },
+            snapshotFetcher: { _ in snapshot },
+            episodeResolver: { episodeId, token, timestamp in
+                await capture.record(episodeId: episodeId, token: token, timestamp: timestamp)
+            }
+        )
+
+        let result = await resolver.resolveLatestMigraine()
+        let recorded = await capture.value
+
+        #expect(result == .resolved)
+        #expect(recorded?.episodeId == "newer")
+        #expect(recorded?.token == "valid-token")
+        #expect(recorded?.timestamp == resolutionDate)
+    }
+
+    @Test
+    func reportsNoActiveMigraineWithoutUpdatingAnotherSymptom() async {
+        let suiteName = "HandsFreeMigraineResolverTests.missing.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let resolver = HandsFreeMigraineResolver(
+            defaults: defaults,
+            tokenProvider: { "valid-token" },
+            snapshotFetcher: { _ in
+                currentSymptomsSnapshot(items: [
+                    currentSymptom(id: "headache", code: "HEADACHE", loggedAt: "2026-07-31T12:00:00Z")
+                ])
+            },
+            episodeResolver: { _, _, _ in
+                Issue.record("A non-migraine symptom must not be resolved")
+            }
+        )
+
+        #expect(await resolver.resolveLatestMigraine() == .notFound)
+    }
+
+    @Test
+    func signedOutResolutionDoesNotFetchOrUpdate() async {
+        let suiteName = "HandsFreeMigraineResolverTests.auth.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let resolver = HandsFreeMigraineResolver(
+            defaults: defaults,
+            tokenProvider: { nil },
+            snapshotFetcher: { _ in
+                Issue.record("A signed-out request must not fetch symptoms")
+                return currentSymptomsSnapshot(items: [])
+            },
+            episodeResolver: { _, _, _ in
+                Issue.record("A signed-out request must not resolve a migraine")
+            }
+        )
+
+        #expect(await resolver.resolveLatestMigraine() == .signedOut)
+    }
+
+    @Test
+    func failedResolutionDoesNotClaimSuccess() async {
+        let suiteName = "HandsFreeMigraineResolverTests.failure.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let resolver = HandsFreeMigraineResolver(
+            defaults: defaults,
+            tokenProvider: { "valid-token" },
+            snapshotFetcher: { _ in
+                currentSymptomsSnapshot(items: [
+                    currentSymptom(id: "migraine", code: "MIGRAINE", loggedAt: "2026-07-31T12:00:00Z")
+                ])
+            },
+            episodeResolver: { _, _, _ in throw TestError.unavailable }
+        )
+
+        #expect(await resolver.resolveLatestMigraine() == .failed)
+    }
+
+    @Test
+    func retryWithinDuplicateWindowDoesNotResolveTwice() async {
+        let suiteName = "HandsFreeMigraineResolverTests.duplicate.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let capture = SubmissionCount()
+        let date = Date(timeIntervalSince1970: 1_722_000_000)
+        let resolver = HandsFreeMigraineResolver(
+            duplicateWindow: 30,
+            defaults: defaults,
+            now: { date },
+            tokenProvider: { "valid-token" },
+            snapshotFetcher: { _ in
+                currentSymptomsSnapshot(items: [
+                    currentSymptom(id: "migraine", code: "MIGRAINE", loggedAt: "2026-07-31T12:00:00Z")
+                ])
+            },
+            episodeResolver: { _, _, _ in await capture.increment() }
+        )
+
+        let first = await resolver.resolveLatestMigraine()
+        let retry = await resolver.resolveLatestMigraine()
+
+        #expect(first == .resolved)
+        #expect(retry == .duplicate)
+        #expect(await capture.value == 1)
+    }
+}
+
+private func currentSymptomsSnapshot(items: [CurrentSymptomItem]) -> CurrentSymptomsSnapshot {
+    CurrentSymptomsSnapshot(
+        generatedAt: "2026-07-31T12:00:00Z",
+        windowHours: 48,
+        summary: CurrentSymptomsSummary(
+            activeCount: items.count,
+            newCount: items.count,
+            ongoingCount: 0,
+            improvingCount: 0,
+            worseCount: 0,
+            lastUpdatedAt: "2026-07-31T12:00:00Z",
+            followUpAvailable: false
+        ),
+        items: items,
+        contributingDrivers: [],
+        patternContext: [],
+        followUpSettings: CurrentSymptomsFollowUpSettings(
+            notificationsEnabled: false,
+            enabled: false,
+            notificationFamilyEnabled: false,
+            pushEnabled: false,
+            cadence: "balanced",
+            states: [],
+            symptomCodes: []
+        ),
+        voiceSemantic: nil
+    )
+}
+
+private func currentSymptom(id: String, code: String, loggedAt: String) -> CurrentSymptomItem {
+    CurrentSymptomItem(
+        id: id,
+        symptomCode: code,
+        label: code == "MIGRAINE" ? "Migraine" : "Headache",
+        severity: 5,
+        originalSeverity: 5,
+        loggedAt: loggedAt,
+        lastInteractionAt: loggedAt,
+        currentState: .new,
+        notePreview: nil,
+        noteCount: 0,
+        likelyDrivers: [],
+        patternHint: nil,
+        gaugeKeys: [],
+        currentContextBadge: nil,
+        pendingFollowUp: nil
+    )
+}
+
 private actor SymptomEventCapture {
     private(set) var value: (event: SymptomQueuedEvent, token: String)?
 
     func record(event: SymptomQueuedEvent, token: String) {
         value = (event, token)
+    }
+}
+
+private actor MigraineResolutionCapture {
+    private(set) var value: (episodeId: String, token: String, timestamp: Date)?
+
+    func record(episodeId: String, token: String, timestamp: Date) {
+        value = (episodeId, token, timestamp)
     }
 }
 

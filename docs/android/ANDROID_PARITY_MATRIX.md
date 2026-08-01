@@ -1,6 +1,6 @@
 # Android Parity Matrix
 
-Last reviewed: 2026-07-31
+Last reviewed: 2026-08-01
 
 This matrix defines Android v1 parity against the live iOS app. It is intentionally scoped to a practical first Android release, not every iOS-only or future feature.
 
@@ -10,7 +10,7 @@ This matrix defines Android v1 parity against the live iOS app. It is intentiona
 | Health permission step | Required | Health Connect | Optional. No forced permission wall. Continue with limited body surfaces if skipped. |
 | 30-day import | Required | `/v1/samples/batch` | Health Connect initial sync for the minimum useful set only. |
 | Home | Required | `/v1/dashboard`, `/v1/features/today`, `/v1/users/me/drivers`, profile feed | Cache-first Home is implemented with all eight shared gauges in a compact expandable layout, current/possible symptoms, Signals to Watch, and authenticated context-entry actions. |
-| Body | Required | `/v1/features/today`, `/v1/samples/batch` | Read-only cache-first sleep stages, efficiency, health stats, personal deltas, steps, and heart range are implemented from the shared account data. Health Connect import/upload remains pending the explicit HRV/RMSSD contract. |
+| Body | Required | `/v1/features/today`, `/v1/samples/batch` | Cache-first sleep stages, efficiency, health stats, personal deltas, steps, and heart range are implemented from shared account data. Optional 30-day Health Connect import is implemented for sleep, steps, heart rate, resting heart rate, respiratory rate, and oxygen saturation, with account-scoped durable retry. HRV remains deferred under the explicit RMSSD/SDNN boundary. |
 | Patterns | Required | `/v1/patterns`, `/v1/patterns/summary` | Read-only cache-first parity is implemented with a fast summary, expanded background refresh, shared confidence/evidence language, and responsive phone/tablet cards. Deeper drilldowns and subscription presentation can follow. |
 | Outlook | Required | `/v1/users/me/outlook`, `/v1/space/forecast/outlook` | Read-only cache-first parity is implemented with the shared daily signal cards, likely symptom domains, corrected signal labels, and responsive phone/tablet layouts. Narrative summary blocks removed from iOS remain omitted. |
 | Explore / All Drivers | Required | `/v1/users/me/drivers`, public space/earth/local endpoints | Read-only cache-first parity is implemented from the shared ranked driver payload, including current role/state, signal strength, personal pattern context, active symptoms, summary counts, and responsive phone/tablet cards. |
@@ -62,6 +62,12 @@ mutex serializes foreground and background delivery. WorkManager retries a
 failed foreground delivery once the network is connected and also runs a
 15-minute safety drain; an expired or absent session does not create a retry
 storm.
+
+Health Connect access is optional and requested only from the Body page. The
+initial import covers 30 days and uses the shared `/v1/samples/batch` contract
+with Android/Health Connect provenance. Upload batches are account scoped,
+persisted before delivery, and retried when network access returns. HRV is not
+requested or uploaded in v1.
 
 ## Website parity note
 

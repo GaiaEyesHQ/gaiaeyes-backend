@@ -1,6 +1,7 @@
 package com.gaiaeyes.app.ui
 
 import androidx.compose.foundation.background
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +72,8 @@ import com.gaiaeyes.app.data.BodySource
 import com.gaiaeyes.app.data.DashboardRepository
 import com.gaiaeyes.app.data.DashboardSource
 import com.gaiaeyes.app.data.HealthRepository
+import com.gaiaeyes.app.data.HealthConnectRepository
+import com.gaiaeyes.app.data.HealthConnectStatus
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.HomeContextSource
 import com.gaiaeyes.app.data.JournalRepository
@@ -92,6 +95,7 @@ fun GaiaEyesApp(
     bodyRepository: BodyRepository,
     dashboardRepository: DashboardRepository,
     healthRepository: HealthRepository,
+    healthConnectRepository: HealthConnectRepository,
     homeContextRepository: HomeContextRepository,
     journalRepository: JournalRepository,
     outlookRepository: OutlookRepository,
@@ -105,6 +109,7 @@ fun GaiaEyesApp(
             bodyRepository = bodyRepository,
             dashboardRepository = dashboardRepository,
             healthRepository = healthRepository,
+            healthConnectRepository = healthConnectRepository,
             homeContextRepository = homeContextRepository,
             journalRepository = journalRepository,
             outlookRepository = outlookRepository,
@@ -113,6 +118,10 @@ fun GaiaEyesApp(
         ),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
+        contract = healthConnectRepository.permissionContract(),
+        onResult = { viewModel.refreshHealthConnect() },
+    )
 
     when (val authState = uiState.authState) {
         AuthState.Initializing -> LoadingScreen(modifier)
@@ -157,6 +166,10 @@ fun GaiaEyesApp(
                 onSignOut = viewModel::signOut,
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
+                onConnectHealth = {
+                    healthConnectPermissionLauncher.launch(healthConnectRepository.requiredPermissions)
+                },
+                onImportHealth = viewModel::importHealthConnect,
                 modifier = modifier,
             )
             SignedInPage.PATTERNS -> PatternsScreen(
@@ -465,6 +478,8 @@ private fun BodyScreen(
     onSignOut: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
+    onConnectHealth: () -> Unit,
+    onImportHealth: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ScreenFrame(modifier = modifier) {
@@ -538,6 +553,12 @@ private fun BodyScreen(
                     uiState.isLoadingBody -> BodyLoadingCard()
                     else -> BodyEmptyCard()
                 }
+                Spacer(modifier = Modifier.height(18.dp))
+                HealthConnectCard(
+                    uiState = uiState,
+                    onConnect = onConnectHealth,
+                    onImport = onImportHealth,
+                )
                 Spacer(modifier = Modifier.height(18.dp))
                 BackendCard(uiState = uiState, onRetry = onRefresh)
             }
@@ -1788,6 +1809,89 @@ private fun SleepStageCard(
                     .fillMaxWidth()
                     .height(7.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun HealthConnectCard(
+    uiState: HomeUiState,
+    onConnect: () -> Unit,
+    onImport: () -> Unit,
+) {
+    val status = uiState.healthConnectStatus
+    val description = when (status) {
+        HealthConnectStatus.CHECKING -> "Checking Health Connect availability…"
+        HealthConnectStatus.UNAVAILABLE -> "Health Connect isn't available on this device."
+        HealthConnectStatus.UPDATE_REQUIRED ->
+            "Install or update Health Connect to import Android health data."
+        HealthConnectStatus.PERMISSIONS_REQUIRED ->
+            "Connect sleep, steps, heart rate, resting heart rate, breathing rate, and oxygen saturation. HRV stays off until compatible measurement standards are confirmed."
+        HealthConnectStatus.READY ->
+            "Connected. Import the last 30 days now. Saved batches retry automatically if your connection drops."
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaBlue.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Health Connect",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = description,
+                color = Color(0xFFB4C0CE),
+                fontSize = 15.sp,
+                lineHeight = 21.sp,
+            )
+            if (uiState.pendingHealthSampleBatches > 0) {
+                Text(
+                    text = "${uiState.pendingHealthSampleBatches} saved ${if (uiState.pendingHealthSampleBatches == 1) "batch is" else "batches are"} waiting to retry.",
+                    color = GaiaAmber,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            uiState.healthConnectMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = if (message.contains("couldn't")) GaiaRose else GaiaGreen,
+                    fontSize = 14.sp,
+                )
+            }
+            when (status) {
+                HealthConnectStatus.PERMISSIONS_REQUIRED -> Button(
+                    onClick = onConnect,
+                    colors = ButtonDefaults.buttonColors(containerColor = GaiaBlue),
+                ) {
+                    Text("Connect Health Connect", fontWeight = FontWeight.Bold)
+                }
+                HealthConnectStatus.READY -> Button(
+                    onClick = onImport,
+                    enabled = !uiState.isImportingHealthConnect,
+                    colors = ButtonDefaults.buttonColors(containerColor = GaiaBlue),
+                ) {
+                    if (uiState.isImportingHealthConnect) {
+                        CircularProgressIndicator(
+                            color = GaiaNavy,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    } else {
+                        Text("Import recent health data", fontWeight = FontWeight.Bold)
+                    }
+                }
+                else -> Unit
+            }
         }
     }
 }

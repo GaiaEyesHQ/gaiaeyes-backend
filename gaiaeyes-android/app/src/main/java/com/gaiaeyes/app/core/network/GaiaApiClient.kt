@@ -215,6 +215,19 @@ class GaiaApiClient(
         return requireNotNull(envelope.data)
     }
 
+    suspend fun uploadHealthSamples(
+        accessToken: String,
+        samples: List<HealthSampleUpload>,
+    ): HealthSampleBatchResponse {
+        require(samples.isNotEmpty()) { "At least one health sample is required" }
+        val response = authenticatedPost("/v1/samples/batch", accessToken, samples)
+        val result = response.body<HealthSampleBatchResponse>()
+        check(result.ok) {
+            result.error ?: "Health data could not be uploaded"
+        }
+        return result
+    }
+
     private suspend fun authenticatedGet(path: String, accessToken: String) =
         httpClient.get(path) {
             header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")

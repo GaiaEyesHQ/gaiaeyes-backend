@@ -83,6 +83,33 @@ def test_user_outlook_skips_without_dev_user_id(monkeypatch):
     assert "GAIA_MONITOR_DEV_USER_ID" in result.detail
 
 
+def test_user_outlook_passes_with_space_only_drivers(monkeypatch):
+    monkeypatch.setattr(monitor, "AUTH_BEARER", "token")
+    monkeypatch.setattr(monitor, "DEV_USER_ID", "user-123")
+    monkeypatch.setattr(
+        monitor,
+        "_get_json",
+        lambda path, **kwargs: {
+            "daily_outlook": [
+                {
+                    "label": "Tomorrow",
+                    "top_drivers": [
+                        {"key": "kp"},
+                        {"key": "solar_wind"},
+                        {"key": "cme"},
+                    ],
+                }
+            ]
+        },
+    )
+
+    result = monitor.check_user_outlook()
+
+    assert result.status == "pass"
+    assert "domain=space" in result.detail
+    assert "kp" in result.detail
+
+
 def test_get_json_retries_incomplete_read_once(monkeypatch):
     class _Response:
         def __enter__(self):

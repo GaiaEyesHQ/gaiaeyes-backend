@@ -106,8 +106,11 @@ Onboarding should clearly state Health Connect is optional. If skipped or denied
    authenticated writes, stable retry payloads, account-scoped persistence,
    serialized foreground draining, and network-constrained WorkManager retry
    are implemented.**
-6. Add Health Connect import for the approved v1 set. Keep HRV deferred until
-   the RMSSD/SDNN contract is explicitly resolved.
+6. Add Health Connect import for the approved v1 set. **Completed locally:
+   optional permissions, 30-day reads for the six approved signals, shared
+   sample-contract uploads, durable account-scoped batching, and
+   network-constrained retry are implemented. HRV remains deferred until the
+   RMSSD/SDNN contract is explicitly resolved.**
 7. Create the Google Play organization account and listing after the LLC/D-U-N-S prerequisites are complete.
 8. Add RevenueCat/Google Play Billing purchase and restore flow after Play products exist.
 9. Run internal QA, then Play internal testing.

@@ -16,6 +16,8 @@ import com.gaiaeyes.app.data.DashboardRepository
 import com.gaiaeyes.app.data.DashboardSnapshot
 import com.gaiaeyes.app.data.DriversSnapshot
 import com.gaiaeyes.app.data.HealthRepository
+import com.gaiaeyes.app.data.HealthConnectRepository
+import com.gaiaeyes.app.data.HealthConnectStatus
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.CurrentSymptomsSnapshot
 import com.gaiaeyes.app.data.JournalRepository
@@ -35,6 +37,7 @@ class HomeViewModel(
     private val bodyRepository: BodyRepository,
     private val dashboardRepository: DashboardRepository,
     private val healthRepository: HealthRepository,
+    private val healthConnectRepository: HealthConnectRepository,
     private val homeContextRepository: HomeContextRepository,
     private val journalRepository: JournalRepository,
     private val outlookRepository: OutlookRepository,
@@ -126,6 +129,70 @@ class HomeViewModel(
         }
     }
 
+    fun refreshHealthConnect() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                healthConnectStatus = HealthConnectStatus.CHECKING,
+                healthConnectMessage = null,
+            )
+            runCatching {
+                val status = healthConnectRepository.status()
+                val pending = healthConnectRepository.pendingCount(account.accountId)
+                status to pending
+            }.onSuccess { (status, pending) ->
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        healthConnectStatus = status,
+                        pendingHealthSampleBatches = pending,
+                    )
+                }
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        healthConnectStatus = HealthConnectStatus.UNAVAILABLE,
+                        healthConnectMessage = "Health Connect couldn't be checked on this device.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun importHealthConnect() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.isImportingHealthConnect) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isImportingHealthConnect = true,
+                healthConnectMessage = null,
+            )
+            runCatching {
+                healthConnectRepository.importRecent(account.accountId)
+            }.onSuccess { result ->
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        isImportingHealthConnect = false,
+                        healthConnectImportedCount = result.importedSampleCount,
+                        pendingHealthSampleBatches = result.pendingBatchCount,
+                        healthConnectMessage = if (result.pendingBatchCount == 0) {
+                            "Imported ${result.importedSampleCount} Health Connect readings."
+                        } else {
+                            "Imported ${result.importedSampleCount} readings. Saved batches will retry automatically."
+                        },
+                    )
+                    loadBody(account.accountId, showCachedFirst = false)
+                }
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        isImportingHealthConnect = false,
+                        healthConnectMessage = "Health data couldn't import. Check Health Connect access and try again.",
+                    )
+                }
+            }
+        }
+    }
+
     fun selectPage(page: SignedInPage) {
         _uiState.value = _uiState.value.copy(selectedPage = page)
         val account = _uiState.value.authState as? AuthState.SignedIn ?: return
@@ -157,6 +224,7 @@ class HomeViewModel(
                 bodyRepository.clear(account.accountId)
                 homeContextRepository.clear(account.accountId)
                 journalRepository.clear(account.accountId)
+                healthConnectRepository.clear(account.accountId)
                 outlookRepository.clear(account.accountId)
                 patternsRepository.clear(account.accountId)
                 authRepository.signOut()
@@ -179,6 +247,7 @@ class HomeViewModel(
             outlookMessage = null,
             patternsMessage = null,
             journalMessage = null,
+            healthConnectMessage = null,
         )
     }
 
@@ -311,6 +380,7 @@ class HomeViewModel(
                 loadedAccountId = authState.accountId
                 loadDashboard(authState.accountId, showCachedFirst = true)
                 loadHomeContext(authState.accountId, showCachedFirst = true)
+                refreshHealthConnect()
                 if (quickLogCoordinator.pending.value == null) {
                     retryJournalWrites(authState.accountId, showSuccessMessage = false)
                 }
@@ -353,6 +423,11 @@ class HomeViewModel(
             isSubmittingJournal = false,
             journalMessage = null,
             pendingJournalWrites = 0,
+            healthConnectStatus = HealthConnectStatus.CHECKING,
+            isImportingHealthConnect = false,
+            healthConnectMessage = null,
+            healthConnectImportedCount = 0,
+            pendingHealthSampleBatches = 0,
             authMessage = if (
                 authState is AuthState.SignedOut &&
                 quickLogCoordinator.pending.value != null
@@ -776,6 +851,7 @@ class HomeViewModel(
         private val bodyRepository: BodyRepository,
         private val dashboardRepository: DashboardRepository,
         private val healthRepository: HealthRepository,
+        private val healthConnectRepository: HealthConnectRepository,
         private val homeContextRepository: HomeContextRepository,
         private val journalRepository: JournalRepository,
         private val outlookRepository: OutlookRepository,
@@ -790,6 +866,7 @@ class HomeViewModel(
                 bodyRepository = bodyRepository,
                 dashboardRepository = dashboardRepository,
                 healthRepository = healthRepository,
+                healthConnectRepository = healthConnectRepository,
                 homeContextRepository = homeContextRepository,
                 journalRepository = journalRepository,
                 outlookRepository = outlookRepository,
@@ -832,6 +909,11 @@ data class HomeUiState(
     val isSubmittingJournal: Boolean = false,
     val journalMessage: String? = null,
     val pendingJournalWrites: Int = 0,
+    val healthConnectStatus: HealthConnectStatus = HealthConnectStatus.CHECKING,
+    val isImportingHealthConnect: Boolean = false,
+    val healthConnectMessage: String? = null,
+    val healthConnectImportedCount: Int = 0,
+    val pendingHealthSampleBatches: Int = 0,
     val isCheckingBackend: Boolean = false,
     val backendAvailable: Boolean? = null,
     val backendDetail: String = "Checking the Gaia Eyes data service",
