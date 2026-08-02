@@ -1815,6 +1815,9 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Write in crisp, human language (not a bulletin or press release). Avoid sterile or overly technical phrasing (e.g., 'inward-pointing field component'). Prefer plain equivalents like 'southward field orientation' or 'field leaning south'. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
         "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, choose a specific human angle supported by the content rather than automatically using recovery, recoup, gentle-plan, or lingering-buzz language. Explain that quiet space conditions do not erase carryover or local influences when the supplied history supports that distinction. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
+        "Choose one primary public read for the day and carry it through caption, affects, voiceover, and reel fields. "
+        "Do not balance that read with an opposite outcome or an 'others may feel the reverse' paragraph. Supporting "
+        "effects may add nuance, but they must point in the same direction as the hook and primary read. "
         "Humor is optional. If you use an analogy, keep it to one sentence max and do not use the phrase 'Think of it like'. Vary phrasing. Never start a sentence with 'Think of it like'. You may use metaphor_pool as guidance or invent a fresh analogy. Do not reuse any recent_analogies. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
@@ -2022,6 +2025,9 @@ def _rewrite_json_candidates(
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
         "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, choose a specific human angle supported by the content rather than automatically using recovery, recoup, gentle-plan, or lingering-buzz language. Explain that quiet space conditions do not erase carryover or local influences when supplied history supports it. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
+        "Choose one primary public read for the day and carry it through caption, affects, voiceover, and reel fields. "
+        "Do not hedge with an opposite outcome or say that another group may feel the reverse. Supporting effects must "
+        "reinforce the same narrative direction as the hook. "
         "Lead with a felt human hook before explaining the signal context. Use hook_lane_brief to choose the doorway across quiet-day breathing room, trouble sleeping, wired/tired, brain fog, headache, migraine, chronic illness flare, head pressure, pain flare, low energy, restless body, mood, and scattered focus. "
         "Do not make sleep the default just because a sleep hook performed well before; sleep must earn its place from today's facts and recent lane history. "
         "Do not make focus/productivity the default. "
@@ -2079,7 +2085,7 @@ def _rewrite_json_candidates(
         "candidate_requirements": {
             "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, a recovery score, parasympathetic, or autonomic. Preserve one specific felt texture and avoid the anti-pattern cadence in public_voice_reference.",
             "snapshot": "2-4 plain-language sentences with no numeric space-weather measurements.",
-            "affects": "2-4 sentences about possible felt patterns without certainty.",
+            "affects": "2-4 sentences about one primary possible felt pattern without certainty. Supporting effects must reinforce that pattern, not reverse it.",
             "playbook": "3-5 short bullets.",
             "hashtags": "6-10 hashtags as one string.",
             "voiceover": "40-60 spoken words. Open with the caption hook, then use a complete conversational second sentence to explain the strongest factual environmental change. Do not start sentence two with Mostly, And, But, So, or Because. Connect only to felt effects already in affects. No advice, CTA, metrics, or hashtags.",
@@ -2990,8 +2996,11 @@ def _rewrite_facebook_caption_from_spine(
     profile = _platform_caption_profile("fb")
     system_msg = (
         "You are adapting one approved Gaia Eyes daily message for Facebook. "
-        "The editorial read of the day is already selected in the content spine. Preserve its dominant felt-effect lane, "
-        "emotional hook, intensity, symptom scope, and practical advice. Do not reinterpret the signals, choose a different "
+        "The title is the approved emotional hook. The caption must begin with required_exact_hook word for word so the "
+        "gallery, Facebook caption, voiceover, and reel make the same opening promise. The editorial read of the day is "
+        "already selected in the content spine. Preserve its dominant felt-effect lane, intensity, symptom scope, and "
+        "practical advice. If older spine wording conflicts with the title, resolve the explanation around the approved "
+        "title while keeping the environmental facts honest. Do not reinterpret the signals, choose a different "
         "hook lane, introduce new symptoms, or make the day sound calmer or more active than the spine. "
         "Preserve the spine's meaning, not its sentences. Rewrite stock wording from the spine instead of expanding or "
         "echoing phrases such as 'room to recoup,' 'chance to recover,' 'light buzz,' 'small buzz,' 'mild headwind,' "
@@ -3010,6 +3019,7 @@ def _rewrite_facebook_caption_from_spine(
     )
     user_msg = {
         "task": "Expand the approved content spine into a Facebook caption without changing its message.",
+        "required_exact_hook": str(title or "").strip(),
         "facebook_brief": profile["caption_instruction"],
         "public_voice_reference": PUBLIC_WRITER_VOICE_REFERENCE,
         "content_spine": {
@@ -3031,38 +3041,55 @@ def _rewrite_facebook_caption_from_spine(
             "caption_words": profile["caption_words"],
         },
     }
-    try:
-        resp = _chat_create_compat(
-            client,
-            model=_writer_model(),
-            temperature=0.8,
-            top_p=0.95,
-            presence_penalty=0.1,
-            frequency_penalty=0.1,
-            reasoning_effort="low",
-            max_completion_tokens=900,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": json.dumps(user_msg, ensure_ascii=False)},
-            ],
-        )
-        raw = _extract_first_json_object(_chat_text(resp).strip())
-        if not raw:
-            return None
-        obj = json.loads(raw)
-        if not isinstance(obj, dict):
-            return None
-        caption = _sanitize_paragraph_caption(str(obj.get("caption") or ""))
-        if not caption:
-            return None
-        hashtags = obj.get("hashtags")
-        return {
-            "caption": caption,
-            "hashtags": hashtags.strip() if isinstance(hashtags, str) else str(default_hashtags or "").strip(),
-        }
-    except Exception:
-        return None
+    required_hook = _sanitize_caption(str(title or ""))
+    for attempt in range(3):
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": json.dumps(user_msg, ensure_ascii=False)},
+        ]
+        if attempt:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "Regenerate the full JSON response. Your caption must start with this exact text, including "
+                        f"punctuation: {required_hook}"
+                    ),
+                }
+            )
+        try:
+            resp = _chat_create_compat(
+                client,
+                model=_writer_model(),
+                temperature=0.8,
+                top_p=0.95,
+                presence_penalty=0.1,
+                frequency_penalty=0.1,
+                reasoning_effort="low",
+                max_completion_tokens=900,
+                response_format={"type": "json_object"},
+                messages=messages,
+            )
+            raw = _extract_first_json_object(_chat_text(resp).strip())
+            if not raw:
+                continue
+            obj = json.loads(raw)
+            if not isinstance(obj, dict):
+                continue
+            caption = _sanitize_paragraph_caption(str(obj.get("caption") or ""))
+            if not caption:
+                continue
+            if required_hook and not _sanitize_caption(caption).lower().startswith(required_hook.lower()):
+                _dbg(f"facebook_spine: exact-hook retry attempt={attempt + 1}")
+                continue
+            hashtags = obj.get("hashtags")
+            return {
+                "caption": caption,
+                "hashtags": hashtags.strip() if isinstance(hashtags, str) else str(default_hashtags or "").strip(),
+            }
+        except Exception as exc:
+            _dbg(f"facebook_spine: rewrite attempt={attempt + 1} failed: {exc}")
+    return None
 
 
 def _build_social_caption_variants(
@@ -3150,12 +3177,10 @@ def _validate_reel_spine(
         return None
 
     out = {key: _sanitize_caption(str(obj[key])) for key in required}
-    hook = _first_sentence(_sanitize_caption(caption))
-    voiceover = out["voiceover"]
-    if not hook or not voiceover.lower().startswith(hook.lower()):
+    voiceover = _sanitize_caption(_first_caption_paragraph(caption))
+    if not voiceover:
         return None
-    if not 35 <= len(voiceover.split()) <= 65:
-        return None
+    out["voiceover"] = voiceover
     if re.search(r"\b(follow gaia eyes|download (?:gaia eyes|the app)|gaiaeyes\.com)\b", voiceover, re.I):
         return None
 
@@ -3189,14 +3214,15 @@ def _rewrite_reel_from_final_caption(
         return None
     facts = _build_facts(ctx)
     hook = _first_sentence(_sanitize_caption(caption))
-    if not hook:
+    voiceover_paragraph = _sanitize_caption(_first_caption_paragraph(caption))
+    if not hook or not voiceover_paragraph:
         return None
 
     system_msg = (
-        "You are writing one coherent Gaia Eyes reel and voiceover from an already-approved Facebook caption. "
-        "Do not rewrite the caption hook. The voiceover must begin with that exact hook, word for word. "
+        "You are writing one coherent Gaia Eyes reel from an already-approved Facebook caption. "
+        "Do not rewrite the caption hook or voiceover. The voiceover must equal required_voiceover word for word. "
         "Build one narrative in this order: the hook, a plain-English environmental answer, the primary possible "
-        "body pattern, then one distinct secondary interpretation. Slide two must answer the hook instead of merely "
+        "body pattern, then one supporting takeaway. Slide two must answer the hook instead of merely "
         "announcing a technical status. Keep the most likely interpretation primary; do not present opposite effects "
         "as equally likely. On a quiet day, follow the approved caption's primary human pattern; use recovery framing "
         "only when the content spine supports it. Mention carryover, lingering effects, yesterday, "
@@ -3210,14 +3236,16 @@ def _rewrite_reel_from_final_caption(
         "Do not invent local weather, allergens, symptoms, or events. Do not imply that a space signal causes a health "
         "effect. Explain any necessary space-weather term in ordinary language. "
         "Return only JSON with exactly these string keys: voiceover, reel_signal, reel_effects, reel_pattern. "
-        "Voiceover: 45-65 spoken words, exact caption hook first, no advice, metrics, hashtags, follow CTA, or app CTA. "
+        "Voiceover: copy required_voiceover exactly, with no additions or omissions. "
         "Each reel field: one complete standalone thought, 4-12 words, no bullets or newline. "
         "reel_signal answers why the hook fits today. reel_effects gives one primary possible felt pattern. "
-        "reel_pattern gives one secondary interpretation and must not repeat or reverse reel_effects."
+        "reel_pattern supports the primary interpretation and must not repeat or reverse reel_effects. "
+        "Never use 'others may', 'alternatively', or another construction that introduces an opposing outcome."
     )
     payload = {
         "approved_caption": caption,
         "required_exact_hook": hook,
+        "required_voiceover": voiceover_paragraph,
         "current_facts": facts,
         "current_snapshot": snapshot,
         "current_affects": affects,
@@ -3258,34 +3286,16 @@ def _first_playbook_action(playbook: str) -> str:
 
 
 def _caption_voiceover_lead(caption: str, title: str) -> str:
-    raw = str(caption or "").strip()
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", raw) if part.strip()]
-    lead = paragraphs[0] if paragraphs else raw
+    lead = _first_caption_paragraph(caption)
     if not lead:
         lead = str(title or "").strip()
-    lead = _sanitize_caption(lead)
-    sentences = _split_text_sentences(lead)
-    if sentences:
-        lead = " ".join(sentences[:2]).strip()
-    words = lead.split()
-    if len(words) > 28:
-        first_sentence = sentences[0] if sentences else ""
-        if first_sentence and len(first_sentence.split()) <= 28:
-            lead = first_sentence
-        else:
-            lead = " ".join(words[:28]).rstrip(" ,;:-") + "."
+    return _sanitize_caption(lead)
 
-    first = _first_sentence(lead)
-    if first and _hook_lane_for_text(first):
-        return lead
-    title_clean = _sanitize_caption(str(title or ""))
-    if title_clean:
-        if not title_clean.endswith((".", "?", "!")):
-            title_clean = f"{title_clean}."
-        if lead and not lead.lower().startswith(title_clean.lower()):
-            return f"{title_clean} {lead}".strip()
-        return title_clean
-    return lead
+
+def _first_caption_paragraph(caption: str) -> str:
+    raw = str(caption or "").strip()
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", raw) if part.strip()]
+    return paragraphs[0] if paragraphs else raw
 
 
 def _build_reel_voiceover_text(
@@ -3298,32 +3308,7 @@ def _build_reel_voiceover_text(
     playbook: str,
     rewrite: Optional[Dict[str, str]] = None,
 ) -> str:
-    explicit = _sanitize_caption(str((rewrite or {}).get("voiceover") or ""))
-    caption_hook = _first_sentence(_sanitize_caption(caption))
-    caption_opens_as_hook = bool(
-        caption_hook and (_hook_lane_for_text(caption_hook) or caption_hook.endswith(("?", "!")))
-    )
-    expected_hook = caption_hook if caption_opens_as_hook else _first_sentence(
-        _caption_voiceover_lead(caption, title)
-    )
-    if (
-        explicit
-        and expected_hook
-        and explicit.lower().startswith(expected_hook.lower())
-        and len(explicit.split()) >= 24
-        and len(_split_text_sentences(explicit)) >= 2
-    ):
-        return _scrub_banned_phrases(explicit)
-
-    lead = expected_hook or caption_hook
-    if not lead:
-        preferred = _preferred_hook_lanes(ctx, limit=1)
-        if preferred:
-            lead = HOOK_LANES[preferred[0]]["examples"][0]
-    context = " ".join(_split_text_sentences(snapshot)[:2]).strip()
-    felt = " ".join(_split_text_sentences(affects)[:1]).strip()
-    words = _sanitize_caption(" ".join(part for part in (lead, context, felt) if part)).split()
-    return _scrub_banned_phrases(" ".join(words[:60]).strip())
+    return _scrub_banned_phrases(_caption_voiceover_lead(caption, title))
 
 
 _DANGLING_REEL_WORDS = {
