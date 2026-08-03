@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.gaiaeyes.app.core.network.AllDriversResponse
 import com.gaiaeyes.app.core.network.CurrentSymptomsResponse
+import com.gaiaeyes.app.core.network.LocalCheckResponse
+import com.gaiaeyes.app.core.network.ProfileLocation
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -64,10 +66,35 @@ class HomeContextCache(
         }
     }
 
+    suspend fun readLocal(accountId: String): CachedLocalWeather? {
+        val encoded = context.homeContextDataStore.data.first()[localKey(accountId)] ?: return null
+        return runCatching {
+            json.decodeFromString<CachedLocalWeather>(encoded)
+        }.getOrNull()
+    }
+
+    suspend fun writeLocal(
+        accountId: String,
+        location: ProfileLocation?,
+        local: LocalCheckResponse?,
+        savedAtEpochMillis: Long,
+    ) {
+        context.homeContextDataStore.edit { preferences ->
+            preferences[localKey(accountId)] = json.encodeToString(
+                CachedLocalWeather(
+                    location = location,
+                    local = local,
+                    savedAtEpochMillis = savedAtEpochMillis,
+                ),
+            )
+        }
+    }
+
     suspend fun clear(accountId: String) {
         context.homeContextDataStore.edit { preferences ->
             preferences.remove(symptomsKey(accountId))
             preferences.remove(driversKey(accountId))
+            preferences.remove(localKey(accountId))
         }
     }
 
@@ -76,6 +103,9 @@ class HomeContextCache(
 
     private fun driversKey(accountId: String) =
         stringPreferencesKey("drivers_${accountId.cacheSafeKey()}")
+
+    private fun localKey(accountId: String) =
+        stringPreferencesKey("local_${accountId.cacheSafeKey()}")
 }
 
 private fun String.cacheSafeKey() = filter(Char::isLetterOrDigit)
@@ -89,5 +119,12 @@ data class CachedCurrentSymptoms(
 @Serializable
 data class CachedDrivers(
     val drivers: AllDriversResponse,
+    val savedAtEpochMillis: Long,
+)
+
+@Serializable
+data class CachedLocalWeather(
+    val location: ProfileLocation? = null,
+    val local: LocalCheckResponse? = null,
     val savedAtEpochMillis: Long,
 )

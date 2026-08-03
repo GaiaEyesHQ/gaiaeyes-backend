@@ -104,6 +104,11 @@ Source: <https://support.google.com/googleplay/android-developer/answer/14151465
 When the physical Samsung phone and watch are available:
 
 - Install the current debug/internal build and sign in to the existing Gaia Eyes account.
+- Tap all eight Home gauges and confirm each detail view explains the score, change from yesterday, active symptoms, and current influencers without clipped text.
+- Tap the Home `Signals to Watch` card and confirm it opens Explore's full, relevance-ordered driver surface.
+- From Body, create a temporary symptom, change its severity, mark it improving, edit its note, and delete it; confirm every change survives leaving and reopening the screen.
+- On Patterns, confirm each section initially shows three varied-color cards and that `Show all` / `Show fewer` works for Clearest, Body, and Still Taking Shape.
+- Open Explore > Local Weather and confirm the location label, observation time, temperature, humidity, pressure, precipitation, and AQI match the shared Gaia Eyes local snapshot.
 - Confirm Samsung Health writes the approved signals into Health Connect; do not assume Samsung Health data is shared until each permission is enabled.
 - Grant Gaia Eyes only sleep, steps, heart rate, resting heart rate, respiratory rate, and oxygen saturation.
 - Import recent health data from Body and confirm the pending-upload count returns to zero.

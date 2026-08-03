@@ -14,6 +14,14 @@ data class PatternSectionModel(
     val cards: List<PatternCard>,
 )
 
+fun visiblePatternCards(
+    cards: List<PatternCard>,
+    showsAll: Boolean,
+    collapsedLimit: Int = 3,
+): List<PatternCard> {
+    return if (showsAll) cards else cards.take(collapsedLimit.coerceAtLeast(0))
+}
+
 fun patternOverviewText(patterns: PatternsResponse): String {
     return patterns.voiceSemantics
         ?.overview

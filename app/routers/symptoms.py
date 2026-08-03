@@ -1024,6 +1024,28 @@ async def get_current_symptom_timeline(
     return _success(CurrentSymptomTimelineResponse(data=data))
 
 
+@router.get("/current/{episode_id}", response_model=CurrentSymptomItemResponse)
+async def get_current_symptom_episode(
+    episode_id: str,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    try:
+        row = await symptoms_db.fetch_symptom_episode(conn, user_id, episode_id)
+    except Exception as exc:
+        logger.exception("failed to load symptom episode", extra={"user_id": user_id, "episode_id": episode_id})
+        return _failure(
+            CurrentSymptomItemResponse(
+                ok=False,
+                data=None,
+                error=_error_text(exc),
+                friendly_error=_ERR_LOAD_CURRENT,
+            )
+        )
+    return _success(CurrentSymptomItemResponse(data=_build_current_symptom_item_out(row)))
+
+
 @router.post("/current/{episode_id}/updates", response_model=CurrentSymptomItemResponse)
 async def update_current_symptom(
     episode_id: str,

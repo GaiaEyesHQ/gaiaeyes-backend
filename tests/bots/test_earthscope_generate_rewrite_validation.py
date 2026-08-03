@@ -487,23 +487,22 @@ def test_select_best_rewrite_candidate_uses_non_sleep_lane_when_sleep_recent():
     assert selected["voiceover"].startswith("Body buzzing")
 
 
-def test_reel_voiceover_fallback_starts_with_emotional_title_not_action_caption():
+def test_reel_voiceover_reads_caption_first_paragraph_verbatim():
+    first_paragraph = (
+        "Body buzzing for no reason? The field is active enough to make settling feel harder for some people."
+    )
     voiceover = _build_reel_voiceover_text(
         ctx={"kp_max_24h": 4.5, "bz_min": -7},
         title="Body Buzzing For No Reason?",
-        caption="Take short movement breaks and sip water today. Keep the day simple when your body feels keyed up.",
+        caption=f"{first_paragraph}\n\nTake short movement breaks and sip water today.",
         snapshot="Solar wind is elevated today. Magnetic conditions are shifting.",
         affects="Some people may notice restless energy or trouble settling.",
         playbook="- Do 3 minutes of easy movement\n- Sip water",
         rewrite=None,
     )
 
-    assert voiceover.startswith("Body Buzzing For No Reason?")
-    assert "Solar wind is elevated today." in voiceover
-    assert "restless energy" in voiceover
+    assert voiceover == first_paragraph
     assert "Do 3 minutes" not in voiceover
-    assert "Follow Gaia Eyes" not in voiceover
-    assert "download the app" not in voiceover
 
 
 def test_voiceover_caption_source_prefers_facebook_variant():
@@ -518,7 +517,7 @@ def test_voiceover_caption_source_prefers_facebook_variant():
     assert caption == "Facebook caption first paragraph.\n\nMore Facebook context."
 
 
-def test_reel_voiceover_uses_long_explicit_script_when_available():
+def test_reel_voiceover_ignores_separately_generated_script():
     voiceover = _build_reel_voiceover_text(
         ctx={"kp_max_24h": 4.5, "bz_min": -7},
         title="Body Buzzing For No Reason?",
@@ -534,13 +533,10 @@ def test_reel_voiceover_uses_long_explicit_script_when_available():
         },
     )
 
-    assert voiceover == (
-        "Body buzzing for no clear reason? Solar wind is elevated today, and magnetic conditions have been shifting. "
-        "Some sensitive people notice days like this as restless energy, trouble settling, or energy that spikes and dips before easing again."
-    )
+    assert voiceover == "Body buzzing for no clear reason? Take short movement breaks and sip water today."
 
 
-def test_reel_voiceover_accepts_complete_writer_script_below_old_word_floor():
+def test_reel_voiceover_uses_caption_even_when_generated_script_is_complete():
     script = (
         "Feeling off for no clear reason? Today's signals are mostly steady, so this is a better day "
         "to notice your own pattern than to expect a shared reaction."
@@ -556,7 +552,7 @@ def test_reel_voiceover_accepts_complete_writer_script_below_old_word_floor():
         rewrite={"voiceover": script},
     )
 
-    assert voiceover == script
+    assert voiceover == "Feeling off for no clear reason? A steadier day may leave more room to reset."
 
 
 def test_reel_voiceover_rejects_writer_script_with_different_caption_hook():
@@ -777,10 +773,11 @@ def test_rewrite_reel_from_final_caption_passes_history_and_returns_aligned_spin
 
     supplied = json.loads(captured["messages"][1]["content"])
     assert supplied["required_exact_hook"] == "A quieter day to catch your breath?"
+    assert supplied["required_voiceover"] == "A quieter day to catch your breath? Keep plans light."
     assert supplied["carryover_supported"] is True
     assert supplied["recent_signal_history"][0]["day"] == "2026-07-24"
     assert result is not None
-    assert result["voiceover"].startswith(supplied["required_exact_hook"])
+    assert result["voiceover"] == supplied["required_voiceover"]
 
 
 def test_reel_story_fallback_uses_complete_distinct_sentences():
@@ -804,13 +801,16 @@ def test_reel_story_fallback_uses_complete_distinct_sentences():
     assert story["pattern"] == "Focus can come in short bursts with quicker dips."
 
 
-def test_reel_voiceover_keeps_hook_signal_and_effect_without_tip():
+def test_reel_voiceover_does_not_append_snapshot_or_affects_to_caption_paragraph():
+    first_paragraph = (
+        "Body buzzing for no clear reason? That jittery wired-but-tired feeling can make small tasks feel draining."
+    )
     voiceover = _build_reel_voiceover_text(
         ctx={"kp_max_24h": 2.0, "bz_min": -4.8},
         title="Body Buzzing For No Clear Reason?",
         caption=(
-            "Body buzzing for no clear reason? That jittery wired-but-tired feeling can make small tasks feel draining. "
-            "This extra sentence should not make the reel drag into a long Facebook-style read."
+            f"{first_paragraph}\n\n"
+            "This extra paragraph should not make the reel drag into a long Facebook-style read."
         ),
         snapshot="Solar wind is elevated today. Magnetic conditions are shifting.",
         affects="Some people may notice restless energy or energy that spikes and dips.",
@@ -818,10 +818,9 @@ def test_reel_voiceover_keeps_hook_signal_and_effect_without_tip():
         rewrite=None,
     )
 
-    assert voiceover.startswith("Body buzzing for no clear reason?")
-    assert "Solar wind is elevated today." in voiceover
+    assert voiceover == first_paragraph
+    assert "Solar wind is elevated today." not in voiceover
     assert "slow breaths" not in voiceover
-    assert len(voiceover.split()) <= 60
 
 
 def test_facebook_caption_rewrite_receives_finished_content_spine(monkeypatch):
@@ -862,6 +861,7 @@ def test_facebook_caption_rewrite_receives_finished_content_spine(monkeypatch):
     )
 
     prompt = json.loads(captured["messages"][1]["content"])
+    assert prompt["required_exact_hook"] == "Body Buzzing For No Clear Reason?"
     assert prompt["content_spine"]["title"] == "Body Buzzing For No Clear Reason?"
     assert prompt["content_spine"]["felt_effects"].startswith("You may feel jumpy and drained")
     assert prompt["public_voice_reference"]["golden"]["title_shape"] == "Brain Fog Comes In Waves"
@@ -878,6 +878,49 @@ def test_facebook_caption_rewrite_receives_finished_content_spine(monkeypatch):
     assert result["caption"].startswith("Body buzzing for no clear reason?")
     assert "\n\nTry three minutes" in result["caption"]
     assert result["hashtags"] == "#GaiaEyes"
+
+
+def test_facebook_caption_retries_when_model_changes_shared_hook(monkeypatch):
+    responses = [
+        {
+            "caption": "A different hook that would conflict with the gallery. More context follows.",
+            "hashtags": "#GaiaEyes",
+        },
+        {
+            "caption": (
+                "Sinus pressure louder today? Quiet space conditions make local pressure, smoke, or pollen worth "
+                "checking before blaming the broader sky.\n\nKeep the rest of the day simple."
+            ),
+            "hashtags": "#GaiaEyes #SinusPressure",
+        },
+    ]
+    calls = []
+
+    def fake_chat_create(_client, **kwargs):
+        calls.append(kwargs)
+        message = types.SimpleNamespace(content=json.dumps(responses[len(calls) - 1]))
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    monkeypatch.setattr(earthscope_generate, "_chat_create_compat", fake_chat_create)
+    monkeypatch.setattr(earthscope_generate, "_writer_model", lambda: "test-model")
+
+    result = _rewrite_facebook_caption_from_spine(
+        object(),
+        ctx={"day": "2026-08-01", "platform": "fb"},
+        title="Sinus pressure louder today?",
+        default_caption="Head pressure may feel different today.",
+        default_hashtags="#GaiaEyes",
+        sections={
+            "snapshot": "Space conditions are quiet.",
+            "affects": "Some people may notice a steadier day.",
+            "playbook": "- Check local conditions",
+        },
+    )
+
+    assert len(calls) == 2
+    assert calls[1]["messages"][-1]["content"].endswith("Sinus pressure louder today?")
+    assert result is not None
+    assert result["caption"].startswith("Sinus pressure louder today?")
 
 
 def test_social_variants_expand_spine_instead_of_starting_second_interpretation(monkeypatch):

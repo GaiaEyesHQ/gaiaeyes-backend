@@ -106,4 +106,63 @@ class HomeContextResponsesTest {
         assertEquals("Strong pattern", response.drivers.single().patternStatusLabel)
         assertEquals(0.88, response.drivers.single().displayScore ?: 0.0, 0.001)
     }
+
+    @Test
+    fun decodesLocalWeatherWhenHealthFlagsAreAnObject() {
+        val response = json.decodeFromString<LocalCheckResponse>(
+            """
+            {
+              "ok": true,
+              "where": {"zip": "78754", "lat": 30.35, "lon": -97.65},
+              "weather": {
+                "temp_c": 31.2,
+                "temp_delta_24h_c": 1.8,
+                "humidity_pct": 62.0,
+                "precip_prob_pct": 20.0,
+                "pressure_hpa": 1012.4,
+                "baro_delta_24h_hpa": -2.3,
+                "baro_trend": "falling",
+                "obs_time": "2026-08-02T21:35:00Z"
+              },
+              "air": {"aqi": 42, "category": "Good", "pollutant": "O3"},
+              "health": {
+                "flags": {
+                  "aqi_flag": "good",
+                  "pressure_rapid_drop": false,
+                  "big_temp_shift_24h": false
+                },
+                "messages": []
+              },
+              "asof": "2026-08-02T21:36:00Z"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("78754", response.where.zip)
+        assertEquals(31.2, response.weather.temperatureC ?: 0.0, 0.001)
+        assertEquals(42, response.air.aqi)
+    }
+
+    @Test
+    fun decodesNullableLocationPreferences() {
+        val envelope = json.decodeFromString<ProfileLocationEnvelope>(
+            """
+            {
+              "ok": true,
+              "location": {
+                "zip": "78754",
+                "lat": 30.35,
+                "lon": -97.65,
+                "is_primary": true,
+                "use_gps": null,
+                "local_insights_enabled": null
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("78754", envelope.location?.zip)
+        assertEquals(null, envelope.location?.useGps)
+        assertEquals(null, envelope.location?.localInsightsEnabled)
+    }
 }

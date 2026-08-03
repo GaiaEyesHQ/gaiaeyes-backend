@@ -701,6 +701,55 @@ async def fetch_current_symptom_items(
     return result
 
 
+async def fetch_symptom_episode(conn, user_id: str, episode_id: str) -> dict:
+    sql = """
+    select ep.id,
+           ep.symptom_code,
+           coalesce(sc.label, initcap(replace(ep.symptom_code, '_', ' '))) as label,
+           ep.original_severity,
+           ep.current_severity,
+           ep.started_at,
+           ep.current_state,
+           ep.state_updated_at,
+           ep.last_interaction_at,
+           ep.latest_note_text,
+           ep.latest_note_at,
+           ep.follow_up_state,
+           coalesce((
+             select count(*)
+               from raw.user_symptom_episode_updates u
+              where u.episode_id = ep.id
+                and u.note_text is not null
+                and btrim(u.note_text) <> ''
+           ), 0) as note_count
+      from raw.user_symptom_episodes ep
+      left join dim.symptom_codes sc on sc.symptom_code = ep.symptom_code
+     where ep.id = %s
+       and ep.user_id = %s
+     limit 1
+    """
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(sql, (episode_id, user_id), prepare=False)
+        row = await cur.fetchone()
+    if not row:
+        raise RuntimeError("Symptom episode not found")
+    return {
+        "id": _serialize_uuid(row.get("id")),
+        "symptom_code": row.get("symptom_code"),
+        "label": row.get("label"),
+        "original_severity": row.get("original_severity"),
+        "current_severity": row.get("current_severity"),
+        "started_at": _serialize_ts(row.get("started_at")),
+        "current_state": _normalize_state(row.get("current_state")),
+        "state_updated_at": _serialize_ts(row.get("state_updated_at")),
+        "last_interaction_at": _serialize_ts(row.get("last_interaction_at")),
+        "latest_note_text": row.get("latest_note_text"),
+        "latest_note_at": _serialize_ts(row.get("latest_note_at")),
+        "follow_up_state": _serialize_json(row.get("follow_up_state")) or {},
+        "note_count": int(row.get("note_count") or 0),
+    }
+
+
 async def fetch_current_symptom_items_fallback(
     conn,
     user_id: str,

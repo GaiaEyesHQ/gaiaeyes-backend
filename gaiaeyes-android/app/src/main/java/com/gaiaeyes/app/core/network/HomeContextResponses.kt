@@ -2,6 +2,7 @@ package com.gaiaeyes.app.core.network
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class CurrentSymptomsEnvelope(
@@ -45,10 +46,133 @@ data class CurrentSymptomItem(
     val symptomCode: String = "",
     val label: String = "",
     val severity: Int? = null,
+    @SerialName("original_severity")
+    val originalSeverity: Int? = null,
+    @SerialName("logged_at")
+    val loggedAt: String? = null,
+    @SerialName("last_interaction_at")
+    val lastInteractionAt: String? = null,
     @SerialName("current_state")
     val currentState: String = "",
+    @SerialName("note_preview")
+    val notePreview: String? = null,
+    @SerialName("note_count")
+    val noteCount: Int = 0,
     @SerialName("gauge_keys")
     val gaugeKeys: List<String> = emptyList(),
+    @SerialName("current_context_badge")
+    val currentContextBadge: String? = null,
+)
+
+@Serializable
+data class CurrentSymptomUpdateRequest(
+    val state: String? = null,
+    val severity: Int? = null,
+    @SerialName("note_text")
+    val noteText: String? = null,
+    @SerialName("ts_utc")
+    val timestampUtc: String? = null,
+)
+
+@Serializable
+data class CurrentSymptomItemEnvelope(
+    val ok: Boolean = false,
+    val data: CurrentSymptomItem? = null,
+    val error: String? = null,
+    @SerialName("friendly_error")
+    val friendlyError: String? = null,
+)
+
+@Serializable
+data class CurrentSymptomDeleteEnvelope(
+    val ok: Boolean = false,
+    val data: CurrentSymptomDeleteData? = null,
+    val error: String? = null,
+    @SerialName("friendly_error")
+    val friendlyError: String? = null,
+)
+
+@Serializable
+data class CurrentSymptomDeleteData(
+    @SerialName("episode_id")
+    val episodeId: String = "",
+    @SerialName("symptom_code")
+    val symptomCode: String = "",
+    @SerialName("deleted_at")
+    val deletedAt: String = "",
+)
+
+@Serializable
+data class ProfileLocationEnvelope(
+    val ok: Boolean = false,
+    val location: ProfileLocation? = null,
+)
+
+@Serializable
+data class ProfileLocation(
+    val zip: String = "",
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val label: String? = null,
+    @SerialName("is_primary")
+    val isPrimary: Boolean = true,
+    @SerialName("use_gps")
+    val useGps: Boolean? = null,
+    @SerialName("local_insights_enabled")
+    val localInsightsEnabled: Boolean? = null,
+    @SerialName("updated_at")
+    val updatedAt: String? = null,
+)
+
+@Serializable
+data class LocalCheckResponse(
+    val where: LocalCheckWhere = LocalCheckWhere(),
+    val weather: LocalWeather = LocalWeather(),
+    val air: LocalAir = LocalAir(),
+    val health: LocalHealth = LocalHealth(),
+    val asof: String? = null,
+)
+
+@Serializable
+data class LocalCheckWhere(
+    val zip: String = "",
+    val lat: Double? = null,
+    val lon: Double? = null,
+)
+
+@Serializable
+data class LocalWeather(
+    @SerialName("temp_c")
+    val temperatureC: Double? = null,
+    @SerialName("temp_delta_24h_c")
+    val temperatureDelta24hC: Double? = null,
+    @SerialName("humidity_pct")
+    val humidityPercent: Double? = null,
+    @SerialName("precip_prob_pct")
+    val precipitationProbabilityPercent: Double? = null,
+    @SerialName("pressure_hpa")
+    val pressureHpa: Double? = null,
+    @SerialName("obs_time")
+    val observationTime: String? = null,
+    @SerialName("baro_delta_24h_hpa")
+    val pressureDelta24hHpa: Double? = null,
+    @SerialName("baro_trend")
+    val barometricTrend: String? = null,
+    @SerialName("pressure_trend")
+    val pressureTrend: String? = null,
+)
+
+@Serializable
+data class LocalAir(
+    val aqi: Int? = null,
+    val category: String? = null,
+    val pollutant: String? = null,
+)
+
+@Serializable
+data class LocalHealth(
+    val flags: JsonElement? = null,
+    val messages: List<String> = emptyList(),
 )
 
 @Serializable

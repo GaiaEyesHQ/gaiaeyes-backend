@@ -76,4 +76,15 @@ class PatternsPresentationTest {
             patternBaseline(card),
         )
     }
+
+    @Test
+    fun collapsesEachPatternSectionToThreeCardsUntilExpanded() {
+        val cards = (1..5).map { PatternCard(outcome = "Pattern $it") }
+
+        assertEquals(
+            listOf("Pattern 1", "Pattern 2", "Pattern 3"),
+            visiblePatternCards(cards, showsAll = false).map { it.outcome },
+        )
+        assertEquals(cards, visiblePatternCards(cards, showsAll = true))
+    }
 }

@@ -7,6 +7,7 @@ import com.gaiaeyes.app.core.auth.AuthRepository
 import com.gaiaeyes.app.core.auth.AuthState
 import com.gaiaeyes.app.core.network.DailyCheckInStatus
 import com.gaiaeyes.app.core.network.ExposureCatalogOption
+import com.gaiaeyes.app.core.network.CurrentSymptomUpdateRequest
 import com.gaiaeyes.app.core.network.SymptomCodeOption
 import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
 import com.gaiaeyes.app.core.quicklog.QuickLogRequest
@@ -20,6 +21,7 @@ import com.gaiaeyes.app.data.HealthConnectRepository
 import com.gaiaeyes.app.data.HealthConnectStatus
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.CurrentSymptomsSnapshot
+import com.gaiaeyes.app.data.LocalWeatherSnapshot
 import com.gaiaeyes.app.data.JournalRepository
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSnapshot
@@ -50,6 +52,7 @@ class HomeViewModel(
     private var dashboardJob: Job? = null
     private var bodyJob: Job? = null
     private var homeContextJob: Job? = null
+    private var localWeatherJob: Job? = null
     private var outlookJob: Job? = null
     private var patternsJob: Job? = null
     private var loadedAccountId: String? = null
@@ -122,10 +125,16 @@ class HomeViewModel(
                 loadDashboard(account.accountId, showCachedFirst = false)
                 loadHomeContext(account.accountId, showCachedFirst = false)
             }
-            SignedInPage.BODY -> loadBody(account.accountId, showCachedFirst = false)
+            SignedInPage.BODY -> {
+                loadBody(account.accountId, showCachedFirst = false)
+                loadHomeContext(account.accountId, showCachedFirst = false)
+            }
             SignedInPage.PATTERNS -> loadPatterns(account.accountId, showCachedFirst = false)
             SignedInPage.OUTLOOK -> loadOutlook(account.accountId, showCachedFirst = false)
-            SignedInPage.EXPLORE -> loadHomeContext(account.accountId, showCachedFirst = false)
+            SignedInPage.EXPLORE -> {
+                loadHomeContext(account.accountId, showCachedFirst = false)
+                loadLocalWeather(account.accountId, showCachedFirst = false)
+            }
         }
     }
 
@@ -198,8 +207,13 @@ class HomeViewModel(
         val account = _uiState.value.authState as? AuthState.SignedIn ?: return
         when (page) {
             SignedInPage.HOME -> Unit
-            SignedInPage.BODY -> if (_uiState.value.body == null) {
-                loadBody(account.accountId, showCachedFirst = true)
+            SignedInPage.BODY -> {
+                if (_uiState.value.body == null) {
+                    loadBody(account.accountId, showCachedFirst = true)
+                }
+                if (_uiState.value.currentSymptoms == null) {
+                    loadHomeContext(account.accountId, showCachedFirst = true)
+                }
             }
             SignedInPage.PATTERNS -> if (_uiState.value.patterns == null) {
                 loadPatterns(account.accountId, showCachedFirst = true)
@@ -207,8 +221,13 @@ class HomeViewModel(
             SignedInPage.OUTLOOK -> if (_uiState.value.outlook == null) {
                 loadOutlook(account.accountId, showCachedFirst = true)
             }
-            SignedInPage.EXPLORE -> if (_uiState.value.drivers == null) {
-                loadHomeContext(account.accountId, showCachedFirst = true)
+            SignedInPage.EXPLORE -> {
+                if (_uiState.value.drivers == null) {
+                    loadHomeContext(account.accountId, showCachedFirst = true)
+                }
+                if (_uiState.value.localWeather == null) {
+                    loadLocalWeather(account.accountId, showCachedFirst = true)
+                }
             }
         }
     }
@@ -248,7 +267,92 @@ class HomeViewModel(
             patternsMessage = null,
             journalMessage = null,
             healthConnectMessage = null,
+            localWeatherMessage = null,
+            symptomActionMessage = null,
         )
+    }
+
+    fun updateCurrentSymptom(
+        episodeId: String,
+        state: String? = null,
+        severity: Int? = null,
+        note: String? = null,
+    ) {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.isUpdatingSymptoms || episodeId.isBlank()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isUpdatingSymptoms = true,
+                journalMessage = null,
+                symptomActionMessage = null,
+            )
+            runCatching {
+                homeContextRepository.updateCurrentSymptom(
+                    accountId = account.accountId,
+                    episodeId = episodeId,
+                    request = CurrentSymptomUpdateRequest(
+                        state = state,
+                        severity = severity,
+                        noteText = note?.trim()?.takeIf(String::isNotEmpty),
+                        timestampUtc = Instant.now().toString(),
+                    ),
+                )
+            }.onSuccess { (_, symptoms) ->
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        currentSymptoms = symptoms,
+                        isUpdatingSymptoms = false,
+                        symptomActionMessage = when (state) {
+                            "resolved" -> "Symptom marked resolved."
+                            "improving" -> "Symptom marked improving."
+                            "worse" -> "Symptom update saved."
+                            else -> "Symptom details updated."
+                        },
+                    )
+                    loadDashboard(account.accountId, showCachedFirst = false)
+                    loadHomeContext(account.accountId, showCachedFirst = false)
+                }
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        isUpdatingSymptoms = false,
+                        symptomActionMessage = "That symptom couldn't be updated. Check your connection and try again.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteCurrentSymptom(episodeId: String) {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.isUpdatingSymptoms || episodeId.isBlank()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isUpdatingSymptoms = true,
+                journalMessage = null,
+                symptomActionMessage = null,
+            )
+            runCatching {
+                homeContextRepository.deleteCurrentSymptom(account.accountId, episodeId)
+            }.onSuccess { (_, symptoms) ->
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        currentSymptoms = symptoms,
+                        isUpdatingSymptoms = false,
+                        symptomActionMessage = "Symptom entry deleted.",
+                    )
+                    loadDashboard(account.accountId, showCachedFirst = false)
+                    loadHomeContext(account.accountId, showCachedFirst = false)
+                }
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        isUpdatingSymptoms = false,
+                        symptomActionMessage = "That symptom couldn't be deleted. Check your connection and try again.",
+                    )
+                }
+            }
+        }
     }
 
     fun openSymptomLog() {
@@ -395,6 +499,8 @@ class HomeViewModel(
         bodyJob = null
         homeContextJob?.cancel()
         homeContextJob = null
+        localWeatherJob?.cancel()
+        localWeatherJob = null
         patternsJob?.cancel()
         patternsJob = null
         outlookJob?.cancel()
@@ -412,6 +518,11 @@ class HomeViewModel(
             drivers = null,
             isLoadingHomeContext = false,
             homeContextMessage = null,
+            localWeather = null,
+            isLoadingLocalWeather = false,
+            localWeatherMessage = null,
+            isUpdatingSymptoms = false,
+            symptomActionMessage = null,
             patterns = null,
             isLoadingPatterns = false,
             patternsMessage = null,
@@ -734,6 +845,53 @@ class HomeViewModel(
         }
     }
 
+    private fun loadLocalWeather(accountId: String, showCachedFirst: Boolean) {
+        localWeatherJob?.cancel()
+        localWeatherJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoadingLocalWeather = true,
+                localWeatherMessage = null,
+            )
+
+            if (showCachedFirst) {
+                homeContextRepository.cachedLocal(accountId)?.let { cached ->
+                    if (isCurrentAccount(accountId)) {
+                        _uiState.value = _uiState.value.copy(localWeather = cached)
+                    }
+                }
+            }
+
+            runCatching {
+                homeContextRepository.refreshLocal(accountId)
+            }.onSuccess { localWeather ->
+                if (isCurrentAccount(accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        localWeather = localWeather,
+                        isLoadingLocalWeather = false,
+                        localWeatherMessage = when {
+                            localWeather.location == null -> "Add a ZIP code in Gaia Eyes to see local conditions."
+                            localWeather.location.localInsightsEnabled == false -> "Local conditions are turned off in your Gaia Eyes profile."
+                            localWeather.local == null -> "Local conditions aren't available for this location yet."
+                            else -> null
+                        },
+                    )
+                }
+            }.onFailure {
+                if (isCurrentAccount(accountId)) {
+                    val hasCachedLocal = _uiState.value.localWeather?.local != null
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingLocalWeather = false,
+                        localWeatherMessage = if (hasCachedLocal) {
+                            "Showing saved local conditions while live data reconnects."
+                        } else {
+                            "Local conditions couldn't load. Check your connection and try again."
+                        },
+                    )
+                }
+            }
+        }
+    }
+
     private fun loadPatterns(accountId: String, showCachedFirst: Boolean) {
         patternsJob?.cancel()
         patternsJob = viewModelScope.launch {
@@ -895,6 +1053,11 @@ data class HomeUiState(
     val drivers: DriversSnapshot? = null,
     val isLoadingHomeContext: Boolean = false,
     val homeContextMessage: String? = null,
+    val localWeather: LocalWeatherSnapshot? = null,
+    val isLoadingLocalWeather: Boolean = false,
+    val localWeatherMessage: String? = null,
+    val isUpdatingSymptoms: Boolean = false,
+    val symptomActionMessage: String? = null,
     val patterns: PatternsSnapshot? = null,
     val isLoadingPatterns: Boolean = false,
     val patternsMessage: String? = null,

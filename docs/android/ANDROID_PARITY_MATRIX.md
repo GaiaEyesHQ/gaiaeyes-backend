@@ -1,6 +1,6 @@
 # Android Parity Matrix
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-02
 
 This matrix defines Android v1 parity against the live iOS app. It is intentionally scoped to a practical first Android release, not every iOS-only or future feature.
 
@@ -9,12 +9,12 @@ This matrix defines Android v1 parity against the live iOS app. It is intentiona
 | Welcome/onboarding | Required | Supabase auth, profile endpoints | Match the current iOS email magic-link/session flow; do not create a parallel Android identity model. |
 | Health permission step | Required | Health Connect | Optional. No forced permission wall. Continue with limited body surfaces if skipped. |
 | 30-day import | Required | `/v1/samples/batch` | Health Connect initial sync for the minimum useful set only. |
-| Home | Required | `/v1/dashboard`, `/v1/features/today`, `/v1/users/me/drivers`, profile feed | Cache-first Home is implemented with all eight shared gauges in a compact expandable layout, current/possible symptoms, Signals to Watch, and authenticated context-entry actions. |
+| Home | Required | `/v1/dashboard`, `/v1/features/today`, `/v1/users/me/drivers`, profile feed | Cache-first Home is implemented with all eight shared gauges in a compact expandable layout, tap-to-open gauge explanations, current/possible symptoms, Signals to Watch, and authenticated context-entry actions. |
 | Body | Required | `/v1/features/today`, `/v1/samples/batch` | Cache-first sleep stages, efficiency, health stats, personal deltas, steps, and heart range are implemented from shared account data. Optional 30-day Health Connect import is implemented for sleep, steps, heart rate, resting heart rate, respiratory rate, and oxygen saturation, with account-scoped durable retry. HRV remains deferred under the explicit RMSSD/SDNN boundary. |
-| Patterns | Required | `/v1/patterns`, `/v1/patterns/summary` | Read-only cache-first parity is implemented with a fast summary, expanded background refresh, shared confidence/evidence language, and responsive phone/tablet cards. Deeper drilldowns and subscription presentation can follow. |
+| Patterns | Required | `/v1/patterns`, `/v1/patterns/summary` | Read-only cache-first parity is implemented with a fast summary, expanded background refresh, shared confidence/evidence language, varied category accents, three-card previews, and explicit Show all/Show fewer controls. Deeper drilldowns and subscription presentation can follow. |
 | Outlook | Required | `/v1/users/me/outlook`, `/v1/space/forecast/outlook` | Read-only cache-first parity is implemented with the shared daily signal cards, likely symptom domains, corrected signal labels, and responsive phone/tablet layouts. Narrative summary blocks removed from iOS remain omitted. |
-| Explore / All Drivers | Required | `/v1/users/me/drivers`, public space/earth/local endpoints | Read-only cache-first parity is implemented from the shared ranked driver payload, including current role/state, signal strength, personal pattern context, active symptoms, summary counts, and responsive phone/tablet cards. |
-| Symptoms | Required | `/v1/symptoms/codes`, `/v1/symptoms` | Implemented with server-driven choices, authenticated writes, and an account-scoped persistent queue with WorkManager background retry. |
+| Explore / All Drivers | Required | `/v1/users/me/drivers`, profile location, `/v1/local/check` | Read-only cache-first parity is implemented from the shared ranked driver payload, including current role/state, signal strength, personal pattern context, active symptoms, and summary counts. Explore also includes a location-aware Local Weather card and detail page using the existing shared local-current payload. |
+| Symptoms | Required | `/v1/symptoms/codes`, `/v1/symptoms`, `/v1/symptoms/current` | Implemented with server-driven choices, authenticated writes, and an account-scoped persistent queue with WorkManager background retry. Body and Home link to an active-symptom review page where users can mark an item ongoing, improving, worse, or resolved; edit severity/notes; or delete an accidental entry. |
 | Hands-free migraine log | Required | `/v1/symptoms` | Android V1 accepts an Assistant/App Action or `gaiaeyes://log/migraine`, records the invocation time with the shared `MIGRAINE` code and default severity 5, and uses the existing persistent symptom queue. It opens Gaia Eyes for confirmation; Android does not guarantee invisible background fulfillment. |
 | Exposures | Required | `/v1/exposures/catalog`, `/v1/exposures` | Implemented with the shared backend allowlist, authenticated writes, and the same persistent queue with WorkManager background retry. The catalog endpoint must be deployed before production end-to-end testing. |
 | Daily check-in | Required | `/v1/feedback/daily-checkin` | Implemented with the backend-selected target day, authenticated upsert, and persistent foreground/background retry. |
@@ -49,6 +49,7 @@ Android must not blank core surfaces at day rollover or during transient backend
 - Dashboard gauges.
 - Patterns summary and expanded result.
 - Drivers preview and all drivers.
+- Local weather/current-conditions payload.
 - User outlook.
 - Symptoms current/today/daily/diag.
 - Profile preferences/location/tags.

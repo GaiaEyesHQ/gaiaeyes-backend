@@ -34,6 +34,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,6 +68,7 @@ import com.gaiaeyes.app.core.auth.AuthRepository
 import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
 import com.gaiaeyes.app.core.auth.AuthState
 import com.gaiaeyes.app.core.network.DashboardGaugesResponse
+import com.gaiaeyes.app.core.network.CurrentSymptomItem
 import com.gaiaeyes.app.core.network.DriverItem
 import com.gaiaeyes.app.core.network.FeaturesTodayResponse
 import com.gaiaeyes.app.core.network.OutlookDay
@@ -82,6 +85,7 @@ import com.gaiaeyes.app.data.HealthConnectStatus
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.HomeContextSource
 import com.gaiaeyes.app.data.JournalRepository
+import com.gaiaeyes.app.data.LocalWeatherSnapshot
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSource
 import com.gaiaeyes.app.data.PatternsRepository
@@ -124,6 +128,8 @@ fun GaiaEyesApp(
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showCurrentSymptoms by rememberSaveable { mutableStateOf(false) }
+    var showLocalWeather by rememberSaveable { mutableStateOf(false) }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         contract = healthConnectRepository.permissionContract(),
         onResult = { viewModel.refreshHealthConnect() },
@@ -160,8 +166,29 @@ fun GaiaEyesApp(
                 onRefresh = viewModel::refresh,
                 onSignOut = {
                     showSettings = false
+                    showCurrentSymptoms = false
+                    showLocalWeather = false
                     viewModel.signOut()
                 },
+                modifier = modifier,
+            )
+        } else if (showCurrentSymptoms) {
+            CurrentSymptomsScreen(
+                uiState = uiState,
+                onClose = { showCurrentSymptoms = false },
+                onRefresh = viewModel::refresh,
+                onLogSymptom = viewModel::openSymptomLog,
+                onUpdateSymptom = viewModel::updateCurrentSymptom,
+                onDeleteSymptom = viewModel::deleteCurrentSymptom,
+                onDismissMessage = viewModel::dismissMessage,
+                modifier = modifier,
+            )
+        } else if (showLocalWeather) {
+            LocalWeatherScreen(
+                uiState = uiState,
+                onClose = { showLocalWeather = false },
+                onRefresh = viewModel::refresh,
+                onDismissMessage = viewModel::dismissMessage,
                 modifier = modifier,
             )
         } else when (uiState.selectedPage) {
@@ -175,6 +202,7 @@ fun GaiaEyesApp(
                 onLogSymptom = viewModel::openSymptomLog,
                 onLogExposure = viewModel::openExposureLog,
                 onDailyCheckIn = viewModel::openDailyCheckIn,
+                onOpenCurrentSymptoms = { showCurrentSymptoms = true },
                 modifier = modifier,
             )
             SignedInPage.BODY -> BodyScreen(
@@ -188,6 +216,7 @@ fun GaiaEyesApp(
                     healthConnectPermissionLauncher.launch(healthConnectRepository.requiredPermissions)
                 },
                 onImportHealth = viewModel::importHealthConnect,
+                onOpenCurrentSymptoms = { showCurrentSymptoms = true },
                 modifier = modifier,
             )
             SignedInPage.PATTERNS -> PatternsScreen(
@@ -215,6 +244,7 @@ fun GaiaEyesApp(
                 onOpenSettings = { showSettings = true },
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
+                onOpenLocalWeather = { showLocalWeather = true },
                 modifier = modifier,
             )
         }
@@ -620,9 +650,40 @@ private fun HomeScreen(
     onLogSymptom: () -> Unit,
     onLogExposure: () -> Unit,
     onDailyCheckIn: () -> Unit,
+    onOpenCurrentSymptoms: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showAllGauges by rememberSaveable { mutableStateOf(false) }
+    var selectedGaugeKey by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val selectedGauge = allGaugeDefinitions.firstOrNull { it.key == selectedGaugeKey }
+    if (selectedGauge != null) {
+        GaugeDetailScreen(
+            model = gaugeDetailModel(
+                key = selectedGauge.key,
+                fallbackLabel = selectedGauge.fallbackLabel,
+                dashboard = uiState.dashboard?.dashboard,
+                currentSymptoms = uiState.currentSymptoms?.symptoms,
+                drivers = uiState.drivers?.drivers,
+            ),
+            color = selectedGauge.color,
+            onClose = { selectedGaugeKey = null },
+            onViewBody = {
+                selectedGaugeKey = null
+                onSelectPage(SignedInPage.BODY)
+            },
+            onViewDrivers = {
+                selectedGaugeKey = null
+                onSelectPage(SignedInPage.EXPLORE)
+            },
+            onLogSymptom = {
+                selectedGaugeKey = null
+                onLogSymptom()
+            },
+            modifier = modifier,
+        )
+        return
+    }
 
     ScreenFrame(modifier = modifier) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -664,6 +725,7 @@ private fun HomeScreen(
                     dashboard = uiState.dashboard?.dashboard,
                     columns = columns,
                     showAll = showAllGauges,
+                    onGaugeClick = { selectedGaugeKey = it.key },
                 )
                 TextButton(
                     onClick = { showAllGauges = !showAllGauges },
@@ -714,9 +776,13 @@ private fun HomeScreen(
                     onLogSymptom = onLogSymptom,
                     onLogExposure = onLogExposure,
                     onDailyCheckIn = onDailyCheckIn,
+                    onOpenCurrentSymptoms = onOpenCurrentSymptoms,
                 )
                 Spacer(modifier = Modifier.height(18.dp))
-                SignalsToWatchCard(uiState = uiState)
+                SignalsToWatchCard(
+                    uiState = uiState,
+                    onClick = { onSelectPage(SignedInPage.EXPLORE) },
+                )
                 Spacer(modifier = Modifier.height(18.dp))
                 BackendCard(uiState = uiState, onRetry = onRefresh)
             }
@@ -739,6 +805,7 @@ private fun BodyScreen(
     onSelectPage: (SignedInPage) -> Unit,
     onConnectHealth: () -> Unit,
     onImportHealth: () -> Unit,
+    onOpenCurrentSymptoms: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ScreenFrame(modifier = modifier) {
@@ -806,6 +873,11 @@ private fun BodyScreen(
                     else -> BodyEmptyCard()
                 }
                 Spacer(modifier = Modifier.height(18.dp))
+                CurrentSymptomsSummaryCard(
+                    uiState = uiState,
+                    onClick = onOpenCurrentSymptoms,
+                )
+                Spacer(modifier = Modifier.height(18.dp))
                 HealthConnectCard(
                     uiState = uiState,
                     onConnect = onConnectHealth,
@@ -820,6 +892,395 @@ private fun BodyScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
+    }
+}
+
+@Composable
+private fun CurrentSymptomsSummaryCard(
+    uiState: HomeUiState,
+    onClick: () -> Unit,
+) {
+    val symptoms = uiState.currentSymptoms?.symptoms?.items.orEmpty()
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaRose.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, GaiaRose.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Current Symptoms",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = if (symptoms.isEmpty()) "Open ›" else "${symptoms.size} active ›",
+                    color = GaiaRose,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Text(
+                text = when {
+                    symptoms.isNotEmpty() -> symptoms
+                        .take(3)
+                        .joinToString(" • ") { it.label.ifBlank { "Symptom" } }
+                    uiState.isLoadingHomeContext -> "Checking your recent symptom logs…"
+                    else -> "Nothing is active right now. Open this page to log or review symptoms."
+                },
+                color = Color(0xFFB7C0CC),
+                fontSize = 15.sp,
+                lineHeight = 21.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CurrentSymptomsScreen(
+    uiState: HomeUiState,
+    onClose: () -> Unit,
+    onRefresh: () -> Unit,
+    onLogSymptom: () -> Unit,
+    onUpdateSymptom: (String, String?, Int?, String?) -> Unit,
+    onDeleteSymptom: (String) -> Unit,
+    onDismissMessage: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var editingItem by remember { mutableStateOf<CurrentSymptomItem?>(null) }
+    var deletingItem by remember { mutableStateOf<CurrentSymptomItem?>(null) }
+    val symptoms = uiState.currentSymptoms?.symptoms?.items.orEmpty()
+
+    BackHandler(onBack = onClose)
+    ScreenFrame(modifier = modifier) {
+        ContentColumn(bottomPadding = 36.dp) {
+            Header(
+                subtitle = "Body context",
+                trailing = {
+                    TextButton(onClick = onClose) {
+                        Text("Close", color = GaiaRose)
+                    }
+                },
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Current Symptoms",
+                        color = Color.White,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Review what is active, add an update, or remove an accidental entry.",
+                        color = Color(0xFF9BA6B4),
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                TextButton(
+                    onClick = onRefresh,
+                    enabled = !uiState.isLoadingHomeContext && !uiState.isUpdatingSymptoms,
+                ) {
+                    Text(if (uiState.isLoadingHomeContext) "Refreshing…" else "Refresh")
+                }
+            }
+
+            uiState.symptomActionMessage?.let { message ->
+                Spacer(modifier = Modifier.height(14.dp))
+                MessageCard(
+                    message = message,
+                    positive = !message.contains("couldn't"),
+                    onDismiss = onDismissMessage,
+                )
+            }
+            uiState.homeContextMessage?.let { message ->
+                Spacer(modifier = Modifier.height(14.dp))
+                MessageCard(
+                    message = message,
+                    positive = uiState.currentSymptoms != null,
+                    onDismiss = onDismissMessage,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+            when {
+                symptoms.isNotEmpty() -> symptoms.forEach { item ->
+                    CurrentSymptomEditorCard(
+                        item = item,
+                        isUpdating = uiState.isUpdatingSymptoms,
+                        onStateChange = { state ->
+                            onUpdateSymptom(item.id, state, item.severity, null)
+                        },
+                        onEdit = { editingItem = item },
+                        onDelete = { deletingItem = item },
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+                uiState.isLoadingHomeContext -> ContextLoadingRow("Checking recent symptoms…")
+                else -> Card(
+                    colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "Nothing is active right now. If something changes, one quick log is enough to start a timeline.",
+                        color = Color(0xFFB7C0CC),
+                        fontSize = 16.sp,
+                        lineHeight = 23.sp,
+                        modifier = Modifier.padding(20.dp),
+                    )
+                }
+            }
+
+            Button(
+                onClick = onLogSymptom,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = GaiaRose,
+                    contentColor = GaiaNavy,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Log a symptom", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+
+    editingItem?.let { item ->
+        SymptomEditDialog(
+            item = item,
+            onDismiss = { editingItem = null },
+            onSave = { severity, note ->
+                editingItem = null
+                onUpdateSymptom(item.id, item.currentState.ifBlank { "ongoing" }, severity, note)
+            },
+        )
+    }
+    deletingItem?.let { item ->
+        AlertDialog(
+            onDismissRequest = { deletingItem = null },
+            title = { Text("Delete ${item.label.ifBlank { "symptom" }}?") },
+            text = { Text("This removes the symptom episode and its updates. This cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deletingItem = null
+                        onDeleteSymptom(item.id)
+                    },
+                ) {
+                    Text("Delete", color = GaiaRose, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingItem = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun CurrentSymptomEditorCard(
+    item: CurrentSymptomItem,
+    isUpdating: Boolean,
+    onStateChange: (String) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaRose.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, GaiaRose.copy(alpha = 0.24f)),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.label.ifBlank { "Symptom" },
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = buildString {
+                            item.severity?.let { append("Severity $it/10") }
+                            if (isNotEmpty()) append(" • ")
+                            append(symptomStateLabel(item.currentState))
+                        },
+                        color = Color(0xFFADB7C5),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                item.currentContextBadge?.trim()?.takeIf(String::isNotEmpty)?.let { badge ->
+                    PatternPill(label = badge, color = GaiaBlue)
+                }
+            }
+            item.notePreview?.trim()?.takeIf(String::isNotEmpty)?.let { note ->
+                Text(
+                    text = note,
+                    color = Color(0xFFC4CCD7),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SymptomUpdateButton(
+                    label = "Still active",
+                    enabled = !isUpdating,
+                    onClick = { onStateChange("ongoing") },
+                    modifier = Modifier.weight(1f),
+                )
+                SymptomUpdateButton(
+                    label = "Improving",
+                    enabled = !isUpdating,
+                    onClick = { onStateChange("improving") },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SymptomUpdateButton(
+                    label = "Worse",
+                    enabled = !isUpdating,
+                    onClick = { onStateChange("worse") },
+                    modifier = Modifier.weight(1f),
+                )
+                SymptomUpdateButton(
+                    label = "Resolved",
+                    enabled = !isUpdating,
+                    onClick = { onStateChange("resolved") },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                TextButton(onClick = onEdit, enabled = !isUpdating) {
+                    Text("Edit details", color = GaiaRose)
+                }
+                TextButton(onClick = onDelete, enabled = !isUpdating) {
+                    Text("Delete", color = Color(0xFFADB7C5))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SymptomUpdateButton(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = GaiaRose.copy(alpha = 0.15f),
+            contentColor = GaiaRose,
+        ),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+        modifier = modifier,
+    ) {
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun SymptomEditDialog(
+    item: CurrentSymptomItem,
+    onDismiss: () -> Unit,
+    onSave: (Int?, String?) -> Unit,
+) {
+    var severityText by rememberSaveable(item.id) {
+        mutableStateOf(item.severity?.toString().orEmpty())
+    }
+    var noteText by rememberSaveable(item.id) {
+        mutableStateOf(item.notePreview.orEmpty())
+    }
+    val severity = severityText.toIntOrNull()?.takeIf { it in 0..10 }
+    val severityIsValid = severityText.isBlank() || severity != null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit ${item.label.ifBlank { "symptom" }}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = severityText,
+                    onValueChange = { severityText = it.filter(Char::isDigit).take(2) },
+                    label = { Text("Severity (0–10)") },
+                    isError = !severityIsValid,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { noteText = it.take(500) },
+                    label = { Text("Note (optional)") },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(severity, noteText.trim().takeIf(String::isNotEmpty)) },
+                enabled = severityIsValid,
+            ) {
+                Text("Save", color = GaiaRose, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+private fun symptomStateLabel(state: String): String {
+    return when (state.lowercase()) {
+        "new" -> "New"
+        "ongoing" -> "Still active"
+        "improving" -> "Improving"
+        "worse" -> "Worse"
+        "resolved" -> "Resolved"
+        else -> "Active"
     }
 }
 
@@ -971,6 +1432,8 @@ private fun PatternSectionCard(
     section: PatternSectionModel,
     columns: Int,
 ) {
+    var showsAll by rememberSaveable(section.title) { mutableStateOf(false) }
+    val visibleCards = visiblePatternCards(section.cards, showsAll)
     Card(
         colors = CardDefaults.cardColors(containerColor = GaiaPanel),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
@@ -1003,20 +1466,34 @@ private fun PatternSectionCard(
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    section.cards.chunked(columns).forEach { cards ->
+                    visibleCards.chunked(columns).forEachIndexed { rowIndex, cards ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            cards.forEach { card ->
+                            cards.forEachIndexed { columnIndex, card ->
+                                val cardIndex = (rowIndex * columns) + columnIndex
                                 PatternResultCard(
                                     card = card,
+                                    accentColor = patternCardAccent(cardIndex),
                                     modifier = Modifier.weight(1f),
                                 )
                             }
                             repeat(columns - cards.size) {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
+                        }
+                    }
+                    if (section.cards.size > 3) {
+                        TextButton(
+                            onClick = { showsAll = !showsAll },
+                            modifier = Modifier.align(Alignment.End),
+                        ) {
+                            Text(
+                                text = if (showsAll) "Show fewer" else "Show all (${section.cards.size})",
+                                color = GaiaBlue,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
                     }
                 }
@@ -1028,14 +1505,15 @@ private fun PatternSectionCard(
 @Composable
 private fun PatternResultCard(
     card: PatternCard,
+    accentColor: Color,
     modifier: Modifier = Modifier,
 ) {
     val confidenceColor = patternConfidenceColor(card.confidence)
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = confidenceColor.copy(alpha = 0.08f),
+            containerColor = accentColor.copy(alpha = 0.08f),
         ),
-        border = BorderStroke(1.dp, confidenceColor.copy(alpha = 0.28f)),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.30f)),
         shape = RoundedCornerShape(22.dp),
         modifier = modifier.heightIn(min = 220.dp),
     ) {
@@ -1290,6 +1768,7 @@ private fun ExploreScreen(
     onOpenSettings: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
+    onOpenLocalWeather: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ScreenFrame(modifier = modifier) {
@@ -1322,9 +1801,15 @@ private fun ExploreScreen(
                     }
                     TextButton(
                         onClick = onRefresh,
-                        enabled = !uiState.isLoadingHomeContext,
+                        enabled = !uiState.isLoadingHomeContext && !uiState.isLoadingLocalWeather,
                     ) {
-                        Text(if (uiState.isLoadingHomeContext) "Refreshing…" else "Refresh")
+                        Text(
+                            if (uiState.isLoadingHomeContext || uiState.isLoadingLocalWeather) {
+                                "Refreshing…"
+                            } else {
+                                "Refresh"
+                            },
+                        )
                     }
                 }
 
@@ -1344,6 +1829,14 @@ private fun ExploreScreen(
                         onDismiss = onDismissMessage,
                     )
                 }
+                uiState.localWeatherMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = uiState.localWeather != null,
+                        onDismiss = onDismissMessage,
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(18.dp))
                 Text(
@@ -1358,6 +1851,13 @@ private fun ExploreScreen(
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
                     modifier = Modifier.padding(top = 7.dp),
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+
+                LocalConditionsSummaryCard(
+                    snapshot = uiState.localWeather,
+                    isLoading = uiState.isLoadingLocalWeather,
+                    onClick = onOpenLocalWeather,
                 )
                 Spacer(modifier = Modifier.height(18.dp))
 
@@ -1403,6 +1903,328 @@ private fun ExploreScreen(
                 onSelectPage = onSelectPage,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
+        }
+    }
+}
+
+@Composable
+private fun LocalConditionsSummaryCard(
+    snapshot: LocalWeatherSnapshot?,
+    isLoading: Boolean,
+    onClick: () -> Unit,
+) {
+    val metrics = localWeatherMetrics(snapshot)
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaAmber.copy(alpha = 0.07f)),
+        border = BorderStroke(1.dp, GaiaAmber.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Local Weather",
+                        color = Color.White,
+                        fontSize = 23.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = localWeatherLocationLabel(snapshot),
+                        color = Color(0xFFB7C0CC),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                DriverPill(
+                    label = when {
+                        isLoading -> "Updating"
+                        snapshot?.local != null -> localWeatherSourceLabel(snapshot)
+                        else -> "Open"
+                    },
+                    color = when {
+                        isLoading -> GaiaAmber
+                        snapshot?.source == HomeContextSource.NETWORK -> GaiaGreen
+                        else -> GaiaBlue
+                    },
+                )
+            }
+
+            if (metrics.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
+                ) {
+                    metrics.take(3).forEach { metric ->
+                        SupportingStatChip(
+                            label = metric.label,
+                            value = metric.value,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(3 - metrics.take(3).size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+                Text(
+                    text = "Open current conditions and local health context ›",
+                    color = GaiaAmber,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            } else {
+                Text(
+                    text = when {
+                        isLoading -> "Checking your latest local conditions…"
+                        snapshot?.location?.zip.isNullOrBlank() ->
+                            "Add a ZIP code in Gaia Eyes to connect weather, air quality, and pressure."
+                        else -> "Current local conditions are not available yet. Tap to review or refresh."
+                    },
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalWeatherScreen(
+    uiState: HomeUiState,
+    onClose: () -> Unit,
+    onRefresh: () -> Unit,
+    onDismissMessage: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val snapshot = uiState.localWeather
+    val metrics = localWeatherMetrics(snapshot)
+
+    BackHandler(onBack = onClose)
+    ScreenFrame(modifier = modifier) {
+        ContentColumn(bottomPadding = 36.dp) {
+            Header(
+                subtitle = "Explore",
+                trailing = {
+                    TextButton(onClick = onClose) {
+                        Text("Close", color = GaiaAmber)
+                    }
+                },
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Local Weather",
+                        color = Color.White,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Weather, air quality, and pressure near ${localWeatherLocationLabel(snapshot)}.",
+                        color = Color(0xFF9BA6B4),
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                TextButton(
+                    onClick = onRefresh,
+                    enabled = !uiState.isLoadingLocalWeather,
+                ) {
+                    Text(if (uiState.isLoadingLocalWeather) "Refreshing…" else "Refresh")
+                }
+            }
+
+            uiState.localWeatherMessage?.let { message ->
+                Spacer(modifier = Modifier.height(14.dp))
+                MessageCard(
+                    message = message,
+                    positive = snapshot?.local != null,
+                    onDismiss = onDismissMessage,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GaiaAmber.copy(alpha = 0.07f)),
+                border = BorderStroke(1.dp, GaiaAmber.copy(alpha = 0.28f)),
+                shape = RoundedCornerShape(26.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = localWeatherLocationLabel(snapshot),
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        DriverPill(
+                            label = localWeatherSourceLabel(snapshot),
+                            color = if (snapshot?.source == HomeContextSource.NETWORK) {
+                                GaiaGreen
+                            } else {
+                                GaiaAmber
+                            },
+                        )
+                    }
+                    localWeatherObservedText(snapshot)?.let { observed ->
+                        Text(
+                            text = observed,
+                            color = Color(0xFF9BA6B4),
+                            fontSize = 13.sp,
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            when {
+                metrics.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    metrics.chunked(2).forEach { rowMetrics ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            rowMetrics.forEach { metric ->
+                                LocalWeatherMetricCard(
+                                    metric = metric,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            repeat(2 - rowMetrics.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+                uiState.isLoadingLocalWeather -> ContextLoadingRow("Checking local conditions…")
+                else -> Card(
+                    colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = if (snapshot?.location?.zip.isNullOrBlank()) {
+                            "Local weather needs a ZIP code. Add or update your location in Gaia Eyes, then refresh this page."
+                        } else {
+                            "Current conditions have not arrived yet. Refresh to try again."
+                        },
+                        color = Color(0xFFB7C0CC),
+                        fontSize = 16.sp,
+                        lineHeight = 23.sp,
+                        modifier = Modifier.padding(20.dp),
+                    )
+                }
+            }
+
+            snapshot?.local?.health?.messages
+                .orEmpty()
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .distinct()
+                .take(4)
+                .takeIf { it.isNotEmpty() }
+                ?.let { messages ->
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = GaiaBlue.copy(alpha = 0.07f)),
+                        border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.24f)),
+                        shape = RoundedCornerShape(26.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                text = "What may be useful to notice",
+                                color = Color.White,
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            messages.forEach { message ->
+                                Text(
+                                    text = "• $message",
+                                    color = Color(0xFFC4CCD7),
+                                    fontSize = 15.sp,
+                                    lineHeight = 21.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+
+            Spacer(modifier = Modifier.height(18.dp))
+            Text(
+                text = "Local conditions provide context for your personal history. They do not prove a cause or predict a medical event.",
+                color = Color(0xFF8994A3),
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LocalWeatherMetricCard(
+    metric: LocalWeatherMetric,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.16f)),
+        border = BorderStroke(1.dp, GaiaAmber.copy(alpha = 0.22f)),
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.heightIn(min = 128.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(15.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = metric.label,
+                color = Color(0xFF9BA6B4),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = metric.value,
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            metric.detail?.let { detail ->
+                Text(
+                    text = detail,
+                    color = Color(0xFFADB7C5),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                )
+            }
         }
     }
 }
@@ -2398,6 +3220,7 @@ private fun TodayReadCard(
     onLogSymptom: () -> Unit,
     onLogExposure: () -> Unit,
     onDailyCheckIn: () -> Unit,
+    onOpenCurrentSymptoms: () -> Unit,
 ) {
     val activeLabels = uiState.currentSymptoms
         ?.symptoms
@@ -2463,16 +3286,27 @@ private fun TodayReadCard(
                 },
             )
             if (activeLabels.isNotEmpty()) {
-                SymptomGrid(
-                    symptoms = activeLabels.take(6).map {
-                        SymptomChipModel(
-                            label = it,
-                            isMatched = false,
-                            isActive = true,
-                        )
-                    },
-                    columns = columns,
-                )
+                Column(
+                    modifier = Modifier.clickable(onClick = onOpenCurrentSymptoms),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    SymptomGrid(
+                        symptoms = activeLabels.take(6).map {
+                            SymptomChipModel(
+                                label = it,
+                                isMatched = false,
+                                isActive = true,
+                            )
+                        },
+                        columns = columns,
+                    )
+                    Text(
+                        text = "Review or update active symptoms ›",
+                        color = GaiaRose,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
             HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
             Text(
@@ -2533,7 +3367,10 @@ private fun JournalActionButton(
 }
 
 @Composable
-private fun SignalsToWatchCard(uiState: HomeUiState) {
+private fun SignalsToWatchCard(
+    uiState: HomeUiState,
+    onClick: () -> Unit,
+) {
     val driverResponse = uiState.drivers?.drivers
     val drivers = relevantDrivers(driverResponse).take(3)
 
@@ -2543,7 +3380,9 @@ private fun SignalsToWatchCard(uiState: HomeUiState) {
         ),
         border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.25f)),
         shape = RoundedCornerShape(26.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -2559,6 +3398,12 @@ private fun SignalsToWatchCard(uiState: HomeUiState) {
                 text = "Context clues, not a diagnosis.",
                 color = Color(0xFF9BA6B4),
                 fontSize = 14.sp,
+            )
+            Text(
+                text = "View all drivers ›",
+                color = GaiaBlue,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
             )
             driverResponse?.summary?.note
                 ?.trim()
@@ -2863,23 +3708,25 @@ private data class GaugeDefinition(
     val color: Color,
 )
 
+private val allGaugeDefinitions = listOf(
+    GaugeDefinition("pain", "Pain", GaiaRose),
+    GaugeDefinition("focus", "Focus", GaiaBlue),
+    GaugeDefinition("heart", "Heart", GaiaGreen),
+    GaugeDefinition("stamina", "Recovery Load", GaiaAmber),
+    GaugeDefinition("energy", "Energy", GaiaAmber),
+    GaugeDefinition("sleep", "Sleep", Color(0xFFA282E0)),
+    GaugeDefinition("mood", "Mood", GaiaBlue),
+    GaugeDefinition("health_status", "Health Status", GaiaGreen),
+)
+
 @Composable
 private fun GaugeGrid(
     dashboard: DashboardGaugesResponse?,
     columns: Int,
     showAll: Boolean,
+    onGaugeClick: (GaugeDefinition) -> Unit,
 ) {
-    val allDefinitions = listOf(
-        GaugeDefinition("pain", "Pain", GaiaRose),
-        GaugeDefinition("focus", "Focus", GaiaBlue),
-        GaugeDefinition("heart", "Heart", GaiaGreen),
-        GaugeDefinition("stamina", "Recovery Load", GaiaAmber),
-        GaugeDefinition("energy", "Energy", GaiaAmber),
-        GaugeDefinition("sleep", "Sleep", Color(0xFFA282E0)),
-        GaugeDefinition("mood", "Mood", GaiaBlue),
-        GaugeDefinition("health_status", "Health Status", GaiaGreen),
-    )
-    val definitions = if (showAll) allDefinitions else allDefinitions.take(4)
+    val definitions = if (showAll) allGaugeDefinitions else allGaugeDefinitions.take(4)
     val rows = (definitions.size + columns - 1) / columns
     val gridHeight = (rows * 164 + (rows - 1).coerceAtLeast(0) * 10).dp
 
@@ -2899,6 +3746,7 @@ private fun GaugeGrid(
                 displayLabel = dashboard?.gaugeLabels?.get(definition.key)
                     ?: definition.fallbackLabel,
                 zoneLabel = dashboard?.gaugesMeta?.get(definition.key)?.label,
+                onClick = { onGaugeClick(definition) },
             )
         }
     }
@@ -2911,6 +3759,7 @@ private fun GaugeCard(
     delta: Int?,
     displayLabel: String,
     zoneLabel: String?,
+    onClick: () -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -2922,7 +3771,9 @@ private fun GaugeCard(
             ),
         ),
         shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.height(164.dp),
+        modifier = Modifier
+            .height(164.dp)
+            .clickable(onClick = onClick),
     ) {
         Column(
             modifier = Modifier
@@ -2970,13 +3821,179 @@ private fun GaugeCard(
                 }
             }
             Text(
-                text = zoneLabel ?: if (value == null) "Loading" else "Current",
+                text = "${zoneLabel ?: if (value == null) "Loading" else "Current"}  ›",
                 color = Color(0xFF9BA6B4),
                 fontSize = 12.sp,
                 maxLines = 1,
             )
         }
     }
+}
+
+@Composable
+private fun GaugeDetailScreen(
+    model: GaugeDetailModel,
+    color: Color,
+    onClose: () -> Unit,
+    onViewBody: () -> Unit,
+    onViewDrivers: () -> Unit,
+    onLogSymptom: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onClose)
+    ScreenFrame(modifier = modifier) {
+        ContentColumn(bottomPadding = 36.dp) {
+            Header(
+                subtitle = "Gauge details",
+                trailing = {
+                    TextButton(onClick = onClose) {
+                        Text("Close", color = color)
+                    }
+                },
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Why This Matters Now",
+                color = Color.White,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "${model.title} — ${model.status}",
+                color = color,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+            GaugeDetailSectionCard(title = "Today’s gauge", color = color) {
+                Text(
+                    text = model.score?.toString() ?: "—",
+                    color = Color.White,
+                    fontSize = 46.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = gaugeScoreExplanation,
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                )
+            }
+
+            model.delta?.let { delta ->
+                Spacer(modifier = Modifier.height(16.dp))
+                GaugeDetailSectionCard(title = "Change from yesterday", color = color) {
+                    Text(
+                        text = "${if (delta > 0) "+" else ""}$delta points",
+                        color = color,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = gaugeDeltaExplanation,
+                        color = Color(0xFFB7C0CC),
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                    )
+                }
+            }
+
+            if (model.symptoms.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                GaugeDetailSectionCard(title = "Active symptoms", color = color) {
+                    model.symptoms.forEach { symptom ->
+                        GaugeDetailRow(text = symptom, color = GaiaRose)
+                    }
+                    TextButton(onClick = onViewBody, modifier = Modifier.align(Alignment.End)) {
+                        Text("View Body ›", color = color)
+                    }
+                }
+            }
+
+            if (model.influencers.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                GaugeDetailSectionCard(title = "Current influencers", color = color) {
+                    model.influencers.forEach { influencer ->
+                        GaugeDetailRow(text = influencer, color = color)
+                    }
+                    TextButton(onClick = onViewDrivers, modifier = Modifier.align(Alignment.End)) {
+                        Text("View all drivers ›", color = color)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            GaugeDetailSectionCard(title = "Helpful right now", color = color) {
+                model.helpfulTips.forEach { tip ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("•", color = GaiaGreen, fontSize = 19.sp)
+                        Text(
+                            text = tip,
+                            color = Color(0xFFD3D9E2),
+                            fontSize = 16.sp,
+                            lineHeight = 23.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+            Button(
+                onClick = onLogSymptom,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = color,
+                    contentColor = GaiaNavy,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Log a symptom", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GaugeDetailSectionCard(
+    title: String,
+    color: Color,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.35f)),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(13.dp),
+        ) {
+            Text(
+                text = title,
+                color = Color(0xFFB7C0CC),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun GaugeDetailRow(text: String, color: Color) {
+    Text(
+        text = text,
+        color = Color.White,
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    )
 }
 
 @Composable
@@ -3194,4 +4211,16 @@ private fun patternConfidenceColor(confidence: String?): Color {
         "weak", "low" -> GaiaRose
         else -> GaiaBlue
     }
+}
+
+private fun patternCardAccent(index: Int): Color {
+    val palette = listOf(
+        GaiaBlue,
+        GaiaGreen,
+        GaiaAmber,
+        GaiaRose,
+        Color(0xFF9D7BFF),
+        Color(0xFF45C6B5),
+    )
+    return palette[index.mod(palette.size)]
 }

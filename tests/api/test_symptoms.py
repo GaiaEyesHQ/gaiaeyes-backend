@@ -552,6 +552,41 @@ async def test_current_symptom_update_returns_updated_item(monkeypatch, client: 
 
 
 @pytest.mark.anyio
+async def test_current_symptom_episode_returns_resolved_history_item(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": user_id,
+    }
+
+    async def _fetch(conn, user, episode_id):  # noqa: ARG001
+        assert episode_id == "ep-resolved"
+        return {
+            "id": "ep-resolved",
+            "symptom_code": "migraine",
+            "label": "Migraine",
+            "current_state": "resolved",
+            "original_severity": 5,
+            "current_severity": 3,
+            "started_at": "2024-04-02T08:00:00+00:00",
+            "state_updated_at": "2024-04-02T10:00:00+00:00",
+            "last_interaction_at": "2024-04-02T10:00:00+00:00",
+            "latest_note_text": "Ice hat helped",
+            "note_count": 1,
+        }
+
+    monkeypatch.setattr(symptoms_db, "fetch_symptom_episode", _fetch)
+
+    response = await client.get("/v1/symptoms/current/ep-resolved", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["data"]["symptom_code"] == "MIGRAINE"
+    assert payload["data"]["current_state"] == "resolved"
+    assert payload["data"]["note_preview"] == "Ice hat helped"
+
+
+@pytest.mark.anyio
 async def test_current_symptom_delete_returns_deleted_episode(monkeypatch, client: AsyncClient):
     user_id = str(uuid4())
     headers = {

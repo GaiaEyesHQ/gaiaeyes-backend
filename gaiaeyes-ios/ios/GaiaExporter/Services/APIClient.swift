@@ -750,6 +750,13 @@ final class APIClient {
         try await getJSON("v1/symptoms/current/timeline?days=\(days)", as: Envelope<[CurrentSymptomTimelineEntry]>.self)
     }
 
+    func fetchCurrentSymptom(episodeId: String) async throws -> Envelope<CurrentSymptomItem> {
+        try await getJSON(
+            "v1/symptoms/current/\(episodeId)",
+            as: Envelope<CurrentSymptomItem>.self
+        )
+    }
+
     func updateCurrentSymptom(
         episodeId: String,
         state: CurrentSymptomState? = nil,

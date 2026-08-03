@@ -9,6 +9,8 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.delete
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -66,6 +68,59 @@ class GaiaApiClient(
             envelope.friendlyError ?: envelope.error ?: "Current symptoms were unavailable"
         }
         return requireNotNull(envelope.data)
+    }
+
+    suspend fun updateCurrentSymptom(
+        accessToken: String,
+        episodeId: String,
+        request: CurrentSymptomUpdateRequest,
+    ): CurrentSymptomItem {
+        require(episodeId.isNotBlank()) { "A symptom entry is required" }
+        val response = authenticatedPost(
+            "/v1/symptoms/current/$episodeId/updates",
+            accessToken,
+            request,
+        )
+        val envelope = response.body<CurrentSymptomItemEnvelope>()
+        check(envelope.ok && envelope.data != null) {
+            envelope.friendlyError ?: envelope.error ?: "The symptom could not be updated"
+        }
+        return requireNotNull(envelope.data)
+    }
+
+    suspend fun deleteCurrentSymptom(
+        accessToken: String,
+        episodeId: String,
+    ): CurrentSymptomDeleteData {
+        require(episodeId.isNotBlank()) { "A symptom entry is required" }
+        val response = httpClient.delete("/v1/symptoms/current/$episodeId") {
+            header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
+            timeout {
+                requestTimeoutMillis = JOURNAL_WRITE_TIMEOUT_MILLIS
+                socketTimeoutMillis = JOURNAL_WRITE_TIMEOUT_MILLIS
+            }
+        }.also(::throwIfUnauthorizedOrFailed)
+        val envelope = response.body<CurrentSymptomDeleteEnvelope>()
+        check(envelope.ok && envelope.data != null) {
+            envelope.friendlyError ?: envelope.error ?: "The symptom could not be deleted"
+        }
+        return requireNotNull(envelope.data)
+    }
+
+    suspend fun profileLocation(accessToken: String): ProfileLocation? {
+        val response = authenticatedGet("/v1/profile/location", accessToken)
+        val envelope = response.body<ProfileLocationEnvelope>()
+        check(envelope.ok) { "Your saved location was unavailable" }
+        return envelope.location
+    }
+
+    suspend fun localCheck(zip: String): LocalCheckResponse {
+        require(zip.isNotBlank()) { "A ZIP code is required for local conditions" }
+        val response = httpClient.get("/v1/local/check") {
+            parameter("zip", zip)
+        }
+        throwIfUnauthorizedOrFailed(response)
+        return response.body()
     }
 
     suspend fun allDrivers(accessToken: String): AllDriversResponse {

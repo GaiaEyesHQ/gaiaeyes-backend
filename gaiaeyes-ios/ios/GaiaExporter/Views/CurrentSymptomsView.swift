@@ -1851,36 +1851,41 @@ struct CurrentSymptomsTimelineView: View {
                 }
 
                 ForEach(entries) { entry in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(entry.label)
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                Text(label(for: entry))
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.65))
+                    NavigationLink {
+                        HistoricalSymptomEditor(api: api, episodeId: entry.episodeId)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(entry.label)
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    Text(label(for: entry))
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.65))
+                                }
+                                Spacer()
+                                Text(timestamp(for: entry))
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.54))
                             }
-                            Spacer()
-                            Text(timestamp(for: entry))
-                                .font(.caption2)
-                                .foregroundColor(.white.opacity(0.54))
-                        }
 
-                        if let noteText = entry.noteText, !noteText.isEmpty {
-                            Text(noteText)
-                                .font(.footnote)
-                                .foregroundColor(.white.opacity(0.72))
+                            if let noteText = entry.noteText, !noteText.isEmpty {
+                                Text(noteText)
+                                    .font(.footnote)
+                                    .foregroundColor(.white.opacity(0.72))
+                            }
                         }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                        )
                     }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
                 }
 
                 if !isLoading && entries.isEmpty && errorMessage == nil {
@@ -1961,5 +1966,91 @@ struct CurrentSymptomsTimelineView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+private struct HistoricalSymptomEditor: View {
+    let api: APIClient
+    let episodeId: String
+
+    @State private var item: CurrentSymptomItem?
+    @State private var severity = 5
+    @State private var note = ""
+    @State private var isLoading = true
+    @State private var isSaving = false
+    @State private var statusMessage: String?
+
+    var body: some View {
+        Form {
+            if isLoading {
+                ProgressView("Loading symptom…")
+            } else if let item {
+                Section("Symptom") {
+                    LabeledContent("Name", value: item.label)
+                    LabeledContent("Status", value: item.currentState.rawValue.capitalized)
+                    Stepper("Severity: \(severity)/10", value: $severity, in: 0...10)
+                }
+                Section("Notes") {
+                    TextField("Optional note", text: $note, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+                if item.symptomCode.uppercased() == "MIGRAINE" {
+                    Section("Migraine details") {
+                        Text("Early signs, context, treatment, and outcome details will remain editable here after the migraine follow-up is added.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Section {
+                    Button(isSaving ? "Saving…" : "Save changes") {
+                        Task { await save() }
+                    }
+                    .disabled(isSaving)
+                }
+                if let statusMessage {
+                    Section { Text(statusMessage).font(.footnote) }
+                }
+            } else {
+                Text(statusMessage ?? "Symptom unavailable.")
+            }
+        }
+        .navigationTitle("Edit symptom")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func load() async {
+        do {
+            let response = try await api.fetchCurrentSymptom(episodeId: episodeId)
+            guard response.ok != false, let loaded = response.payload else {
+                throw NSError(domain: "HistoricalSymptomEditor", code: 1, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Symptom unavailable"])
+            }
+            item = loaded
+            severity = loaded.severity ?? loaded.originalSeverity ?? 5
+            note = loaded.notePreview ?? ""
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    private func save() async {
+        guard item != nil else { return }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            let response = try await api.updateCurrentSymptom(
+                episodeId: episodeId,
+                severity: severity,
+                noteText: note.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            guard response.ok != false else {
+                throw NSError(domain: "HistoricalSymptomEditor", code: 2, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Changes not saved"])
+            }
+            item = response.payload ?? item
+            statusMessage = "Changes saved."
+        } catch {
+            statusMessage = error.localizedDescription
+        }
     }
 }
