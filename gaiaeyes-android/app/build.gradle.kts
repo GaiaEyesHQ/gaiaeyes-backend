@@ -26,6 +26,12 @@ fun quotedBuildConfigValue(value: String): String {
     return "\"$escaped\""
 }
 
+val supabaseUrl = runtimeValue(
+    "SUPABASE_URL",
+    runtimeValue("SUPABASE_REST_URL"),
+)
+val supabaseAnonKey = runtimeValue("SUPABASE_ANON_KEY")
+
 android {
     namespace = "com.gaiaeyes.app"
 
@@ -57,12 +63,12 @@ android {
         buildConfigField(
             "String",
             "SUPABASE_URL",
-            quotedBuildConfigValue(runtimeValue("SUPABASE_URL")),
+            quotedBuildConfigValue(supabaseUrl),
         )
         buildConfigField(
             "String",
             "SUPABASE_ANON_KEY",
-            quotedBuildConfigValue(runtimeValue("SUPABASE_ANON_KEY")),
+            quotedBuildConfigValue(supabaseAnonKey),
         )
         buildConfigField(
             "String",
@@ -142,3 +148,20 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
+val validateReleaseConfiguration by tasks.registering {
+    group = "verification"
+    description = "Fails release builds when secure account access is not configured."
+
+    doLast {
+        if (supabaseUrl.isBlank() || supabaseAnonKey.isBlank()) {
+            throw GradleException(
+                "Release auth configuration is missing. Set SUPABASE_URL (or SUPABASE_REST_URL) " +
+                    "and SUPABASE_ANON_KEY outside Git before building.",
+            )
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(validateReleaseConfiguration)
+}

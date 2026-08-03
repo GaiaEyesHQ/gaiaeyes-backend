@@ -138,8 +138,6 @@ fun GaiaEyesApp(
     when (val authState = uiState.authState) {
         AuthState.Initializing -> LoadingScreen(modifier)
         AuthState.Unavailable -> ConfigurationScreen(
-            uiState = uiState,
-            onRetry = viewModel::refresh,
             modifier = modifier,
         )
         AuthState.SignedOut -> SignInScreen(
@@ -283,29 +281,41 @@ private fun LoadingScreen(modifier: Modifier = Modifier) {
 
 @Composable
 private fun ConfigurationScreen(
-    uiState: HomeUiState,
-    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val uriHandler = LocalUriHandler.current
+
     ScreenFrame(modifier = modifier) {
         ContentColumn {
-            Header(subtitle = "Android preview")
+            Header(subtitle = "Secure account access")
             Spacer(modifier = Modifier.height(34.dp))
             Text(
-                text = "Account setup is not configured",
+                text = "Sign-in is temporarily unavailable",
                 color = Color.White,
                 fontSize = 30.sp,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "This local build needs the Gaia Eyes Supabase URL and public anon key before secure sign-in can begin.",
+                text = "Secure sign-in isn’t available in this app version. Please update Gaia Eyes. If you still need help, contact support.",
                 color = Color(0xFFADB7C5),
                 fontSize = 17.sp,
                 lineHeight = 25.sp,
                 modifier = Modifier.padding(top = 12.dp),
             )
             Spacer(modifier = Modifier.height(22.dp))
-            BackendCard(uiState = uiState, onRetry = onRetry)
+            Button(
+                onClick = { uriHandler.openUri("https://gaiaeyes.com/support/") },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = GaiaBlue,
+                    contentColor = GaiaNavy,
+                ),
+            ) {
+                Text(
+                    text = "Open support",
+                    color = GaiaNavy,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
     }
 }

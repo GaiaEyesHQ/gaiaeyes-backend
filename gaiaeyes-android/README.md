@@ -90,6 +90,7 @@ runtime values may also be supplied there or as process environment variables:
 ```properties
 GAIA_API_BASE=https://gaiaeyes-backend.onrender.com
 SUPABASE_URL=
+# SUPABASE_REST_URL= may be used instead of SUPABASE_URL
 SUPABASE_ANON_KEY=
 REVENUECAT_ANDROID_API_KEY=
 REVENUECAT_PLUS_MONTHLY_PRODUCT_ID=
@@ -99,6 +100,10 @@ REVENUECAT_PLUS_YEARLY_PRODUCT_ID=
 Do not commit production keys, signing files, or a populated
 `local.properties`. The RevenueCat values are reserved placeholders until the
 Google Play products and Android RevenueCat app exist.
+
+Release builds fail before compilation when the Supabase URL or public anon
+key is missing. This prevents publishing a build that cannot start secure
+account access.
 
 For magic-link testing, add `gaiaeyes://auth/callback` to the Supabase Auth
 redirect allowlist. The Android app handles that callback without retaining the
