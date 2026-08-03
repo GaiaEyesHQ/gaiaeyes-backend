@@ -6,7 +6,7 @@ This matrix defines Android v1 parity against the live iOS app. It is intentiona
 
 | Surface | Android v1 | Backend/API dependency | Notes |
 | --- | --- | --- | --- |
-| Welcome/onboarding | Required | Supabase auth, profile endpoints | Match the current iOS email magic-link/session flow; do not create a parallel Android identity model. |
+| Welcome/onboarding | Required | Supabase auth, profile endpoints | Match the current iOS email magic-link/session flow, including **Continue without email** through a shared Supabase anonymous account. Let users attach an email later without changing their Supabase UUID; do not create a parallel Android identity model. |
 | Health permission step | Required | Health Connect | Optional. No forced permission wall. Continue with limited body surfaces if skipped. |
 | 30-day import | Required | `/v1/samples/batch` | Health Connect initial sync for the minimum useful set only. |
 | Home | Required | `/v1/dashboard`, `/v1/features/today`, `/v1/users/me/drivers`, profile feed | Cache-first Home is implemented with all eight shared gauges in a compact expandable layout, tap-to-open gauge explanations, current/possible symptoms, Signals to Watch, and authenticated context-entry actions. |

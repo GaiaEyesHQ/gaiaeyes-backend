@@ -144,6 +144,7 @@ fun GaiaEyesApp(
             uiState = uiState,
             onEmailChanged = viewModel::onEmailChanged,
             onSendMagicLink = viewModel::sendMagicLink,
+            onContinueWithoutEmail = viewModel::continueWithoutEmail,
             onDismissMessage = viewModel::dismissMessage,
             onRetry = viewModel::refresh,
             modifier = modifier,
@@ -152,6 +153,7 @@ fun GaiaEyesApp(
             uiState = uiState.copy(authMessage = uiState.authMessage ?: authState.message),
             onEmailChanged = viewModel::onEmailChanged,
             onSendMagicLink = viewModel::sendMagicLink,
+            onContinueWithoutEmail = viewModel::continueWithoutEmail,
             onDismissMessage = viewModel::dismissMessage,
             onRetry = viewModel::refresh,
             modifier = modifier,
@@ -162,6 +164,9 @@ fun GaiaEyesApp(
                 account = authState,
                 onBack = { showSettings = false },
                 onRefresh = viewModel::refresh,
+                onEmailChanged = viewModel::onEmailChanged,
+                onAddEmail = viewModel::addEmailToCurrentAccount,
+                onDismissMessage = viewModel::dismissMessage,
                 onSignOut = {
                     showSettings = false
                     showCurrentSymptoms = false
@@ -325,22 +330,25 @@ private fun SignInScreen(
     uiState: HomeUiState,
     onEmailChanged: (String) -> Unit,
     onSendMagicLink: () -> Unit,
+    onContinueWithoutEmail: () -> Unit,
     onDismissMessage: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showGuestConfirmation by rememberSaveable { mutableStateOf(false) }
+
     ScreenFrame(modifier = modifier) {
         ContentColumn {
             Header(subtitle = "Secure account access")
             Spacer(modifier = Modifier.height(34.dp))
             Text(
-                text = "Welcome back.",
+                text = "Sign in or create your account.",
                 color = Color.White,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "Use the same email as Gaia Eyes on iPhone. We’ll send a secure link—no password needed.",
+                text = "Enter your email and we’ll send a secure link. If you’re new, your account will be created when you open it.",
                 color = Color(0xFFADB7C5),
                 fontSize = 17.sp,
                 lineHeight = 25.sp,
@@ -366,7 +374,7 @@ private fun SignInScreen(
                     )
                     Button(
                         onClick = onSendMagicLink,
-                        enabled = !uiState.isSendingMagicLink,
+                        enabled = !uiState.isSendingMagicLink && !uiState.isStartingGuest,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = GaiaBlue,
                             contentColor = GaiaNavy,
@@ -381,11 +389,47 @@ private fun SignInScreen(
                             )
                         } else {
                             Text(
-                                text = if (uiState.magicLinkSent) "Send another link" else "Email me a sign-in link",
+                                text = if (uiState.magicLinkSent) "Send another link" else "Continue with email",
                                 fontWeight = FontWeight.Bold,
                             )
                         }
                     }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        HorizontalDivider(modifier = Modifier.weight(1f))
+                        Text("or", color = Color(0xFF8994A3), fontSize = 13.sp)
+                        HorizontalDivider(modifier = Modifier.weight(1f))
+                    }
+                    TextButton(
+                        onClick = { showGuestConfirmation = true },
+                        enabled = !uiState.isSendingMagicLink && !uiState.isStartingGuest,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (uiState.isStartingGuest) {
+                            CircularProgressIndicator(
+                                color = GaiaBlue,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        } else {
+                            Text(
+                                text = "Continue without email",
+                                color = GaiaBlue,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Try Gaia Eyes now and add an email later to protect your history and use it on another device.",
+                        color = Color(0xFF8994A3),
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     uiState.authMessage?.let { message ->
                         MessageCard(
                             message = message,
@@ -399,6 +443,33 @@ private fun SignInScreen(
             BackendCard(uiState = uiState, onRetry = onRetry)
         }
     }
+
+    if (showGuestConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showGuestConfirmation = false },
+            title = { Text("Continue without an email?") },
+            text = {
+                Text(
+                    "This guest account stays on this device. Add an email before signing out, reinstalling, clearing app data, or moving to another device so you can recover it.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showGuestConfirmation = false
+                        onContinueWithoutEmail()
+                    },
+                ) {
+                    Text("Continue as guest")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGuestConfirmation = false }) {
+                    Text("Use email")
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -407,6 +478,9 @@ private fun SettingsScreen(
     account: AuthState.SignedIn,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    onEmailChanged: (String) -> Unit,
+    onAddEmail: () -> Unit,
+    onDismissMessage: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -442,17 +516,71 @@ private fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
             SettingsSectionCard(title = "Account") {
-                SettingsStatusRow(
-                    label = "Signed in as",
-                    value = account.email ?: "Gaia Eyes account",
-                    positive = true,
-                )
-                TextButton(
-                    onClick = onSignOut,
-                    enabled = !uiState.isSigningOut,
-                    modifier = Modifier.align(Alignment.End),
-                ) {
-                    Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
+                if (account.isAnonymous) {
+                    SettingsStatusRow(
+                        label = "Account",
+                        value = "Guest account",
+                        positive = true,
+                    )
+                    Text(
+                        text = "Add an email to protect your history and use Gaia Eyes on another device.",
+                        color = Color(0xFF9BA6B4),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                    )
+                    OutlinedTextField(
+                        value = uiState.email,
+                        onValueChange = onEmailChanged,
+                        label = { Text("Email") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = onAddEmail,
+                        enabled = !uiState.isAddingEmail,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GaiaBlue,
+                            contentColor = GaiaNavy,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (uiState.isAddingEmail) {
+                            CircularProgressIndicator(
+                                color = GaiaNavy,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        } else {
+                            Text("Add recovery email", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    uiState.authMessage?.let { message ->
+                        MessageCard(
+                            message = message,
+                            positive = uiState.emailUpgradeSent,
+                            onDismiss = onDismissMessage,
+                        )
+                    }
+                    Text(
+                        text = "Sign out is unavailable until you add an email, so this account can’t be lost by accident.",
+                        color = Color(0xFF8994A3),
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                    )
+                } else {
+                    SettingsStatusRow(
+                        label = "Signed in as",
+                        value = account.email ?: "Gaia Eyes account",
+                        positive = true,
+                    )
+                    TextButton(
+                        onClick = onSignOut,
+                        enabled = !uiState.isSigningOut,
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
+                    }
                 }
             }
 

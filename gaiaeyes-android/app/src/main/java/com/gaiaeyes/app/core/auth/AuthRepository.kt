@@ -66,6 +66,18 @@ class AuthRepository(
         }
     }
 
+    suspend fun signInAnonymously() {
+        requireClient().auth.signInAnonymously()
+    }
+
+    suspend fun addEmailToCurrentAccount(email: String) {
+        requireClient().auth.updateUser(
+            redirectUrl = MAGIC_LINK_REDIRECT,
+        ) {
+            this.email = email.trim()
+        }
+    }
+
     fun handleDeepLink(intent: Intent) {
         _deepLinkError.value = null
         client?.handleDeeplinks(
@@ -118,6 +130,7 @@ class AuthRepository(
                     AuthState.SignedIn(
                         accountId = user.id,
                         email = user.email,
+                        isAnonymous = isAnonymousAccountEmail(user.email),
                     )
                 }
             }
@@ -140,6 +153,8 @@ internal fun normalizeSupabaseProjectUrl(value: String): String {
         .trimEnd('/')
 }
 
+internal fun isAnonymousAccountEmail(email: String?): Boolean = email.isNullOrBlank()
+
 sealed interface AuthState {
     data object Initializing : AuthState
     data object SignedOut : AuthState
@@ -148,5 +163,6 @@ sealed interface AuthState {
     data class SignedIn(
         val accountId: String,
         val email: String?,
+        val isAnonymous: Boolean = false,
     ) : AuthState
 }

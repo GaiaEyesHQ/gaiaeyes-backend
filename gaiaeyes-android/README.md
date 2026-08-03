@@ -6,8 +6,8 @@ Native Android foundation for Gaia Eyes.
 
 - Jetpack Compose + Material 3 app shell
 - Responsive phone and tablet layout
-- Supabase email magic-link authentication with Android Keystore-backed session
-  storage
+- Supabase email magic-link and shared anonymous-account authentication with
+  Android Keystore-backed session storage and in-place email attachment
 - Authenticated `GET /v1/dashboard/gauges` Home dashboard with all eight shared
   Gaia Eyes gauges in a compact, expandable layout
 - Account-scoped saved dashboard with live refresh and sign-out isolation
@@ -108,3 +108,12 @@ account access.
 For magic-link testing, add `gaiaeyes://auth/callback` to the Supabase Auth
 redirect allowlist. The Android app handles that callback without retaining the
 link tokens in the Activity intent.
+
+For guest-account QA:
+
+1. Start from a fresh app install and choose **Continue without email**.
+2. Confirm Home loads under the new account and Settings labels it as a guest.
+3. In Settings, add an email and open the confirmation link on the same device.
+4. Confirm the account keeps its dashboard and journal history after the email
+   is attached. Do not clear app data or uninstall before attaching an email;
+   an unlinked anonymous account cannot be recovered afterward.

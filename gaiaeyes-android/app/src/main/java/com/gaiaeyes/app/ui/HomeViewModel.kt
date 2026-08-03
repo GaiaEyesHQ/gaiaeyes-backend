@@ -80,6 +80,7 @@ class HomeViewModel(
             email = email,
             authMessage = null,
             magicLinkSent = false,
+            emailUpgradeSent = false,
         )
     }
 
@@ -91,7 +92,7 @@ class HomeViewModel(
             )
             return
         }
-        if (_uiState.value.isSendingMagicLink) return
+        if (_uiState.value.isSendingMagicLink || _uiState.value.isStartingGuest) return
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -111,6 +112,66 @@ class HomeViewModel(
                 _uiState.value = _uiState.value.copy(
                     isSendingMagicLink = false,
                     authMessage = "We couldn't send the sign-in link. Check your connection and try again.",
+                )
+            }
+        }
+    }
+
+    fun continueWithoutEmail() {
+        if (_uiState.value.isStartingGuest || _uiState.value.isSendingMagicLink) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isStartingGuest = true,
+                authMessage = null,
+                magicLinkSent = false,
+            )
+            runCatching {
+                authRepository.signInAnonymously()
+            }.onSuccess {
+                _uiState.value = _uiState.value.copy(
+                    isStartingGuest = false,
+                    authMessage = null,
+                )
+            }.onFailure {
+                _uiState.value = _uiState.value.copy(
+                    isStartingGuest = false,
+                    authMessage = "We couldn't start your Gaia Eyes account. Check your connection and try again.",
+                )
+            }
+        }
+    }
+
+    fun addEmailToCurrentAccount() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (!account.isAnonymous) return
+        val email = _uiState.value.email.trim()
+        if (!email.looksLikeEmail()) {
+            _uiState.value = _uiState.value.copy(
+                authMessage = "Enter a valid email address to protect this account.",
+            )
+            return
+        }
+        if (_uiState.value.isAddingEmail) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isAddingEmail = true,
+                emailUpgradeSent = false,
+                authMessage = null,
+            )
+            runCatching {
+                authRepository.addEmailToCurrentAccount(email)
+            }.onSuccess {
+                _uiState.value = _uiState.value.copy(
+                    isAddingEmail = false,
+                    emailUpgradeSent = true,
+                    authMessage = "Check your email and open the secure link to protect your Gaia Eyes account.",
+                )
+            }.onFailure {
+                _uiState.value = _uiState.value.copy(
+                    isAddingEmail = false,
+                    authMessage = "We couldn't add that email. If it already has a Gaia Eyes account, use that account's sign-in link instead.",
                 )
             }
         }
@@ -235,6 +296,12 @@ class HomeViewModel(
     fun signOut() {
         val account = _uiState.value.authState as? AuthState.SignedIn ?: return
         if (_uiState.value.isSigningOut) return
+        if (account.isAnonymous) {
+            _uiState.value = _uiState.value.copy(
+                authMessage = "Add an email before signing out so you don't lose access to this account.",
+            )
+            return
+        }
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSigningOut = true, authMessage = null)
@@ -477,9 +544,18 @@ class HomeViewModel(
         _uiState.value = _uiState.value.copy(
             authState = authState,
             isSigningOut = false,
+            isStartingGuest = false,
         )
 
         if (authState is AuthState.SignedIn) {
+            _uiState.value = _uiState.value.copy(
+                email = authState.email ?: _uiState.value.email,
+                emailUpgradeSent = if (authState.isAnonymous) {
+                    _uiState.value.emailUpgradeSent
+                } else {
+                    false
+                },
+            )
             if (loadedAccountId != authState.accountId) {
                 loadedAccountId = authState.accountId
                 loadDashboard(authState.accountId, showCachedFirst = true)
@@ -1040,6 +1116,9 @@ data class HomeUiState(
     val email: String = "",
     val isSendingMagicLink: Boolean = false,
     val magicLinkSent: Boolean = false,
+    val isStartingGuest: Boolean = false,
+    val isAddingEmail: Boolean = false,
+    val emailUpgradeSent: Boolean = false,
     val authMessage: String? = null,
     val isSigningOut: Boolean = false,
     val selectedPage: SignedInPage = SignedInPage.HOME,

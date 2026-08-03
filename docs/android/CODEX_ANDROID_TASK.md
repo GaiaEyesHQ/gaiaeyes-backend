@@ -38,8 +38,9 @@ Create a native Android app for Gaia Eyes using Kotlin + Jetpack Compose with pa
    - `REVENUECAT_ANDROID_API_KEY`
    - `REVENUECAT_PLUS_MONTHLY_PRODUCT_ID`
    - `REVENUECAT_PLUS_YEARLY_PRODUCT_ID`
-3. Mirror iOS Supabase email magic-link/session auth. Do not add an Android-only
-   anonymous or email/password identity path.
+3. Mirror iOS Supabase email magic-link/session auth, including the shared
+   anonymous-account option and later email attachment on the same Supabase
+   UUID. Do not add an Android-only identity model or email/password path.
 4. Implement encrypted token/session storage.
 5. Implement a single authenticated backend API client with token refresh and reauth notice behavior.
 6. Implement app-scoped caches for features, dashboard, gauges, drivers, outlook, symptoms, profile, and Health Connect diagnostics.
@@ -88,6 +89,8 @@ Allowed `sleep_stage.value_text` values:
 
 - Fresh install can complete onboarding with Health Connect skipped.
 - Fresh install can complete onboarding with Health Connect granted.
+- Fresh install can continue with a recoverable Supabase anonymous account.
+- Adding an email to an anonymous account preserves its Supabase UUID and data.
 - Health Connect initial import uploads accepted Android payloads.
 - Health Connect permission denial does not block app use.
 - Existing account login restores cached account-scoped state.

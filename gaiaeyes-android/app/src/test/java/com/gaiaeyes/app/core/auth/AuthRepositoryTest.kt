@@ -1,6 +1,8 @@
 package com.gaiaeyes.app.core.auth
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AuthRepositoryTest {
@@ -18,5 +20,13 @@ class AuthRepositoryTest {
             "https://example.supabase.co",
             normalizeSupabaseProjectUrl(" https://example.supabase.co/rest/v1/ "),
         )
+    }
+
+    @Test
+    fun identifiesAnonymousAccountFromMissingEmail() {
+        assertTrue(isAnonymousAccountEmail(null))
+        assertTrue(isAnonymousAccountEmail(""))
+        assertTrue(isAnonymousAccountEmail("   "))
+        assertFalse(isAnonymousAccountEmail("person@example.com"))
     }
 }

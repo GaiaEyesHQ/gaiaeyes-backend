@@ -55,7 +55,11 @@ Contract tests should be added as each Android client model is introduced rather
 
 ### 1. Authentication
 
-Recommendation: mirror the current iOS Supabase magic-link/session behavior and preserve the Supabase UUID as the single account identity. Do not launch a separate Android-only email/password or anonymous-account model.
+Recommendation: mirror the current iOS Supabase magic-link/session behavior,
+including its shared anonymous-account option, and preserve the Supabase UUID
+as the single account identity. Users may later attach an email to that same
+identity. Do not launch a separate Android-only identity or email/password
+model.
 
 ### 2. HRV
 
@@ -108,8 +112,8 @@ The initial foundation and authenticated Home vertical slice are complete in
 2. Placeholder-safe environment injection from process variables or ignored
    `local.properties`.
 3. Ktor API client and a real public `GET /health` vertical slice.
-4. Supabase email magic-link authentication with Android Keystore-backed
-   encrypted session persistence.
+4. Supabase email magic-link and anonymous-account authentication with Android
+   Keystore-backed encrypted session persistence and in-place email attachment.
 5. Authenticated `GET /v1/dashboard/gauges` Home dashboard using the existing
    Supabase bearer contract.
 6. Account-scoped saved dashboard, cache-first launch behavior, live refresh,
