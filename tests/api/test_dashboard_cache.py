@@ -121,3 +121,34 @@ def test_attach_dashboard_freshness_keeps_existing_freshness_keys():
 
     assert out["freshness"]["earthscope"] == {"status": "fresh"}
     assert out["freshness"]["dashboard"]["status"] == "fresh"
+
+
+@pytest.mark.anyio
+async def test_refresh_stale_dashboard_space_preserves_personalized_payload(monkeypatch):
+    target_day = date(2026, 8, 4)
+    payload = {
+        "day": target_day.isoformat(),
+        "gauges": {"sleep": 39},
+        "drivers": [{"key": "schumann", "label": "Schumann"}],
+        "signal_bar": {
+            "space": {"kp_now": 0.0},
+            "items": [{"key": "kp", "value": "0.0"}],
+        },
+    }
+
+    def fake_refresh(signal_bar, *, day):
+        assert signal_bar == payload["signal_bar"]
+        assert day == target_day
+        return {
+            "space": {"kp_now": 2.7},
+            "items": [{"key": "kp", "value": "2.7"}],
+        }
+
+    monkeypatch.setattr(dashboard_router, "refresh_signal_bar_space", fake_refresh)
+
+    out = await dashboard_router._refresh_stale_dashboard_space(payload, target_day)
+
+    assert payload["signal_bar"]["space"]["kp_now"] == 0.0
+    assert out["signal_bar"]["space"]["kp_now"] == 2.7
+    assert out["gauges"] == payload["gauges"]
+    assert out["drivers"] == payload["drivers"]

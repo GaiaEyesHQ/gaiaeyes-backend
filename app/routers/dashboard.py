@@ -46,7 +46,7 @@ from services.patterns.personal_relevance import (
 )
 from services.personalization.health_context import build_personalization_profile
 from services.drivers.driver_normalize import merge_signal_bar_driver_candidates
-from services.signal_bar import build_signal_bar
+from services.signal_bar import build_signal_bar, refresh_signal_bar_space
 
 
 router = APIRouter(prefix="/v1", tags=["dashboard"])
@@ -192,6 +192,31 @@ def _attach_dashboard_freshness(
     out["cache_age_seconds"] = freshness["cache_age_seconds"]
     out["stale"] = stale
     out["refresh_scheduled"] = refresh_scheduled
+    return out
+
+
+async def _refresh_stale_dashboard_space(payload: Dict[str, Any], day: date) -> Dict[str, Any]:
+    signal_bar = payload.get("signal_bar")
+    if not isinstance(signal_bar, dict):
+        return payload
+
+    try:
+        refreshed_signal_bar = await asyncio.wait_for(
+            asyncio.to_thread(refresh_signal_bar_space, signal_bar, day=day),
+            timeout=_SIGNAL_CONTEXT_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        logger.warning("[dashboard] stale cache space refresh timed out day=%s", day.isoformat())
+        return payload
+    except Exception as exc:
+        logger.warning("[dashboard] stale cache space refresh failed day=%s error=%s", day.isoformat(), exc)
+        return payload
+
+    if refreshed_signal_bar == signal_bar:
+        return payload
+
+    out = copy.deepcopy(payload)
+    out["signal_bar"] = refreshed_signal_bar
     return out
 
 
@@ -1146,6 +1171,7 @@ async def dashboard(
         if cached_payload is not None:
             refresh_scheduled = False
             if is_stale:
+                cached_payload = await _refresh_stale_dashboard_space(cached_payload, day)
                 refresh_scheduled = _schedule_dashboard_refresh(user_id, day)
             logger.info(
                 "[dashboard] cache hit user=%s day=%s age=%.1fs stale=%s refresh_scheduled=%s",

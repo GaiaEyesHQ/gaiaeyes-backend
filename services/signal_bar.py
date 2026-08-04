@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from datetime import date, datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
@@ -230,15 +231,7 @@ def _state_label(state: str) -> str:
     }.get(state, "Quiet")
 
 
-def build_signal_bar(
-    *,
-    day: date,
-    active_states: Sequence[Mapping[str, Any]] | None,
-    local_payload: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    normalized_active = [item for item in list(active_states or []) if isinstance(item, Mapping)]
-    payload = signal_resolver._normalize_local_payload(dict(local_payload or {}))
-    weather = dict(payload.get("weather") or {})
+def _build_space_signal_snapshot(day: date) -> dict[str, Any]:
     space = signal_resolver._fetch_space_snapshot(day) or {}
 
     kp_now = _safe_float(space.get("kp_now"))
@@ -248,6 +241,107 @@ def build_signal_bar(
     sw_now = _safe_float(space.get("sw_speed_now_kms"))
     sw_avg = _safe_float(space.get("sw_speed_avg"))
     sw_value = sw_now if sw_now is not None else sw_avg
+    space_updated_at = _coerce_iso(space.get("space_now_ts") or space.get("updated_at"))
+
+    return {
+        "updated_at": space_updated_at,
+        "space": {
+            "kp_now": kp_value,
+            "kp_max_24h": kp_max,
+            "bz_now": _safe_float(space.get("bz_now")),
+            "sw_speed_now_kms": sw_value,
+            "sw_density_now_cm3": _safe_float(space.get("sw_density_now_cm3")),
+            "updated_at": space_updated_at,
+        },
+        "items": [
+            {
+                "key": "kp",
+                "label": "KP",
+                "value": "—" if kp_value is None else f"{kp_value:.1f}",
+                "numeric_value": kp_value,
+                "state": _kp_state(kp_value),
+                "driver_key": "kp",
+                "detail_target": "driver",
+                "updated_at": space_updated_at,
+            },
+            {
+                "key": "solar_wind",
+                "label": "SW",
+                "value": "—" if sw_value is None else f"{int(round(sw_value))} km/s",
+                "numeric_value": sw_value,
+                "state": _solar_wind_state(sw_value),
+                "driver_key": "solar_wind",
+                "detail_target": "driver",
+                "updated_at": space_updated_at,
+            },
+        ],
+    }
+
+
+def refresh_signal_bar_space(
+    signal_bar: Mapping[str, Any] | None,
+    *,
+    day: date,
+) -> dict[str, Any]:
+    """Refresh volatile space values without rebuilding personalized dashboard data."""
+
+    out = copy.deepcopy(dict(signal_bar or {}))
+    current = _build_space_signal_snapshot(day)
+    current_space = current.get("space") if isinstance(current.get("space"), Mapping) else {}
+    space_keys = ("kp_now", "kp_max_24h", "bz_now", "sw_speed_now_kms", "sw_density_now_cm3")
+    available_keys = {key for key in space_keys if current_space.get(key) is not None}
+    if not available_keys:
+        return out
+
+    merged_space = dict(out.get("space") or {})
+    for key in available_keys:
+        merged_space[key] = current_space[key]
+    if current.get("updated_at"):
+        merged_space["updated_at"] = current["updated_at"]
+    out["space"] = merged_space
+
+    replaceable_item_keys: set[str] = set()
+    if {"kp_now", "kp_max_24h"} & available_keys:
+        replaceable_item_keys.add("kp")
+    if "sw_speed_now_kms" in available_keys:
+        replaceable_item_keys.add("solar_wind")
+    replacements = {
+        str(item.get("key") or ""): item
+        for item in current.get("items") or []
+        if isinstance(item, Mapping) and str(item.get("key") or "") in replaceable_item_keys
+    }
+    items: list[dict[str, Any]] = []
+    replaced: set[str] = set()
+    for item in out.get("items") or []:
+        if not isinstance(item, Mapping):
+            continue
+        key = str(item.get("key") or "")
+        if key in replacements:
+            items.append(copy.deepcopy(dict(replacements[key])))
+            replaced.add(key)
+        else:
+            items.append(copy.deepcopy(dict(item)))
+
+    for key in ("kp", "solar_wind"):
+        if key not in replaced and key in replacements:
+            items.append(copy.deepcopy(dict(replacements[key])))
+    out["items"] = items
+
+    if current.get("updated_at"):
+        out["updated_at"] = current["updated_at"]
+    return out
+
+
+def build_signal_bar(
+    *,
+    day: date,
+    active_states: Sequence[Mapping[str, Any]] | None,
+    local_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    normalized_active = [item for item in list(active_states or []) if isinstance(item, Mapping)]
+    payload = signal_resolver._normalize_local_payload(dict(local_payload or {}))
+    weather = dict(payload.get("weather") or {})
+    space_signal = _build_space_signal_snapshot(day)
 
     schumann_live = _fetch_schumann_snapshot()
     schumann_trigger_state = _signal_state(normalized_active, "schumann.variability_24h")
@@ -268,29 +362,10 @@ def build_signal_bar(
         break
 
     pressure_updated_at = _coerce_iso(payload.get("asof") or payload.get("as_of"))
-    space_updated_at = _coerce_iso(space.get("space_now_ts") or space.get("updated_at"))
+    space_updated_at = space_signal.get("updated_at")
 
     items = [
-        {
-            "key": "kp",
-            "label": "KP",
-            "value": "—" if kp_value is None else f"{kp_value:.1f}",
-            "numeric_value": kp_value,
-            "state": _kp_state(kp_value),
-            "driver_key": "kp",
-            "detail_target": "driver",
-            "updated_at": space_updated_at,
-        },
-        {
-            "key": "solar_wind",
-            "label": "SW",
-            "value": "—" if sw_value is None else f"{int(round(sw_value))} km/s",
-            "numeric_value": sw_value,
-            "state": _solar_wind_state(sw_value),
-            "driver_key": "solar_wind",
-            "detail_target": "driver",
-            "updated_at": space_updated_at,
-        },
+        *space_signal["items"],
         {
             "key": "schumann",
             "label": "SR",
@@ -313,13 +388,6 @@ def build_signal_bar(
 
     return {
         "updated_at": space_updated_at or pressure_updated_at or schumann_updated_at,
-        "space": {
-            "kp_now": kp_value,
-            "kp_max_24h": kp_max,
-            "bz_now": _safe_float(space.get("bz_now")),
-            "sw_speed_now_kms": sw_value,
-            "sw_density_now_cm3": _safe_float(space.get("sw_density_now_cm3")),
-            "updated_at": space_updated_at,
-        },
+        "space": space_signal["space"],
         "items": items,
     }

@@ -5,7 +5,10 @@ permissions:
 
 on:
   schedule:
-    - cron: "5 14 * * *" # 14:05 UTC ~ 09:05 America/Chicago
+    # GitHub's scheduled runners can drift by hours on busy mornings.
+    # Fire a bounded morning retry window and let preflight below release the
+    # real run only after 09:05 local time, once per local day.
+    - cron: "5,35 11-15 * * *"
   workflow_dispatch:
     inputs:
       date:
@@ -21,9 +24,108 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  preflight:
+    name: Morning window gate
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+      reason: ${{ steps.decide.outputs.reason }}
+    env:
+      GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE || 'America/Chicago' }}
+      EARTHSCOPE_DAILY_URL: https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope_daily.json
+      EARLIEST_LOCAL_HOUR: "9"
+      EARLIEST_LOCAL_MINUTE: "5"
+    steps:
+      - name: Decide whether this slot should publish
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime, timezone
+          from zoneinfo import ZoneInfo
+
+          def set_output(name: str, value: str) -> None:
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                  fh.write(f"{name}={value}\n")
+
+          def append_summary(line: str) -> None:
+              path = os.getenv("GITHUB_STEP_SUMMARY")
+              if not path:
+                  return
+              with open(path, "a", encoding="utf-8") as fh:
+                  fh.write(line + "\n")
+
+          event_name = os.getenv("EVENT_NAME", "")
+          if event_name == "workflow_dispatch":
+              set_output("should_run", "true")
+              set_output("reason", "manual_dispatch")
+              append_summary("Manual dispatch: bypassing morning window gate.")
+              raise SystemExit(0)
+
+          tz_name = os.getenv("GAIA_TIMEZONE") or "America/Chicago"
+          tz = ZoneInfo(tz_name)
+          now_utc = datetime.now(timezone.utc)
+          now_local = now_utc.astimezone(tz)
+          earliest_local = now_local.replace(
+              hour=int(os.getenv("EARLIEST_LOCAL_HOUR", "9")),
+              minute=int(os.getenv("EARLIEST_LOCAL_MINUTE", "5")),
+              second=0,
+              microsecond=0,
+          )
+
+          if now_local < earliest_local:
+              set_output("should_run", "false")
+              set_output("reason", "before_local_publish_window")
+              append_summary(
+                  f"Skipping scheduled slot before local publish window: now={now_local.isoformat()} earliest={earliest_local.isoformat()}"
+              )
+              raise SystemExit(0)
+
+          payload_url = os.getenv("EARTHSCOPE_DAILY_URL", "").strip()
+          already_published_today = False
+          published_ts = ""
+          fetch_note = ""
+
+          if payload_url:
+              try:
+                  req = urllib.request.Request(
+                      payload_url,
+                      headers={"Accept": "application/json", "User-Agent": "gaiaeyes-daily-preflight/1.0"},
+                  )
+                  with urllib.request.urlopen(req, timeout=20) as response:
+                      payload = json.load(response)
+                  published_ts = str(payload.get("timestamp_utc") or "").strip()
+                  if published_ts:
+                      published_dt = datetime.fromisoformat(published_ts.replace("Z", "+00:00"))
+                      already_published_today = published_dt.astimezone(tz).date() == now_local.date()
+              except Exception as exc:  # noqa: BLE001
+                  fetch_note = str(exc)
+
+          if already_published_today:
+              set_output("should_run", "false")
+              set_output("reason", "already_published_today")
+              append_summary(
+                  f"Skipping scheduled slot because today's EarthScope daily JSON already exists: timestamp_utc={published_ts}"
+              )
+              raise SystemExit(0)
+
+          set_output("should_run", "true")
+          set_output("reason", "ready_to_publish")
+          note = f" publish_check_error={fetch_note}" if fetch_note else ""
+          append_summary(
+              f"Publishing from scheduled slot: now={now_local.isoformat()} existing_timestamp_utc={published_ts or 'none'}{note}"
+          )
+          PY
+
   generate:
     name: Generate Earthscope → Supabase
     runs-on: ubuntu-latest
+    needs: preflight
+    if: ${{ needs.preflight.outputs.should_run == 'true' }}
     permissions:
       contents: write
       issues: write

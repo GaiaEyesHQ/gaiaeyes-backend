@@ -176,6 +176,7 @@ When trigger events are detected for paid users, the engine appends a “Trigger
       - `updated_at`: most recent source timestamp available for the bar payload
       - `items`: ordered pills for `KP`, `SW`, `SR`, and `hPa`
       - each item includes `key`, `label`, `value`, `state`, `driver_key`, `detail_target`, and `updated_at`
+      - stale cached dashboards refresh the volatile space snapshot and `KP` / `SW` pills before returning; personalized gauges and driver ranking continue to refresh in the background
     - Signal-bar rules stay objective:
       - the bar always renders the same four core signals, even when they are quiet
       - personalization does not suppress or soften a stronger objective state

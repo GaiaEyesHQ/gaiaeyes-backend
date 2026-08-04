@@ -18,6 +18,94 @@ except ModuleNotFoundError as exc:  # pragma: no cover - optional DB deps are ab
 
 @unittest.skipIf(_IMPORT_ERROR is not None, f"Signal bar tests require optional dependencies: {_IMPORT_ERROR}")
 class SignalBarTests(unittest.TestCase):
+    def test_refresh_signal_bar_space_replaces_only_volatile_space_values(self) -> None:
+        stale = {
+            "updated_at": "2026-08-04T01:00:00Z",
+            "space": {
+                "kp_now": 0.0,
+                "sw_speed_now_kms": 390.0,
+                "updated_at": "2026-08-04T01:00:00Z",
+            },
+            "items": [
+                {"key": "kp", "label": "KP", "value": "0.0", "state": "quiet"},
+                {"key": "solar_wind", "label": "SW", "value": "390 km/s", "state": "quiet"},
+                {"key": "schumann", "label": "SR", "value": "Active", "state": "watch"},
+                {"key": "pressure", "label": "hPa", "value": "1014 →", "state": "quiet"},
+            ],
+        }
+
+        with patch.object(
+            signal_bar.signal_resolver,
+            "_fetch_space_snapshot",
+            return_value={
+                "kp_now": 2.7,
+                "kp_max": 3.0,
+                "bz_now": -2.2,
+                "sw_speed_now_kms": 448.4,
+                "sw_density_now_cm3": 6.1,
+                "space_now_ts": datetime(2026, 8, 4, 2, 5, tzinfo=timezone.utc),
+            },
+        ):
+            refreshed = signal_bar.refresh_signal_bar_space(stale, day=date(2026, 8, 4))
+
+        items = {item["key"]: item for item in refreshed["items"]}
+        self.assertEqual(stale["space"]["kp_now"], 0.0)
+        self.assertEqual(refreshed["space"]["kp_now"], 2.7)
+        self.assertEqual(refreshed["space"]["bz_now"], -2.2)
+        self.assertEqual(refreshed["space"]["sw_density_now_cm3"], 6.1)
+        self.assertEqual(items["kp"]["value"], "2.7")
+        self.assertEqual(items["solar_wind"]["value"], "448 km/s")
+        self.assertEqual(items["schumann"], stale["items"][2])
+        self.assertEqual(items["pressure"], stale["items"][3])
+        self.assertEqual(refreshed["updated_at"], "2026-08-04T02:05:00+00:00")
+
+    def test_refresh_signal_bar_space_preserves_cache_when_current_source_is_empty(self) -> None:
+        stale = {
+            "updated_at": "2026-08-04T01:00:00Z",
+            "space": {"kp_now": 0.3},
+            "items": [{"key": "kp", "value": "0.3"}],
+        }
+
+        with patch.object(signal_bar.signal_resolver, "_fetch_space_snapshot", return_value={}):
+            refreshed = signal_bar.refresh_signal_bar_space(stale, day=date(2026, 8, 4))
+
+        self.assertEqual(refreshed, stale)
+        self.assertIsNot(refreshed, stale)
+
+    def test_refresh_signal_bar_space_preserves_missing_live_metrics(self) -> None:
+        stale = {
+            "updated_at": "2026-08-04T01:00:00Z",
+            "space": {
+                "kp_now": 0.0,
+                "bz_now": -1.7,
+                "sw_speed_now_kms": 421.0,
+                "sw_density_now_cm3": 5.4,
+                "updated_at": "2026-08-04T01:00:00Z",
+            },
+            "items": [
+                {"key": "kp", "label": "KP", "value": "0.0", "state": "quiet"},
+                {"key": "solar_wind", "label": "SW", "value": "421 km/s", "state": "quiet"},
+            ],
+        }
+
+        with patch.object(
+            signal_bar.signal_resolver,
+            "_fetch_space_snapshot",
+            return_value={
+                "kp_now": 2.0,
+                "space_now_ts": datetime(2026, 8, 4, 2, 5, tzinfo=timezone.utc),
+            },
+        ):
+            refreshed = signal_bar.refresh_signal_bar_space(stale, day=date(2026, 8, 4))
+
+        items = {item["key"]: item for item in refreshed["items"]}
+        self.assertEqual(refreshed["space"]["kp_now"], 2.0)
+        self.assertEqual(refreshed["space"]["bz_now"], -1.7)
+        self.assertEqual(refreshed["space"]["sw_speed_now_kms"], 421.0)
+        self.assertEqual(refreshed["space"]["sw_density_now_cm3"], 5.4)
+        self.assertEqual(items["kp"]["value"], "2.0")
+        self.assertEqual(items["solar_wind"], stale["items"][1])
+
     def test_build_signal_bar_prefers_current_solar_wind_over_higher_daily_average(self) -> None:
         with patch.object(
             signal_bar.signal_resolver,
