@@ -8,6 +8,7 @@ import com.gaiaeyes.app.core.auth.AuthState
 import com.gaiaeyes.app.core.network.DailyCheckInStatus
 import com.gaiaeyes.app.core.network.ExposureCatalogOption
 import com.gaiaeyes.app.core.network.CurrentSymptomUpdateRequest
+import com.gaiaeyes.app.core.network.ProfileLocation
 import com.gaiaeyes.app.core.network.SymptomCodeOption
 import com.gaiaeyes.app.core.network.ProfileLocationUpdate
 import com.gaiaeyes.app.core.network.ProfilePreferencesUpdate
@@ -18,6 +19,7 @@ import com.gaiaeyes.app.data.BodyRepository
 import com.gaiaeyes.app.data.BodySnapshot
 import com.gaiaeyes.app.data.DashboardRepository
 import com.gaiaeyes.app.data.DashboardSnapshot
+import com.gaiaeyes.app.data.DeviceLocationRepository
 import com.gaiaeyes.app.data.DriversSnapshot
 import com.gaiaeyes.app.data.HealthRepository
 import com.gaiaeyes.app.data.HealthConnectRepository
@@ -42,6 +44,7 @@ class HomeViewModel(
     private val authRepository: AuthRepository,
     private val bodyRepository: BodyRepository,
     private val dashboardRepository: DashboardRepository,
+    private val deviceLocationRepository: DeviceLocationRepository,
     private val healthRepository: HealthRepository,
     private val healthConnectRepository: HealthConnectRepository,
     private val homeContextRepository: HomeContextRepository,
@@ -61,8 +64,10 @@ class HomeViewModel(
     private var outlookJob: Job? = null
     private var patternsJob: Job? = null
     private var onboardingJob: Job? = null
+    private var locationJob: Job? = null
     private var loadedAccountId: String? = null
     private var processingQuickLogId: String? = null
+    private var lastForegroundLocationRefreshAt = 0L
 
     init {
         refreshHealth()
@@ -204,7 +209,7 @@ class HomeViewModel(
             SignedInPage.OUTLOOK -> loadOutlook(account.accountId, showCachedFirst = false)
             SignedInPage.EXPLORE -> {
                 loadHomeContext(account.accountId, showCachedFirst = false)
-                loadLocalWeather(account.accountId, showCachedFirst = false)
+                refreshLocalWeather()
             }
         }
     }
@@ -241,8 +246,120 @@ class HomeViewModel(
     fun onOnboardingZipChanged(value: String) {
         _uiState.value = _uiState.value.copy(
             onboardingZip = value.filter(Char::isDigit).take(5),
+            onboardingUseGps = false,
+            onboardingLatitude = null,
+            onboardingLongitude = null,
             onboardingMessage = null,
         )
+    }
+
+    fun onLocationLocalInsightsChanged(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            locationLocalInsightsEnabled = enabled,
+            locationSettingsMessage = null,
+        )
+    }
+
+    fun onLocationZipChanged(value: String) {
+        _uiState.value = _uiState.value.copy(
+            locationZip = value.filter(Char::isDigit).take(5),
+            locationUseGps = false,
+            locationLatitude = null,
+            locationLongitude = null,
+            locationSettingsMessage = null,
+        )
+    }
+
+    fun onLocationPermissionDenied(forOnboarding: Boolean) {
+        val message = "Location access wasn't granted. You can still use a saved ZIP code."
+        _uiState.value = if (forOnboarding) {
+            _uiState.value.copy(onboardingMessage = message)
+        } else {
+            _uiState.value.copy(locationSettingsMessage = message)
+        }
+    }
+
+    fun useCurrentDeviceLocation(forOnboarding: Boolean) {
+        updateFromDeviceLocation(forOnboarding = forOnboarding, showMessage = true)
+    }
+
+    fun saveLocationSettings() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        val state = _uiState.value
+        if (state.isSavingLocation || state.isLocatingDevice) return
+        if (state.locationLocalInsightsEnabled && !isValidOnboardingZip(state.locationZip)) {
+            _uiState.value = state.copy(
+                locationSettingsMessage = "Enter a 5-digit ZIP code or use your current location.",
+            )
+            return
+        }
+
+        locationJob?.cancel()
+        locationJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isSavingLocation = true,
+                locationSettingsMessage = null,
+            )
+            runCatching {
+                profileRepository.saveLocation(
+                    ProfileLocationUpdate(
+                        zip = state.locationZip.takeIf { state.locationLocalInsightsEnabled },
+                        lat = state.locationLatitude.takeIf { state.locationLocalInsightsEnabled },
+                        lon = state.locationLongitude.takeIf { state.locationLocalInsightsEnabled },
+                        useGps = state.locationUseGps && state.locationLocalInsightsEnabled,
+                        localInsightsEnabled = state.locationLocalInsightsEnabled,
+                    ),
+                )
+            }.onSuccess { location ->
+                if (!isCurrentAccount(account.accountId)) return@onSuccess
+                hydrateLocationSettings(location)
+                _uiState.value = _uiState.value.copy(
+                    isSavingLocation = false,
+                    locationSettingsMessage = if (state.locationLocalInsightsEnabled) {
+                        "Local conditions updated for ZIP ${state.locationZip}."
+                    } else {
+                        "Local conditions are turned off."
+                    },
+                )
+                loadLocalWeather(account.accountId, showCachedFirst = false)
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        isSavingLocation = false,
+                        locationSettingsMessage = "Your local settings couldn't be saved. Check your connection and try again.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun refreshLocalWeather() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (
+            _uiState.value.locationUseGps &&
+            _uiState.value.locationLocalInsightsEnabled &&
+            deviceLocationRepository.hasPermission()
+        ) {
+            updateFromDeviceLocation(forOnboarding = false, showMessage = false)
+        } else {
+            loadLocalWeather(account.accountId, showCachedFirst = false)
+        }
+    }
+
+    fun refreshForegroundLocation() {
+        val state = _uiState.value
+        if (
+            state.onboardingStatus != OnboardingStatus.COMPLETE ||
+            !state.locationSettingsLoaded ||
+            !state.locationUseGps ||
+            !state.locationLocalInsightsEnabled ||
+            !deviceLocationRepository.hasPermission() ||
+            state.isLocatingDevice
+        ) return
+        val now = System.currentTimeMillis()
+        if (now - lastForegroundLocationRefreshAt < FOREGROUND_LOCATION_REFRESH_INTERVAL_MS) return
+        lastForegroundLocationRefreshAt = now
+        updateFromDeviceLocation(forOnboarding = false, showMessage = false)
     }
 
     fun previousOnboardingStep() {
@@ -267,7 +384,7 @@ class HomeViewModel(
             !isValidOnboardingZip(state.onboardingZip)
         ) {
             _uiState.value = state.copy(
-                onboardingMessage = "Enter a 5-digit ZIP code, or choose Not now.",
+                onboardingMessage = "Enter a 5-digit ZIP code, use your current location, or choose Not now.",
             )
             return
         }
@@ -308,7 +425,14 @@ class HomeViewModel(
                                 zip = state.onboardingZip.takeIf {
                                     state.onboardingLocalInsightsEnabled
                                 },
-                                useGps = false,
+                                lat = state.onboardingLatitude.takeIf {
+                                    state.onboardingLocalInsightsEnabled
+                                },
+                                lon = state.onboardingLongitude.takeIf {
+                                    state.onboardingLocalInsightsEnabled
+                                },
+                                useGps = state.onboardingUseGps &&
+                                    state.onboardingLocalInsightsEnabled,
                                 localInsightsEnabled = state.onboardingLocalInsightsEnabled,
                             ),
                         )
@@ -445,6 +569,9 @@ class HomeViewModel(
             SignedInPage.EXPLORE -> {
                 if (_uiState.value.drivers == null) {
                     loadHomeContext(account.accountId, showCachedFirst = true)
+                }
+                if (!_uiState.value.locationSettingsLoaded) {
+                    loadLocationSettings(account.accountId)
                 }
                 if (_uiState.value.localWeather == null) {
                     loadLocalWeather(account.accountId, showCachedFirst = true)
@@ -740,6 +867,9 @@ class HomeViewModel(
         outlookJob = null
         onboardingJob?.cancel()
         onboardingJob = null
+        locationJob?.cancel()
+        locationJob = null
+        lastForegroundLocationRefreshAt = 0L
         loadedAccountId = null
         _uiState.value = _uiState.value.copy(
             dashboard = null,
@@ -751,6 +881,9 @@ class HomeViewModel(
             selectedPage = SignedInPage.HOME,
             onboardingStatus = OnboardingStatus.CHECKING,
             onboardingStep = OnboardingStep.WELCOME,
+            onboardingUseGps = false,
+            onboardingLatitude = null,
+            onboardingLongitude = null,
             isSavingOnboarding = false,
             onboardingMessage = null,
             currentSymptoms = null,
@@ -760,6 +893,15 @@ class HomeViewModel(
             localWeather = null,
             isLoadingLocalWeather = false,
             localWeatherMessage = null,
+            locationLocalInsightsEnabled = true,
+            locationZip = "",
+            locationUseGps = false,
+            locationLatitude = null,
+            locationLongitude = null,
+            locationSettingsLoaded = false,
+            isLocatingDevice = false,
+            isSavingLocation = false,
+            locationSettingsMessage = null,
             isUpdatingSymptoms = false,
             symptomActionMessage = null,
             patterns = null,
@@ -886,8 +1028,12 @@ class HomeViewModel(
                             onboardingLocalInsightsEnabled =
                                 profile.location?.localInsightsEnabled != false,
                             onboardingZip = profile.location?.zip.orEmpty(),
+                            onboardingUseGps = profile.location?.useGps == true,
+                            onboardingLatitude = profile.location?.lat,
+                            onboardingLongitude = profile.location?.lon,
                             onboardingMessage = null,
                         )
+                        hydrateLocationSettings(profile.location)
                         refreshHealthConnect()
                     }
                 }
@@ -906,11 +1052,129 @@ class HomeViewModel(
     private fun loadSignedInContent(accountId: String) {
         loadDashboard(accountId, showCachedFirst = true)
         loadHomeContext(accountId, showCachedFirst = true)
+        loadLocationSettings(accountId)
         refreshHealthConnect()
         if (quickLogCoordinator.pending.value == null) {
             retryJournalWrites(accountId, showSuccessMessage = false)
         }
         maybeHandleQuickLog(quickLogCoordinator.pending.value)
+    }
+
+    private fun loadLocationSettings(accountId: String) {
+        locationJob?.cancel()
+        locationJob = viewModelScope.launch {
+            runCatching { profileRepository.loadLocation() }
+                .onSuccess { location ->
+                    if (isCurrentAccount(accountId)) {
+                        hydrateLocationSettings(location)
+                    }
+                }
+                .onFailure {
+                    if (isCurrentAccount(accountId)) {
+                        _uiState.value = _uiState.value.copy(
+                            locationSettingsLoaded = true,
+                            locationSettingsMessage = "Your saved location couldn't load. You can try again from Settings.",
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun updateFromDeviceLocation(forOnboarding: Boolean, showMessage: Boolean) {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.isLocatingDevice || _uiState.value.isSavingLocation) return
+        if (!deviceLocationRepository.hasPermission()) {
+            onLocationPermissionDenied(forOnboarding)
+            return
+        }
+
+        locationJob?.cancel()
+        locationJob = viewModelScope.launch {
+            _uiState.value = if (forOnboarding) {
+                _uiState.value.copy(isLocatingDevice = true, onboardingMessage = null)
+            } else {
+                _uiState.value.copy(isLocatingDevice = true, locationSettingsMessage = null)
+            }
+
+            runCatching { deviceLocationRepository.currentPostalLocation() }
+                .onSuccess { deviceLocation ->
+                    if (!isCurrentAccount(account.accountId)) return@onSuccess
+                    if (forOnboarding) {
+                        _uiState.value = _uiState.value.copy(
+                            onboardingLocalInsightsEnabled = true,
+                            onboardingZip = deviceLocation.zip,
+                            onboardingUseGps = true,
+                            onboardingLatitude = deviceLocation.latitude,
+                            onboardingLongitude = deviceLocation.longitude,
+                            isLocatingDevice = false,
+                            onboardingMessage = "Current location found. ZIP ${deviceLocation.zip} will remain your fallback.",
+                        )
+                    } else {
+                        runCatching {
+                            profileRepository.saveLocation(
+                                ProfileLocationUpdate(
+                                    zip = deviceLocation.zip,
+                                    lat = deviceLocation.latitude,
+                                    lon = deviceLocation.longitude,
+                                    useGps = true,
+                                    localInsightsEnabled = true,
+                                ),
+                            )
+                        }.onSuccess saveLocationSuccess@{ savedLocation ->
+                            if (!isCurrentAccount(account.accountId)) return@saveLocationSuccess
+                            hydrateLocationSettings(
+                                savedLocation ?: ProfileLocation(
+                                    zip = deviceLocation.zip,
+                                    lat = deviceLocation.latitude,
+                                    lon = deviceLocation.longitude,
+                                    useGps = true,
+                                    localInsightsEnabled = true,
+                                ),
+                            )
+                            _uiState.value = _uiState.value.copy(
+                                isLocatingDevice = false,
+                                locationSettingsMessage = if (showMessage) {
+                                    "Using your current location. ZIP ${deviceLocation.zip} is saved as a fallback."
+                                } else {
+                                    null
+                                },
+                            )
+                            loadLocalWeather(account.accountId, showCachedFirst = false)
+                        }.onFailure {
+                            if (isCurrentAccount(account.accountId)) {
+                                _uiState.value = _uiState.value.copy(
+                                    isLocatingDevice = false,
+                                    locationSettingsMessage = "Your current location was found, but it couldn't be saved. Try again shortly.",
+                                )
+                            }
+                        }
+                    }
+                }
+                .onFailure { error ->
+                    if (!isCurrentAccount(account.accountId)) return@onFailure
+                    val message = error.message
+                        ?: "Your current location couldn't be found. Try again or enter a ZIP code."
+                    _uiState.value = if (forOnboarding) {
+                        _uiState.value.copy(isLocatingDevice = false, onboardingMessage = message)
+                    } else {
+                        _uiState.value.copy(isLocatingDevice = false, locationSettingsMessage = message)
+                    }
+                    if (!forOnboarding && !showMessage) {
+                        loadLocalWeather(account.accountId, showCachedFirst = false)
+                    }
+                }
+        }
+    }
+
+    private fun hydrateLocationSettings(location: ProfileLocation?) {
+        _uiState.value = _uiState.value.copy(
+            locationLocalInsightsEnabled = location?.localInsightsEnabled != false,
+            locationZip = location?.zip.orEmpty(),
+            locationUseGps = location?.useGps == true,
+            locationLatitude = location?.lat,
+            locationLongitude = location?.lon,
+            locationSettingsLoaded = true,
+        )
     }
 
     private fun submitJournalWrite(
@@ -1160,6 +1424,7 @@ class HomeViewModel(
                 homeContextRepository.refreshLocal(accountId)
             }.onSuccess { localWeather ->
                 if (isCurrentAccount(accountId)) {
+                    hydrateLocationSettings(localWeather.location)
                     _uiState.value = _uiState.value.copy(
                         localWeather = localWeather,
                         isLoadingLocalWeather = false,
@@ -1303,6 +1568,7 @@ class HomeViewModel(
         private val authRepository: AuthRepository,
         private val bodyRepository: BodyRepository,
         private val dashboardRepository: DashboardRepository,
+        private val deviceLocationRepository: DeviceLocationRepository,
         private val healthRepository: HealthRepository,
         private val healthConnectRepository: HealthConnectRepository,
         private val homeContextRepository: HomeContextRepository,
@@ -1319,6 +1585,7 @@ class HomeViewModel(
                 authRepository = authRepository,
                 bodyRepository = bodyRepository,
                 dashboardRepository = dashboardRepository,
+                deviceLocationRepository = deviceLocationRepository,
                 healthRepository = healthRepository,
                 healthConnectRepository = healthConnectRepository,
                 homeContextRepository = homeContextRepository,
@@ -1352,6 +1619,9 @@ data class HomeUiState(
     val onboardingSelectedTags: Set<String> = emptySet(),
     val onboardingLocalInsightsEnabled: Boolean = true,
     val onboardingZip: String = "",
+    val onboardingUseGps: Boolean = false,
+    val onboardingLatitude: Double? = null,
+    val onboardingLongitude: Double? = null,
     val isSavingOnboarding: Boolean = false,
     val onboardingMessage: String? = null,
     val dashboard: DashboardSnapshot? = null,
@@ -1367,6 +1637,15 @@ data class HomeUiState(
     val localWeather: LocalWeatherSnapshot? = null,
     val isLoadingLocalWeather: Boolean = false,
     val localWeatherMessage: String? = null,
+    val locationLocalInsightsEnabled: Boolean = true,
+    val locationZip: String = "",
+    val locationUseGps: Boolean = false,
+    val locationLatitude: Double? = null,
+    val locationLongitude: Double? = null,
+    val locationSettingsLoaded: Boolean = false,
+    val isLocatingDevice: Boolean = false,
+    val isSavingLocation: Boolean = false,
+    val locationSettingsMessage: String? = null,
     val isUpdatingSymptoms: Boolean = false,
     val symptomActionMessage: String? = null,
     val patterns: PatternsSnapshot? = null,
@@ -1438,3 +1717,5 @@ private fun String.looksLikeEmail(): Boolean {
     val separator = indexOf('@')
     return separator > 0 && separator < lastIndex && substring(separator + 1).contains('.')
 }
+
+private const val FOREGROUND_LOCATION_REFRESH_INTERVAL_MS = 5 * 60 * 1_000L

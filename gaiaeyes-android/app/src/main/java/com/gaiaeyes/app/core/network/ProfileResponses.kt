@@ -39,10 +39,12 @@ data class ProfilePreferencesUpdate(
 @Serializable
 data class ProfileLocationUpdate(
     val zip: String? = null,
+    val lat: Double? = null,
+    val lon: Double? = null,
     @SerialName("use_gps")
-    val useGps: Boolean = false,
+    val useGps: Boolean? = null,
     @SerialName("local_insights_enabled")
-    val localInsightsEnabled: Boolean = true,
+    val localInsightsEnabled: Boolean? = null,
 )
 
 @Serializable

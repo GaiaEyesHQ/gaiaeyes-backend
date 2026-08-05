@@ -8,6 +8,7 @@ import com.gaiaeyes.app.data.BodyCache
 import com.gaiaeyes.app.data.BodyRepository
 import com.gaiaeyes.app.data.DashboardCache
 import com.gaiaeyes.app.data.DashboardRepository
+import com.gaiaeyes.app.data.DeviceLocationRepository
 import com.gaiaeyes.app.data.HealthRepository
 import com.gaiaeyes.app.data.HealthConnectRepository
 import com.gaiaeyes.app.data.HealthSampleQueue
@@ -31,6 +32,7 @@ class AppContainer(
 ) {
     private val apiClient = GaiaApiClient(apiBase = apiBase)
     val quickLogCoordinator = QuickLogCoordinator()
+    val deviceLocationRepository = DeviceLocationRepository(context.applicationContext)
 
     val authRepository = AuthRepository(
         context = context,

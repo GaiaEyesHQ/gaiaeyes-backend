@@ -30,6 +30,10 @@ class ProfileRepository(
             apiClient.updateProfilePreferences(authRepository.accessToken(), update)
         }
 
+    suspend fun loadLocation(): ProfileLocation? = authenticatedRequest {
+        apiClient.profileLocation(authRepository.accessToken())
+    }
+
     suspend fun saveLocation(update: ProfileLocationUpdate): ProfileLocation? =
         authenticatedRequest {
             apiClient.updateProfileLocation(authRepository.accessToken(), update)

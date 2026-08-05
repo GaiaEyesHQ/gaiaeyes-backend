@@ -1,6 +1,8 @@
 package com.gaiaeyes.app.core.network
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -70,5 +72,25 @@ class ProfileResponsesTest {
         )
 
         assertEquals(listOf("migraine", "fibromyalgia"), envelope.tags)
+    }
+
+    @Test
+    fun encodesDeviceLocationForSharedProfile() {
+        val encoded = json.encodeToJsonElement(
+            ProfileLocationUpdate.serializer(),
+            ProfileLocationUpdate(
+                zip = "78754",
+                lat = 30.35,
+                lon = -97.65,
+                useGps = true,
+                localInsightsEnabled = true,
+            ),
+        ).jsonObject
+
+        assertEquals("78754", encoded.getValue("zip").jsonPrimitive.content)
+        assertEquals("30.35", encoded.getValue("lat").jsonPrimitive.content)
+        assertEquals("-97.65", encoded.getValue("lon").jsonPrimitive.content)
+        assertEquals("true", encoded.getValue("use_gps").jsonPrimitive.content)
+        assertEquals("true", encoded.getValue("local_insights_enabled").jsonPrimitive.content)
     }
 }

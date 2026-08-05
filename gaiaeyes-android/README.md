@@ -9,8 +9,8 @@ Native Android foundation for Gaia Eyes.
 - Supabase email magic-link and shared anonymous-account authentication with
   Android Keystore-backed session storage and in-place email attachment
 - Resumable account-scoped onboarding backed by the shared profile APIs for
-  display style, health context, fixed ZIP/local insights, and optional Health
-  Connect permission
+  display style, health context, optional approximate foreground location with
+  a saved ZIP fallback/local insights, and optional Health Connect permission
 - Authenticated `GET /v1/dashboard/gauges` Home dashboard with all eight shared
   Gaia Eyes gauges in a compact, expandable layout
 - Account-scoped saved dashboard with live refresh and sign-out isolation
@@ -121,3 +121,19 @@ For guest-account QA:
 4. Confirm the account keeps its dashboard and journal history after the email
    is attached. Do not clear app data or uninstall before attaching an email;
    an unlinked anonymous account cannot be recovered afterward.
+
+## Local conditions QA
+
+Gaia Eyes requests approximate location only while the Android app is in use.
+It does not request precise or background location. The resolved ZIP and
+coordinates are saved to the shared profile so local conditions can load before
+the next device-location refresh.
+
+1. Start onboarding with a new account and choose **Use current location**.
+2. Grant approximate location access and confirm the detected ZIP appears.
+3. Finish onboarding, open **Explore > Local Weather**, and confirm local
+   conditions load for that ZIP.
+4. Change the saved location from either **Settings > Local conditions** or
+   **Explore > Local Weather**, then confirm both surfaces show the new ZIP.
+5. Disable current-location updates and save a manual ZIP. Reopen the app and
+   confirm local conditions continue to load from that saved fallback.

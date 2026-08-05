@@ -1,7 +1,10 @@
 package com.gaiaeyes.app.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.BorderStroke
@@ -62,6 +65,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gaiaeyes.app.BuildConfig
@@ -80,6 +86,7 @@ import com.gaiaeyes.app.data.BodyRepository
 import com.gaiaeyes.app.data.BodySource
 import com.gaiaeyes.app.data.DashboardRepository
 import com.gaiaeyes.app.data.DashboardSource
+import com.gaiaeyes.app.data.DeviceLocationRepository
 import com.gaiaeyes.app.data.HealthRepository
 import com.gaiaeyes.app.data.HealthConnectRepository
 import com.gaiaeyes.app.data.HealthConnectStatus
@@ -105,6 +112,7 @@ fun GaiaEyesApp(
     authRepository: AuthRepository,
     bodyRepository: BodyRepository,
     dashboardRepository: DashboardRepository,
+    deviceLocationRepository: DeviceLocationRepository,
     healthRepository: HealthRepository,
     healthConnectRepository: HealthConnectRepository,
     homeContextRepository: HomeContextRepository,
@@ -120,6 +128,7 @@ fun GaiaEyesApp(
             authRepository = authRepository,
             bodyRepository = bodyRepository,
             dashboardRepository = dashboardRepository,
+            deviceLocationRepository = deviceLocationRepository,
             healthRepository = healthRepository,
             healthConnectRepository = healthConnectRepository,
             homeContextRepository = homeContextRepository,
@@ -134,10 +143,36 @@ fun GaiaEyesApp(
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showCurrentSymptoms by rememberSaveable { mutableStateOf(false) }
     var showLocalWeather by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    var locationRequestForOnboarding by rememberSaveable { mutableStateOf(false) }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         contract = healthConnectRepository.permissionContract(),
         onResult = { viewModel.refreshHealthConnect() },
     )
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.useCurrentDeviceLocation(locationRequestForOnboarding)
+        } else {
+            viewModel.onLocationPermissionDenied(locationRequestForOnboarding)
+        }
+    }
+    val requestCurrentLocation: (Boolean) -> Unit = { forOnboarding ->
+        locationRequestForOnboarding = forOnboarding
+        if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.useCurrentDeviceLocation(forOnboarding)
+        } else {
+            locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshForegroundLocation()
+    }
 
     when (val authState = uiState.authState) {
         AuthState.Initializing -> LoadingScreen(modifier)
@@ -173,6 +208,7 @@ fun GaiaEyesApp(
                 onToggleTag = viewModel::toggleOnboardingTag,
                 onLocalInsightsChanged = viewModel::onOnboardingLocalInsightsChanged,
                 onZipChanged = viewModel::onOnboardingZipChanged,
+                onUseDeviceLocation = { requestCurrentLocation(true) },
                 onBack = viewModel::previousOnboardingStep,
                 onContinue = viewModel::continueOnboarding,
                 onConnectHealth = {
@@ -190,6 +226,10 @@ fun GaiaEyesApp(
                 onRefresh = viewModel::refresh,
                 onEmailChanged = viewModel::onEmailChanged,
                 onAddEmail = viewModel::addEmailToCurrentAccount,
+                onLocalInsightsChanged = viewModel::onLocationLocalInsightsChanged,
+                onZipChanged = viewModel::onLocationZipChanged,
+                onUseDeviceLocation = { requestCurrentLocation(false) },
+                onSaveLocation = viewModel::saveLocationSettings,
                 onDismissMessage = viewModel::dismissMessage,
                 onSignOut = {
                     showSettings = false
@@ -214,7 +254,11 @@ fun GaiaEyesApp(
             LocalWeatherScreen(
                 uiState = uiState,
                 onClose = { showLocalWeather = false },
-                onRefresh = viewModel::refresh,
+                onRefresh = viewModel::refreshLocalWeather,
+                onLocalInsightsChanged = viewModel::onLocationLocalInsightsChanged,
+                onZipChanged = viewModel::onLocationZipChanged,
+                onUseDeviceLocation = { requestCurrentLocation(false) },
+                onSaveLocation = viewModel::saveLocationSettings,
                 onDismissMessage = viewModel::dismissMessage,
                 modifier = modifier,
             )
@@ -295,6 +339,7 @@ private fun OnboardingScreen(
     onToggleTag: (String) -> Unit,
     onLocalInsightsChanged: (Boolean) -> Unit,
     onZipChanged: (String) -> Unit,
+    onUseDeviceLocation: () -> Unit,
     onBack: () -> Unit,
     onContinue: () -> Unit,
     onConnectHealth: () -> Unit,
@@ -346,6 +391,7 @@ private fun OnboardingScreen(
                     uiState = uiState,
                     onLocalInsightsChanged = onLocalInsightsChanged,
                     onZipChanged = onZipChanged,
+                    onUseDeviceLocation = onUseDeviceLocation,
                 )
                 OnboardingStep.HEALTH_CONNECT -> OnboardingHealthConnect(
                     uiState = uiState,
@@ -454,10 +500,11 @@ private fun OnboardingLocation(
     uiState: HomeUiState,
     onLocalInsightsChanged: (Boolean) -> Unit,
     onZipChanged: (String) -> Unit,
+    onUseDeviceLocation: () -> Unit,
 ) {
     OnboardingTitle(
         "Add local conditions",
-        "A ZIP code lets Gaia Eyes compare weather, pressure, air quality, and other nearby signals with your day.",
+        "Use your current location or a saved ZIP code so Gaia Eyes can compare nearby weather, pressure, and air quality with your day.",
     )
     ChoiceRow("Use local insights", uiState.onboardingLocalInsightsEnabled) {
         onLocalInsightsChanged(true)
@@ -467,14 +514,50 @@ private fun OnboardingLocation(
     }
     if (uiState.onboardingLocalInsightsEnabled) {
         Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onUseDeviceLocation,
+            enabled = !uiState.isLocatingDevice,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = GaiaGreen,
+                contentColor = GaiaNavy,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (uiState.isLocatingDevice) {
+                CircularProgressIndicator(
+                    color = GaiaNavy,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp),
+                )
+            } else {
+                Text("Use current location", fontWeight = FontWeight.Bold)
+            }
+        }
+        Text(
+            text = when {
+                uiState.onboardingUseGps && uiState.onboardingZip.isNotBlank() ->
+                    "Using your current area. ZIP ${uiState.onboardingZip} is saved as a fallback."
+                uiState.onboardingZip.isNotBlank() -> "Using saved ZIP ${uiState.onboardingZip}."
+                else -> "Choose your current location or enter a ZIP code."
+            },
+            color = Color(0xFF9BA6B4),
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+        )
         OutlinedTextField(
             value = uiState.onboardingZip,
             onValueChange = onZipChanged,
             label = { Text("ZIP code") },
-            supportingText = { Text("Used for local conditions; exact GPS is not required.") },
+            supportingText = { Text("You can use this instead of device location.") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            "Gaia Eyes requests approximate location only while you use the app. It saves a ZIP fallback and does not track you in the background.",
+            color = Color(0xFF8F9AA9),
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
         )
     }
 }
@@ -515,7 +598,11 @@ private fun OnboardingReady(uiState: HomeUiState) {
     OnboardingTitle("You're ready", "Gaia Eyes will begin with the information available now and become more personal as you add context.")
     OnboardingInfoCard(
         if (uiState.onboardingLocalInsightsEnabled) {
-            "Local conditions are set for ${uiState.onboardingZip}. Health and pattern sections may take a little time to fill in."
+            if (uiState.onboardingUseGps) {
+                "Local conditions will follow your approximate location while Gaia Eyes is open. ZIP ${uiState.onboardingZip} remains saved as a fallback. Health and pattern sections may take a little time to fill in."
+            } else {
+                "Local conditions are set for ZIP ${uiState.onboardingZip}. Health and pattern sections may take a little time to fill in."
+            }
         } else {
             "Local insights are off for now. Health and pattern sections may take a little time to fill in."
         },
@@ -824,6 +911,10 @@ private fun SettingsScreen(
     onRefresh: () -> Unit,
     onEmailChanged: (String) -> Unit,
     onAddEmail: () -> Unit,
+    onLocalInsightsChanged: (Boolean) -> Unit,
+    onZipChanged: (String) -> Unit,
+    onUseDeviceLocation: () -> Unit,
+    onSaveLocation: () -> Unit,
     onDismissMessage: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
@@ -851,7 +942,7 @@ private fun SettingsScreen(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "Manage your account, connections, and support information.",
+                text = "Manage your account, local conditions, connections, and support information.",
                 color = Color(0xFF9BA6B4),
                 fontSize = 15.sp,
                 lineHeight = 22.sp,
@@ -929,6 +1020,15 @@ private fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            LocalConditionsSettingsCard(
+                uiState = uiState,
+                onLocalInsightsChanged = onLocalInsightsChanged,
+                onZipChanged = onZipChanged,
+                onUseDeviceLocation = onUseDeviceLocation,
+                onSaveLocation = onSaveLocation,
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
             SettingsSectionCard(title = "Connections") {
                 SettingsStatusRow(
                     label = "Gaia Eyes data service",
@@ -1004,6 +1104,112 @@ private fun SettingsScreen(
                     Text("Share diagnostics", fontWeight = FontWeight.Bold)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LocalConditionsSettingsCard(
+    uiState: HomeUiState,
+    onLocalInsightsChanged: (Boolean) -> Unit,
+    onZipChanged: (String) -> Unit,
+    onUseDeviceLocation: () -> Unit,
+    onSaveLocation: () -> Unit,
+) {
+    SettingsSectionCard(title = "Local conditions") {
+        Text(
+            text = "Use your current area as you travel, or keep conditions tied to one saved ZIP code.",
+            color = Color(0xFFB7C0CC),
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+        )
+        ChoiceRow("Use local conditions", uiState.locationLocalInsightsEnabled) {
+            onLocalInsightsChanged(true)
+        }
+        ChoiceRow("Not now", !uiState.locationLocalInsightsEnabled) {
+            onLocalInsightsChanged(false)
+        }
+        if (uiState.locationLocalInsightsEnabled) {
+            Button(
+                onClick = onUseDeviceLocation,
+                enabled = !uiState.isLocatingDevice && !uiState.isSavingLocation,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = GaiaGreen,
+                    contentColor = GaiaNavy,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (uiState.isLocatingDevice) {
+                    CircularProgressIndicator(
+                        color = GaiaNavy,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp),
+                    )
+                } else {
+                    Text("Use current location", fontWeight = FontWeight.Bold)
+                }
+            }
+            Text(
+                text = when {
+                    uiState.locationUseGps && uiState.locationZip.isNotBlank() ->
+                        "Following your approximate location. ZIP ${uiState.locationZip} is the fallback."
+                    uiState.locationZip.isNotBlank() -> "Using saved ZIP ${uiState.locationZip}."
+                    else -> "Choose your current location or enter a ZIP code."
+                },
+                color = Color(0xFF9BA6B4),
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+            )
+            OutlinedTextField(
+                value = uiState.locationZip,
+                onValueChange = onZipChanged,
+                label = { Text("ZIP code") },
+                supportingText = { Text("Entering a ZIP turns off device-location updates.") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Approximate location is checked only while Gaia Eyes is in use. Background location is not requested.",
+                color = Color(0xFF8994A3),
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+            )
+        }
+        Button(
+            onClick = onSaveLocation,
+            enabled = !uiState.isSavingLocation && !uiState.isLocatingDevice,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = GaiaBlue,
+                contentColor = GaiaNavy,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (uiState.isSavingLocation) {
+                CircularProgressIndicator(
+                    color = GaiaNavy,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp),
+                )
+            } else {
+                Text("Save local settings", fontWeight = FontWeight.Bold)
+            }
+        }
+        uiState.locationSettingsMessage?.let { message ->
+            Text(
+                text = message,
+                color = if (
+                    message.startsWith("Using") ||
+                    message.startsWith("Local conditions updated") ||
+                    message.startsWith("Local conditions are turned off")
+                ) {
+                    GaiaGreen
+                } else {
+                    GaiaRose
+                },
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+            )
         }
     }
 }
@@ -2485,6 +2691,10 @@ private fun LocalWeatherScreen(
     uiState: HomeUiState,
     onClose: () -> Unit,
     onRefresh: () -> Unit,
+    onLocalInsightsChanged: (Boolean) -> Unit,
+    onZipChanged: (String) -> Unit,
+    onUseDeviceLocation: () -> Unit,
+    onSaveLocation: () -> Unit,
     onDismissMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -2539,6 +2749,15 @@ private fun LocalWeatherScreen(
                     onDismiss = onDismissMessage,
                 )
             }
+
+            Spacer(modifier = Modifier.height(18.dp))
+            LocalConditionsSettingsCard(
+                uiState = uiState,
+                onLocalInsightsChanged = onLocalInsightsChanged,
+                onZipChanged = onZipChanged,
+                onUseDeviceLocation = onUseDeviceLocation,
+                onSaveLocation = onSaveLocation,
+            )
 
             Spacer(modifier = Modifier.height(18.dp))
             Card(
