@@ -24,11 +24,11 @@ from typing import Optional, Dict, Any, List
 import hashlib
 
 STYLE_GUIDE = (
-    "Persona: Humorous researcher who studies space/earth frequencies and their effects on physiology. "
-    "Voice: Viral, humorous, plain‑language, humane, lightly empathic; first‑person is OK in short asides. "
+    "Persona: A clear, thoughtful human editor who explains environmental patterns. "
+    "Voice: Plain-language, humane, grounded, and lightly conversational; first-person is OK in short asides. "
     "Audience: Chronic pain sufferers and people who consider themselves sensitive (HRV, sleep, nerve/pain flares during storms). "
-    "Rules: Never contradict provided metrics; no emojis; no rhetorical questions. "
-    "Prefer terms like 'active geomagnetics', 'autonomic/HRV', 'sleep quality', 'nerve sensitivity'. "
+    "Rules: Never contradict provided metrics; no emojis; natural opening questions are allowed. "
+    "Prefer everyday descriptions; use technical terms only when they add necessary context. "
     "Never claim deterministic health effects; use 'some may', 'can', 'tends to', 'I often see'. "
     "Keep sections compact and scannable."
 )
@@ -72,6 +72,7 @@ PUBLIC_WRITER_VOICE_REFERENCE = {
         "keep plans gentle and take short breaks",
         "quiet and steady up there",
         "a vague question that could fit almost any day",
+        "forced browser-tab, pocket, window, or signal-noise metaphors",
     ],
     "instruction": (
         "Learn the qualities, cadence, and specificity of the golden example. Do not copy its phrases, "
@@ -205,7 +206,7 @@ INTRO_LINES = [
     "Today asks for cleaner boundaries.",
     "Active currents, gentle strategy.",
     "Quiet magnetics, useful focus.",
-    "Friction pockets, keep it simple.",
+    "A little extra friction, keep it simple.",
     "Your nervous system gets a vote.",
     "Build slack into the schedule.",
     "Steady effort beats heroic effort.",
@@ -547,7 +548,7 @@ def _platform_caption_profile(platform: str) -> Dict[str, Any]:
                 "'Big picture,' or 'Pacing note.' "
                 "Do not open with 'Neutral energy', 'near-Earth field', or metric-report language. "
                 "For calm or neutral days, keep CME counts on the stats card unless explicit Earth-directed/arrival context exists. "
-                "It can be reflective or lightly funny, but should not feel like a report or interchangeable wellness copy."
+                "It should feel human and specific, not like a report, a writing exercise, or interchangeable wellness copy."
             ),
             "max_caption_chars": 1600,
         }
@@ -658,7 +659,7 @@ HOOK_LANES: Dict[str, Dict[str, Any]] = {
     "brain_fog": {
         "label": "brain fog or mental noise",
         "terms": ("brain fog", "fog", "mental", "scattered", "focus", "attention", "mind"),
-        "examples": ["Brain fog on a loop?", "Mind tabs everywhere?"],
+        "examples": ["Hard to hold a thought today?", "Does your thinking feel slower today?"],
     },
     "head_pressure": {
         "label": "head pressure or sinus pressure",
@@ -689,6 +690,26 @@ HOOK_LANES: Dict[str, Dict[str, Any]] = {
         "label": "low energy or drained",
         "terms": ("energy", "drained", "fatigue", "stamina", "low energy", "battery"),
         "examples": ["Energy hard to hold?", "Battery dipping early?"],
+    },
+    "dizziness_balance": {
+        "label": "dizziness or feeling unsteady",
+        "terms": ("dizzy", "dizziness", "unsteady", "off balance", "lightheaded", "vertigo"),
+        "examples": ["Feeling a little unsteady today?", "Dizzy spells more noticeable today?"],
+    },
+    "sensory": {
+        "label": "light, sound, or sensory sensitivity",
+        "terms": ("light sensitivity", "sound sensitivity", "sensory", "noise", "bright lights"),
+        "examples": ["Do lights and sounds feel stronger today?", "Everything feeling a little too loud?"],
+    },
+    "joint_stiffness": {
+        "label": "joint stiffness or body aches",
+        "terms": ("joint", "joints", "stiff", "stiffness", "body aches"),
+        "examples": ["Joints feeling stiffer today?", "Body aches more noticeable today?"],
+    },
+    "heart_awareness": {
+        "label": "heart pounding or fluttery body awareness",
+        "terms": ("heart pounding", "flutter", "fluttery", "palpitation", "pulse"),
+        "examples": ["More aware of your heartbeat today?", "Heart feeling a little fluttery?"],
     },
 }
 
@@ -727,10 +748,10 @@ def _preferred_hook_lanes(ctx: Dict[str, Any], *, limit: int = 3) -> List[str]:
                 scores[lane] += 1.2
 
     if tone == "stormy":
-        for lane in ("pain", "migraine_headache", "chronic_flare", "head_pressure", "wired_tired", "energy"):
+        for lane in ("pain", "migraine_headache", "chronic_flare", "head_pressure", "wired_tired", "energy", "sensory", "joint_stiffness"):
             scores[lane] += 1.5
     elif tone == "unsettled":
-        for lane in ("wired_tired", "brain_fog", "mood", "head_pressure", "migraine_headache", "chronic_flare"):
+        for lane in ("wired_tired", "brain_fog", "mood", "head_pressure", "migraine_headache", "chronic_flare", "sensory", "dizziness_balance"):
             scores[lane] += 1.4
     elif tone == "calm":
         scores["recovery_breather"] += 2.0
@@ -1373,10 +1394,7 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "aurora_severity": ctx.get("aurora_severity"),
         "quakes_count": ctx.get("quakes_count"),
         "severe_summary": ctx.get("severe_summary"),
-        # Removed intro_hint and banned_openers from facts passed to LLM
-        "metaphor_hint": ctx.get("metaphor_hint"),
-        "metaphor_pool": ctx.get("metaphor_pool") or [],
-        "recent_analogies": ctx.get("recent_analogies") or [],
+        # Recent signal history supports honest carryover context.
         "recent_signal_history": ctx.get("recent_signal_history") or [],
         "template_id": ctx.get("template_id"),
         "platform": _ctx_platform(ctx),
@@ -1804,8 +1822,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
     caption_profile = _platform_caption_profile(str(facts.get("platform") or "default"))
 
     system_msg = (
-        "You are Gaia Eyes’ daily weather desk: viral, practical, and lightly funny. "
-        "Interpret today’s space/earth conditions for humans. "
+        "You are the human editor for the Gaia Eyes daily update. Interpret today's space and Earth conditions for the public. "
+        "Use ordinary spoken English. Sound like a thoughtful person explaining the day to a friend, not a brand, clinician, weather bulletin, or creative-writing exercise. "
         "Write in clear public language without flattening the voice: vary sentence length, use concrete words, and avoid medical/science lecture voice. "
         "The first sentence must not start with or center on HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. Lead with an everyday feeling instead. Use hook_lane_brief to choose the opening lane. "
         "Sleep is allowed when it is the best lane, but do not default to sleep because a previous sleep post performed well. "
@@ -1818,7 +1836,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Choose one primary public read for the day and carry it through caption, affects, voiceover, and reel fields. "
         "Do not balance that read with an opposite outcome or an 'others may feel the reverse' paragraph. Supporting "
         "effects may add nuance, but they must point in the same direction as the hook and primary read. "
-        "Humor is optional. If you use an analogy, keep it to one sentence max and do not use the phrase 'Think of it like'. Vary phrasing. Never start a sentence with 'Think of it like'. You may use metaphor_pool as guidance or invent a fresh analogy. Do not reuse any recent_analogies. "
+        "Do not force humor, metaphors, wordplay, or novelty. Prefer a direct sentence whenever it says the same thing more clearly. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. A natural opening question is allowed when it fits the hook lane; do not turn statements into fake questions. "
@@ -1842,7 +1860,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "context": _summarize_context(facts),
         "draft": draft,
         "style": {
-            "persona": "researcher-coach-comedian",
+            "persona": "clear human editor",
             "public_voice_reference": PUBLIC_WRITER_VOICE_REFERENCE,
             "audience": "people noticing sleep, pain, mood, headaches, migraine patterns, chronic illness flares, low energy, brain fog, and body-pattern changes",
             "opener_palette": HOOKS.get(facts.get("tone") or "neutral", HOOKS["neutral"]),
@@ -1865,9 +1883,6 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
                 "autonomic markers"
             ],
             # Removed intro_hint and banned_openers from style
-            "metaphor_hint": facts.get("metaphor_hint"),
-            "metaphor_pool": facts.get("metaphor_pool") or [],
-            "recent_analogies": facts.get("recent_analogies") or [],
             "template_id": template_id if template_id is not None else facts.get("template_id"),
             "template_map": CAPTION_STRUCTURE_TEMPLATES,
             "hook_lane_brief": facts.get("hook_lane_brief"),
@@ -2021,7 +2036,8 @@ def _rewrite_json_candidates(
         if isinstance(x, str) and str(x).strip()
     ][:12]
     system_msg = (
-        "You write Gaia Eyes daily social captions. Your job is to make the post feel fresh, human, and worth reading. "
+        "You are the human editor for Gaia Eyes daily social posts. Write in ordinary spoken English that is clear on the first read. "
+        "Do not force humor, metaphors, wordplay, or clever phrasing. Direct language is better than novelty. "
         "Use the provided facts only. Do not invent events. Do not include numeric space-weather measurements, units, dates, emojis, or hashtags inside the caption text. "
         "CME counts only mean recent observed/reported CME activity. Do not say CMEs are headed our way, incoming, Earth-directed, arriving, or likely to impact Earth unless explicit Earth-directed/arrival fields are provided. "
         "Follow public_signal_strength, public_positioning, and quiet_day_context. On low-signal calm or neutral days, choose a specific human angle supported by the content rather than automatically using recovery, recoup, gentle-plan, or lingering-buzz language. Explain that quiet space conditions do not erase carryover or local influences when supplied history supports it. You may invite readers to check local pressure, temperature, storms, lightning, AQI, smoke, ozone, humidity, or allergens, but do not claim those conditions are active everywhere without supporting data. Do not turn background activity into predictions of irritability, reactivity, fidgeting, head pressure, headache, migraine, pain, flares, or sleep trouble. A CME count without Earth-directed or arrival evidence is background context and must not raise the felt-effect intensity. "
@@ -2052,7 +2068,7 @@ def _rewrite_json_candidates(
         "draft_reference": draft,
         "voice": {
             "audience": "people noticing sleep, pain, mood, headaches, migraine patterns, chronic illness flares, low energy, brain fog, and body-pattern changes",
-            "style": "human, emotionally relatable, curious, practical, sometimes funny",
+            "style": "human, emotionally relatable, clear, and practical",
             "public_voice_reference": PUBLIC_WRITER_VOICE_REFERENCE,
             "target_platform": caption_profile["platform"],
             "hook_lane_brief": facts.get("hook_lane_brief"),
@@ -2069,6 +2085,10 @@ def _rewrite_json_candidates(
                 "low energy or drained",
                 "brain fog or mental noise",
                 "scattered focus",
+                "dizziness or feeling unsteady",
+                "light or sound sensitivity",
+                "joint stiffness or body aches",
+                "heart pounding or fluttery body awareness",
             ],
             "avoid": [
                 "weather report voice",
@@ -2459,10 +2479,15 @@ def fetch_space_weather_from_marts(day: str) -> Dict[str, Any]:
         row = (res.data or [None])[0]
         if not row:
             return {}
+        wind_now = to_float(row.get("sw_speed_now_kms") or row.get("sw_speed_now"))
+        wind_avg = to_float(row.get("sw_speed_avg"))
+        wind = wind_now if wind_now is not None and 100 <= wind_now <= 2000 else wind_avg
+        if wind is not None and not 100 <= wind <= 2000:
+            wind = None
         return {
             "kp_max_24h": to_float(row.get("kp_max")),
             "bz_min": to_float(row.get("bz_min")),
-            "solar_wind_kms": to_float(row.get("sw_speed_avg")),
+            "solar_wind_kms": wind,
             "flares_24h": to_float(row.get("flares_count")) or 0,
             "cmes_24h": to_float(row.get("cmes_count")) or 0,
         }
@@ -2977,9 +3002,6 @@ def _platform_variant_context(ctx: Dict[str, Any], platform: str) -> Dict[str, A
     recent_captions = _recent_platform_captions(platform, limit=EARTHSCOPE_SIM_RECENT, before_day=day_iso)
     variant_ctx["recent_captions"] = recent_captions
     variant_ctx["intro_hint"] = _select_intro_line(day_iso, platform, variant_ctx.get("banned_openers"))
-    variant_ctx["metaphor_hint"] = _select_metaphor_hint(day_iso, platform)
-    variant_ctx["metaphor_pool"] = _select_metaphor_pool(day_iso, platform, size=8)
-    variant_ctx["recent_analogies"] = _extract_recent_analogies(recent_captions)
     variant_ctx["template_id"] = _select_caption_template_id(day_iso, platform)
     return variant_ctx
 
@@ -3006,7 +3028,7 @@ def _rewrite_facebook_caption_from_spine(
         "echoing phrases such as 'room to recoup,' 'chance to recover,' 'light buzz,' 'small buzz,' 'mild headwind,' "
         "'keep plans gentle,' or 'take short breaks.' Do not synonym-swap those phrases; find a fresher, specific way "
         "to express the supported human pattern. "
-        "Expand only for Facebook: add useful context, natural paragraphing, at most one fitting analogy, a practical pacing "
+        "Expand only for Facebook: add useful context, natural paragraphing, and a practical pacing "
         "or ritual note with a reason behind it. Keep the founder voice human, lightly playful, grounded, and non-fearful. "
         "Use one specific felt texture and one natural Gaia Eyes identity line when they fit. An audience question is optional. "
         "Study public_voice_reference for quality and cadence, but do not copy its wording, sleep lane, claims, or advice. "
@@ -3924,9 +3946,6 @@ def main():
     ctx["recent_captions"] = recent_captions
     ctx["recent_signal_history"] = _recent_signal_history(args.platform, limit=3, before_day=day)
     ctx["intro_hint"] = _select_intro_line(day, args.platform, ctx.get("banned_openers"))
-    ctx["metaphor_hint"] = _select_metaphor_hint(day, args.platform)
-    ctx["metaphor_pool"] = _select_metaphor_pool(day, args.platform, size=8)
-    ctx["recent_analogies"] = _extract_recent_analogies(recent_captions)
     ctx["template_id"] = _select_caption_template_id(day, args.platform)
 
     # Fill Kp 'now' from the marts if available

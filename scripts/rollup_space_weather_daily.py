@@ -24,11 +24,11 @@ with sw as (
     date(ts_utc) as day,
     max(kp_index)              as kp_max,
     min(bz_nt)                 as bz_min,
-    avg(sw_speed_kms)          as sw_speed_avg,
+    avg(sw_speed_kms) filter (where sw_speed_kms between 100 and 2000) as sw_speed_avg,
     max(sw_density_cm3)        as sw_density_max_cm3,
     (array_agg(kp_index order by ts_utc desc) filter (where kp_index is not null))[1] as kp_now,
     (array_agg(bz_nt order by ts_utc desc) filter (where bz_nt is not null))[1] as bz_now,
-    (array_agg(sw_speed_kms order by ts_utc desc) filter (where sw_speed_kms is not null))[1] as sw_speed_now_kms,
+    (array_agg(sw_speed_kms order by ts_utc desc) filter (where sw_speed_kms between 100 and 2000))[1] as sw_speed_now_kms,
     (array_agg(sw_density_cm3 order by ts_utc desc) filter (where sw_density_cm3 is not null))[1] as sw_density_now_cm3,
     max(ts_utc) filter (
       where kp_index is not null

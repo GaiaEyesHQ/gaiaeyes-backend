@@ -100,6 +100,18 @@ def _to_float_or_none(x):
     except Exception:
         return None
 
+
+def _valid_metric_value(field_name: str, value):
+    """Drop feed sentinels and physically impossible telemetry before storage."""
+    value = _to_float_or_none(value)
+    if value is None:
+        return None
+    if field_name == "sw_speed_kms" and not 100 <= value <= 2000:
+        return None
+    if field_name == "sw_density_cm3" and not 0 <= value <= 1000:
+        return None
+    return value
+
 def parse_next72_headline(forecast_txt: str|None) -> tuple[str,str]:
     """
     Heuristic: scan SWPC 3-day text for strongest G-level keywords and adverbs.
@@ -427,7 +439,7 @@ def merge_metric(records, candidates, field_name, out_map, *, active_only: bool 
                 continue
         val = None
         if col_i < len(row):
-            val = coerce_float(row[col_i])
+            val = _valid_metric_value(field_name, coerce_float(row[col_i]))
         if ts not in out_map:
             out_map[ts] = {}
         if val is not None:

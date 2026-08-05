@@ -69,6 +69,24 @@ def test_merge_metric_prefers_decimal_estimated_kp():
     assert merged[ts]["kp_index"] == 1.67
 
 
+def test_merge_metric_drops_noaa_missing_speed_sentinel():
+    payload = [
+        {
+            "time_tag": "2026-08-04T01:03:00",
+            "active": True,
+            "source": "SOLAR1",
+            "proton_speed": -9999,
+        }
+    ]
+    records = ingest.rows_to_records(ingest.normalize_to_table(payload), {"ts": ["time_tag"]})
+    merged = {}
+
+    ingest.merge_metric(records, ["proton_speed"], "sw_speed_kms", merged, active_only=True)
+
+    ts = datetime(2026, 8, 4, 1, 3, tzinfo=timezone.utc)
+    assert "sw_speed_kms" not in merged[ts]
+
+
 def test_rtsw_urls_are_primary_and_legacy_solar_wind_products_are_not_used():
     assert ingest.URLS_LIST["kp"][0].endswith("/json/planetary_k_index_1m.json")
     assert ingest.URLS_LIST["speed"][0].endswith("/json/rtsw/rtsw_wind_1m.json")

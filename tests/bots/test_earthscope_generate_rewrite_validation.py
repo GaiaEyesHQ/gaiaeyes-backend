@@ -601,6 +601,48 @@ def test_quiet_neutral_facts_keep_count_only_cme_in_background():
     assert "lively Schumann" not in summary
 
 
+def test_space_weather_mart_prefers_valid_current_solar_wind(monkeypatch):
+    class Query:
+        data = [{
+            "kp_max": 4.0,
+            "bz_min": -9.5,
+            "sw_speed_avg": -107.0,
+            "sw_speed_now_kms": 436.0,
+            "flares_count": 0,
+            "cmes_count": 2,
+        }]
+
+        def select(self, *_args): return self
+        def eq(self, *_args): return self
+        def limit(self, *_args): return self
+        def execute(self): return self
+
+    class Client:
+        def schema(self, *_args): return self
+        def table(self, *_args): return Query()
+
+    monkeypatch.setattr(earthscope_generate, "SB", Client())
+
+    result = earthscope_generate.fetch_space_weather_from_marts("2026-08-04")
+
+    assert result["solar_wind_kms"] == 436.0
+
+
+def test_public_writer_facts_do_not_include_forced_metaphor_prompts():
+    facts = _build_facts({
+        "day": "2026-08-04",
+        "platform": "default",
+        "kp_max_24h": 4.0,
+        "bz_min": -9.5,
+        "solar_wind_kms": 436.0,
+        "metaphor_hint": "too many browser tabs",
+        "metaphor_pool": ["pockets", "windows"],
+    })
+
+    assert "metaphor_hint" not in facts
+    assert "metaphor_pool" not in facts
+
+
 def test_quiet_days_prefer_recovery_breather_hook_lane():
     lanes = _preferred_hook_lanes(
         {
