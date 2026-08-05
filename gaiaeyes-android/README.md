@@ -8,6 +8,9 @@ Native Android foundation for Gaia Eyes.
 - Responsive phone and tablet layout
 - Supabase email magic-link and shared anonymous-account authentication with
   Android Keystore-backed session storage and in-place email attachment
+- Resumable account-scoped onboarding backed by the shared profile APIs for
+  display style, health context, fixed ZIP/local insights, and optional Health
+  Connect permission
 - Authenticated `GET /v1/dashboard/gauges` Home dashboard with all eight shared
   Gaia Eyes gauges in a compact, expandable layout
 - Account-scoped saved dashboard with live refresh and sign-out isolation
@@ -26,7 +29,8 @@ Native Android foundation for Gaia Eyes.
   serialized foreground/session-refresh draining
 - Network-constrained WorkManager retry after failed foreground delivery plus
   a 15-minute safety drain for pending journal writes
-- Optional Health Connect connection on Body with a 30-day import for sleep,
+- Optional Health Connect connection during onboarding or on Body with a
+  30-day import for sleep,
   steps, heart rate, resting heart rate, respiratory rate, and oxygen
   saturation
 - Account-scoped durable Health Connect upload batches with immediate and

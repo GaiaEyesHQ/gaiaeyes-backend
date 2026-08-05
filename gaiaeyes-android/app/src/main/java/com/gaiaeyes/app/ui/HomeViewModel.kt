@@ -9,6 +9,9 @@ import com.gaiaeyes.app.core.network.DailyCheckInStatus
 import com.gaiaeyes.app.core.network.ExposureCatalogOption
 import com.gaiaeyes.app.core.network.CurrentSymptomUpdateRequest
 import com.gaiaeyes.app.core.network.SymptomCodeOption
+import com.gaiaeyes.app.core.network.ProfileLocationUpdate
+import com.gaiaeyes.app.core.network.ProfilePreferencesUpdate
+import com.gaiaeyes.app.core.network.ProfileTagOption
 import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
 import com.gaiaeyes.app.core.quicklog.QuickLogRequest
 import com.gaiaeyes.app.data.BodyRepository
@@ -27,6 +30,7 @@ import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSnapshot
 import com.gaiaeyes.app.data.PatternsRepository
 import com.gaiaeyes.app.data.PatternsSnapshot
+import com.gaiaeyes.app.data.ProfileRepository
 import java.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +48,7 @@ class HomeViewModel(
     private val journalRepository: JournalRepository,
     private val outlookRepository: OutlookRepository,
     private val patternsRepository: PatternsRepository,
+    private val profileRepository: ProfileRepository,
     private val quickLogCoordinator: QuickLogCoordinator,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -55,6 +60,7 @@ class HomeViewModel(
     private var localWeatherJob: Job? = null
     private var outlookJob: Job? = null
     private var patternsJob: Job? = null
+    private var onboardingJob: Job? = null
     private var loadedAccountId: String? = null
     private var processingQuickLogId: String? = null
 
@@ -180,6 +186,10 @@ class HomeViewModel(
     fun refresh() {
         refreshHealth()
         val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.onboardingStatus != OnboardingStatus.COMPLETE) {
+            loadOnboarding(account.accountId)
+            return
+        }
         retryJournalWrites(account.accountId, showSuccessMessage = false)
         when (_uiState.value.selectedPage) {
             SignedInPage.HOME -> {
@@ -195,6 +205,156 @@ class HomeViewModel(
             SignedInPage.EXPLORE -> {
                 loadHomeContext(account.accountId, showCachedFirst = false)
                 loadLocalWeather(account.accountId, showCachedFirst = false)
+            }
+        }
+    }
+
+    fun onOnboardingModeChanged(value: String) {
+        _uiState.value = _uiState.value.copy(onboardingMode = value, onboardingMessage = null)
+    }
+
+    fun onOnboardingToneChanged(value: String) {
+        _uiState.value = _uiState.value.copy(onboardingTone = value, onboardingMessage = null)
+    }
+
+    fun onOnboardingTemperatureUnitChanged(value: String) {
+        _uiState.value = _uiState.value.copy(onboardingTemperatureUnit = value, onboardingMessage = null)
+    }
+
+    fun toggleOnboardingTag(tagKey: String) {
+        val next = _uiState.value.onboardingSelectedTags.toMutableSet().apply {
+            if (!add(tagKey)) remove(tagKey)
+        }
+        _uiState.value = _uiState.value.copy(
+            onboardingSelectedTags = next,
+            onboardingMessage = null,
+        )
+    }
+
+    fun onOnboardingLocalInsightsChanged(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            onboardingLocalInsightsEnabled = enabled,
+            onboardingMessage = null,
+        )
+    }
+
+    fun onOnboardingZipChanged(value: String) {
+        _uiState.value = _uiState.value.copy(
+            onboardingZip = value.filter(Char::isDigit).take(5),
+            onboardingMessage = null,
+        )
+    }
+
+    fun previousOnboardingStep() {
+        val previous = when (_uiState.value.onboardingStep) {
+            OnboardingStep.WELCOME -> OnboardingStep.WELCOME
+            OnboardingStep.PREFERENCES -> OnboardingStep.WELCOME
+            OnboardingStep.HEALTH_CONTEXT -> OnboardingStep.PREFERENCES
+            OnboardingStep.LOCATION -> OnboardingStep.HEALTH_CONTEXT
+            OnboardingStep.HEALTH_CONNECT -> OnboardingStep.LOCATION
+            OnboardingStep.READY -> OnboardingStep.HEALTH_CONNECT
+        }
+        _uiState.value = _uiState.value.copy(onboardingStep = previous, onboardingMessage = null)
+    }
+
+    fun continueOnboarding() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.isSavingOnboarding) return
+        val state = _uiState.value
+        if (
+            state.onboardingStep == OnboardingStep.LOCATION &&
+            state.onboardingLocalInsightsEnabled &&
+            !isValidOnboardingZip(state.onboardingZip)
+        ) {
+            _uiState.value = state.copy(
+                onboardingMessage = "Enter a 5-digit ZIP code, or choose Not now.",
+            )
+            return
+        }
+
+        onboardingJob?.cancel()
+        onboardingJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSavingOnboarding = true, onboardingMessage = null)
+            runCatching {
+                when (state.onboardingStep) {
+                    OnboardingStep.WELCOME -> {
+                        profileRepository.savePreferences(
+                            ProfilePreferencesUpdate(onboardingStep = "mode"),
+                        )
+                        OnboardingStep.PREFERENCES
+                    }
+                    OnboardingStep.PREFERENCES -> {
+                        profileRepository.savePreferences(
+                            ProfilePreferencesUpdate(
+                                mode = state.onboardingMode,
+                                guide = "cat",
+                                tone = state.onboardingTone,
+                                tempUnit = state.onboardingTemperatureUnit,
+                                onboardingStep = "health_context",
+                            ),
+                        )
+                        OnboardingStep.HEALTH_CONTEXT
+                    }
+                    OnboardingStep.HEALTH_CONTEXT -> {
+                        profileRepository.saveTags(state.onboardingSelectedTags)
+                        profileRepository.savePreferences(
+                            ProfilePreferencesUpdate(onboardingStep = "location"),
+                        )
+                        OnboardingStep.LOCATION
+                    }
+                    OnboardingStep.LOCATION -> {
+                        profileRepository.saveLocation(
+                            ProfileLocationUpdate(
+                                zip = state.onboardingZip.takeIf {
+                                    state.onboardingLocalInsightsEnabled
+                                },
+                                useGps = false,
+                                localInsightsEnabled = state.onboardingLocalInsightsEnabled,
+                            ),
+                        )
+                        profileRepository.savePreferences(
+                            ProfilePreferencesUpdate(onboardingStep = "healthkit"),
+                        )
+                        OnboardingStep.HEALTH_CONNECT
+                    }
+                    OnboardingStep.HEALTH_CONNECT -> {
+                        profileRepository.savePreferences(
+                            ProfilePreferencesUpdate(onboardingStep = "activation"),
+                        )
+                        OnboardingStep.READY
+                    }
+                    OnboardingStep.READY -> {
+                        profileRepository.savePreferences(
+                            ProfilePreferencesUpdate(
+                                onboardingStep = "activation",
+                                onboardingCompleted = true,
+                            ),
+                        )
+                        null
+                    }
+                }
+            }.onSuccess { nextStep ->
+                if (!isCurrentAccount(account.accountId)) return@onSuccess
+                if (nextStep == null) {
+                    _uiState.value = _uiState.value.copy(
+                        onboardingStatus = OnboardingStatus.COMPLETE,
+                        isSavingOnboarding = false,
+                        onboardingMessage = null,
+                    )
+                    loadSignedInContent(account.accountId)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        onboardingStep = nextStep,
+                        isSavingOnboarding = false,
+                    )
+                }
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        isSavingOnboarding = false,
+                        onboardingMessage = "That choice couldn't be saved. Check your connection and try again.",
+                    )
+                }
             }
         }
     }
@@ -558,14 +718,11 @@ class HomeViewModel(
             )
             if (loadedAccountId != authState.accountId) {
                 loadedAccountId = authState.accountId
-                loadDashboard(authState.accountId, showCachedFirst = true)
-                loadHomeContext(authState.accountId, showCachedFirst = true)
-                refreshHealthConnect()
-                if (quickLogCoordinator.pending.value == null) {
-                    retryJournalWrites(authState.accountId, showSuccessMessage = false)
-                }
+                loadOnboarding(authState.accountId)
             }
-            maybeHandleQuickLog(quickLogCoordinator.pending.value)
+            if (_uiState.value.onboardingStatus == OnboardingStatus.COMPLETE) {
+                maybeHandleQuickLog(quickLogCoordinator.pending.value)
+            }
             return
         }
 
@@ -581,6 +738,8 @@ class HomeViewModel(
         patternsJob = null
         outlookJob?.cancel()
         outlookJob = null
+        onboardingJob?.cancel()
+        onboardingJob = null
         loadedAccountId = null
         _uiState.value = _uiState.value.copy(
             dashboard = null,
@@ -590,6 +749,10 @@ class HomeViewModel(
             isLoadingBody = false,
             bodyMessage = null,
             selectedPage = SignedInPage.HOME,
+            onboardingStatus = OnboardingStatus.CHECKING,
+            onboardingStep = OnboardingStep.WELCOME,
+            isSavingOnboarding = false,
+            onboardingMessage = null,
             currentSymptoms = null,
             drivers = null,
             isLoadingHomeContext = false,
@@ -639,6 +802,7 @@ class HomeViewModel(
             }
             return
         }
+        if (_uiState.value.onboardingStatus != OnboardingStatus.COMPLETE) return
 
         processingQuickLogId = request.id
         viewModelScope.launch {
@@ -692,6 +856,61 @@ class HomeViewModel(
                 }
             }
         }
+    }
+
+    private fun loadOnboarding(accountId: String) {
+        onboardingJob?.cancel()
+        onboardingJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                onboardingStatus = OnboardingStatus.CHECKING,
+                onboardingMessage = null,
+            )
+            runCatching { profileRepository.load() }
+                .onSuccess { profile ->
+                    if (!isCurrentAccount(accountId)) return@onSuccess
+                    if (profile.preferences.onboardingCompleted) {
+                        _uiState.value = _uiState.value.copy(
+                            onboardingStatus = OnboardingStatus.COMPLETE,
+                            onboardingMessage = null,
+                        )
+                        loadSignedInContent(accountId)
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            onboardingStatus = OnboardingStatus.REQUIRED,
+                            onboardingStep = onboardingStepFor(profile.preferences.onboardingStep),
+                            onboardingMode = profile.preferences.mode,
+                            onboardingTone = profile.preferences.tone,
+                            onboardingTemperatureUnit = profile.preferences.tempUnit ?: "F",
+                            onboardingTagCatalog = profile.tagCatalog,
+                            onboardingSelectedTags = profile.selectedTags,
+                            onboardingLocalInsightsEnabled =
+                                profile.location?.localInsightsEnabled != false,
+                            onboardingZip = profile.location?.zip.orEmpty(),
+                            onboardingMessage = null,
+                        )
+                        refreshHealthConnect()
+                    }
+                }
+                .onFailure {
+                    if (isCurrentAccount(accountId)) {
+                        _uiState.value = _uiState.value.copy(
+                            onboardingStatus = OnboardingStatus.REQUIRED,
+                            onboardingStep = OnboardingStep.WELCOME,
+                            onboardingMessage = "Setup couldn't load. Check your connection and try again.",
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun loadSignedInContent(accountId: String) {
+        loadDashboard(accountId, showCachedFirst = true)
+        loadHomeContext(accountId, showCachedFirst = true)
+        refreshHealthConnect()
+        if (quickLogCoordinator.pending.value == null) {
+            retryJournalWrites(accountId, showSuccessMessage = false)
+        }
+        maybeHandleQuickLog(quickLogCoordinator.pending.value)
     }
 
     private fun submitJournalWrite(
@@ -1090,6 +1309,7 @@ class HomeViewModel(
         private val journalRepository: JournalRepository,
         private val outlookRepository: OutlookRepository,
         private val patternsRepository: PatternsRepository,
+        private val profileRepository: ProfileRepository,
         private val quickLogCoordinator: QuickLogCoordinator,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
@@ -1105,6 +1325,7 @@ class HomeViewModel(
                 journalRepository = journalRepository,
                 outlookRepository = outlookRepository,
                 patternsRepository = patternsRepository,
+                profileRepository = profileRepository,
                 quickLogCoordinator = quickLogCoordinator,
             ) as T
         }
@@ -1122,6 +1343,17 @@ data class HomeUiState(
     val authMessage: String? = null,
     val isSigningOut: Boolean = false,
     val selectedPage: SignedInPage = SignedInPage.HOME,
+    val onboardingStatus: OnboardingStatus = OnboardingStatus.CHECKING,
+    val onboardingStep: OnboardingStep = OnboardingStep.WELCOME,
+    val onboardingMode: String = "scientific",
+    val onboardingTone: String = "balanced",
+    val onboardingTemperatureUnit: String = "F",
+    val onboardingTagCatalog: List<ProfileTagOption> = emptyList(),
+    val onboardingSelectedTags: Set<String> = emptySet(),
+    val onboardingLocalInsightsEnabled: Boolean = true,
+    val onboardingZip: String = "",
+    val isSavingOnboarding: Boolean = false,
+    val onboardingMessage: String? = null,
     val dashboard: DashboardSnapshot? = null,
     val isLoadingDashboard: Boolean = false,
     val dashboardMessage: String? = null,
@@ -1160,6 +1392,33 @@ data class HomeUiState(
     val backendAvailable: Boolean? = null,
     val backendDetail: String = "Checking the Gaia Eyes data service",
 )
+
+enum class OnboardingStatus {
+    CHECKING,
+    REQUIRED,
+    COMPLETE,
+}
+
+enum class OnboardingStep {
+    WELCOME,
+    PREFERENCES,
+    HEALTH_CONTEXT,
+    LOCATION,
+    HEALTH_CONNECT,
+    READY,
+}
+
+internal fun onboardingStepFor(value: String): OnboardingStep = when (value) {
+    "mode", "guide", "tone", "temperature_unit", "sensitivities" -> OnboardingStep.PREFERENCES
+    "health_context" -> OnboardingStep.HEALTH_CONTEXT
+    "location" -> OnboardingStep.LOCATION
+    "healthkit", "backfill", "notifications" -> OnboardingStep.HEALTH_CONNECT
+    "activation" -> OnboardingStep.READY
+    else -> OnboardingStep.WELCOME
+}
+
+internal fun isValidOnboardingZip(value: String): Boolean =
+    value.length == 5 && value.all(Char::isDigit)
 
 enum class JournalDialog {
     SYMPTOM,

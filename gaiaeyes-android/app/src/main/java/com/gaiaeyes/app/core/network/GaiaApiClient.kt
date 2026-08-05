@@ -12,6 +12,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.delete
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -112,6 +113,57 @@ class GaiaApiClient(
         val envelope = response.body<ProfileLocationEnvelope>()
         check(envelope.ok) { "Your saved location was unavailable" }
         return envelope.location
+    }
+
+    suspend fun profilePreferences(accessToken: String): ProfilePreferences {
+        val envelope = authenticatedGet("/v1/profile/preferences", accessToken)
+            .body<ProfilePreferencesEnvelope>()
+        check(envelope.ok) { envelope.error ?: "Your profile preferences were unavailable" }
+        return envelope.preferences
+    }
+
+    suspend fun updateProfilePreferences(
+        accessToken: String,
+        request: ProfilePreferencesUpdate,
+    ): ProfilePreferences {
+        val envelope = authenticatedPut("/v1/profile/preferences", accessToken, request)
+            .body<ProfilePreferencesEnvelope>()
+        check(envelope.ok) { envelope.error ?: "Your profile preferences could not be saved" }
+        return envelope.preferences
+    }
+
+    suspend fun updateProfileLocation(
+        accessToken: String,
+        request: ProfileLocationUpdate,
+    ): ProfileLocation? {
+        val envelope = authenticatedPut("/v1/profile/location", accessToken, request)
+            .body<ProfileLocationEnvelope>()
+        check(envelope.ok) { "Your location could not be saved" }
+        return envelope.location
+    }
+
+    suspend fun profileTagCatalog(accessToken: String): List<ProfileTagOption> {
+        val envelope = authenticatedGet("/v1/profile/tags/catalog", accessToken)
+            .body<ProfileTagCatalogEnvelope>()
+        check(envelope.ok) { envelope.error ?: "Health context choices were unavailable" }
+        return envelope.items
+    }
+
+    suspend fun profileTags(accessToken: String): List<String> {
+        val envelope = authenticatedGet("/v1/profile/tags", accessToken)
+            .body<ProfileTagsEnvelope>()
+        check(envelope.ok) { envelope.error ?: "Your health context was unavailable" }
+        return envelope.tags
+    }
+
+    suspend fun updateProfileTags(
+        accessToken: String,
+        request: ProfileTagsUpdate,
+    ): List<String> {
+        val envelope = authenticatedPut("/v1/profile/tags", accessToken, request)
+            .body<ProfileTagsEnvelope>()
+        check(envelope.ok) { envelope.error ?: "Your health context could not be saved" }
+        return envelope.tags
     }
 
     suspend fun localCheck(zip: String): LocalCheckResponse {
@@ -300,6 +352,16 @@ class GaiaApiClient(
             requestTimeoutMillis = JOURNAL_WRITE_TIMEOUT_MILLIS
             socketTimeoutMillis = JOURNAL_WRITE_TIMEOUT_MILLIS
         }
+    }.also(::throwIfUnauthorizedOrFailed)
+
+    private suspend inline fun <reified T> authenticatedPut(
+        path: String,
+        accessToken: String,
+        request: T,
+    ) = httpClient.put(path) {
+        header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
+        contentType(ContentType.Application.Json)
+        setBody(request)
     }.also(::throwIfUnauthorizedOrFailed)
 
     private fun requiredToken(accessToken: String): String {

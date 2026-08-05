@@ -1,13 +1,13 @@
 # Android Parity Matrix
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-04
 
 This matrix defines Android v1 parity against the live iOS app. It is intentionally scoped to a practical first Android release, not every iOS-only or future feature.
 
 | Surface | Android v1 | Backend/API dependency | Notes |
 | --- | --- | --- | --- |
-| Welcome/onboarding | Required | Supabase auth, profile endpoints | Match the current iOS email magic-link/session flow, including **Continue without email** through a shared Supabase anonymous account. Let users attach an email later without changing their Supabase UUID; do not create a parallel Android identity model. |
-| Health permission step | Required | Health Connect | Optional. No forced permission wall. Continue with limited body surfaces if skipped. |
+| Welcome/onboarding | Required | Supabase auth, profile endpoints | Implemented as a resumable, account-scoped flow using shared preferences, health-context tags, and profile location. It supports email magic link and **Continue without email** through a shared Supabase anonymous account; existing accounts with completed onboarding bypass it. |
+| Health permission step | Required | Health Connect | Implemented as an optional onboarding step and remains available on Body. No forced permission wall; the app continues with limited body surfaces if skipped. |
 | 30-day import | Required | `/v1/samples/batch` | Health Connect initial sync for the minimum useful set only. |
 | Home | Required | `/v1/dashboard`, `/v1/features/today`, `/v1/users/me/drivers`, profile feed | Cache-first Home is implemented with all eight shared gauges in a compact expandable layout, tap-to-open gauge explanations, current/possible symptoms, Signals to Watch, and authenticated context-entry actions. |
 | Body | Required | `/v1/features/today`, `/v1/samples/batch` | Cache-first sleep stages, efficiency, health stats, personal deltas, steps, and heart range are implemented from shared account data. Optional 30-day Health Connect import is implemented for sleep, steps, heart rate, resting heart rate, respiratory rate, and oxygen saturation, with account-scoped durable retry. HRV remains deferred under the explicit RMSSD/SDNN boundary. |
@@ -19,7 +19,7 @@ This matrix defines Android v1 parity against the live iOS app. It is intentiona
 | Exposures | Required | `/v1/exposures/catalog`, `/v1/exposures` | Implemented with the shared backend allowlist, authenticated writes, and the same persistent queue with WorkManager background retry. The catalog endpoint must be deployed before production end-to-end testing. |
 | Daily check-in | Required | `/v1/feedback/daily-checkin` | Implemented with the backend-selected target day, authenticated upsert, and persistent foreground/background retry. |
 | Guide | Required | bundled/app API content | Include launch welcome notice and app guidance. |
-| Settings | Required | profile, auth, diagnostics | Launch slice implemented with account/sign-out, data-service and Health Connect status, pending journal/health queue counts, refresh, support/privacy/terms links, and privacy-safe diagnostics sharing. Units, guide/mode/tone, and subscription management remain follow-ups. |
+| Settings | Required | profile, auth, diagnostics | Launch slice implemented with account/sign-out, data-service and Health Connect status, pending journal/health queue counts, refresh, support/privacy/terms links, and privacy-safe diagnostics sharing. Onboarding stores units/mode/tone through shared preferences; editing those choices later and subscription management remain follow-ups. |
 | Subscribe / Restore | Required | RevenueCat Android, `/v1/billing/entitlements` | Plus monthly/yearly only for v1 unless product strategy changes. |
 | Share cards | Required | local rendering + current app data | Match current iOS social share direction; no backend dependency required beyond source data. |
 | Diagnostics bundle | Required | `/health`, cached local state | Initial redacted status share is implemented with app version, backend/Health Connect state, queue counts, and cache-loaded flags. It explicitly excludes email, account ID, access credentials, and raw health readings. Billing and richer support metadata remain follow-ups. |
@@ -64,7 +64,8 @@ failed foreground delivery once the network is connected and also runs a
 15-minute safety drain; an expired or absent session does not create a retry
 storm.
 
-Health Connect access is optional and requested only from the Body page. The
+Health Connect access is optional and requested during onboarding or from the
+Body page. The
 initial import covers 30 days and uses the shared `/v1/samples/batch` contract
 with Android/Health Connect provenance. Upload batches are account scoped,
 persisted before delivery, and retried when network access returns. HRV is not

@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
                     journalRepository = container.journalRepository,
                     outlookRepository = container.outlookRepository,
                     patternsRepository = container.patternsRepository,
+                    profileRepository = container.profileRepository,
                     quickLogCoordinator = container.quickLogCoordinator,
                 )
             }

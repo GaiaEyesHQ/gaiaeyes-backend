@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -90,6 +91,7 @@ import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSource
 import com.gaiaeyes.app.data.PatternsRepository
 import com.gaiaeyes.app.data.PatternsSource
+import com.gaiaeyes.app.data.ProfileRepository
 import com.gaiaeyes.app.ui.theme.GaiaAmber
 import com.gaiaeyes.app.ui.theme.GaiaBlue
 import com.gaiaeyes.app.ui.theme.GaiaGreen
@@ -109,6 +111,7 @@ fun GaiaEyesApp(
     journalRepository: JournalRepository,
     outlookRepository: OutlookRepository,
     patternsRepository: PatternsRepository,
+    profileRepository: ProfileRepository,
     quickLogCoordinator: QuickLogCoordinator,
     modifier: Modifier = Modifier,
 ) {
@@ -123,6 +126,7 @@ fun GaiaEyesApp(
             journalRepository = journalRepository,
             outlookRepository = outlookRepository,
             patternsRepository = patternsRepository,
+            profileRepository = profileRepository,
             quickLogCoordinator = quickLogCoordinator,
         ),
     )
@@ -158,7 +162,27 @@ fun GaiaEyesApp(
             onRetry = viewModel::refresh,
             modifier = modifier,
         )
-        is AuthState.SignedIn -> if (showSettings) {
+        is AuthState.SignedIn -> if (uiState.onboardingStatus == OnboardingStatus.CHECKING) {
+            LoadingScreen(modifier)
+        } else if (uiState.onboardingStatus == OnboardingStatus.REQUIRED) {
+            OnboardingScreen(
+                uiState = uiState,
+                onModeChanged = viewModel::onOnboardingModeChanged,
+                onToneChanged = viewModel::onOnboardingToneChanged,
+                onTemperatureUnitChanged = viewModel::onOnboardingTemperatureUnitChanged,
+                onToggleTag = viewModel::toggleOnboardingTag,
+                onLocalInsightsChanged = viewModel::onOnboardingLocalInsightsChanged,
+                onZipChanged = viewModel::onOnboardingZipChanged,
+                onBack = viewModel::previousOnboardingStep,
+                onContinue = viewModel::continueOnboarding,
+                onConnectHealth = {
+                    healthConnectPermissionLauncher.launch(healthConnectRepository.requiredPermissions)
+                },
+                onRetry = viewModel::refresh,
+                onSignOut = viewModel::signOut,
+                modifier = modifier,
+            )
+        } else if (showSettings) {
             SettingsScreen(
                 uiState = uiState,
                 account = authState,
@@ -260,6 +284,326 @@ fun GaiaEyesApp(
         onSubmitExposure = viewModel::submitExposure,
         onSubmitDailyCheckIn = viewModel::submitDailyCheckIn,
     )
+}
+
+@Composable
+private fun OnboardingScreen(
+    uiState: HomeUiState,
+    onModeChanged: (String) -> Unit,
+    onToneChanged: (String) -> Unit,
+    onTemperatureUnitChanged: (String) -> Unit,
+    onToggleTag: (String) -> Unit,
+    onLocalInsightsChanged: (Boolean) -> Unit,
+    onZipChanged: (String) -> Unit,
+    onBack: () -> Unit,
+    onContinue: () -> Unit,
+    onConnectHealth: () -> Unit,
+    onRetry: () -> Unit,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(enabled = uiState.onboardingStep != OnboardingStep.WELCOME, onBack = onBack)
+    val stepNumber = uiState.onboardingStep.ordinal + 1
+    ScreenFrame(modifier = modifier) {
+        ContentColumn(bottomPadding = 32.dp) {
+            Header(
+                subtitle = "A calm, useful setup",
+                trailing = {
+                    TextButton(onClick = onSignOut) {
+                        Text("Sign out", color = Color(0xFF9BA6B4))
+                    }
+                },
+            )
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "Step $stepNumber of ${OnboardingStep.entries.size}",
+                color = GaiaBlue,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { stepNumber.toFloat() / OnboardingStep.entries.size.toFloat() },
+                color = GaiaBlue,
+                trackColor = Color.White.copy(alpha = 0.10f),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(24.dp))
+
+            when (uiState.onboardingStep) {
+                OnboardingStep.WELCOME -> OnboardingWelcome()
+                OnboardingStep.PREFERENCES -> OnboardingPreferences(
+                    uiState = uiState,
+                    onModeChanged = onModeChanged,
+                    onToneChanged = onToneChanged,
+                    onTemperatureUnitChanged = onTemperatureUnitChanged,
+                )
+                OnboardingStep.HEALTH_CONTEXT -> OnboardingHealthContext(
+                    uiState = uiState,
+                    onToggleTag = onToggleTag,
+                )
+                OnboardingStep.LOCATION -> OnboardingLocation(
+                    uiState = uiState,
+                    onLocalInsightsChanged = onLocalInsightsChanged,
+                    onZipChanged = onZipChanged,
+                )
+                OnboardingStep.HEALTH_CONNECT -> OnboardingHealthConnect(
+                    uiState = uiState,
+                    onConnectHealth = onConnectHealth,
+                )
+                OnboardingStep.READY -> OnboardingReady(uiState)
+            }
+
+            uiState.onboardingMessage?.let { message ->
+                Spacer(Modifier.height(16.dp))
+                Text(message, color = GaiaRose, fontSize = 14.sp)
+                if (uiState.onboardingStep == OnboardingStep.WELCOME) {
+                    TextButton(onClick = onRetry) { Text("Try again", color = GaiaBlue) }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (uiState.onboardingStep != OnboardingStep.WELCOME) {
+                    TextButton(onClick = onBack, enabled = !uiState.isSavingOnboarding) {
+                        Text("Back", color = Color(0xFF9BA6B4))
+                    }
+                }
+                Button(
+                    onClick = onContinue,
+                    enabled = !uiState.isSavingOnboarding,
+                    colors = ButtonDefaults.buttonColors(containerColor = GaiaBlue),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    if (uiState.isSavingOnboarding) {
+                        CircularProgressIndicator(
+                            color = GaiaNavy,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    } else {
+                        Text(
+                            if (uiState.onboardingStep == OnboardingStep.READY) "Open Gaia Eyes" else "Continue",
+                            color = GaiaNavy,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnboardingWelcome() {
+    OnboardingTitle(
+        title = "Make Gaia Eyes yours",
+        body = "Choose the context Gaia Eyes should pay attention to. Your selections help organize the dashboard; they do not diagnose a condition or predict a health event.",
+    )
+    OnboardingInfoCard(
+        "We'll set your display style, health context, local conditions, and optional Health Connect access. You can skip any optional choice.",
+    )
+}
+
+@Composable
+private fun OnboardingPreferences(
+    uiState: HomeUiState,
+    onModeChanged: (String) -> Unit,
+    onToneChanged: (String) -> Unit,
+    onTemperatureUnitChanged: (String) -> Unit,
+) {
+    OnboardingTitle("Choose your view", "These choices change presentation, not the underlying data.")
+    OnboardingSectionLabel("Style")
+    ChoiceRow("Scientific", uiState.onboardingMode == "scientific") { onModeChanged("scientific") }
+    ChoiceRow("Mystical", uiState.onboardingMode == "mystical") { onModeChanged("mystical") }
+    OnboardingSectionLabel("Language")
+    ChoiceRow("Straightforward", uiState.onboardingTone == "straight") { onToneChanged("straight") }
+    ChoiceRow("Balanced", uiState.onboardingTone == "balanced") { onToneChanged("balanced") }
+    ChoiceRow("A little playful", uiState.onboardingTone == "humorous") { onToneChanged("humorous") }
+    OnboardingSectionLabel("Temperature")
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ChoiceChip("°F", uiState.onboardingTemperatureUnit == "F") { onTemperatureUnitChanged("F") }
+        ChoiceChip("°C", uiState.onboardingTemperatureUnit == "C") { onTemperatureUnitChanged("C") }
+    }
+}
+
+@Composable
+private fun OnboardingHealthContext(uiState: HomeUiState, onToggleTag: (String) -> Unit) {
+    OnboardingTitle(
+        "What is relevant to your health?",
+        "Optional. This helps Gaia Eyes prioritize useful symptoms and context. Choose diagnosed or suspected areas that matter to you.",
+    )
+    if (uiState.onboardingTagCatalog.isEmpty()) {
+        OnboardingInfoCard("No health context choices are available right now. You can continue without selecting one.")
+    } else {
+        uiState.onboardingTagCatalog.forEach { option ->
+            ChoiceRow(
+                label = option.label,
+                selected = option.tagKey in uiState.onboardingSelectedTags,
+                detail = option.description,
+            ) { onToggleTag(option.tagKey) }
+        }
+    }
+}
+
+@Composable
+private fun OnboardingLocation(
+    uiState: HomeUiState,
+    onLocalInsightsChanged: (Boolean) -> Unit,
+    onZipChanged: (String) -> Unit,
+) {
+    OnboardingTitle(
+        "Add local conditions",
+        "A ZIP code lets Gaia Eyes compare weather, pressure, air quality, and other nearby signals with your day.",
+    )
+    ChoiceRow("Use local insights", uiState.onboardingLocalInsightsEnabled) {
+        onLocalInsightsChanged(true)
+    }
+    ChoiceRow("Not now", !uiState.onboardingLocalInsightsEnabled) {
+        onLocalInsightsChanged(false)
+    }
+    if (uiState.onboardingLocalInsightsEnabled) {
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = uiState.onboardingZip,
+            onValueChange = onZipChanged,
+            label = { Text("ZIP code") },
+            supportingText = { Text("Used for local conditions; exact GPS is not required.") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun OnboardingHealthConnect(uiState: HomeUiState, onConnectHealth: () -> Unit) {
+    OnboardingTitle(
+        "Connect your health data",
+        "Optional. Health Connect can add sleep, steps, heart rate, resting heart rate, respiratory rate, and SpO₂ when your device makes them available.",
+    )
+    val statusText = when (uiState.healthConnectStatus) {
+        HealthConnectStatus.READY -> "Health Connect is ready."
+        HealthConnectStatus.PERMISSIONS_REQUIRED -> "Choose Connect to review Health Connect permissions."
+        HealthConnectStatus.UNAVAILABLE -> "Health Connect is not available on this device. You can continue."
+        HealthConnectStatus.UPDATE_REQUIRED -> "Health Connect needs an update. You can continue for now."
+        HealthConnectStatus.CHECKING -> "Checking Health Connect…"
+    }
+    OnboardingInfoCard(statusText)
+    if (uiState.healthConnectStatus == HealthConnectStatus.PERMISSIONS_REQUIRED) {
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onConnectHealth,
+            colors = ButtonDefaults.buttonColors(containerColor = GaiaGreen),
+        ) {
+            Text("Connect Health Connect", color = GaiaNavy, fontWeight = FontWeight.Bold)
+        }
+    }
+    Text(
+        "Continue works even if you prefer to connect later.",
+        color = Color(0xFF8F9AA9),
+        fontSize = 13.sp,
+        modifier = Modifier.padding(top = 12.dp),
+    )
+}
+
+@Composable
+private fun OnboardingReady(uiState: HomeUiState) {
+    OnboardingTitle("You're ready", "Gaia Eyes will begin with the information available now and become more personal as you add context.")
+    OnboardingInfoCard(
+        if (uiState.onboardingLocalInsightsEnabled) {
+            "Local conditions are set for ${uiState.onboardingZip}. Health and pattern sections may take a little time to fill in."
+        } else {
+            "Local insights are off for now. Health and pattern sections may take a little time to fill in."
+        },
+    )
+}
+
+@Composable
+private fun OnboardingTitle(title: String, body: String) {
+    Text(title, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+    Text(
+        body,
+        color = Color(0xFF9BA6B4),
+        fontSize = 16.sp,
+        lineHeight = 23.sp,
+        modifier = Modifier.padding(top = 10.dp, bottom = 20.dp),
+    )
+}
+
+@Composable
+private fun OnboardingSectionLabel(label: String) {
+    Text(
+        label.uppercase(),
+        color = GaiaBlue,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 14.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun ChoiceRow(
+    label: String,
+    selected: Boolean,
+    detail: String? = null,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) GaiaBlue.copy(alpha = 0.20f) else GaiaPanel,
+        ),
+        border = BorderStroke(1.dp, if (selected) GaiaBlue else Color.White.copy(alpha = 0.08f)),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                detail?.takeIf(String::isNotBlank)?.let {
+                    Text(it, color = Color(0xFF8F9AA9), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+            Text(if (selected) "✓" else "", color = GaiaBlue, fontSize = 20.sp)
+        }
+    }
+}
+
+@Composable
+private fun RowScope.ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) GaiaBlue else GaiaPanel,
+        ),
+        modifier = Modifier.weight(1f),
+    ) {
+        Text(label, color = if (selected) GaiaNavy else Color.White)
+    }
+}
+
+@Composable
+private fun OnboardingInfoCard(text: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text,
+            color = Color(0xFFC2CBD6),
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+            modifier = Modifier.padding(18.dp),
+        )
+    }
 }
 
 @Composable

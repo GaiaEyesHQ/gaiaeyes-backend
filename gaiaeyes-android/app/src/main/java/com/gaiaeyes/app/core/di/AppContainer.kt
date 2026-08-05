@@ -19,6 +19,7 @@ import com.gaiaeyes.app.data.OutlookCache
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.PatternsCache
 import com.gaiaeyes.app.data.PatternsRepository
+import com.gaiaeyes.app.data.ProfileRepository
 import com.gaiaeyes.app.core.work.JournalDrainScheduler
 import com.gaiaeyes.app.core.work.HealthSampleDrainScheduler
 
@@ -78,5 +79,9 @@ class AppContainer(
         scheduleBackgroundDrain = {
             JournalDrainScheduler.enqueueNow(context.applicationContext)
         },
+    )
+    val profileRepository = ProfileRepository(
+        authRepository = authRepository,
+        apiClient = apiClient,
     )
 }
