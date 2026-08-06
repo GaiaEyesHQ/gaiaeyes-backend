@@ -87,6 +87,35 @@ def test_bz_falls_back_to_current_with_label():
     assert bz_row.color == (100, 160, 220, 220)
 
 
+def test_solar_wind_label_matches_current_or_average_source():
+    current_rows = build_stats_rows(
+        {
+            "kp_max": 2.0,
+            "sw_speed_current": 386,
+            "sw_speed_avg": 359,
+            "sch_any_fundamental_avg_hz": 7.72,
+        },
+        "avg",
+    )
+    current_row = _row_for_label(current_rows, "SW speed (current)")
+
+    assert current_row.display == "386 km/s"
+    assert current_row.raw_value == pytest.approx(386.0)
+
+    average_rows = build_stats_rows(
+        {
+            "kp_max": 2.0,
+            "sw_speed_avg": 359,
+            "sch_any_fundamental_avg_hz": 7.72,
+        },
+        "avg",
+    )
+    average_row = _row_for_label(average_rows, "SW speed (avg)")
+
+    assert average_row.display == "359 km/s"
+    assert average_row.raw_value == pytest.approx(359.0)
+
+
 def test_post_metrics_merge_uses_nested_space_json_for_current_bz_and_wind():
     feats = _merge_post_metrics_into_features(
         {},

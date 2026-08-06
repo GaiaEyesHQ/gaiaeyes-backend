@@ -1190,8 +1190,10 @@ def build_stats_rows(
         logging.warning("Stats card Bz missing (min/current/now unavailable)")
 
     sw_val = feats.get("sw_speed_current")
+    sw_label = "SW speed (current)"
     if sw_val is None:
         sw_val = feats.get("sw_speed_avg")
+        sw_label = "SW speed (avg)"
 
     rows: List[StatRow] = [
         StatRow(
@@ -1211,7 +1213,7 @@ def build_stats_rows(
             bz_val,
         ),
         StatRow(
-            "SW speed",
+            sw_label,
             format_metric_float(sw_val, 0, "km/s"),
             (80, 200, 140, 220),
             "SW",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -152,3 +153,53 @@ async def test_refresh_stale_dashboard_space_preserves_personalized_payload(monk
     assert out["signal_bar"]["space"]["kp_now"] == 2.7
     assert out["gauges"] == payload["gauges"]
     assert out["drivers"] == payload["drivers"]
+
+
+@pytest.mark.anyio
+async def test_dashboard_refreshes_space_on_fresh_cache_hit(monkeypatch):
+    target_day = date(2026, 8, 6)
+    cached_payload = {
+        "day": target_day.isoformat(),
+        "gauges": {"sleep": 39},
+        "signal_bar": {
+            "space": {"kp_now": 0.0},
+            "items": [{"key": "kp", "value": "0.0"}],
+        },
+    }
+    refresh_calls = []
+
+    async def fake_get_cached_dashboard(user_id, day, *, allow_stale=False):
+        assert user_id == "user-1"
+        assert day == target_day
+        assert allow_stale is True
+        return cached_payload, 30.0, False
+
+    async def fake_refresh_space(payload, day):
+        refresh_calls.append((payload, day))
+        refreshed = dict(payload)
+        refreshed["signal_bar"] = {
+            "space": {"kp_now": 1.3},
+            "items": [{"key": "kp", "value": "1.3"}],
+        }
+        return refreshed
+
+    def fail_if_scheduled(*args, **kwargs):
+        raise AssertionError("fresh cache hits must not schedule a full dashboard rebuild")
+
+    monkeypatch.setattr(dashboard_router, "_get_cached_dashboard", fake_get_cached_dashboard)
+    monkeypatch.setattr(dashboard_router, "_refresh_stale_dashboard_space", fake_refresh_space)
+    monkeypatch.setattr(dashboard_router, "_schedule_dashboard_refresh", fail_if_scheduled)
+
+    request = SimpleNamespace(state=SimpleNamespace(user_id="user-1"))
+    out = await dashboard_router.dashboard(
+        request,
+        day=target_day,
+        debug=False,
+        force=False,
+    )
+
+    assert len(refresh_calls) == 1
+    assert out["signal_bar"]["space"]["kp_now"] == 1.3
+    assert out["cache_hit"] is True
+    assert out["stale"] is False
+    assert out["refresh_scheduled"] is False

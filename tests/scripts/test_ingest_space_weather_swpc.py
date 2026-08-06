@@ -69,6 +69,20 @@ def test_merge_metric_prefers_decimal_estimated_kp():
     assert merged[ts]["kp_index"] == 1.67
 
 
+def test_merge_metric_reads_official_three_hour_kp_product():
+    payload = [
+        ["time_tag", "Kp", "a_running", "station_count"],
+        ["2026-08-06 03:00:00.000", "1.33", "3", "8"],
+    ]
+    records = ingest.rows_to_records(payload, {"ts": ["time_tag"]})
+    merged = {}
+
+    ingest.merge_metric(records, ["estimated_kp", "kp_est", "kp_index", "kp"], "kp_index", merged)
+
+    ts = datetime(2026, 8, 6, 3, 0, tzinfo=timezone.utc)
+    assert merged[ts]["kp_index"] == 1.33
+
+
 def test_merge_metric_drops_noaa_missing_speed_sentinel():
     payload = [
         {
@@ -87,8 +101,9 @@ def test_merge_metric_drops_noaa_missing_speed_sentinel():
     assert "sw_speed_kms" not in merged[ts]
 
 
-def test_rtsw_urls_are_primary_and_legacy_solar_wind_products_are_not_used():
-    assert ingest.URLS_LIST["kp"][0].endswith("/json/planetary_k_index_1m.json")
+def test_official_kp_and_rtsw_urls_are_primary():
+    assert ingest.URLS_LIST["kp"][0].endswith("/products/noaa-planetary-k-index.json")
+    assert ingest.URLS_LIST["kp"][1].endswith("/json/planetary_k_index_1m.json")
     assert ingest.URLS_LIST["speed"][0].endswith("/json/rtsw/rtsw_wind_1m.json")
     assert ingest.URLS_LIST["mag"][0].endswith("/json/rtsw/rtsw_mag_1m.json")
     assert not any("products/solar-wind" in url for url in ingest.URLS_LIST["speed"])

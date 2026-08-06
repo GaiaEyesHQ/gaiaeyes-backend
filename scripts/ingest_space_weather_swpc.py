@@ -3,7 +3,9 @@
 NOAA SWPC ingester → ext.space_weather
 
 Fetches from these SWPC endpoints (JSON):
-- Estimated planetary K-index (chart updates every minute):
+- Official three-hour planetary K-index (primary):
+  https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json
+- Estimated one-minute planetary K-index (freshness fallback):
   https://services.swpc.noaa.gov/json/planetary_k_index_1m.json
 - Active solar wind plasma (SOLAR-1 primary, ACE backup):
   https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json
@@ -31,6 +33,9 @@ import httpx
 
 SINCE_HOURS = int(os.getenv("SINCE_HOURS", "72"))
 MAX_SOURCE_AGE_MINUTES = int(os.getenv("MAX_SOURCE_AGE_MINUTES", "90"))
+# The official Kp row is timestamped at the start of its three-hour interval, so
+# it can be nearly four hours old before the following completed row appears.
+MAX_KP_SOURCE_AGE_MINUTES = int(os.getenv("MAX_KP_SOURCE_AGE_MINUTES", "360"))
 DB = os.getenv("SUPABASE_DB_URL")
 if not DB:
     print("Missing SUPABASE_DB_URL", file=sys.stderr)
@@ -46,8 +51,8 @@ BASE_PROD = "https://services.swpc.noaa.gov/products"
 BASE_RTSW = "https://services.swpc.noaa.gov/json/rtsw"
 URLS_LIST = {
     "kp": [
-        "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json",
         f"{BASE_PROD}/noaa-planetary-k-index.json",
+        "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json",
     ],
     "speed": [
         f"{BASE_RTSW}/rtsw_wind_1m.json",
@@ -576,7 +581,7 @@ async def main():
             client,
             URLS_LIST["kp"],
             "kp",
-            max_age_minutes=MAX_SOURCE_AGE_MINUTES,
+            max_age_minutes=MAX_KP_SOURCE_AGE_MINUTES,
         )
         spd_arr, speed_source_url = await fetch_any_json_array(
             client,
@@ -612,8 +617,8 @@ async def main():
     # Merge values into a dict keyed by timestamp
     merged = {}
 
-    # Kp can be under different header names; common ones in these feeds:
-    # Prefer NOAA's decimal near-real-time estimate; retain coarser aliases as fallbacks.
+    # The official product uses `Kp`; the one-minute fallback uses
+    # `estimated_kp`. Header matching is case-insensitive.
     merge_metric(kp_recs, ["estimated_kp","kp_est","kp_index","kp"], "kp_index", merged)
     # Speed (km/s) appears as: 'windspeed', 'speed', 'V', 'proton_speed', 'solar_wind_speed', 'sw_speed'
     merge_metric(

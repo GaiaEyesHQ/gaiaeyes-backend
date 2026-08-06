@@ -1169,9 +1169,9 @@ async def dashboard(
     if not debug and not force:
         cached_payload, cache_age, is_stale = await _get_cached_dashboard(user_id, day, allow_stale=True)
         if cached_payload is not None:
+            cached_payload = await _refresh_stale_dashboard_space(cached_payload, day)
             refresh_scheduled = False
             if is_stale:
-                cached_payload = await _refresh_stale_dashboard_space(cached_payload, day)
                 refresh_scheduled = _schedule_dashboard_refresh(user_id, day)
             logger.info(
                 "[dashboard] cache hit user=%s day=%s age=%.1fs stale=%s refresh_scheduled=%s",
@@ -1196,6 +1196,7 @@ async def dashboard(
         if not debug and not force:
             cached_payload, cache_age, _ = await _get_cached_dashboard(user_id, day)
             if cached_payload is not None:
+                cached_payload = await _refresh_stale_dashboard_space(cached_payload, day)
                 return _attach_dashboard_freshness(
                     cached_payload,
                     day=day,
