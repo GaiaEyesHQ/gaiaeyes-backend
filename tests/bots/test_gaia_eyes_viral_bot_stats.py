@@ -1,4 +1,5 @@
 import sys
+import datetime as dt
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bots.earthscope_post.gaia_eyes_viral_bot import (
+    _energy_from_tone_and_bands,
     _earthscope_hook_title,
     _format_public_playbook,
     _merge_post_metrics_into_features,
@@ -35,6 +37,58 @@ def test_stats_card_uses_health_forward_title_and_plain_url_footer():
     assert STATS_CARD_FOOTER == "gaiaeyes.com/app"
     assert "EarthScope" not in STATS_CARD_TITLE
     assert "Download" not in STATS_CARD_FOOTER
+
+
+def test_public_cards_label_environmental_state_as_signal(monkeypatch):
+    labels = []
+
+    def fake_badge(_im, _draw, text, *_args, **_kwargs):
+        labels.append(text)
+
+    monkeypatch.setattr(gaia_eyes_viral_bot, "_draw_badge", fake_badge)
+
+    gaia_eyes_viral_bot.render_card("Calm", "Mood hard to place?", 7.54, 1.67)
+
+    assert "Signal: Calm" in labels
+    assert "Energy: Calm" not in labels
+
+
+def test_stats_card_labels_environmental_state_as_signal(monkeypatch):
+    labels = []
+
+    def fake_badge(_im, _draw, text, *_args, **_kwargs):
+        labels.append(text)
+
+    monkeypatch.setattr(gaia_eyes_viral_bot, "_draw_badge", fake_badge)
+
+    gaia_eyes_viral_bot.render_stats_card_from_features(
+        dt.date(2026, 8, 7),
+        {
+            "kp_max": 1.67,
+            "bz_min": -5.24,
+            "sw_speed_current": 273,
+            "sch_any_fundamental_avg_hz": 7.54,
+            "cmes_count": 1,
+        },
+        energy="Calm",
+    )
+
+    assert "Signal: Calm" in labels
+    assert "Energy: Calm" not in labels
+
+
+@pytest.mark.parametrize(
+    ("tone", "kp_band", "expected"),
+    [
+        ("unsettled", "", "Elevated"),
+        ("", "active", "Elevated"),
+        ("stormy", "active", "High"),
+        ("", "severe", "High"),
+        ("neutral", "quiet", "Calm"),
+    ],
+)
+def test_signal_state_uses_tone_and_kp_band(tone, kp_band, expected):
+    assert _energy_from_tone_and_bands(tone, kp_band) == expected
 
 
 def test_clean_reel_backgrounds_are_exported_without_card_overlays(monkeypatch, tmp_path):

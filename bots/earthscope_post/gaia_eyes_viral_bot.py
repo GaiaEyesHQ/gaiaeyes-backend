@@ -1089,7 +1089,7 @@ def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str =
     draw.text((x0, y), "Gaia Eyes • Daily EarthScope", fill=fg, font=font_h1); y += 90
     el = (energy_label or "").lower()
     col = (59,201,168,190) if el=="calm" else ((243,193,75,190) if el=="elevated" else ((239,106,106,190) if el=="high" else (104,162,224,190)))
-    _draw_badge(im, draw, f"Energy: {energy_label}", (x0, y), fill=col, font=font_h2); y += 70
+    _draw_badge(im, draw, f"Signal: {energy_label}", (x0, y), fill=col, font=font_h2); y += 70
     y += 36  # extra spacing under badge (no inline stats here)
 
     def section(head: str, body: str) -> None:
@@ -1330,10 +1330,11 @@ def render_stats_card_from_features(
         _shadowed_text(draw, (x0, y0 + 76), date_txt, font=font_h1, fill=fg)
         y = y0 + 152
 
-    # Energy pill
+    # Signal pill. The value still reflects the environmental activity state,
+    # but the label avoids fighting the writer's selected symptom lane.
     el = (energy or "").lower()
     col = (59,201,168,200) if el=="calm" else ((243,193,75,200) if el=="elevated" else ((239,106,106,200) if el=="high" else (104,162,224,200)))
-    _draw_badge(im, draw, f"Energy: {energy}", (x0, y+4), fill=col, font=font_h2, pad=(18,10))
+    _draw_badge(im, draw, f"Signal: {energy}", (x0, y+4), fill=col, font=font_h2, pad=(18,10))
     y += 82
 
     # Panel
@@ -1409,6 +1410,16 @@ def _daily_title_variant(options: List[str], *, seed_text: str) -> str:
     seed = f"{dt.datetime.utcnow().date().isoformat()}|{seed_text}"
     rng = random.Random(seed)
     return options[rng.randrange(len(options))]
+
+
+def _energy_from_tone_and_bands(tone: str = "", kp_band: str = "") -> str:
+    t = (tone or "").lower()
+    kb = (kp_band or "").lower()
+    if t in ("stormy", "high") or kb in ("storm", "severe"):
+        return "High"
+    if t == "unsettled" or kb in ("active", "unsettled", "mild"):
+        return "Elevated"
+    return "Calm"
 
 
 def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] = None) -> str:
@@ -1902,17 +1913,6 @@ def main(args: Optional[argparse.Namespace] = None):
     tone_val = (metrics.get("tone") if isinstance(metrics, dict) else None) or ""
     bands = (metrics.get("bands") if isinstance(metrics, dict) else {}) or {}
     kp_band = (bands.get("kp") or "").lower()
-    # Map bands/tone → energy badge
-    def _energy_from_tone_and_bands(tone: str, kp_band_str: str) -> str:
-        t = (tone or "").lower()
-        if t in ("stormy","high"):
-            return "High"
-        kb = kp_band_str
-        if kb in ("storm","severe"):
-            return "High"
-        if kb in ("active","unsettled","mild"):
-            return "Elevated"
-        return "Calm"
     if tone_val or kp_band:
         tone_band_energy = _energy_from_tone_and_bands(tone_val, kp_band)
 
@@ -2025,13 +2025,6 @@ def main(args: Optional[argparse.Namespace] = None):
         stats_feats["sw_speed_current"] = metrics_now["sw"]
         stats_feats.setdefault("sw_speed_avg", stats_feats.get("sw_speed_avg"))
 
-    base_feats = stats_feats
-    stats_im   = render_stats_card_from_features(day, base_feats, energy, kind="tall", pulse=pulse_like)
-    if isinstance(caption_text, (dict, list)):
-        caption_text = json.dumps(caption_text, ensure_ascii=False)
-    if hasattr(caption_text, "strip"):
-        caption_text = caption_text.strip()
-
     # Override energy label from tone/bands if provided by metrics_json
     if tone_band_energy:
         energy = tone_band_energy
@@ -2041,12 +2034,14 @@ def main(args: Optional[argparse.Namespace] = None):
         tone2  = (m2.get("tone") or "").lower()
         kb2    = (bands2.get("kp") or "").lower()
         if tone2 or kb2:
-            def _energy_from_tb(t, kb):
-                if t in ("stormy","high"): return "High"
-                if kb in ("storm","severe"): return "High"
-                if kb in ("active","unsettled","mild"): return "Elevated"
-                return "Calm"
-            energy = _energy_from_tb(tone2, kb2)
+            energy = _energy_from_tone_and_bands(tone2, kb2)
+
+    base_feats = stats_feats
+    stats_im   = render_stats_card_from_features(day, base_feats, energy, kind="tall", pulse=pulse_like)
+    if isinstance(caption_text, (dict, list)):
+        caption_text = json.dumps(caption_text, ensure_ascii=False)
+    if hasattr(caption_text, "strip"):
+        caption_text = caption_text.strip()
 
     # Strip hashtags/emojis from affects/playbook text for layout robustness
     affects_txt  = strip_hashtags_and_emojis(_safe_text(affects_txt))
