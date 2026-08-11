@@ -172,6 +172,7 @@ fun GaiaEyesApp(
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshForegroundLocation()
+        viewModel.refreshForegroundHealthConnect()
     }
 
     when (val authState = uiState.authState) {

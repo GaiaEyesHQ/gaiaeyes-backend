@@ -65,9 +65,11 @@ class HomeViewModel(
     private var patternsJob: Job? = null
     private var onboardingJob: Job? = null
     private var locationJob: Job? = null
+    private var healthConnectJob: Job? = null
     private var loadedAccountId: String? = null
     private var processingQuickLogId: String? = null
     private var lastForegroundLocationRefreshAt = 0L
+    private var lastForegroundHealthImportAt = 0L
 
     init {
         refreshHealth()
@@ -485,7 +487,8 @@ class HomeViewModel(
 
     fun refreshHealthConnect() {
         val account = _uiState.value.authState as? AuthState.SignedIn ?: return
-        viewModelScope.launch {
+        if (healthConnectJob?.isActive == true || _uiState.value.isImportingHealthConnect) return
+        healthConnectJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 healthConnectStatus = HealthConnectStatus.CHECKING,
                 healthConnectMessage = null,
@@ -512,10 +515,80 @@ class HomeViewModel(
         }
     }
 
+    fun refreshForegroundHealthConnect() {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.onboardingStatus != OnboardingStatus.COMPLETE) return
+        if (healthConnectJob?.isActive == true || _uiState.value.isImportingHealthConnect) return
+
+        healthConnectJob = viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            runCatching {
+                val status = healthConnectRepository.status()
+                val pending = healthConnectRepository.pendingCount(account.accountId)
+                status to pending
+            }.onSuccess { (status, pending) ->
+                if (!isCurrentAccount(account.accountId)) return@onSuccess
+                _uiState.value = _uiState.value.copy(
+                    healthConnectStatus = status,
+                    pendingHealthSampleBatches = pending,
+                )
+                if (
+                    status == HealthConnectStatus.READY &&
+                    shouldRunForegroundHealthImport(lastForegroundHealthImportAt, now)
+                ) {
+                    lastForegroundHealthImportAt = now
+                    importRecentHealthConnectInForeground(account.accountId)
+                }
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        healthConnectMessage = "Health data will refresh when the connection is ready.",
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun importRecentHealthConnectInForeground(accountId: String) {
+        if (!isCurrentAccount(accountId)) return
+        _uiState.value = _uiState.value.copy(
+            isImportingHealthConnect = true,
+            healthConnectMessage = null,
+        )
+        runCatching {
+            healthConnectRepository.importRecent(
+                accountId = accountId,
+                days = FOREGROUND_HEALTH_IMPORT_DAYS,
+            )
+        }.onSuccess { result ->
+            if (isCurrentAccount(accountId)) {
+                _uiState.value = _uiState.value.copy(
+                    isImportingHealthConnect = false,
+                    healthConnectImportedCount = result.importedSampleCount,
+                    pendingHealthSampleBatches = result.pendingBatchCount,
+                )
+                loadBody(accountId, showCachedFirst = false)
+            }
+        }.onFailure {
+            if (isCurrentAccount(accountId)) {
+                val pending = runCatching {
+                    healthConnectRepository.pendingCount(accountId)
+                }.getOrDefault(_uiState.value.pendingHealthSampleBatches)
+                _uiState.value = _uiState.value.copy(
+                    isImportingHealthConnect = false,
+                    pendingHealthSampleBatches = pending,
+                    healthConnectMessage = "Health data will retry when the connection is ready.",
+                )
+            }
+        }
+    }
+
     fun importHealthConnect() {
         val account = _uiState.value.authState as? AuthState.SignedIn ?: return
         if (_uiState.value.isImportingHealthConnect) return
-        viewModelScope.launch {
+        healthConnectJob?.cancel()
+        lastForegroundHealthImportAt = System.currentTimeMillis()
+        healthConnectJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isImportingHealthConnect = true,
                 healthConnectMessage = null,
@@ -553,6 +626,7 @@ class HomeViewModel(
         when (page) {
             SignedInPage.HOME -> Unit
             SignedInPage.BODY -> {
+                refreshForegroundHealthConnect()
                 if (_uiState.value.body == null) {
                     loadBody(account.accountId, showCachedFirst = true)
                 }
@@ -828,10 +902,33 @@ class HomeViewModel(
     }
 
     private fun handleAuthState(authState: AuthState) {
+        val currentAuthState = _uiState.value.authState
+        if (shouldPreserveSignedInSurface(currentAuthState, authState, loadedAccountId)) {
+            _uiState.value = _uiState.value.copy(
+                authState = currentAuthState,
+                isSigningOut = false,
+                isStartingGuest = false,
+                authMessage = if (authState is AuthState.SessionProblem) {
+                    TRANSIENT_SESSION_MESSAGE
+                } else {
+                    _uiState.value.authMessage
+                },
+            )
+            return
+        }
+
         _uiState.value = _uiState.value.copy(
             authState = authState,
             isSigningOut = false,
             isStartingGuest = false,
+            authMessage = if (
+                authState is AuthState.SignedIn &&
+                _uiState.value.authMessage == TRANSIENT_SESSION_MESSAGE
+            ) {
+                null
+            } else {
+                _uiState.value.authMessage
+            },
         )
 
         if (authState is AuthState.SignedIn) {
@@ -869,7 +966,10 @@ class HomeViewModel(
         onboardingJob = null
         locationJob?.cancel()
         locationJob = null
+        healthConnectJob?.cancel()
+        healthConnectJob = null
         lastForegroundLocationRefreshAt = 0L
+        lastForegroundHealthImportAt = 0L
         loadedAccountId = null
         _uiState.value = _uiState.value.copy(
             dashboard = null,
@@ -1053,7 +1153,7 @@ class HomeViewModel(
         loadDashboard(accountId, showCachedFirst = true)
         loadHomeContext(accountId, showCachedFirst = true)
         loadLocationSettings(accountId)
-        refreshHealthConnect()
+        refreshForegroundHealthConnect()
         if (quickLogCoordinator.pending.value == null) {
             retryJournalWrites(accountId, showSuccessMessage = false)
         }
@@ -1699,6 +1799,23 @@ internal fun onboardingStepFor(value: String): OnboardingStep = when (value) {
 internal fun isValidOnboardingZip(value: String): Boolean =
     value.length == 5 && value.all(Char::isDigit)
 
+internal fun shouldPreserveSignedInSurface(
+    currentAuthState: AuthState,
+    nextAuthState: AuthState,
+    loadedAccountId: String?,
+): Boolean {
+    val currentAccountId = (currentAuthState as? AuthState.SignedIn)?.accountId ?: return false
+    return currentAccountId == loadedAccountId && (
+        nextAuthState is AuthState.Initializing || nextAuthState is AuthState.SessionProblem
+    )
+}
+
+internal fun shouldRunForegroundHealthImport(
+    lastImportAt: Long,
+    now: Long,
+    intervalMs: Long = FOREGROUND_HEALTH_IMPORT_INTERVAL_MS,
+): Boolean = lastImportAt == 0L || now - lastImportAt >= intervalMs
+
 enum class JournalDialog {
     SYMPTOM,
     EXPOSURE,
@@ -1719,3 +1836,7 @@ private fun String.looksLikeEmail(): Boolean {
 }
 
 private const val FOREGROUND_LOCATION_REFRESH_INTERVAL_MS = 5 * 60 * 1_000L
+private const val FOREGROUND_HEALTH_IMPORT_INTERVAL_MS = 15 * 60 * 1_000L
+private const val FOREGROUND_HEALTH_IMPORT_DAYS = 2L
+private const val TRANSIENT_SESSION_MESSAGE =
+    "Connection interrupted. Gaia Eyes will keep your saved view while it reconnects."
