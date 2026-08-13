@@ -14,6 +14,8 @@ jobs:
       APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
       APNS_BUNDLE_ID: ${{ secrets.APNS_BUNDLE_ID }}
       APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+      FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+      FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
       GAIA_LOG_LEVEL: INFO
     steps:
       - uses: actions/checkout@v4

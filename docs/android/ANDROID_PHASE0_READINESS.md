@@ -69,7 +69,10 @@ Recommendation: keep HRV in Android v1, but first add an explicit backend sample
 
 ### 3. Notifications
 
-Recommendation: include local notification channels, permission handling, and settings scaffolding in v1. Defer Firebase Cloud Messaging and remote condition alerts until delivery rules, throttling, and credentials are approved.
+Superseded scope: include real Firebase Cloud Messaging delivery, permission
+handling, notification channels, token lifecycle, and Settings controls in V1.
+Reuse the shared backend preferences, quiet hours, cooldowns, bundling, and alert
+families documented in `ANDROID_V1_COMPLETION_AND_PARITY_PLAN.md`.
 
 ## Approved dependency set
 
@@ -85,7 +88,7 @@ Recommendation: include local notification channels, permission handling, and se
 | WorkManager | Health/symptom upload drain and safe retries | Keep |
 | Health Connect client | Optional wearable/health import | Keep |
 | RevenueCat Android | Plus purchase/restore | Add after Play products are available |
-| Firebase Cloud Messaging | Remote alerts | Defer |
+| Firebase Cloud Messaging | Remote alerts | Required for V1; credentials must remain outside the repo |
 | Hilt or another DI framework | Dependency injection | Avoid initially; use explicit constructors/manual wiring |
 
 Use Android Keystore-backed storage for session material. Do not commit API keys, service configuration, signing files, or environment files.

@@ -2,6 +2,10 @@
 
 Last updated: 2026-07-08
 
+> Scope update: notification delivery in this early plan is superseded by
+> `ANDROID_V1_COMPLETION_AND_PARITY_PLAN.md`. Android V1 now includes real FCM
+> delivery and notification controls; social share cards are deferred to V1.1.
+
 ## Goal
 
 Start a scheduled Codex/agent track that converts Gaia Eyes into an Android MVP while protecting the iOS release path, production stability, and the health-pattern positioning.

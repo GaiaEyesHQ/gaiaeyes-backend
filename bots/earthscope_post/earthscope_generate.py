@@ -724,6 +724,31 @@ def _hook_lane_for_text(text: str) -> Optional[str]:
     return None
 
 
+def _caption_with_approved_hook(caption: str, title: str) -> str:
+    """Keep the final title hook as the shared opener when it fits the same lane."""
+    clean_caption = _sanitize_caption(caption)
+    clean_title = _sanitize_caption(title)
+    if not clean_caption or not clean_title:
+        return clean_caption
+
+    caption_hook = _first_sentence(clean_caption)
+    title_hook = _first_sentence(clean_title)
+    if not caption_hook or not title_hook:
+        return clean_caption
+    if caption_hook.lower() == title_hook.lower():
+        return clean_caption
+
+    caption_lane = _hook_lane_for_text(caption_hook)
+    title_lane = _hook_lane_for_text(title_hook)
+    if not caption_lane or caption_lane != title_lane:
+        return clean_caption
+    if caption_hook.endswith("?") != title_hook.endswith("?"):
+        return clean_caption
+
+    rest = clean_caption[len(caption_hook):].lstrip()
+    return f"{title_hook} {rest}".strip()
+
+
 def _recent_hook_lanes(ctx: Dict[str, Any]) -> List[str]:
     lanes: List[str] = []
     for value in list(ctx.get("banned_openers") or []) + list(ctx.get("recent_captions") or []):
@@ -3122,13 +3147,14 @@ def _build_social_caption_variants(
     default_hashtags: str,
     sections: Dict[str, str],
 ) -> Dict[str, Dict[str, str]]:
+    aligned_default_caption = _caption_with_approved_hook(default_caption, title)
     variants: Dict[str, Dict[str, str]] = {
         "default": {
-            "caption": default_caption,
+            "caption": aligned_default_caption,
             "hashtags": default_hashtags,
         },
         "ig": {
-            "caption": default_caption,
+            "caption": aligned_default_caption,
             "hashtags": default_hashtags,
         },
     }
@@ -3144,7 +3170,7 @@ def _build_social_caption_variants(
         client,
         ctx=fb_ctx,
         title=title,
-        default_caption=default_caption,
+        default_caption=aligned_default_caption,
         default_hashtags=default_hashtags,
         sections=sections,
     )
@@ -4054,6 +4080,8 @@ def main():
         default_hashtags=(long_tags or short_tags),
         sections=sections_struct,
     )
+    short_caption = str((social_variants.get("default") or {}).get("caption") or short_caption).strip()
+    sections_struct["caption"] = short_caption
     vo_caption = _voiceover_caption_from_variants(social_variants, short_caption)
     rewrite_for_reel = _REWRITE_CACHE.get(_rewrite_cache_key(ctx)[0])
     aligned_reel_rewrite = _rewrite_reel_from_final_caption(

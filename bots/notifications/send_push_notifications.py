@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List
 
 from bots.notifications.apns import create_provider_token, send_apns_notification
+from bots.notifications.fcm import FcmClient
 from bots.notifications.push_logic import utc_now
 from services.db import pg
 
@@ -22,6 +23,7 @@ _INVALID_TOKEN_REASONS = {
     "DeviceTokenNotForTopic",
     "Unregistered",
 }
+_INVALID_FCM_REASONS = {"UNREGISTERED", "registration-token-not-registered"}
 
 
 def _fetch_queued_events(limit: int | None = None, user_id: str | None = None) -> List[Dict[str, Any]]:
@@ -58,7 +60,7 @@ def _fetch_queued_events(limit: int | None = None, user_id: str | None = None) -
 def _fetch_user_tokens(user_id: str) -> List[Dict[str, Any]]:
     return pg.fetch(
         """
-        select id, device_token, environment
+        select id, platform, device_token, environment
           from app.user_push_tokens
          where user_id = %s
            and enabled = true
@@ -137,6 +139,23 @@ def _apns_body(event: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _fcm_reason(result: Dict[str, Any]) -> str:
+    body = _normalized_payload(result.get("body"))
+    error = _normalized_payload(body.get("error"))
+    details = error.get("details") if isinstance(error.get("details"), list) else []
+    for detail in details:
+        detail_map = _normalized_payload(detail)
+        code = str(detail_map.get("errorCode") or "").strip()
+        if code:
+            return code
+    return str(
+        error.get("status")
+        or error.get("message")
+        or result.get("raw_body")
+        or f"http_{result.get('status_code') or 0}"
+    )
+
+
 def _iter_events(rows: Iterable[Dict[str, Any]], limit: int | None) -> Iterable[Dict[str, Any]]:
     count = 0
     for row in rows:
@@ -164,7 +183,7 @@ def _missing_apns_env() -> List[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Send queued Gaia Eyes push notifications through APNs.")
+    parser = argparse.ArgumentParser(description="Send queued Gaia Eyes push notifications through APNs or FCM.")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of queued events processed.")
     parser.add_argument("--user-id", default=None, help="Optional single user_id override.")
     args = parser.parse_args()
@@ -174,20 +193,9 @@ def main() -> None:
         logger.info("[push-send] no queued events")
         return
 
-    missing_env = _missing_apns_env()
-    if missing_env:
-        logger.warning(
-            "[push-send] missing APNS env (%s); leaving %d queued events in queued status",
-            ", ".join(missing_env),
-            len(queued_events),
-        )
-        return
-
-    team_id = _required_env("APNS_TEAM_ID")
-    key_id = _required_env("APNS_KEY_ID")
-    bundle_id = _required_env("APNS_BUNDLE_ID")
-    private_key = _required_env("APNS_PRIVATE_KEY")
-    auth_token = create_provider_token(team_id=team_id, key_id=key_id, private_key_pem=private_key)
+    apns_config: Dict[str, str] | None = None
+    fcm_client: FcmClient | None = None
+    fcm_config_error: str | None = None
     logger.info("[push-send] queued=%d", len(queued_events))
 
     sent = 0
@@ -233,18 +241,70 @@ def main() -> None:
         collapse_id = str(event.get("dedupe_key") or event_id)
 
         any_success = False
+        any_attempt = False
         errors: List[str] = []
         for token_row in tokens:
             token_id = str(token_row.get("id") or "").strip()
             device_token = str(token_row.get("device_token") or "").strip()
             environment = str(token_row.get("environment") or "prod").strip().lower() or "prod"
-            sandbox = environment == "dev"
+            platform = str(token_row.get("platform") or "ios").strip().lower() or "ios"
+            if platform == "android":
+                if fcm_client is None and fcm_config_error is None:
+                    try:
+                        fcm_client = FcmClient.from_environment()
+                    except Exception as exc:
+                        fcm_config_error = str(exc)
+                if fcm_client is None:
+                    errors.append(fcm_config_error or "fcm_not_configured")
+                    continue
+                any_attempt = True
+                payload = _normalized_payload(event.get("payload"))
+                payload.setdefault("family", str(event.get("family") or ""))
+                payload.setdefault("event_id", event_id)
+                result = fcm_client.send(
+                    device_token=device_token,
+                    title=str(event.get("title") or "").strip(),
+                    body=str(event.get("body") or "").strip(),
+                    data=payload,
+                )
+                if result.get("ok"):
+                    any_success = True
+                    continue
+                reason = _fcm_reason(result)
+                errors.append(reason)
+                logger.warning(
+                    "[push-send] fcm rejected event=%s user=%s family=%s token=%s status=%s reason=%s",
+                    event_id,
+                    user_id,
+                    str(event.get("family") or "").strip() or "unknown",
+                    token_id or "<missing>",
+                    result.get("status_code") or 0,
+                    reason,
+                )
+                if reason in _INVALID_FCM_REASONS and token_id:
+                    _disable_token(token_id, reason, now_utc)
+                continue
+
+            if apns_config is None:
+                missing_env = _missing_apns_env()
+                if missing_env:
+                    errors.append("missing_apns_env:" + ",".join(missing_env))
+                    continue
+                apns_config = {
+                    "bundle_id": _required_env("APNS_BUNDLE_ID"),
+                    "auth_token": create_provider_token(
+                        team_id=_required_env("APNS_TEAM_ID"),
+                        key_id=_required_env("APNS_KEY_ID"),
+                        private_key_pem=_required_env("APNS_PRIVATE_KEY"),
+                    ),
+                }
+            any_attempt = True
             result = send_apns_notification(
                 device_token=device_token,
                 body=body,
-                auth_token=auth_token,
-                topic=bundle_id,
-                sandbox=sandbox,
+                auth_token=apns_config["auth_token"],
+                topic=apns_config["bundle_id"],
+                sandbox=environment == "dev",
                 collapse_id=collapse_id,
             )
             if result.get("ok"):
@@ -279,8 +339,15 @@ def main() -> None:
                 str(event.get("family") or "").strip() or "unknown",
             )
             sent += 1
+        elif not any_attempt:
+            logger.warning(
+                "[push-send] no provider configured event=%s user=%s; leaving queued error=%s",
+                event_id,
+                user_id,
+                "; ".join(errors[:3]) or "provider_not_configured",
+            )
         else:
-            error_text = "; ".join(errors[:3]) or "apns_send_failed"
+            error_text = "; ".join(errors[:3]) or "push_send_failed"
             _mark_event_status(event_id, "failed", now_utc, error_text)
             logger.warning(
                 "[push-send] failed event=%s user=%s family=%s error=%s",

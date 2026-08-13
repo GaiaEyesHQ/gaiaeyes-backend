@@ -54,7 +54,7 @@ internal fun gaugeDetailModel(
 
 internal const val gaugeScoreExplanation =
     "This score brings together your recent body signals, symptoms, and relevant conditions. " +
-        "Higher scores mean more estimated load. It is context, not a diagnosis."
+        "Higher scores mean more estimated load compared with your usual context."
 
 internal const val gaugeDeltaExplanation =
     "This compares today’s gauge score with yesterday. Higher scores mean more estimated load; " +

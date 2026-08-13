@@ -1,8 +1,11 @@
 # Android Parity Matrix
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-12
 
 This matrix defines Android v1 parity against the live iOS app. It is intentionally scoped to a practical first Android release, not every iOS-only or future feature.
+
+The implementation sequence and release gates are defined in
+[ANDROID_V1_COMPLETION_AND_PARITY_PLAN.md](ANDROID_V1_COMPLETION_AND_PARITY_PLAN.md).
 
 | Surface | Android v1 | Backend/API dependency | Notes |
 | --- | --- | --- | --- |
@@ -13,17 +16,17 @@ This matrix defines Android v1 parity against the live iOS app. It is intentiona
 | Body | Required | `/v1/features/today`, `/v1/samples/batch` | Cache-first sleep stages, efficiency, health stats, personal deltas, steps, and heart range are implemented from shared account data. Optional 30-day Health Connect import is implemented for sleep, steps, heart rate, resting heart rate, respiratory rate, and oxygen saturation, with account-scoped durable retry. HRV remains deferred under the explicit RMSSD/SDNN boundary. |
 | Patterns | Required | `/v1/patterns`, `/v1/patterns/summary` | Read-only cache-first parity is implemented with a fast summary, expanded background refresh, shared confidence/evidence language, varied category accents, three-card previews, and explicit Show all/Show fewer controls. Deeper drilldowns and subscription presentation can follow. |
 | Outlook | Required | `/v1/users/me/outlook`, `/v1/space/forecast/outlook` | Read-only cache-first parity is implemented with the shared daily signal cards, likely symptom domains, corrected signal labels, and responsive phone/tablet layouts. Narrative summary blocks removed from iOS remain omitted. |
-| Explore / All Drivers | Required | `/v1/users/me/drivers`, profile location, `/v1/local/check` | Read-only cache-first parity is implemented from the shared ranked driver payload, including current role/state, signal strength, personal pattern context, active symptoms, and summary counts. Explore also includes a location-aware Local Weather card and detail page using the existing shared local-current payload. |
+| Explore / All Drivers | Required | `/v1/users/me/drivers`, profile location, `/v1/local/check`, space/Earth endpoints | **Implemented locally.** Includes All Drivers, Space Weather, Local Conditions, Magnetosphere, Schumann Resonance, Earthquakes, and Hazards with shared backend data and cached fallback states. Release/device validation remains. |
 | Symptoms | Required | `/v1/symptoms/codes`, `/v1/symptoms`, `/v1/symptoms/current` | Implemented with server-driven choices, authenticated writes, and an account-scoped persistent queue with WorkManager background retry. Body and Home link to an active-symptom review page where users can mark an item ongoing, improving, worse, or resolved; edit severity/notes; or delete an accidental entry. |
 | Hands-free migraine log | Required | `/v1/symptoms` | Android V1 accepts an Assistant/App Action or `gaiaeyes://log/migraine`, records the invocation time with the shared `MIGRAINE` code and default severity 5, and uses the existing persistent symptom queue. It opens Gaia Eyes for confirmation; Android does not guarantee invisible background fulfillment. |
 | Exposures | Required | `/v1/exposures/catalog`, `/v1/exposures` | Implemented with the shared backend allowlist, authenticated writes, and the same persistent queue with WorkManager background retry. The catalog endpoint must be deployed before production end-to-end testing. |
 | Daily check-in | Required | `/v1/feedback/daily-checkin` | Implemented with the backend-selected target day, authenticated upsert, and persistent foreground/background retry. |
-| Guide | Required | bundled/app API content | Include launch welcome notice and app guidance. |
-| Settings | Required | profile, auth, diagnostics | Launch slice implemented with account/sign-out, data-service and Health Connect status, pending journal/health queue counts, refresh, support/privacy/terms links, and privacy-safe diagnostics sharing. Onboarding stores units/mode/tone through shared preferences; editing those choices later and subscription management remain follow-ups. |
-| Subscribe / Restore | Required | RevenueCat Android, `/v1/billing/entitlements` | Plus monthly/yearly only for v1 unless product strategy changes. |
-| Share cards | Required | local rendering + current app data | Match current iOS social share direction; no backend dependency required beyond source data. |
+| Guide | Required | bundled/app API content | **Implemented locally.** Uses the current sequence: Support Right Now, Daily Check-In, Daily Poll, Follow-Ups when present, and Help and Understanding. It does not duplicate the older Symptoms/Influences cards now shown on Home. |
+| Settings | Required | profile, auth, notification preferences, diagnostics | **Partial.** Account/sign-out, service and Health Connect status, queue counts, refresh, notification families/permission/quiet-hours/sensitivity controls, legal/support links, and privacy-safe diagnostics are implemented. Editing every setup choice and membership management remain. |
+| Subscribe / Restore | Required | RevenueCat Android, `/v1/billing/entitlements` | **Not implemented.** Build placeholders exist, but the RevenueCat purchase/restore experience and Play product validation remain. Plus monthly/yearly only for v1 unless product strategy changes. |
+| Share cards | V1.1 | local rendering + current app data | **Not implemented and explicitly deferred to V1.1.** Privacy-safe diagnostics sharing is separate. Omit share cards from Android V1 screenshots and launch copy. |
 | Diagnostics bundle | Required | `/health`, cached local state | Initial redacted status share is implemented with app version, backend/Health Connect state, queue counts, and cache-loaded flags. It explicitly excludes email, account ID, access credentials, and raw health readings. Billing and richer support metadata remain follow-ups. |
-| Push alerts | Deferred | FCM, backend notification jobs | Keep out of v1 to reduce Play review and delivery risk. |
+| Notifications | Required | FCM, `/v1/profile/notifications`, push-token routes, shared notification evaluator | **Implemented locally; production activation pending.** Android permission/token lifecycle, Settings controls, quiet hours/sensitivity, account isolation, FCM sender routing, and notification tap destinations are present. Apply the push-token migration, configure Firebase credentials, and complete physical-device delivery/deep-link tests before release. |
 | BLE/Polar | Deferred | BLE permissions, ingest | Not user-facing in Android v1. |
 | Camera | Deferred | Camera permissions | Not user-facing in Android v1. |
 | HRV | Deferred | backend type decision needed | Health Connect HRV is not equivalent to current `hrv_sdnn` assumptions. |
@@ -37,6 +40,7 @@ Android should keep the same mental model as iOS:
 - Bottom tabs: Home, Body, Patterns, Outlook, Explore.
 - Settings entry from top-right gear.
 - Guide entry from Home or settings.
+- Notification preferences and permission status reachable from Settings.
 - Subscribe/Restore reachable from Settings and gated surfaces.
 - Diagnostics reachable from Settings debug/toolkit area.
 

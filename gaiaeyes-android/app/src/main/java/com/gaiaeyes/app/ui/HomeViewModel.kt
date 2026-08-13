@@ -13,6 +13,7 @@ import com.gaiaeyes.app.core.network.SymptomCodeOption
 import com.gaiaeyes.app.core.network.ProfileLocationUpdate
 import com.gaiaeyes.app.core.network.ProfilePreferencesUpdate
 import com.gaiaeyes.app.core.network.ProfileTagOption
+import com.gaiaeyes.app.core.network.NotificationPreferences
 import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
 import com.gaiaeyes.app.core.quicklog.QuickLogRequest
 import com.gaiaeyes.app.data.BodyRepository
@@ -21,6 +22,8 @@ import com.gaiaeyes.app.data.DashboardRepository
 import com.gaiaeyes.app.data.DashboardSnapshot
 import com.gaiaeyes.app.data.DeviceLocationRepository
 import com.gaiaeyes.app.data.DriversSnapshot
+import com.gaiaeyes.app.data.ExploreRepository
+import com.gaiaeyes.app.data.ExploreSnapshot
 import com.gaiaeyes.app.data.HealthRepository
 import com.gaiaeyes.app.data.HealthConnectRepository
 import com.gaiaeyes.app.data.HealthConnectStatus
@@ -28,12 +31,14 @@ import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.CurrentSymptomsSnapshot
 import com.gaiaeyes.app.data.LocalWeatherSnapshot
 import com.gaiaeyes.app.data.JournalRepository
+import com.gaiaeyes.app.data.NotificationRepository
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSnapshot
 import com.gaiaeyes.app.data.PatternsRepository
 import com.gaiaeyes.app.data.PatternsSnapshot
 import com.gaiaeyes.app.data.ProfileRepository
 import java.time.Instant
+import java.util.TimeZone
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,7 +53,9 @@ class HomeViewModel(
     private val healthRepository: HealthRepository,
     private val healthConnectRepository: HealthConnectRepository,
     private val homeContextRepository: HomeContextRepository,
+    private val exploreRepository: ExploreRepository,
     private val journalRepository: JournalRepository,
+    private val notificationRepository: NotificationRepository,
     private val outlookRepository: OutlookRepository,
     private val patternsRepository: PatternsRepository,
     private val profileRepository: ProfileRepository,
@@ -61,11 +68,13 @@ class HomeViewModel(
     private var bodyJob: Job? = null
     private var homeContextJob: Job? = null
     private var localWeatherJob: Job? = null
+    private var exploreJob: Job? = null
     private var outlookJob: Job? = null
     private var patternsJob: Job? = null
     private var onboardingJob: Job? = null
     private var locationJob: Job? = null
     private var healthConnectJob: Job? = null
+    private var notificationJob: Job? = null
     private var loadedAccountId: String? = null
     private var processingQuickLogId: String? = null
     private var lastForegroundLocationRefreshAt = 0L
@@ -211,6 +220,7 @@ class HomeViewModel(
             SignedInPage.OUTLOOK -> loadOutlook(account.accountId, showCachedFirst = false)
             SignedInPage.EXPLORE -> {
                 loadHomeContext(account.accountId, showCachedFirst = false)
+                loadExplore(account.accountId, showCachedFirst = false)
                 refreshLocalWeather()
             }
         }
@@ -650,6 +660,9 @@ class HomeViewModel(
                 if (_uiState.value.localWeather == null) {
                     loadLocalWeather(account.accountId, showCachedFirst = true)
                 }
+                if (_uiState.value.explore == null) {
+                    loadExplore(account.accountId, showCachedFirst = true)
+                }
             }
         }
     }
@@ -667,9 +680,11 @@ class HomeViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSigningOut = true, authMessage = null)
             runCatching {
+                runCatching { notificationRepository.disableCurrentToken() }
                 dashboardRepository.clear(account.accountId)
                 bodyRepository.clear(account.accountId)
                 homeContextRepository.clear(account.accountId)
+                exploreRepository.clear(account.accountId)
                 journalRepository.clear(account.accountId)
                 healthConnectRepository.clear(account.accountId)
                 outlookRepository.clear(account.accountId)
@@ -691,13 +706,99 @@ class HomeViewModel(
             dashboardMessage = null,
             bodyMessage = null,
             homeContextMessage = null,
+            exploreMessage = null,
             outlookMessage = null,
             patternsMessage = null,
             journalMessage = null,
             healthConnectMessage = null,
             localWeatherMessage = null,
             symptomActionMessage = null,
+            notificationMessage = null,
         )
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        updateNotificationPreferences { current ->
+            current.copy(enabled = enabled, timeZone = TimeZone.getDefault().id)
+        }
+    }
+
+    fun setSignalAlertsEnabled(enabled: Boolean) {
+        updateNotificationPreferences { it.copy(signalAlertsEnabled = enabled) }
+    }
+
+    fun setLocalConditionAlertsEnabled(enabled: Boolean) {
+        updateNotificationPreferences { it.copy(localConditionAlertsEnabled = enabled) }
+    }
+
+    fun setGaugeAlertsEnabled(enabled: Boolean) {
+        updateNotificationPreferences { it.copy(personalizedGaugeAlertsEnabled = enabled) }
+    }
+
+    fun setSymptomFollowupsEnabled(enabled: Boolean) {
+        updateNotificationPreferences {
+            it.copy(
+                symptomFollowupsEnabled = enabled,
+                symptomFollowupPushEnabled = enabled,
+                families = it.families + ("symptom_followups" to enabled),
+            )
+        }
+    }
+
+    fun setDailyCheckinRemindersEnabled(enabled: Boolean) {
+        updateNotificationPreferences {
+            it.copy(
+                dailyCheckinsEnabled = enabled,
+                dailyCheckinPushEnabled = enabled,
+                families = it.families + ("daily_checkins" to enabled),
+            )
+        }
+    }
+
+    fun setQuietHoursEnabled(enabled: Boolean) {
+        updateNotificationPreferences {
+            it.copy(
+                quietHoursEnabled = enabled,
+                timeZone = TimeZone.getDefault().id,
+            )
+        }
+    }
+
+    fun setNotificationSensitivity(sensitivity: String) {
+        if (sensitivity !in setOf("minimal", "normal", "detailed")) return
+        updateNotificationPreferences { it.copy(sensitivity = sensitivity) }
+    }
+
+    fun onNotificationPermissionDenied() {
+        _uiState.value = _uiState.value.copy(
+            notificationMessage = "Notifications are off for Gaia Eyes. You can allow them later in Android Settings.",
+        )
+    }
+
+    fun syncNotificationRegistration(canPostNotifications: Boolean) {
+        if (!canPostNotifications || _uiState.value.notificationPreferences?.enabled != true) return
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        if (_uiState.value.isRegisteringNotificationDevice) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRegisteringNotificationDevice = true)
+            runCatching { notificationRepository.registerCurrentToken() }
+                .onSuccess { registered ->
+                    if (isCurrentAccount(account.accountId)) {
+                        _uiState.value = _uiState.value.copy(
+                            isRegisteringNotificationDevice = false,
+                            notificationDeviceRegistered = registered,
+                        )
+                    }
+                }
+                .onFailure {
+                    if (isCurrentAccount(account.accountId)) {
+                        _uiState.value = _uiState.value.copy(
+                            isRegisteringNotificationDevice = false,
+                            notificationMessage = "This device couldn't connect to Gaia Eyes alerts yet. Try again shortly.",
+                        )
+                    }
+                }
+        }
     }
 
     fun updateCurrentSymptom(
@@ -958,10 +1059,14 @@ class HomeViewModel(
         homeContextJob = null
         localWeatherJob?.cancel()
         localWeatherJob = null
+        exploreJob?.cancel()
+        exploreJob = null
         patternsJob?.cancel()
         patternsJob = null
         outlookJob?.cancel()
         outlookJob = null
+        notificationJob?.cancel()
+        notificationJob = null
         onboardingJob?.cancel()
         onboardingJob = null
         locationJob?.cancel()
@@ -993,6 +1098,9 @@ class HomeViewModel(
             localWeather = null,
             isLoadingLocalWeather = false,
             localWeatherMessage = null,
+            explore = null,
+            isLoadingExplore = false,
+            exploreMessage = null,
             locationLocalInsightsEnabled = true,
             locationZip = "",
             locationUseGps = false,
@@ -1020,6 +1128,12 @@ class HomeViewModel(
             healthConnectMessage = null,
             healthConnectImportedCount = 0,
             pendingHealthSampleBatches = 0,
+            notificationPreferences = null,
+            isLoadingNotificationPreferences = false,
+            isSavingNotificationPreferences = false,
+            isRegisteringNotificationDevice = false,
+            notificationDeviceRegistered = false,
+            notificationMessage = null,
             authMessage = if (
                 authState is AuthState.SignedOut &&
                 quickLogCoordinator.pending.value != null
@@ -1153,11 +1267,86 @@ class HomeViewModel(
         loadDashboard(accountId, showCachedFirst = true)
         loadHomeContext(accountId, showCachedFirst = true)
         loadLocationSettings(accountId)
+        loadNotificationPreferences(accountId)
         refreshForegroundHealthConnect()
         if (quickLogCoordinator.pending.value == null) {
             retryJournalWrites(accountId, showSuccessMessage = false)
         }
         maybeHandleQuickLog(quickLogCoordinator.pending.value)
+    }
+
+    private fun loadNotificationPreferences(accountId: String) {
+        notificationJob?.cancel()
+        notificationJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoadingNotificationPreferences = true,
+                notificationMessage = null,
+            )
+            runCatching { notificationRepository.loadPreferences() }
+                .onSuccess { preferences ->
+                    if (isCurrentAccount(accountId)) {
+                        _uiState.value = _uiState.value.copy(
+                            notificationPreferences = preferences,
+                            isLoadingNotificationPreferences = false,
+                        )
+                    }
+                }
+                .onFailure {
+                    if (isCurrentAccount(accountId)) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingNotificationPreferences = false,
+                            notificationMessage = "Notification settings couldn't load. Check your connection and try again.",
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun updateNotificationPreferences(
+        transform: (NotificationPreferences) -> NotificationPreferences,
+    ) {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        val current = _uiState.value.notificationPreferences ?: NotificationPreferences()
+        if (_uiState.value.isSavingNotificationPreferences) return
+        val updated = transform(current).copy(timeZone = TimeZone.getDefault().id)
+        notificationJob?.cancel()
+        notificationJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                notificationPreferences = updated,
+                isSavingNotificationPreferences = true,
+                notificationMessage = null,
+            )
+            runCatching {
+                val saved = notificationRepository.savePreferences(updated.asUpdate())
+                if (saved.enabled) {
+                    saved to notificationRepository.registerCurrentToken()
+                } else {
+                    notificationRepository.disableCurrentToken()
+                    saved to false
+                }
+            }.onSuccess { (saved, registered) ->
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        notificationPreferences = saved,
+                        isSavingNotificationPreferences = false,
+                        notificationDeviceRegistered = registered,
+                        notificationMessage = if (saved.enabled && !registered) {
+                            "Alert preferences were saved. This device is not connected to alerts yet."
+                        } else {
+                            "Notification settings saved."
+                        },
+                    )
+                }
+            }.onFailure {
+                if (isCurrentAccount(account.accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        notificationPreferences = current,
+                        isSavingNotificationPreferences = false,
+                        notificationMessage = "Notification settings couldn't be saved. Try again shortly.",
+                    )
+                }
+            }
+        }
     }
 
     private fun loadLocationSettings(accountId: String) {
@@ -1603,6 +1792,53 @@ class HomeViewModel(
         }
     }
 
+    private fun loadExplore(accountId: String, showCachedFirst: Boolean) {
+        exploreJob?.cancel()
+        exploreJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoadingExplore = true,
+                exploreMessage = null,
+            )
+
+            if (showCachedFirst) {
+                exploreRepository.cached(accountId)?.let { cached ->
+                    if (isCurrentAccount(accountId)) {
+                        _uiState.value = _uiState.value.copy(explore = cached)
+                    }
+                }
+            }
+
+            runCatching {
+                exploreRepository.refresh(accountId)
+            }.onSuccess { explore ->
+                if (isCurrentAccount(accountId)) {
+                    _uiState.value = _uiState.value.copy(
+                        explore = explore,
+                        isLoadingExplore = false,
+                        exploreMessage = explore.unavailableSources
+                            .takeIf(List<String>::isNotEmpty)
+                            ?.joinToString(
+                                prefix = "Some Explore details are using saved data: ",
+                                postfix = ".",
+                            ),
+                    )
+                }
+            }.onFailure {
+                if (isCurrentAccount(accountId)) {
+                    val hasSavedExplore = _uiState.value.explore != null
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingExplore = false,
+                        exploreMessage = if (hasSavedExplore) {
+                            "Showing saved Explore data while live details reconnect."
+                        } else {
+                            "Explore data couldn't load. Check your connection and try again."
+                        },
+                    )
+                }
+            }
+        }
+    }
+
     private fun loadOutlook(accountId: String, showCachedFirst: Boolean) {
         outlookJob?.cancel()
         outlookJob = viewModelScope.launch {
@@ -1672,7 +1908,9 @@ class HomeViewModel(
         private val healthRepository: HealthRepository,
         private val healthConnectRepository: HealthConnectRepository,
         private val homeContextRepository: HomeContextRepository,
+        private val exploreRepository: ExploreRepository,
         private val journalRepository: JournalRepository,
+        private val notificationRepository: NotificationRepository,
         private val outlookRepository: OutlookRepository,
         private val patternsRepository: PatternsRepository,
         private val profileRepository: ProfileRepository,
@@ -1689,7 +1927,9 @@ class HomeViewModel(
                 healthRepository = healthRepository,
                 healthConnectRepository = healthConnectRepository,
                 homeContextRepository = homeContextRepository,
+                exploreRepository = exploreRepository,
                 journalRepository = journalRepository,
+                notificationRepository = notificationRepository,
                 outlookRepository = outlookRepository,
                 patternsRepository = patternsRepository,
                 profileRepository = profileRepository,
@@ -1737,6 +1977,9 @@ data class HomeUiState(
     val localWeather: LocalWeatherSnapshot? = null,
     val isLoadingLocalWeather: Boolean = false,
     val localWeatherMessage: String? = null,
+    val explore: ExploreSnapshot? = null,
+    val isLoadingExplore: Boolean = false,
+    val exploreMessage: String? = null,
     val locationLocalInsightsEnabled: Boolean = true,
     val locationZip: String = "",
     val locationUseGps: Boolean = false,
@@ -1767,6 +2010,12 @@ data class HomeUiState(
     val healthConnectMessage: String? = null,
     val healthConnectImportedCount: Int = 0,
     val pendingHealthSampleBatches: Int = 0,
+    val notificationPreferences: NotificationPreferences? = null,
+    val isLoadingNotificationPreferences: Boolean = false,
+    val isSavingNotificationPreferences: Boolean = false,
+    val isRegisteringNotificationDevice: Boolean = false,
+    val notificationDeviceRegistered: Boolean = false,
+    val notificationMessage: String? = null,
     val isCheckingBackend: Boolean = false,
     val backendAvailable: Boolean? = null,
     val backendDetail: String = "Checking the Gaia Eyes data service",

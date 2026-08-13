@@ -1,0 +1,1254 @@
+[
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSignals are on the quiet side today with steady conditions and no notable flare activity. Solar wind is in a normal range and the magnetic field is only slightly tilted south. A CME was observed recently, but it\u2019s background context for now.\n\nThis quieter stretch may help some people feel more settled and less on-edge. Focus can hold a bit longer when the external push eases. If your system is still unwinding from earlier in the week, it may take a little time to fully feel the ease.\n\n- Pick one or two light tasks and pause between them\n- Take slow breaths and add a short walk or stretch\n- Keep screens dimmer and sound lower than usual\n- Check local pressure, air quality, and pollen\n- Hydrate and avoid overdoing caffeine",
+    "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+    "created_at": "2026-08-12T15:07:42.278107+00:00",
+    "day": "2026-08-12",
+    "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem",
+    "id": 806,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -5.47,
+      "cmes_24h": 1.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.57,
+        "f2": 14.7,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.67,
+      "schumann_value_hz": 7.57,
+      "sections": {
+        "affects": "This quieter stretch may help some people feel more settled and less on-edge. Focus can hold a bit longer when the external push eases. If your system is still unwinding from earlier in the week, it may take a little time to fully feel the ease.",
+        "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "playbook": "- Pick one or two light tasks and pause between them\n- Take slow breaths and add a short walk or stretch\n- Keep screens dimmer and sound lower than usual\n- Check local pressure, air quality, and pollen\n- Hydrate and avoid overdoing caffeine",
+        "reel_story": {
+          "effects": "Focus may hold a bit longer today",
+          "hook": "A quieter day to catch your breath?",
+          "pattern": "Tackle one or two light tasks with pauses",
+          "signal": "Space weather is quiet and the solar wind steady",
+          "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk."
+        },
+        "snapshot": "Signals are on the quiet side today with steady conditions and no notable flare activity. Solar wind is in a normal range and the magnetic field is only slightly tilted south. A CME was observed recently, but it\u2019s background context for now.",
+        "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        },
+        "ig": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        }
+      },
+      "solar_wind_kms": 438.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.67,
+        "kp_now": 2.0
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-08-12",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -5.47,
+          "cmes_24h": 1.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.67,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.57,
+          "severe_summary": null,
+          "solar_wind_kms": 438.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "platform": "default",
+    "title": "A quieter day to catch your breath?",
+    "updated_at": "2026-08-12T15:07:42.278107+00:00"
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSignals are on the quiet side today with steady conditions and no notable flare activity. Solar wind is in a normal range and the magnetic field is only slightly tilted south. A CME was observed recently, but it\u2019s background context for now.\n\nThis quieter stretch may help some people feel more settled and less on-edge. Focus can hold a bit longer when the external push eases. If your system is still unwinding from earlier in the week, it may take a little time to fully feel the ease.\n\n- Pick one or two light tasks and pause between them\n- Take slow breaths and add a short walk or stretch\n- Keep screens dimmer and sound lower than usual\n- Check local pressure, air quality, and pollen\n- Hydrate and avoid overdoing caffeine",
+    "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+    "created_at": "2026-08-12T15:07:42.278107+00:00",
+    "day": "2026-08-12",
+    "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem",
+    "id": 807,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -5.47,
+      "cmes_24h": 1.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.57,
+        "f2": 14.7,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.67,
+      "schumann_value_hz": 7.57,
+      "sections": {
+        "affects": "This quieter stretch may help some people feel more settled and less on-edge. Focus can hold a bit longer when the external push eases. If your system is still unwinding from earlier in the week, it may take a little time to fully feel the ease.",
+        "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "playbook": "- Pick one or two light tasks and pause between them\n- Take slow breaths and add a short walk or stretch\n- Keep screens dimmer and sound lower than usual\n- Check local pressure, air quality, and pollen\n- Hydrate and avoid overdoing caffeine",
+        "reel_story": {
+          "effects": "Focus may hold a bit longer today",
+          "hook": "A quieter day to catch your breath?",
+          "pattern": "Tackle one or two light tasks with pauses",
+          "signal": "Space weather is quiet and the solar wind steady",
+          "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk."
+        },
+        "snapshot": "Signals are on the quiet side today with steady conditions and no notable flare activity. Solar wind is in a normal range and the magnetic field is only slightly tilted south. A CME was observed recently, but it\u2019s background context for now.",
+        "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        },
+        "ig": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        }
+      },
+      "solar_wind_kms": 438.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.67,
+        "kp_now": 2.0
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-08-12",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -5.47,
+          "cmes_24h": 1.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.67,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.57,
+          "severe_summary": null,
+          "solar_wind_kms": 438.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "platform": "ig",
+    "title": "A quieter day to catch your breath?",
+    "updated_at": "2026-08-12T15:07:42.278107+00:00"
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic conditions are quiet overall. The magnetic field is tilted south while the solar wind stays typical. No recent solar flares or eruptions reported. The Earth\u2019s resonance read looks close to baseline.\n\nHead pressure may feel more noticeable for some, especially with bright light, screen glare, or quick posture changes. You might notice a heavy or full feeling that lifts when you step away from stimulus. Sensory load can stack faster than usual, so simple pacing may help.\n\n- Dim screens and lower brightness\n- Use gentle neck and jaw loosening\n- Step outside for a brief, shaded break\n- Keep caffeine steady and hydrate\n- Space out tasks with short pauses",
+    "caption": "Head pressure building? Things feel a bit wobbly, and bright light, screens, or quick moves can make it louder\u2014stepping away can help. Dim screens, loosen your neck and jaw, take slow breaths, and work in short sets.",
+    "created_at": "2026-08-11T14:40:41.854605+00:00",
+    "day": "2026-08-11",
+    "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #MigraineCommunity #Sensitivity #ChronicLife #NervousSystem #Pacing #SelfCare #ListenToYourBody",
+    "id": 804,
+    "metrics_json": {
+      "bands": {
+        "bz": "southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -8.4,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.66,
+        "f2": 15.02,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.0,
+      "schumann_value_hz": 7.66,
+      "sections": {
+        "affects": "Head pressure may feel more noticeable for some, especially with bright light, screen glare, or quick posture changes. You might notice a heavy or full feeling that lifts when you step away from stimulus. Sensory load can stack faster than usual, so simple pacing may help.",
+        "caption": "Head pressure building? Things feel a bit wobbly, and bright light, screens, or quick moves can make it louder\u2014stepping away can help. Dim screens, loosen your neck and jaw, take slow breaths, and work in short sets.",
+        "playbook": "- Dim screens and lower brightness\n- Use gentle neck and jaw loosening\n- Step outside for a brief, shaded break\n- Keep caffeine steady and hydrate\n- Space out tasks with short pauses",
+        "reel_story": {
+          "effects": "Cottony fullness behind the eyes under bright glare",
+          "hook": "Head pressure building?",
+          "pattern": "Dim screens, step into shade, breathe slowly through nose",
+          "signal": "Quiet day, but a south-leaning field sharpens glare",
+          "voiceover": "Head pressure building? Some people may feel a cottony fullness behind the eyes today, especially under bright lights, on glossy screens, or when standing up fast\u2014stepping out of the glare often takes the volume down. Keep it simple: lower your screen brightness, unclench your jaw and soften your neck, and use slow nose-breaths to settle the edges."
+        },
+        "snapshot": "Geomagnetic conditions are quiet overall. The magnetic field is tilted south while the solar wind stays typical. No recent solar flares or eruptions reported. The Earth\u2019s resonance read looks close to baseline.",
+        "voiceover": "Head pressure building? Some people may feel a cottony fullness behind the eyes today, especially under bright lights, on glossy screens, or when standing up fast\u2014stepping out of the glare often takes the volume down. Keep it simple: lower your screen brightness, unclench your jaw and soften your neck, and use slow nose-breaths to settle the edges."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Head pressure building? Things feel a bit wobbly, and bright light, screens, or quick moves can make it louder\u2014stepping away can help. Dim screens, loosen your neck and jaw, take slow breaths, and work in short sets.",
+          "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #MigraineCommunity #Sensitivity #ChronicLife #NervousSystem #Pacing #SelfCare #ListenToYourBody"
+        },
+        "fb": {
+          "caption": "Head pressure building? Some people may feel a cottony fullness behind the eyes today, especially under bright lights, on glossy screens, or when standing up fast\u2014stepping out of the glare often takes the volume down. Keep it simple: lower your screen brightness, unclench your jaw and soften your neck, and use slow nose-breaths to settle the edges.\n\nEnvironment check: space weather is quiet overall, but the magnetic field is angled in a way that can make light and motion feel a touch louder even without big solar activity. Try a gentle cadence\u2014tackle tasks in brief bursts, then look far into shade or out a window before returning; that reset gives your visual system a breather and often eases the pressure. Hold caffeine steady, sip water, and if you can, step outside to a shaded spot for two calm minutes. Gaia Eyes watches how subtle field tilts line up with the body\u2019s sensory load so you don\u2019t have to squint at charts.",
+          "hashtags": "#GaiaEyes #HeadPressure #SensoryLoad #LightSensitivity #SolarWind #Geomagnetic #NervousSystemCare"
+        },
+        "ig": {
+          "caption": "Head pressure building? Things feel a bit wobbly, and bright light, screens, or quick moves can make it louder\u2014stepping away can help. Dim screens, loosen your neck and jaw, take slow breaths, and work in short sets.",
+          "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #MigraineCommunity #Sensitivity #ChronicLife #NervousSystem #Pacing #SelfCare #ListenToYourBody"
+        }
+      },
+      "solar_wind_kms": 403.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.0,
+        "kp_now": 2.0
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-08-11",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -8.4,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.66,
+          "severe_summary": null,
+          "solar_wind_kms": 403.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "platform": "default",
+    "title": "Head pressure building?",
+    "updated_at": "2026-08-11T14:40:41.854605+00:00"
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic conditions are quiet overall. The magnetic field is tilted south while the solar wind stays typical. No recent solar flares or eruptions reported. The Earth\u2019s resonance read looks close to baseline.\n\nHead pressure may feel more noticeable for some, especially with bright light, screen glare, or quick posture changes. You might notice a heavy or full feeling that lifts when you step away from stimulus. Sensory load can stack faster than usual, so simple pacing may help.\n\n- Dim screens and lower brightness\n- Use gentle neck and jaw loosening\n- Step outside for a brief, shaded break\n- Keep caffeine steady and hydrate\n- Space out tasks with short pauses",
+    "caption": "Head pressure building? Things feel a bit wobbly, and bright light, screens, or quick moves can make it louder\u2014stepping away can help. Dim screens, loosen your neck and jaw, take slow breaths, and work in short sets.",
+    "created_at": "2026-08-11T14:40:41.854605+00:00",
+    "day": "2026-08-11",
+    "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #MigraineCommunity #Sensitivity #ChronicLife #NervousSystem #Pacing #SelfCare #ListenToYourBody",
+    "id": 805,
+    "metrics_json": {
+      "bands": {
+        "bz": "southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -8.4,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.66,
+        "f2": 15.02,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.0,
+      "schumann_value_hz": 7.66,
+      "sections": {
+        "affects": "Head pressure may feel more noticeable for some, especially with bright light, screen glare, or quick posture changes. You might notice a heavy or full feeling that lifts when you step away from stimulus. Sensory load can stack faster than usual, so simple pacing may help.",
+        "caption": "Head pressure building? Things feel a bit wobbly, and bright light, screens, or quick moves can make it louder\u2014stepping away can help. Dim screens, loosen your neck and jaw, take slow breaths, and work in short sets.",
+        "playbook": "- Dim screens and lower brightness\n- Use gentle neck and jaw loosening\n- Step outside for a brief, shaded break\n- Keep caffeine steady and hydrate\n- Space out tasks with short pauses",
+        "reel_story": {
+          "effects": "Cottony fullness behind the eyes under bright glare",
+          "hook": "Head pressure building?",
+          "pattern": "Dim screens, step into shade, breathe slowly through nose",
+          "signal": "Quiet day, but a south-leaning field sharpens glare",
+          "voiceover": "Head pressure building? Some people may feel a cottony fullness behind the eyes today, especially under bright lights, on glossy screens, or when standing up fast\u2014stepping out of the glare often takes the volume down. Keep it simple: lower your screen brightness, unclench your jaw and soften your neck, and use slow nose-breaths to settle the edges."
+        },
+        "snapshot": "Geomagnetic conditions are quiet overall. The magnetic field is tilted south while the solar wind stays typical. No recent solar flares or eruptions reported. The Earth\u2019s resonance read looks close to baseline.",
+        "voiceover": "Head pressure building? Some people may feel a cottony fullness behind the eyes today, especially under bright lights, on glossy screens, or when standing up fast\u2014stepping out of the glare often takes the volume down. Keep it simple: lower your screen brightness, unclench your jaw and soften your neck, and use slow nose-breaths to settle the edges."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Head pressure building? Things feel a bit wobbly, and bright light, screens, or quick moves can make it louder\u2014stepping away can help. Dim screens, loosen your neck and jaw, take slow breaths, and work in short sets.",
+          "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #MigraineCommunity #Sensitivity #ChronicLife #NervousSystem #Pacing #SelfCare #ListenToYourBody"
+        },
+        "fb": {
+          "caption": "Head pressure building? Some people may feel a cottony fullness behind the eyes today, especially under bright lights, on glossy screens, or when standing up fast\u2014stepping out of the glare often takes the volume down. Keep it simple: lower your screen brightness, unclench your jaw and soften your neck, and use slow nose-breaths to settle the edges.\n\nEnvironment check: space weather is quiet overall, but the magnetic field is angled in a way that can make light and motion feel a touch louder even without big solar activity. Try a gentle cadence\u2014tackle tasks in brief bursts, then look far into shade or out a window before returning; that reset gives your visual system a breather and often eases the pressure. Hold caffeine steady, sip water, and if you can, step outside to a shaded spot for two calm minutes. Gaia Eyes watches how subtle field tilts line up with the body\u2019s sensory load so you don\u2019t have to squint at charts.",
+          "hashtags": "#GaiaEyes #HeadPressure #SensoryLoad #LightSensitivity #SolarWind #Geomagnetic #NervousSystemCare"
+        },
+        "ig": {
+          "caption": "Head pressure building? Things feel a bit wobbly, and bright light, screens, or quick moves can make it louder\u2014stepping away can help. Dim screens, loosen your neck and jaw, take slow breaths, and work in short sets.",
+          "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #MigraineCommunity #Sensitivity #ChronicLife #NervousSystem #Pacing #SelfCare #ListenToYourBody"
+        }
+      },
+      "solar_wind_kms": 403.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.0,
+        "kp_now": 2.0
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-08-11",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -8.4,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.66,
+          "severe_summary": null,
+          "solar_wind_kms": 403.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "platform": "ig",
+    "title": "Head pressure building?",
+    "updated_at": "2026-08-11T14:40:41.854605+00:00"
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nOverall conditions are quiet. The solar wind is in a normal range and the magnetic field tilt is only slightly south. No flares have been reported in the past day. Some solar eruptions were noted as background activity with no arrival signs.\n\nA calmer backdrop can make tension and diffuse pain feel less loud for some. Short, steady blocks of activity may feel more doable when you avoid rushing. Head and sinus pressure may ease when you keep hydration and light movement in play.\n\n- Plan one or two small doable tasks\n- Take brief stretch or walk breaks\n- Hydrate and eat on time\n- Keep evening light warm and low\n- Check local storms, wind, smoke, or pollen",
+    "caption": "Tiny aches getting quieter today? The sky feels calm, like a soft hum, so there\u2019s room to recoup without pushing. Pick one small task, take slow breaths, and add a short stretch or walk between things.",
+    "created_at": "2026-08-10T14:42:44.344867+00:00",
+    "day": "2026-08-10",
+    "hashtags": "#GaiaEyes #SpaceWeather #PainManagement #Migraine #ChronicIllness #BrainFog #Pacing #Wellness",
+    "id": 802,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -3.96,
+      "cmes_24h": 2.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.73,
+        "f2": 15.0,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.0,
+      "schumann_value_hz": 7.73,
+      "sections": {
+        "affects": "A calmer backdrop can make tension and diffuse pain feel less loud for some. Short, steady blocks of activity may feel more doable when you avoid rushing. Head and sinus pressure may ease when you keep hydration and light movement in play.",
+        "caption": "Tiny aches getting quieter today? The sky feels calm, like a soft hum, so there\u2019s room to recoup without pushing. Pick one small task, take slow breaths, and add a short stretch or walk between things.",
+        "playbook": "- Plan one or two small doable tasks\n- Take brief stretch or walk breaks\n- Hydrate and eat on time\n- Keep evening light warm and low\n- Check local storms, wind, smoke, or pollen",
+        "reel_story": {
+          "effects": "Dull, cottony aches feel louder but soften with movement",
+          "hook": "Tiny aches getting louder?",
+          "pattern": "Take slow, even steps and sip water regularly",
+          "signal": "A calm sky lets small aches stand out today",
+          "voiceover": "Tiny aches getting louder? That dull, cottony throb might feel more noticeable today, not because the sky is rowdy, but because it\u2019s actually quiet enough for your body to hear itself. Solar wind is running in its normal lane, Earth\u2019s field is only slightly tipped south, and there haven\u2019t been fresh flares\u2014just distant eruptions with no signs they\u2019re headed our way."
+        },
+        "snapshot": "Overall conditions are quiet. The solar wind is in a normal range and the magnetic field tilt is only slightly south. No flares have been reported in the past day. Some solar eruptions were noted as background activity with no arrival signs.",
+        "voiceover": "Tiny aches getting louder? That dull, cottony throb might feel more noticeable today, not because the sky is rowdy, but because it\u2019s actually quiet enough for your body to hear itself. Solar wind is running in its normal lane, Earth\u2019s field is only slightly tipped south, and there haven\u2019t been fresh flares\u2014just distant eruptions with no signs they\u2019re headed our way."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Tiny aches getting quieter today? The sky feels calm, like a soft hum, so there\u2019s room to recoup without pushing. Pick one small task, take slow breaths, and add a short stretch or walk between things.",
+          "hashtags": "#GaiaEyes #SpaceWeather #PainManagement #Migraine #ChronicIllness #BrainFog #Pacing #Wellness"
+        },
+        "fb": {
+          "caption": "Tiny aches getting louder? That dull, cottony throb might feel more noticeable today, not because the sky is rowdy, but because it\u2019s actually quiet enough for your body to hear itself. Solar wind is running in its normal lane, Earth\u2019s field is only slightly tipped south, and there haven\u2019t been fresh flares\u2014just distant eruptions with no signs they\u2019re headed our way.\n\nOn days like this, some people may find tension and diffuse pain soften when they move in slow, even steps. Pick one doable task, breathe on purpose as you start, and slip in a brief stretch or a five\u2011minute walk between steps so circulation stays steady and your system doesn\u2019t spike and crash. Keep water nearby and eat on time; both can ease head and sinus pressure when the background is calm. Warm, lower evening light can help your nervous system downshift. We watch how the solar wind brushes Earth\u2019s magnetic field and how that sets the tone for body load\u2014check local storms, wind, smoke, or pollen too, since those can be the real culprits today.",
+          "hashtags": "#GaiaEyes #SpaceWeather #SolarWind #BodyBarometer #HeadPressure #PacingRitual #Hydration #NervousSystem"
+        },
+        "ig": {
+          "caption": "Tiny aches getting quieter today? The sky feels calm, like a soft hum, so there\u2019s room to recoup without pushing. Pick one small task, take slow breaths, and add a short stretch or walk between things.",
+          "hashtags": "#GaiaEyes #SpaceWeather #PainManagement #Migraine #ChronicIllness #BrainFog #Pacing #Wellness"
+        }
+      },
+      "solar_wind_kms": 400.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.0,
+        "kp_now": 2.0
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-08-10",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -3.96,
+          "cmes_24h": 2.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.73,
+          "severe_summary": null,
+          "solar_wind_kms": 400.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "platform": "default",
+    "title": "Tiny aches getting louder?",
+    "updated_at": "2026-08-10T14:42:44.344867+00:00"
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nOverall conditions are quiet. The solar wind is in a normal range and the magnetic field tilt is only slightly south. No flares have been reported in the past day. Some solar eruptions were noted as background activity with no arrival signs.\n\nA calmer backdrop can make tension and diffuse pain feel less loud for some. Short, steady blocks of activity may feel more doable when you avoid rushing. Head and sinus pressure may ease when you keep hydration and light movement in play.\n\n- Plan one or two small doable tasks\n- Take brief stretch or walk breaks\n- Hydrate and eat on time\n- Keep evening light warm and low\n- Check local storms, wind, smoke, or pollen",
+    "caption": "Tiny aches getting quieter today? The sky feels calm, like a soft hum, so there\u2019s room to recoup without pushing. Pick one small task, take slow breaths, and add a short stretch or walk between things.",
+    "created_at": "2026-08-10T14:42:44.344867+00:00",
+    "day": "2026-08-10",
+    "hashtags": "#GaiaEyes #SpaceWeather #PainManagement #Migraine #ChronicIllness #BrainFog #Pacing #Wellness",
+    "id": 803,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -3.96,
+      "cmes_24h": 2.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.73,
+        "f2": 15.0,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.0,
+      "schumann_value_hz": 7.73,
+      "sections": {
+        "affects": "A calmer backdrop can make tension and diffuse pain feel less loud for some. Short, steady blocks of activity may feel more doable when you avoid rushing. Head and sinus pressure may ease when you keep hydration and light movement in play.",
+        "caption": "Tiny aches getting quieter today? The sky feels calm, like a soft hum, so there\u2019s room to recoup without pushing. Pick one small task, take slow breaths, and add a short stretch or walk between things.",
+        "playbook": "- Plan one or two small doable tasks\n- Take brief stretch or walk breaks\n- Hydrate and eat on time\n- Keep evening light warm and low\n- Check local storms, wind, smoke, or pollen",
+        "reel_story": {
+          "effects": "Dull, cottony aches feel louder but soften with movement",
+          "hook": "Tiny aches getting louder?",
+          "pattern": "Take slow, even steps and sip water regularly",
+          "signal": "A calm sky lets small aches stand out today",
+          "voiceover": "Tiny aches getting louder? That dull, cottony throb might feel more noticeable today, not because the sky is rowdy, but because it\u2019s actually quiet enough for your body to hear itself. Solar wind is running in its normal lane, Earth\u2019s field is only slightly tipped south, and there haven\u2019t been fresh flares\u2014just distant eruptions with no signs they\u2019re headed our way."
+        },
+        "snapshot": "Overall conditions are quiet. The solar wind is in a normal range and the magnetic field tilt is only slightly south. No flares have been reported in the past day. Some solar eruptions were noted as background activity with no arrival signs.",
+        "voiceover": "Tiny aches getting louder? That dull, cottony throb might feel more noticeable today, not because the sky is rowdy, but because it\u2019s actually quiet enough for your body to hear itself. Solar wind is running in its normal lane, Earth\u2019s field is only slightly tipped south, and there haven\u2019t been fresh flares\u2014just distant eruptions with no signs they\u2019re headed our way."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Tiny aches getting quieter today? The sky feels calm, like a soft hum, so there\u2019s room to recoup without pushing. Pick one small task, take slow breaths, and add a short stretch or walk between things.",
+          "hashtags": "#GaiaEyes #SpaceWeather #PainManagement #Migraine #ChronicIllness #BrainFog #Pacing #Wellness"
+        },
+        "fb": {
+          "caption": "Tiny aches getting louder? That dull, cottony throb might feel more noticeable today, not because the sky is rowdy, but because it\u2019s actually quiet enough for your body to hear itself. Solar wind is running in its normal lane, Earth\u2019s field is only slightly tipped south, and there haven\u2019t been fresh flares\u2014just distant eruptions with no signs they\u2019re headed our way.\n\nOn days like this, some people may find tension and diffuse pain soften when they move in slow, even steps. Pick one doable task, breathe on purpose as you start, and slip in a brief stretch or a five\u2011minute walk between steps so circulation stays steady and your system doesn\u2019t spike and crash. Keep water nearby and eat on time; both can ease head and sinus pressure when the background is calm. Warm, lower evening light can help your nervous system downshift. We watch how the solar wind brushes Earth\u2019s magnetic field and how that sets the tone for body load\u2014check local storms, wind, smoke, or pollen too, since those can be the real culprits today.",
+          "hashtags": "#GaiaEyes #SpaceWeather #SolarWind #BodyBarometer #HeadPressure #PacingRitual #Hydration #NervousSystem"
+        },
+        "ig": {
+          "caption": "Tiny aches getting quieter today? The sky feels calm, like a soft hum, so there\u2019s room to recoup without pushing. Pick one small task, take slow breaths, and add a short stretch or walk between things.",
+          "hashtags": "#GaiaEyes #SpaceWeather #PainManagement #Migraine #ChronicIllness #BrainFog #Pacing #Wellness"
+        }
+      },
+      "solar_wind_kms": 400.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.0,
+        "kp_now": 2.0
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-08-10",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -3.96,
+          "cmes_24h": 2.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.73,
+          "severe_summary": null,
+          "solar_wind_kms": 400.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "platform": "ig",
+    "title": "Tiny aches getting louder?",
+    "updated_at": "2026-08-10T14:42:44.344867+00:00"
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic conditions are unsettled with a steady southward tilt. Solar wind looks steady. No recent solar flares or eruptions were reported. Expect some variability without a major push.\n\nHeadache and migraine sensitivity may sit lower for some, especially with light, sound, or skipped-food triggers. You might notice a quicker build from a mild ache to a fuller headache if you push through overstimulation. Shorter clear-focus stretches can pair with that head tightness.\n\n- Dim screens and lower brightness\n- Eat on time and hydrate\n- Two minutes of slow breathing between tasks\n- Keep sound levels softer or use ear protection\n- Step outside for brief, gentle daylight",
+    "caption": "Headache threshold lower today? The day has a small wobble\u2014more like a gentle wave\u2014so light and sound may stack up faster if you push through. Dim screens, keep volume low, eat on time, sip water, and pace work in short chunks.",
+    "created_at": "2026-08-09T14:10:39.666122+00:00",
+    "day": "2026-08-09",
+    "hashtags": "#GaiaEyes #SpaceWeather #Migraine #Headache #Sensitivity #BrainFog #ChronicIllness #WeatherSensitivity #SelfCare #NervousSystem",
+    "id": 800,
+    "metrics_json": {
+      "bands": {
+        "bz": "southward",
+        "kp": "unsettled",
+        "sw": "normal"
+      },
+      "bz_min": -9.27,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.77,
+        "f2": 15.18,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 3.0,
+      "schumann_value_hz": 7.77,
+      "sections": {
+        "affects": "Headache and migraine sensitivity may sit lower for some, especially with light, sound, or skipped-food triggers. You might notice a quicker build from a mild ache to a fuller headache if you push through overstimulation. Shorter clear-focus stretches can pair with that head tightness.",
+        "caption": "Headache threshold lower today? The day has a small wobble\u2014more like a gentle wave\u2014so light and sound may stack up faster if you push through. Dim screens, keep volume low, eat on time, sip water, and pace work in short chunks.",
+        "playbook": "- Dim screens and lower brightness\n- Eat on time and hydrate\n- Two minutes of slow breathing between tasks\n- Keep sound levels softer or use ear protection\n- Step outside for brief, gentle daylight",
+        "reel_story": {
+          "effects": "Light and sound may tip aches into headaches faster",
+          "hook": "Headache threshold lower today?",
+          "pattern": "Short, timed blocks and slow breaths lengthen clear-focus windows",
+          "signal": "Steady southward tilt today, with mild carryover from yesterday",
+          "voiceover": "Headache threshold lower today? If your temples feel like they\u2019ve got a quiet rubber-band squeeze, light and sound may stack faster than usual\u2014especially if you power through hunger or screens. Some people may notice a mild ache flipping to a real headache more quickly in busy rooms or bright tabs. Try dimming displays, softening audio, eating on schedule, and keeping water handy so small triggers don\u2019t snowball."
+        },
+        "snapshot": "Geomagnetic conditions are unsettled with a steady southward tilt. Solar wind looks steady. No recent solar flares or eruptions were reported. Expect some variability without a major push.",
+        "voiceover": "Headache threshold lower today? If your temples feel like they\u2019ve got a quiet rubber-band squeeze, light and sound may stack faster than usual\u2014especially if you power through hunger or screens. Some people may notice a mild ache flipping to a real headache more quickly in busy rooms or bright tabs. Try dimming displays, softening audio, eating on schedule, and keeping water handy so small triggers don\u2019t snowball."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Headache threshold lower today? The day has a small wobble\u2014more like a gentle wave\u2014so light and sound may stack up faster if you push through. Dim screens, keep volume low, eat on time, sip water, and pace work in short chunks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Migraine #Headache #Sensitivity #BrainFog #ChronicIllness #WeatherSensitivity #SelfCare #NervousSystem"
+        },
+        "fb": {
+          "caption": "Headache threshold lower today? If your temples feel like they\u2019ve got a quiet rubber-band squeeze, light and sound may stack faster than usual\u2014especially if you power through hunger or screens. Some people may notice a mild ache flipping to a real headache more quickly in busy rooms or bright tabs. Try dimming displays, softening audio, eating on schedule, and keeping water handy so small triggers don\u2019t snowball.\n\nToday\u2019s backdrop is a wobbly-but-not-wild magnetic day: the field is tilted south, the solar wind is steady, and there haven\u2019t been fresh flares\u2014so expect variability without a big shove. Group work into small, timed blocks and take two slow-breathing minutes between them; that tiny reset helps your nervous system drop out of \u201ckeep pushing\u201d mode before the ache climbs. A few quiet minutes outdoors in gentle daylight can also ease that head tension and lengthen clear-focus windows. Gaia Eyes watches how the day-to-day tilt of Earth\u2019s magnetic field lines up with human thresholds, so you can plan with less guesswork.",
+          "hashtags": "#GaiaEyes #Headache #Migraine #Sensitivity #Geomagnetic #NervousSystem"
+        },
+        "ig": {
+          "caption": "Headache threshold lower today? The day has a small wobble\u2014more like a gentle wave\u2014so light and sound may stack up faster if you push through. Dim screens, keep volume low, eat on time, sip water, and pace work in short chunks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Migraine #Headache #Sensitivity #BrainFog #ChronicIllness #WeatherSensitivity #SelfCare #NervousSystem"
+        }
+      },
+      "solar_wind_kms": 437.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 3.0,
+        "kp_now": 2.3
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-08-09",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -9.27,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 3.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.77,
+          "severe_summary": null,
+          "solar_wind_kms": 437.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "southward",
+            "kp": "unsettled",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "platform": "default",
+    "title": "Headache threshold lower today?",
+    "updated_at": "2026-08-09T14:10:39.666122+00:00"
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic conditions are unsettled with a steady southward tilt. Solar wind looks steady. No recent solar flares or eruptions were reported. Expect some variability without a major push.\n\nHeadache and migraine sensitivity may sit lower for some, especially with light, sound, or skipped-food triggers. You might notice a quicker build from a mild ache to a fuller headache if you push through overstimulation. Shorter clear-focus stretches can pair with that head tightness.\n\n- Dim screens and lower brightness\n- Eat on time and hydrate\n- Two minutes of slow breathing between tasks\n- Keep sound levels softer or use ear protection\n- Step outside for brief, gentle daylight",
+    "caption": "Headache threshold lower today? The day has a small wobble\u2014more like a gentle wave\u2014so light and sound may stack up faster if you push through. Dim screens, keep volume low, eat on time, sip water, and pace work in short chunks.",
+    "created_at": "2026-08-09T14:10:39.666122+00:00",
+    "day": "2026-08-09",
+    "hashtags": "#GaiaEyes #SpaceWeather #Migraine #Headache #Sensitivity #BrainFog #ChronicIllness #WeatherSensitivity #SelfCare #NervousSystem",
+    "id": 801,
+    "metrics_json": {
+      "bands": {
+        "bz": "southward",
+        "kp": "unsettled",
+        "sw": "normal"
+      },
+      "bz_min": -9.27,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.77,
+        "f2": 15.18,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 3.0,
+      "schumann_value_hz": 7.77,
+      "sections": {
+        "affects": "Headache and migraine sensitivity may sit lower for some, especially with light, sound, or skipped-food triggers. You might notice a quicker build from a mild ache to a fuller headache if you push through overstimulation. Shorter clear-focus stretches can pair with that head tightness.",
+        "caption": "Headache threshold lower today? The day has a small wobble\u2014more like a gentle wave\u2014so light and sound may stack up faster if you push through. Dim screens, keep volume low, eat on time, sip water, and pace work in short chunks.",
+        "playbook": "- Dim screens and lower brightness\n- Eat on time and hydrate\n- Two minutes of slow breathing between tasks\n- Keep sound levels softer or use ear protection\n- Step outside for brief, gentle daylight",
+        "reel_story": {
+          "effects": "Light and sound may tip aches into headaches faster",
+          "hook": "Headache threshold lower today?",
+          "pattern": "Short, timed blocks and slow breaths lengthen clear-focus windows",
+          "signal": "Steady southward tilt today, with mild carryover from yesterday",
+          "voiceover": "Headache threshold lower today? If your temples feel like they\u2019ve got a quiet rubber-band squeeze, light and sound may stack faster than usual\u2014especially if you power through hunger or screens. Some people may notice a mild ache flipping to a real headache more quickly in busy rooms or bright tabs. Try dimming displays, softening audio, eating on schedule, and keeping water handy so small triggers don\u2019t snowball."
+        },
+        "snapshot": "Geomagnetic conditions are unsettled with a steady southward tilt. Solar wind looks steady. No recent solar flares or eruptions were reported. Expect some variability without a major push.",
+        "voiceover": "Headache threshold lower today? If your temples feel like they\u2019ve got a quiet rubber-band squeeze, light and sound may stack faster than usual\u2014especially if you power through hunger or screens. Some people may notice a mild ache flipping to a real headache more quickly in busy rooms or bright tabs. Try dimming displays, softening audio, eating on schedule, and keeping water handy so small triggers don\u2019t snowball."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Headache threshold lower today? The day has a small wobble\u2014more like a gentle wave\u2014so light and sound may stack up faster if you push through. Dim screens, keep volume low, eat on time, sip water, and pace work in short chunks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Migraine #Headache #Sensitivity #BrainFog #ChronicIllness #WeatherSensitivity #SelfCare #NervousSystem"
+        },
+        "fb": {
+          "caption": "Headache threshold lower today? If your temples feel like they\u2019ve got a quiet rubber-band squeeze, light and sound may stack faster than usual\u2014especially if you power through hunger or screens. Some people may notice a mild ache flipping to a real headache more quickly in busy rooms or bright tabs. Try dimming displays, softening audio, eating on schedule, and keeping water handy so small triggers don\u2019t snowball.\n\nToday\u2019s backdrop is a wobbly-but-not-wild magnetic day: the field is tilted south, the solar wind is steady, and there haven\u2019t been fresh flares\u2014so expect variability without a big shove. Group work into small, timed blocks and take two slow-breathing minutes between them; that tiny reset helps your nervous system drop out of \u201ckeep pushing\u201d mode before the ache climbs. A few quiet minutes outdoors in gentle daylight can also ease that head tension and lengthen clear-focus windows. Gaia Eyes watches how the day-to-day tilt of Earth\u2019s magnetic field lines up with human thresholds, so you can plan with less guesswork.",
+          "hashtags": "#GaiaEyes #Headache #Migraine #Sensitivity #Geomagnetic #NervousSystem"
+        },
+        "ig": {
+          "caption": "Headache threshold lower today? The day has a small wobble\u2014more like a gentle wave\u2014so light and sound may stack up faster if you push through. Dim screens, keep volume low, eat on time, sip water, and pace work in short chunks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Migraine #Headache #Sensitivity #BrainFog #ChronicIllness #WeatherSensitivity #SelfCare #NervousSystem"
+        }
+      },
+      "solar_wind_kms": 437.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 3.0,
+        "kp_now": 2.3
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-08-09",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -9.27,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 3.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.77,
+          "severe_summary": null,
+          "solar_wind_kms": 437.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "southward",
+            "kp": "unsettled",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "platform": "ig",
+    "title": "Headache threshold lower today?",
+    "updated_at": "2026-08-09T14:10:39.666122+00:00"
+  }
+]

@@ -3,6 +3,7 @@ package com.gaiaeyes.app.ui
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -48,7 +49,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,17 +85,22 @@ import com.gaiaeyes.app.core.network.OutlookDay
 import com.gaiaeyes.app.core.network.OutlookDomain
 import com.gaiaeyes.app.core.network.OutlookDriver
 import com.gaiaeyes.app.core.network.PatternCard
+import com.gaiaeyes.app.core.notifications.NotificationDestination
+import com.gaiaeyes.app.core.notifications.NotificationNavigationCoordinator
 import com.gaiaeyes.app.data.BodyRepository
 import com.gaiaeyes.app.data.BodySource
 import com.gaiaeyes.app.data.DashboardRepository
 import com.gaiaeyes.app.data.DashboardSource
 import com.gaiaeyes.app.data.DeviceLocationRepository
 import com.gaiaeyes.app.data.HealthRepository
+import com.gaiaeyes.app.data.ExploreRepository
+import com.gaiaeyes.app.data.ExploreSnapshot
 import com.gaiaeyes.app.data.HealthConnectRepository
 import com.gaiaeyes.app.data.HealthConnectStatus
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.HomeContextSource
 import com.gaiaeyes.app.data.JournalRepository
+import com.gaiaeyes.app.data.NotificationRepository
 import com.gaiaeyes.app.data.LocalWeatherSnapshot
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.OutlookSource
@@ -105,6 +113,9 @@ import com.gaiaeyes.app.ui.theme.GaiaGreen
 import com.gaiaeyes.app.ui.theme.GaiaNavy
 import com.gaiaeyes.app.ui.theme.GaiaPanel
 import com.gaiaeyes.app.ui.theme.GaiaRose
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -116,7 +127,10 @@ fun GaiaEyesApp(
     healthRepository: HealthRepository,
     healthConnectRepository: HealthConnectRepository,
     homeContextRepository: HomeContextRepository,
+    exploreRepository: ExploreRepository,
     journalRepository: JournalRepository,
+    notificationRepository: NotificationRepository,
+    notificationNavigationCoordinator: NotificationNavigationCoordinator,
     outlookRepository: OutlookRepository,
     patternsRepository: PatternsRepository,
     profileRepository: ProfileRepository,
@@ -132,7 +146,9 @@ fun GaiaEyesApp(
             healthRepository = healthRepository,
             healthConnectRepository = healthConnectRepository,
             homeContextRepository = homeContextRepository,
+            exploreRepository = exploreRepository,
             journalRepository = journalRepository,
+            notificationRepository = notificationRepository,
             outlookRepository = outlookRepository,
             patternsRepository = patternsRepository,
             profileRepository = profileRepository,
@@ -140,9 +156,12 @@ fun GaiaEyesApp(
         ),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val notificationNavigation by notificationNavigationCoordinator.pending.collectAsStateWithLifecycle()
+    var showGuide by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showCurrentSymptoms by rememberSaveable { mutableStateOf(false) }
     var showLocalWeather by rememberSaveable { mutableStateOf(false) }
+    var exploreDetail by rememberSaveable { mutableStateOf<ExploreDetail?>(null) }
     val context = LocalContext.current
     var locationRequestForOnboarding by rememberSaveable { mutableStateOf(false) }
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
@@ -156,6 +175,27 @@ fun GaiaEyesApp(
             viewModel.useCurrentDeviceLocation(locationRequestForOnboarding)
         } else {
             viewModel.onLocationPermissionDenied(locationRequestForOnboarding)
+        }
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.setNotificationsEnabled(true)
+        } else {
+            viewModel.onNotificationPermissionDenied()
+        }
+    }
+    val setNotificationsEnabled: (Boolean) -> Unit = { enabled ->
+        if (
+            enabled &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.setNotificationsEnabled(enabled)
         }
     }
     val requestCurrentLocation: (Boolean) -> Unit = { forOnboarding ->
@@ -173,6 +213,44 @@ fun GaiaEyesApp(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshForegroundLocation()
         viewModel.refreshForegroundHealthConnect()
+        val canPostNotifications =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        viewModel.syncNotificationRegistration(canPostNotifications)
+    }
+
+    LaunchedEffect(uiState.authState, uiState.notificationPreferences?.enabled) {
+        val canPostNotifications =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        viewModel.syncNotificationRegistration(canPostNotifications)
+    }
+
+    LaunchedEffect(notificationNavigation, uiState.authState, uiState.onboardingStatus) {
+        val request = notificationNavigation ?: return@LaunchedEffect
+        if (uiState.authState !is AuthState.SignedIn || uiState.onboardingStatus != OnboardingStatus.COMPLETE) {
+            return@LaunchedEffect
+        }
+        showGuide = false
+        showSettings = false
+        showCurrentSymptoms = false
+        showLocalWeather = false
+        exploreDetail = null
+        when (request.destination) {
+            NotificationDestination.HOME -> viewModel.selectPage(SignedInPage.HOME)
+            NotificationDestination.CURRENT_SYMPTOMS -> {
+                viewModel.selectPage(SignedInPage.BODY)
+                showCurrentSymptoms = true
+            }
+            NotificationDestination.DAILY_CHECK_IN -> {
+                viewModel.selectPage(SignedInPage.HOME)
+                viewModel.openDailyCheckIn()
+            }
+            NotificationDestination.EXPLORE -> viewModel.selectPage(SignedInPage.EXPLORE)
+        }
+        notificationNavigationCoordinator.consume(request.id)
     }
 
     when (val authState = uiState.authState) {
@@ -219,11 +297,31 @@ fun GaiaEyesApp(
                 onSignOut = viewModel::signOut,
                 modifier = modifier,
             )
+        } else if (showGuide) {
+            GuideScreen(
+                uiState = uiState,
+                account = authState,
+                onClose = { showGuide = false },
+                onOpenCurrentSymptoms = {
+                    showGuide = false
+                    showCurrentSymptoms = true
+                },
+                onOpenDrivers = {
+                    showGuide = false
+                    viewModel.selectPage(SignedInPage.EXPLORE)
+                },
+                onDailyCheckIn = viewModel::openDailyCheckIn,
+                modifier = modifier,
+            )
         } else if (showSettings) {
             SettingsScreen(
                 uiState = uiState,
                 account = authState,
                 onBack = { showSettings = false },
+                onOpenGuide = {
+                    showSettings = false
+                    showGuide = true
+                },
                 onRefresh = viewModel::refresh,
                 onEmailChanged = viewModel::onEmailChanged,
                 onAddEmail = viewModel::addEmailToCurrentAccount,
@@ -231,11 +329,21 @@ fun GaiaEyesApp(
                 onZipChanged = viewModel::onLocationZipChanged,
                 onUseDeviceLocation = { requestCurrentLocation(false) },
                 onSaveLocation = viewModel::saveLocationSettings,
+                onNotificationsEnabled = setNotificationsEnabled,
+                onSignalAlertsEnabled = viewModel::setSignalAlertsEnabled,
+                onLocalConditionAlertsEnabled = viewModel::setLocalConditionAlertsEnabled,
+                onGaugeAlertsEnabled = viewModel::setGaugeAlertsEnabled,
+                onSymptomFollowupsEnabled = viewModel::setSymptomFollowupsEnabled,
+                onDailyCheckinRemindersEnabled = viewModel::setDailyCheckinRemindersEnabled,
+                onQuietHoursEnabled = viewModel::setQuietHoursEnabled,
+                onNotificationSensitivity = viewModel::setNotificationSensitivity,
                 onDismissMessage = viewModel::dismissMessage,
                 onSignOut = {
+                    showGuide = false
                     showSettings = false
                     showCurrentSymptoms = false
                     showLocalWeather = false
+                    exploreDetail = null
                     viewModel.signOut()
                 },
                 modifier = modifier,
@@ -263,11 +371,22 @@ fun GaiaEyesApp(
                 onDismissMessage = viewModel::dismissMessage,
                 modifier = modifier,
             )
+        } else if (exploreDetail != null) {
+            ExploreDetailScreen(
+                detail = checkNotNull(exploreDetail),
+                snapshot = uiState.explore,
+                isLoading = uiState.isLoadingExplore,
+                message = uiState.exploreMessage,
+                onBack = { exploreDetail = null },
+                onRefresh = viewModel::refresh,
+                modifier = modifier,
+            )
         } else when (uiState.selectedPage) {
             SignedInPage.HOME -> HomeScreen(
                 uiState = uiState,
                 account = authState,
                 onRefresh = viewModel::refresh,
+                onOpenGuide = { showGuide = true },
                 onOpenSettings = { showSettings = true },
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
@@ -317,6 +436,7 @@ fun GaiaEyesApp(
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
                 onOpenLocalWeather = { showLocalWeather = true },
+                onOpenDetail = { exploreDetail = it },
                 modifier = modifier,
             )
         }
@@ -905,10 +1025,238 @@ private fun SignInScreen(
 }
 
 @Composable
+private fun GuideScreen(
+    uiState: HomeUiState,
+    account: AuthState.SignedIn,
+    onClose: () -> Unit,
+    onOpenCurrentSymptoms: () -> Unit,
+    onOpenDrivers: () -> Unit,
+    onDailyCheckIn: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onClose)
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val symptoms = uiState.currentSymptoms?.symptoms?.items.orEmpty()
+    val drivers = relevantDrivers(uiState.drivers?.drivers)
+    val support = guideSupportModel(symptoms = symptoms, drivers = drivers)
+    val pollPrompt = guidePollPrompt(symptoms)
+    val pollChoices = guidePollChoices(symptoms)
+    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
+    val pollPreferences = remember {
+        context.getSharedPreferences("gaiaeyes_guide", 0)
+    }
+    val pollKey = "${account.accountId}:daily-poll:$today"
+    var pollAnswer by rememberSaveable(account.accountId, today) {
+        mutableStateOf(pollPreferences.getString(pollKey, null))
+    }
+
+    ScreenFrame(modifier = modifier) {
+        ContentColumn(bottomPadding = 34.dp) {
+            Header(
+                subtitle = "Practical support and check-ins",
+                trailing = { TextButton(onClick = onClose) { Text("Close") } },
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Guide",
+                color = Color.White,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "A quieter place for useful next steps and quick updates.",
+                color = Color(0xFF9BA6B4),
+                fontSize = 16.sp,
+                lineHeight = 23.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+
+            GuideSectionCard(
+                eyebrow = "Support Right Now",
+                title = support.title,
+            ) {
+                Text(
+                    text = support.introduction,
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                )
+                support.suggestions.forEach { suggestion ->
+                    Text(
+                        text = "•  $suggestion",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    JournalActionButton(
+                        label = "Body context",
+                        onClick = onOpenCurrentSymptoms,
+                        modifier = Modifier.weight(1f),
+                    )
+                    JournalActionButton(
+                        label = "All drivers",
+                        onClick = onOpenDrivers,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            GuideSectionCard(
+                eyebrow = "Daily Check-In",
+                title = "Check in with the day",
+            ) {
+                Text(
+                    text = uiState.dailyCheckInStatus?.prompt?.questionText
+                        ?.trim()
+                        ?.takeIf(String::isNotEmpty)
+                        ?: "Add a quick update about how today feels.",
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                )
+                Button(
+                    onClick = onDailyCheckIn,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GaiaBlue,
+                        contentColor = GaiaNavy,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Open check-in", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            GuideSectionCard(
+                eyebrow = "Daily Poll",
+                title = "A quick pulse question",
+            ) {
+                Text(
+                    text = pollPrompt,
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 16.sp,
+                    lineHeight = 23.sp,
+                )
+                pollChoices.forEach { choice ->
+                    ChoiceRow(
+                        label = choice,
+                        selected = pollAnswer == choice,
+                        onClick = {
+                            pollAnswer = choice
+                            pollPreferences.edit().putString(pollKey, choice).apply()
+                        },
+                    )
+                }
+                if (pollAnswer != null) {
+                    Text(
+                        text = "Saved for today.",
+                        color = GaiaGreen,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+
+            if (symptoms.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                GuideSectionCard(
+                    eyebrow = "Follow-Ups",
+                    title = "A quick symptom update is ready",
+                ) {
+                    val names = symptoms.take(2).joinToString(" and ") { it.label }
+                    Text(
+                        text = "$names can be updated when something changes. A short update keeps the timeline current.",
+                        color = Color(0xFFB7C0CC),
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                    )
+                    Button(
+                        onClick = onOpenCurrentSymptoms,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GaiaBlue.copy(alpha = 0.18f),
+                            contentColor = GaiaBlue,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Update symptoms", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            GuideSectionCard(
+                eyebrow = "Help and Understanding",
+                title = "How Gaia Eyes works",
+            ) {
+                Text(
+                    text = "Learn what Gaia Eyes watches, how personal patterns develop, and where the app keeps its limits visible.",
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                )
+                Button(
+                    onClick = { uriHandler.openUri("https://gaiaeyes.com/support/") },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GaiaBlue,
+                        contentColor = GaiaNavy,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Open help center", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideSectionCard(
+    eyebrow: String,
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.24f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = eyebrow.uppercase(),
+                color = GaiaBlue,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 23.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 29.sp,
+            )
+            content()
+        }
+    }
+}
+
+@Composable
 private fun SettingsScreen(
     uiState: HomeUiState,
     account: AuthState.SignedIn,
     onBack: () -> Unit,
+    onOpenGuide: () -> Unit,
     onRefresh: () -> Unit,
     onEmailChanged: (String) -> Unit,
     onAddEmail: () -> Unit,
@@ -916,6 +1264,14 @@ private fun SettingsScreen(
     onZipChanged: (String) -> Unit,
     onUseDeviceLocation: () -> Unit,
     onSaveLocation: () -> Unit,
+    onNotificationsEnabled: (Boolean) -> Unit,
+    onSignalAlertsEnabled: (Boolean) -> Unit,
+    onLocalConditionAlertsEnabled: (Boolean) -> Unit,
+    onGaugeAlertsEnabled: (Boolean) -> Unit,
+    onSymptomFollowupsEnabled: (Boolean) -> Unit,
+    onDailyCheckinRemindersEnabled: (Boolean) -> Unit,
+    onQuietHoursEnabled: (Boolean) -> Unit,
+    onNotificationSensitivity: (String) -> Unit,
     onDismissMessage: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1030,6 +1386,107 @@ private fun SettingsScreen(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+            SettingsSectionCard(title = "Notifications") {
+                Text(
+                    text = "Choose which helpful updates Gaia Eyes may send. Health observations remain informational and never replace medical care.",
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                )
+                val preferences = uiState.notificationPreferences
+                if (uiState.isLoadingNotificationPreferences && preferences == null) {
+                    CircularProgressIndicator(
+                        color = GaiaBlue,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(24.dp).align(Alignment.CenterHorizontally),
+                    )
+                } else {
+                    val enabled = preferences?.enabled == true
+                    NotificationToggleRow(
+                        label = "Allow Gaia Eyes alerts",
+                        checked = enabled,
+                        enabled = !uiState.isSavingNotificationPreferences,
+                        onCheckedChange = onNotificationsEnabled,
+                    )
+                    NotificationToggleRow(
+                        label = "Earth and space signals",
+                        checked = preferences?.signalAlertsEnabled == true,
+                        enabled = enabled && !uiState.isSavingNotificationPreferences,
+                        onCheckedChange = onSignalAlertsEnabled,
+                    )
+                    NotificationToggleRow(
+                        label = "Local conditions",
+                        checked = preferences?.localConditionAlertsEnabled == true,
+                        enabled = enabled && !uiState.isSavingNotificationPreferences,
+                        onCheckedChange = onLocalConditionAlertsEnabled,
+                    )
+                    NotificationToggleRow(
+                        label = "Gauge changes",
+                        checked = preferences?.personalizedGaugeAlertsEnabled == true,
+                        enabled = enabled && !uiState.isSavingNotificationPreferences,
+                        onCheckedChange = onGaugeAlertsEnabled,
+                    )
+                    NotificationToggleRow(
+                        label = "Symptom follow-ups",
+                        checked = preferences?.symptomFollowupsEnabled == true,
+                        enabled = enabled && !uiState.isSavingNotificationPreferences,
+                        onCheckedChange = onSymptomFollowupsEnabled,
+                    )
+                    NotificationToggleRow(
+                        label = "Daily check-in reminders",
+                        checked = preferences?.dailyCheckinsEnabled == true,
+                        enabled = enabled && !uiState.isSavingNotificationPreferences,
+                        onCheckedChange = onDailyCheckinRemindersEnabled,
+                    )
+                    NotificationToggleRow(
+                        label = "Quiet hours · 10 PM–8 AM",
+                        checked = preferences?.quietHoursEnabled == true,
+                        enabled = enabled && !uiState.isSavingNotificationPreferences,
+                        onCheckedChange = onQuietHoursEnabled,
+                    )
+                    Text(
+                        text = "Alert frequency",
+                        color = if (enabled) Color.White else Color(0xFF7D8794),
+                        fontSize = 15.sp,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    NotificationSensitivityRow(
+                        selected = preferences?.sensitivity ?: "normal",
+                        enabled = enabled && !uiState.isSavingNotificationPreferences,
+                        onSelected = onNotificationSensitivity,
+                    )
+                    SettingsStatusRow(
+                        label = "This device",
+                        value = when {
+                            uiState.isRegisteringNotificationDevice -> "Connecting"
+                            uiState.notificationDeviceRegistered -> "Ready"
+                            enabled -> "Not connected"
+                            else -> "Alerts off"
+                        },
+                        positive = uiState.notificationDeviceRegistered,
+                    )
+                }
+                uiState.notificationMessage?.let { message ->
+                    MessageCard(
+                        message = message,
+                        positive = message == "Notification settings saved.",
+                        onDismiss = onDismissMessage,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsSectionCard(title = "Guide") {
+                Text(
+                    text = "Find practical support, a quick daily pulse, and follow-ups in one place.",
+                    color = Color(0xFFB7C0CC),
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                )
+                SettingsLink(label = "Open Guide", onClick = onOpenGuide)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
             SettingsSectionCard(title = "Connections") {
                 SettingsStatusRow(
                     label = "Gaia Eyes data service",
@@ -1104,6 +1561,66 @@ private fun SettingsScreen(
                 ) {
                     Text("Share diagnostics", fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationToggleRow(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = label,
+            color = if (enabled) Color.White else Color(0xFF7D8794),
+            fontSize = 15.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
+    }
+}
+
+@Composable
+private fun NotificationSensitivityRow(
+    selected: String,
+    enabled: Boolean,
+    onSelected: (String) -> Unit,
+) {
+    val choices = listOf(
+        "minimal" to "Fewer",
+        "normal" to "Balanced",
+        "detailed" to "More",
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        choices.forEach { (value, label) ->
+            val isSelected = selected == value
+            Button(
+                onClick = { onSelected(value) },
+                enabled = enabled,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isSelected) GaiaBlue else Color(0xFF16212D),
+                    contentColor = if (isSelected) GaiaNavy else Color(0xFFB7C0CC),
+                    disabledContainerColor = Color(0xFF111923),
+                    disabledContentColor = Color(0xFF687380),
+                ),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -1333,6 +1850,7 @@ private fun HomeScreen(
     uiState: HomeUiState,
     account: AuthState.SignedIn,
     onRefresh: () -> Unit,
+    onOpenGuide: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
@@ -1380,7 +1898,14 @@ private fun HomeScreen(
             ContentColumn(bottomPadding = 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
-                    trailing = { SettingsButton(onClick = onOpenSettings) },
+                    trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = onOpenGuide) {
+                                Text("Guide")
+                            }
+                            SettingsButton(onClick = onOpenSettings)
+                        }
+                    },
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
@@ -2051,17 +2576,6 @@ private fun PatternsScreen(
                                 columns = columns,
                             )
                         }
-                        Spacer(modifier = Modifier.height(18.dp))
-                        Text(
-                            text = patterns.disclaimer
-                                ?.trim()
-                                ?.takeIf(String::isNotEmpty)
-                                ?: "Patterns show associations in your history. They do not diagnose conditions or prove causes.",
-                            color = Color(0xFF8994A3),
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp,
-                            modifier = Modifier.padding(horizontal = 4.dp),
-                        )
                     }
                     uiState.isLoadingPatterns -> PatternsLoadingCard()
                     else -> PatternsEmptyCard()
@@ -2430,14 +2944,6 @@ private fun OutlookScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(18.dp))
-                Text(
-                    text = "Outlook highlights context to watch. It does not diagnose symptoms or predict a medical event.",
-                    color = Color(0xFF8994A3),
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                )
-                Spacer(modifier = Modifier.height(18.dp))
                 BackendCard(uiState = uiState, onRetry = onRefresh)
             }
             SignedInNavigation(
@@ -2458,6 +2964,7 @@ private fun ExploreScreen(
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
     onOpenLocalWeather: () -> Unit,
+    onOpenDetail: (ExploreDetail) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ScreenFrame(modifier = modifier) {
@@ -2526,6 +3033,14 @@ private fun ExploreScreen(
                         onDismiss = onDismissMessage,
                     )
                 }
+                uiState.exploreMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(14.dp))
+                    MessageCard(
+                        message = message,
+                        positive = uiState.explore != null,
+                        onDismiss = onDismissMessage,
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(18.dp))
                 Text(
@@ -2543,47 +3058,50 @@ private fun ExploreScreen(
                 )
                 Spacer(modifier = Modifier.height(18.dp))
 
-                LocalConditionsSummaryCard(
-                    snapshot = uiState.localWeather,
-                    isLoading = uiState.isLoadingLocalWeather,
-                    onClick = onOpenLocalWeather,
-                )
-                Spacer(modifier = Modifier.height(18.dp))
-
                 val response = uiState.drivers?.drivers
                 when {
                     response?.drivers?.isNotEmpty() == true -> {
                         ExploreSummaryCard(response = response)
-                        Spacer(modifier = Modifier.height(18.dp))
-                        Text(
-                            text = "All Drivers",
-                            color = Color.White,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = "Shown in Gaia Eyes’ current relevance order.",
-                            color = Color(0xFF9BA6B4),
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(top = 5.dp, bottom = 14.dp),
-                        )
-                        ExploreDriverGrid(
-                            drivers = exploreDrivers(response),
-                            columns = columns,
-                        )
                     }
                     uiState.isLoadingHomeContext -> ExploreLoadingCard()
                     else -> ExploreEmptyCard()
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
-                Text(
-                    text = "Drivers are context, not proof of cause. Personal pattern notes describe associations in your history and are not a diagnosis.",
-                    color = Color(0xFF8994A3),
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                ExploreSignalCards(
+                    snapshot = uiState.explore,
+                    isLoading = uiState.isLoadingExplore,
+                    columns = columns,
+                    onOpenDetail = onOpenDetail,
                 )
+
+                Spacer(modifier = Modifier.height(18.dp))
+                LocalConditionsSummaryCard(
+                    snapshot = uiState.localWeather,
+                    isLoading = uiState.isLoadingLocalWeather,
+                    onClick = onOpenLocalWeather,
+                )
+
+                if (response?.drivers?.isNotEmpty() == true) {
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Text(
+                        text = "Current driver order",
+                        color = Color.White,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "The signals Gaia Eyes is comparing right now.",
+                        color = Color(0xFF9BA6B4),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 5.dp, bottom = 14.dp),
+                    )
+                    ExploreDriverGrid(
+                        drivers = exploreDrivers(response),
+                        columns = columns,
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(18.dp))
                 BackendCard(uiState = uiState, onRetry = onRefresh)
             }
@@ -2595,6 +3113,371 @@ private fun ExploreScreen(
         }
     }
 }
+
+private enum class ExploreDetail {
+    SPACE_WEATHER,
+    MAGNETOSPHERE,
+    SCHUMANN,
+    EARTHQUAKES,
+    HAZARDS,
+}
+
+private data class ExploreSignalSummary(
+    val detail: ExploreDetail,
+    val title: String,
+    val subtitle: String,
+    val status: String,
+    val color: Color,
+    val metrics: List<Pair<String, String>>,
+)
+
+@Composable
+private fun ExploreSignalCards(
+    snapshot: ExploreSnapshot?,
+    isLoading: Boolean,
+    columns: Int,
+    onOpenDetail: (ExploreDetail) -> Unit,
+) {
+    val summaries = exploreSignalSummaries(snapshot)
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(
+            text = "Earth and space signals",
+            color = Color.White,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = "Open a signal for current readings, source details, and freshness.",
+            color = Color(0xFF9BA6B4),
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
+        if (summaries.isEmpty() && isLoading) {
+            ExploreLoadingCard()
+        } else if (summaries.isEmpty()) {
+            ExploreEmptyCard()
+        } else {
+            summaries.chunked(columns).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    rowItems.forEach { summary ->
+                        ExploreSignalCard(
+                            summary = summary,
+                            onClick = { onOpenDetail(summary.detail) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(columns - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExploreSignalCard(
+    summary: ExploreSignalSummary,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = summary.color.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, summary.color.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(24.dp),
+        modifier = modifier.clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = summary.title,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = summary.subtitle,
+                        color = Color(0xFFB7C0CC),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                DriverPill(summary.status, summary.color)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                summary.metrics.take(3).forEach { metric ->
+                    SupportingStatChip(
+                        label = metric.first,
+                        value = metric.second,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(3 - summary.metrics.take(3).size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+            Text(
+                text = "View details ›",
+                color = summary.color,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExploreDetailScreen(
+    detail: ExploreDetail,
+    snapshot: ExploreSnapshot?,
+    isLoading: Boolean,
+    message: String?,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onBack)
+    val summary = exploreSignalSummaries(snapshot).firstOrNull { it.detail == detail }
+    ScreenFrame(modifier = modifier) {
+        ContentColumn(bottomPadding = 32.dp) {
+            Header(
+                subtitle = "Explore details",
+                trailing = {
+                    TextButton(onClick = onBack) { Text("Back") }
+                },
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = exploreDetailTitle(detail),
+                color = Color.White,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = summary?.subtitle ?: exploreDetailEmptyText(detail),
+                color = Color(0xFF9BA6B4),
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+
+            if (summary != null && snapshot != null) {
+                SettingsSectionCard(title = "Current readings") {
+                    summary.metrics.forEach { metric ->
+                        SettingsStatusRow(
+                            label = metric.first,
+                            value = metric.second,
+                            positive = true,
+                        )
+                    }
+                    SettingsStatusRow(
+                        label = "Status",
+                        value = summary.status,
+                        positive = true,
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                ExploreEvidenceCard(detail = detail, snapshot = snapshot)
+            } else if (isLoading) {
+                ExploreLoadingCard()
+            } else {
+                ExploreEmptyCard()
+            }
+
+            message?.let {
+                Spacer(modifier = Modifier.height(16.dp))
+                MessageCard(message = it, positive = snapshot != null, onDismiss = {})
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onRefresh,
+                enabled = !isLoading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = GaiaBlue,
+                    contentColor = GaiaNavy,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (isLoading) "Refreshing…" else "Refresh readings", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExploreEvidenceCard(
+    detail: ExploreDetail,
+    snapshot: ExploreSnapshot,
+) {
+    val payload = snapshot.payload
+    val lines = when (detail) {
+        ExploreDetail.SPACE_WEATHER,
+        ExploreDetail.MAGNETOSPHERE -> listOfNotNull(
+            payload.magnetosphere?.data?.ts?.let { "Observation time: ${compactTimestamp(it)}" },
+            "Source: NOAA/SWPC-derived Gaia Eyes feed",
+        )
+        ExploreDetail.SCHUMANN -> listOfNotNull(
+            payload.schumann?.generatedAt?.let { "Generated: ${compactTimestamp(it)}" },
+            payload.schumann?.quality?.primarySource?.let { "Primary source: $it" },
+            payload.schumann?.fusion?.displayF0Source?.let { "Displayed resonance source: $it" },
+        )
+        ExploreDetail.EARTHQUAKES -> listOfNotNull(
+            payload.quakes?.item?.day?.let { "Daily rollup: $it" },
+            "Source: USGS-derived Gaia Eyes feed",
+        )
+        ExploreDetail.HAZARDS -> listOfNotNull(
+            payload.hazards?.generatedAt?.let { "Generated: ${compactTimestamp(it)}" },
+            "Source: GDACS-derived Gaia Eyes feed",
+        )
+    }
+    SettingsSectionCard(title = "Source and freshness") {
+        lines.forEach { line ->
+            Text(
+                text = line,
+                color = Color(0xFFB7C0CC),
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+            )
+        }
+        Text(
+            text = if (snapshot.source == com.gaiaeyes.app.data.ExploreSource.NETWORK) {
+                "Live data refreshed in this session."
+            } else {
+                "Showing the latest saved data while live readings reconnect."
+            },
+            color = if (snapshot.source == com.gaiaeyes.app.data.ExploreSource.NETWORK) GaiaGreen else GaiaAmber,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+private fun exploreSignalSummaries(snapshot: ExploreSnapshot?): List<ExploreSignalSummary> {
+    val payload = snapshot?.payload ?: return emptyList()
+    val magnetosphere = payload.magnetosphere?.data
+    val schumann = payload.schumann
+    val quakes = payload.quakes?.item
+    val hazards = payload.hazards
+    return buildList {
+        magnetosphere?.let { data ->
+            add(
+                ExploreSignalSummary(
+                    detail = ExploreDetail.SPACE_WEATHER,
+                    title = "Space Weather",
+                    subtitle = "Current solar-wind and geomagnetic readings.",
+                    status = data.kpis.storminess?.displaySignalText() ?: "Current",
+                    color = GaiaBlue,
+                    metrics = listOfNotNull(
+                        data.kpis.kp?.let { "Kp" to formatExploreNumber(it) },
+                        data.solarWind.speedKms?.let { "Wind" to "${it.roundToInt()} km/s" },
+                        data.solarWind.bzNt?.let { "Bz" to "${formatExploreNumber(it)} nT" },
+                    ),
+                ),
+            )
+            add(
+                ExploreSignalSummary(
+                    detail = ExploreDetail.MAGNETOSPHERE,
+                    title = "Magnetosphere",
+                    subtitle = "Modeled boundary and geomagnetic context.",
+                    status = data.kpis.geoRisk?.displaySignalText() ?: "Current",
+                    color = GaiaGreen,
+                    metrics = listOfNotNull(
+                        data.kpis.standoffDistanceEarthRadii?.let { "Standoff" to "${formatExploreNumber(it)} Re" },
+                        data.kpis.plasmapauseEarthRadii?.let { "Plasmapause" to "${formatExploreNumber(it)} Re" },
+                        data.solarWind.densityCm3?.let { "Density" to "${formatExploreNumber(it)} cm⁻³" },
+                    ),
+                ),
+            )
+        }
+        schumann?.let { value ->
+            val f0 = value.fusion.displayF0Hz ?: value.harmonics.f0 ?: value.harmonics.combinedF1
+            add(
+                ExploreSignalSummary(
+                    detail = ExploreDetail.SCHUMANN,
+                    title = "Schumann Resonance",
+                    subtitle = "Current resonance frequency and source quality.",
+                    status = when (value.quality.usable) {
+                        true -> "Available"
+                        false -> "Limited"
+                        null -> "Current"
+                    },
+                    color = GaiaAmber,
+                    metrics = listOfNotNull(
+                        f0?.let { "F0" to "${formatExploreNumber(it)} Hz" },
+                        value.quality.qualityScore?.let { "Quality" to formatExploreNumber(it) },
+                        value.amplitude.total0To20?.let { "Amplitude" to formatExploreNumber(it) },
+                    ),
+                ),
+            )
+        }
+        quakes?.let { value ->
+            add(
+                ExploreSignalSummary(
+                    detail = ExploreDetail.EARTHQUAKES,
+                    title = "Earthquakes",
+                    subtitle = "Today’s global earthquake activity.",
+                    status = "Daily",
+                    color = GaiaRose,
+                    metrics = listOfNotNull(
+                        value.allQuakes?.let { "All" to it.toString() },
+                        value.magnitude4Plus?.let { "M4+" to it.toString() },
+                        value.magnitude5Plus?.let { "M5+" to it.toString() },
+                    ),
+                ),
+            )
+        }
+        hazards?.let { value ->
+            add(
+                ExploreSignalSummary(
+                    detail = ExploreDetail.HAZARDS,
+                    title = "Global Hazards",
+                    subtitle = "Recent major hazards reported around the world.",
+                    status = if (value.items.isEmpty()) "Quiet" else "${value.items.size} listed",
+                    color = GaiaAmber,
+                    metrics = listOf(
+                        "Listed" to value.items.size.toString(),
+                        "Severe" to value.items.count { it.severity?.contains("severe", true) == true }.toString(),
+                    ),
+                ),
+            )
+        }
+    }
+}
+
+private fun exploreDetailTitle(detail: ExploreDetail): String = when (detail) {
+    ExploreDetail.SPACE_WEATHER -> "Space Weather"
+    ExploreDetail.MAGNETOSPHERE -> "Magnetosphere"
+    ExploreDetail.SCHUMANN -> "Schumann Resonance"
+    ExploreDetail.EARTHQUAKES -> "Earthquakes"
+    ExploreDetail.HAZARDS -> "Global Hazards"
+}
+
+private fun exploreDetailEmptyText(detail: ExploreDetail): String =
+    "Current ${exploreDetailTitle(detail).lowercase()} readings are not available yet."
+
+private fun formatExploreNumber(value: Double): String =
+    if (value == value.roundToInt().toDouble()) value.roundToInt().toString() else "%.1f".format(value)
+
+private fun compactTimestamp(value: String): String = value.replace("T", " ").replace("Z", " UTC")
+
+private fun String.displaySignalText(): String =
+    trim().replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
 
 @Composable
 private fun LocalConditionsSummaryCard(
@@ -2878,14 +3761,6 @@ private fun LocalWeatherScreen(
                     }
                 }
 
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = "Local conditions provide context for your personal history. They do not prove a cause or predict a medical event.",
-                color = Color(0xFF8994A3),
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
         }
     }
 }
@@ -4097,7 +4972,7 @@ private fun SignalsToWatchCard(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "Context clues, not a diagnosis.",
+                text = "The signals Gaia Eyes is comparing right now.",
                 color = Color(0xFF9BA6B4),
                 fontSize = 14.sp,
             )

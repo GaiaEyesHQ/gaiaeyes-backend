@@ -79,6 +79,8 @@
 | `APNS_KEY_ID` | APNs auth key id (`.p8`) | `1A2BC3D4E5` | `bots/notifications/send_push_notifications.py` |
 | `APNS_BUNDLE_ID` | iOS app bundle id / APNs topic (intentionally unchanged during the Gaia Eyes rename) | `com.gaiaeyes.GaiaExporter` | `bots/notifications/send_push_notifications.py` |
 | `APNS_PRIVATE_KEY` | APNs auth key PEM contents | `-----BEGIN PRIVATE KEY-----...` | `bots/notifications/send_push_notifications.py` |
+| `FCM_PROJECT_ID` | Firebase/Google Cloud project ID used for Android push delivery | `gaia-eyes-android` | `bots/notifications/fcm.py` |
+| `FCM_SERVICE_ACCOUNT_JSON` | Firebase service-account JSON with permission to send FCM HTTP v1 messages | `{"type":"service_account","project_id":"..."}` | `bots/notifications/fcm.py` |
 
 ## iOS (runtime/in-app)
 | Variable | Purpose | Where set |

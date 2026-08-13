@@ -3,12 +3,15 @@ package com.gaiaeyes.app.core.di
 import android.content.Context
 import com.gaiaeyes.app.core.auth.AuthRepository
 import com.gaiaeyes.app.core.network.GaiaApiClient
+import com.gaiaeyes.app.core.notifications.NotificationNavigationCoordinator
 import com.gaiaeyes.app.core.quicklog.QuickLogCoordinator
 import com.gaiaeyes.app.data.BodyCache
 import com.gaiaeyes.app.data.BodyRepository
 import com.gaiaeyes.app.data.DashboardCache
 import com.gaiaeyes.app.data.DashboardRepository
 import com.gaiaeyes.app.data.DeviceLocationRepository
+import com.gaiaeyes.app.data.ExploreCache
+import com.gaiaeyes.app.data.ExploreRepository
 import com.gaiaeyes.app.data.HealthRepository
 import com.gaiaeyes.app.data.HealthConnectRepository
 import com.gaiaeyes.app.data.HealthSampleQueue
@@ -16,6 +19,7 @@ import com.gaiaeyes.app.data.HomeContextCache
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.JournalRepository
 import com.gaiaeyes.app.data.JournalWriteQueue
+import com.gaiaeyes.app.data.NotificationRepository
 import com.gaiaeyes.app.data.OutlookCache
 import com.gaiaeyes.app.data.OutlookRepository
 import com.gaiaeyes.app.data.PatternsCache
@@ -32,6 +36,7 @@ class AppContainer(
 ) {
     private val apiClient = GaiaApiClient(apiBase = apiBase)
     val quickLogCoordinator = QuickLogCoordinator()
+    val notificationNavigationCoordinator = NotificationNavigationCoordinator()
     val deviceLocationRepository = DeviceLocationRepository(context.applicationContext)
 
     val authRepository = AuthRepository(
@@ -64,6 +69,10 @@ class AppContainer(
         apiClient = apiClient,
         cache = HomeContextCache(context.applicationContext),
     )
+    val exploreRepository = ExploreRepository(
+        apiClient = apiClient,
+        cache = ExploreCache(context.applicationContext),
+    )
     val patternsRepository = PatternsRepository(
         authRepository = authRepository,
         apiClient = apiClient,
@@ -83,6 +92,11 @@ class AppContainer(
         },
     )
     val profileRepository = ProfileRepository(
+        authRepository = authRepository,
+        apiClient = apiClient,
+    )
+    val notificationRepository = NotificationRepository(
+        context = context.applicationContext,
         authRepository = authRepository,
         apiClient = apiClient,
     )

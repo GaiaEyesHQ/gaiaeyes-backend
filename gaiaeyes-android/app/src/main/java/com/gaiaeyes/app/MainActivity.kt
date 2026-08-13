@@ -29,7 +29,10 @@ class MainActivity : ComponentActivity() {
                     healthRepository = container.healthRepository,
                     healthConnectRepository = container.healthConnectRepository,
                     homeContextRepository = container.homeContextRepository,
+                    exploreRepository = container.exploreRepository,
                     journalRepository = container.journalRepository,
+                    notificationRepository = container.notificationRepository,
+                    notificationNavigationCoordinator = container.notificationNavigationCoordinator,
                     outlookRepository = container.outlookRepository,
                     patternsRepository = container.patternsRepository,
                     profileRepository = container.profileRepository,
@@ -48,7 +51,9 @@ class MainActivity : ComponentActivity() {
     private fun routeIntent(intent: Intent) {
         val container = (application as GaiaEyesApplication).container
         val handledAsQuickLog = container.quickLogCoordinator.handleIntent(intent)
-        if (!handledAsQuickLog) {
+        val handledAsNotification =
+            !handledAsQuickLog && container.notificationNavigationCoordinator.handleIntent(intent)
+        if (!handledAsQuickLog && !handledAsNotification) {
             container.authRepository.handleDeepLink(intent)
         }
         intent.data = null

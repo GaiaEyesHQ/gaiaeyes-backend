@@ -20,6 +20,7 @@ from bots.earthscope_post.earthscope_generate import (
     _build_facts,
     _build_reel_story,
     _build_reel_voiceover_text,
+    _caption_with_approved_hook,
     _caption_context_lead,
     _canonical_public_platform,
     _clean_llm_title,
@@ -670,6 +671,30 @@ def test_facebook_caption_profile_is_longer_than_instagram():
     assert fb["caption_words"] == [110, 180]
     assert "2-3 short paragraphs" in fb["caption_instruction"]
     assert "question is optional" in fb["caption_instruction"]
+
+
+def test_caption_uses_approved_hook_when_same_lane_drift_conflicts():
+    caption = _caption_with_approved_hook(
+        "Tiny aches getting quieter today? The sky feels calm, so there is room to recoup.",
+        "Tiny aches getting louder?",
+    )
+
+    assert caption == "Tiny aches getting louder? The sky feels calm, so there is room to recoup."
+
+
+def test_social_variants_align_default_caption_to_approved_title(monkeypatch):
+    monkeypatch.setattr(earthscope_generate, "EARTHSCOPE_FORCE_RULES", True)
+
+    variants = _build_social_caption_variants(
+        {"day": "2026-08-10", "platform": "default"},
+        title="Tiny aches getting louder?",
+        default_caption="Tiny aches getting quieter today? The sky feels calm.",
+        default_hashtags="#GaiaEyes",
+        sections={},
+    )
+
+    assert variants["default"]["caption"].startswith("Tiny aches getting louder?")
+    assert variants["ig"]["caption"].startswith("Tiny aches getting louder?")
 
 
 def test_public_generation_uses_one_canonical_platform():

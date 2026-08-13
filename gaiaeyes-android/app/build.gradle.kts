@@ -31,6 +31,10 @@ val supabaseUrl = runtimeValue(
     runtimeValue("SUPABASE_REST_URL"),
 )
 val supabaseAnonKey = runtimeValue("SUPABASE_ANON_KEY")
+val firebaseProjectId = runtimeValue("FIREBASE_PROJECT_ID")
+val firebaseApplicationId = runtimeValue("FIREBASE_APPLICATION_ID")
+val firebaseApiKey = runtimeValue("FIREBASE_API_KEY")
+val firebaseGcmSenderId = runtimeValue("FIREBASE_GCM_SENDER_ID")
 
 android {
     namespace = "com.gaiaeyes.app"
@@ -70,6 +74,10 @@ android {
             "SUPABASE_ANON_KEY",
             quotedBuildConfigValue(supabaseAnonKey),
         )
+        buildConfigField("String", "FIREBASE_PROJECT_ID", quotedBuildConfigValue(firebaseProjectId))
+        buildConfigField("String", "FIREBASE_APPLICATION_ID", quotedBuildConfigValue(firebaseApplicationId))
+        buildConfigField("String", "FIREBASE_API_KEY", quotedBuildConfigValue(firebaseApiKey))
+        buildConfigField("String", "FIREBASE_GCM_SENDER_ID", quotedBuildConfigValue(firebaseGcmSenderId))
         buildConfigField(
             "String",
             "REVENUECAT_ANDROID_API_KEY",
@@ -138,6 +146,8 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("androidx.work:work-runtime-ktx:2.11.1")
     implementation("androidx.health.connect:connect-client:1.1.0")
+    implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
+    implementation("com.google.firebase:firebase-messaging")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
@@ -153,10 +163,17 @@ val validateReleaseConfiguration by tasks.registering {
     description = "Fails release builds when secure account access is not configured."
 
     doLast {
-        if (supabaseUrl.isBlank() || supabaseAnonKey.isBlank()) {
+        if (
+            supabaseUrl.isBlank() ||
+            supabaseAnonKey.isBlank() ||
+            firebaseProjectId.isBlank() ||
+            firebaseApplicationId.isBlank() ||
+            firebaseApiKey.isBlank() ||
+            firebaseGcmSenderId.isBlank()
+        ) {
             throw GradleException(
-                "Release auth configuration is missing. Set SUPABASE_URL (or SUPABASE_REST_URL) " +
-                    "and SUPABASE_ANON_KEY outside Git before building.",
+                "Release account or notification configuration is missing. Set Supabase and Firebase " +
+                    "Android values outside Git before building.",
             )
         }
     }

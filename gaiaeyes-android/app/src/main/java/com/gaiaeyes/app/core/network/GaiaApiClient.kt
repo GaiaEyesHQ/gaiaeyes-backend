@@ -166,6 +166,35 @@ class GaiaApiClient(
         return envelope.tags
     }
 
+    suspend fun notificationPreferences(accessToken: String): NotificationPreferences {
+        val envelope = authenticatedGet("/v1/profile/notifications", accessToken)
+            .body<NotificationPreferencesEnvelope>()
+        check(envelope.ok) { envelope.error ?: "Notification preferences were unavailable" }
+        return envelope.preferences
+    }
+
+    suspend fun updateNotificationPreferences(
+        accessToken: String,
+        request: NotificationPreferencesUpdate,
+    ): NotificationPreferences {
+        val envelope = authenticatedPut("/v1/profile/notifications", accessToken, request)
+            .body<NotificationPreferencesEnvelope>()
+        check(envelope.ok) { envelope.error ?: "Notification preferences could not be saved" }
+        return envelope.preferences
+    }
+
+    suspend fun registerPushToken(accessToken: String, request: PushTokenRequest) {
+        val envelope = authenticatedPost("/v1/profile/push-tokens", accessToken, request)
+            .body<PushTokenEnvelope>()
+        check(envelope.ok) { envelope.error ?: "This device could not be registered for alerts" }
+    }
+
+    suspend fun disablePushToken(accessToken: String, request: PushTokenDisableRequest) {
+        val envelope = authenticatedPost("/v1/profile/push-tokens/disable", accessToken, request)
+            .body<PushTokenEnvelope>()
+        check(envelope.ok) { envelope.error ?: "This device's alerts could not be disabled" }
+    }
+
     suspend fun localCheck(zip: String): LocalCheckResponse {
         require(zip.isNotBlank()) { "A ZIP code is required for local conditions" }
         val response = httpClient.get("/v1/local/check") {
@@ -174,6 +203,18 @@ class GaiaApiClient(
         throwIfUnauthorizedOrFailed(response)
         return response.body()
     }
+
+    suspend fun magnetosphere(): MagnetosphereResponse =
+        publicGet("/v1/space/magnetosphere")
+
+    suspend fun schumannLatest(): SchumannLatestResponse =
+        publicGet("/v1/earth/schumann/latest")
+
+    suspend fun quakesLatest(): QuakesLatestResponse =
+        publicGet("/v1/quakes/latest")
+
+    suspend fun hazards(): HazardsResponse =
+        publicGet("/v1/hazards/gdacs/full")
 
     suspend fun allDrivers(accessToken: String): AllDriversResponse {
         require(accessToken.isNotBlank()) {
@@ -339,6 +380,12 @@ class GaiaApiClient(
         httpClient.get(path) {
             header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
         }.also(::throwIfUnauthorizedOrFailed)
+
+    private suspend inline fun <reified T> publicGet(path: String): T {
+        val response = httpClient.get(path)
+        throwIfUnauthorizedOrFailed(response)
+        return response.body()
+    }
 
     private suspend inline fun <reified T> authenticatedPost(
         path: String,

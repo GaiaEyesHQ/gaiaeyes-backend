@@ -1,6 +1,6 @@
 # Android Launch Plan
 
-Last reviewed: 2026-07-31
+Last reviewed: 2026-08-12
 
 ## Decision
 
@@ -21,12 +21,16 @@ The first Android release should reuse the existing backend and launch US-first.
 - RevenueCat Android SDK with Google Play Billing products mapped to the same Plus entitlement model.
 - Optional Health Connect read flow for the minimum useful body-data set.
 - Local stale-cache behavior that keeps the app useful when the backend or Health Connect is unavailable.
+- Android notifications delivered through FCM using the shared Gaia Eyes alert
+  preferences and evaluation rules, with controls in Settings.
 - US-first Google Play release.
 
 ### Deferred from Android v1
 
 - HRV import, because Android Health Connect HRV semantics differ from the current backend `hrv_sdnn` contract.
-- Cycle tracking, wrist temperature, BLE/Polar, camera, and push alerts.
+- Cycle tracking, wrist temperature, BLE/Polar, and camera.
+- Social share cards, which are planned for Android V1.1 and must not appear in
+  V1 launch screenshots or copy.
 - Android-specific backend schema changes unless contract tests prove an existing endpoint cannot support Android.
 - Tablet-optimized layouts beyond functional responsive support.
 - Website/app landing page Google Play badge until a Play listing URL exists.
@@ -63,6 +67,10 @@ Android should use the same backend endpoints already used by iOS:
 - `GET /v1/profile/tags/catalog`
 - `GET /v1/profile/tags`
 - `PUT /v1/profile/tags`
+- `GET /v1/profile/notifications`
+- `PUT /v1/profile/notifications`
+- `POST /v1/profile/push-tokens`
+- `POST /v1/profile/push-tokens/disable`
 - `POST /v1/samples/batch`
 - `GET /v1/billing/entitlements`
 - Existing public space and earth endpoints under `/v1/space/*` and `/v1/earth/*`.
@@ -121,9 +129,16 @@ Onboarding should clearly state Health Connect is optional. If skipped or denied
    exclude account identifiers, access credentials, and raw health readings.**
 8. Create the Google Play organization account and listing after the LLC/D-U-N-S prerequisites are complete.
 9. Add RevenueCat/Google Play Billing purchase and restore flow after Play products exist.
-10. Run internal QA, then Play internal testing.
-11. Complete any account-specific testing requirement before production access.
-12. Release US-first with staged rollout.
+10. Add FCM notification delivery, Android token lifecycle, shared preference
+    controls, deep links, and physical-device delivery tests. **Implemented
+    locally except for production activation and physical-device acceptance:
+    the app, platform-aware sender, token migration, workflow environment,
+    preferences, permission lifecycle, quiet-hours/sensitivity controls, and
+    tap routing are present. Apply the migration, configure Firebase secrets,
+    and run the device matrix before release.**
+11. Run internal QA, then Play internal testing.
+12. Complete any account-specific testing requirement before production access.
+13. Release US-first with staged rollout.
 
 ## External requirements checked
 

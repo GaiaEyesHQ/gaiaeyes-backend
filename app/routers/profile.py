@@ -2097,7 +2097,7 @@ async def profile_push_token_upsert(
 ):
     user_id = _require_user_id(request)
     platform = str(payload.platform or "ios").strip().lower() or "ios"
-    if platform != "ios":
+    if platform not in {"ios", "android"}:
         raise HTTPException(status_code=400, detail="unsupported push platform")
     environment = str(payload.environment or "prod").strip().lower() or "prod"
     if environment not in {"dev", "prod"}:

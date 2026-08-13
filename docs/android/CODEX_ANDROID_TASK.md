@@ -23,7 +23,9 @@ Create a native Android app for Gaia Eyes using Kotlin + Jetpack Compose with pa
 - No secrets committed.
 - No backend schema changes unless contract tests prove they are required.
 - No new Android health data types outside the approved v1 Health Connect set.
-- No HRV, cycle tracking, wrist temperature, BLE/Polar, camera, or push alerts in Android v1.
+- No HRV, cycle tracking, wrist temperature, BLE/Polar, or camera in Android v1.
+- Android V1 notifications must use FCM and the existing shared preference and
+  notification-evaluation model; do not create Android-only alert logic.
 - RevenueCat App User ID must equal the Supabase UUID.
 - Protected backend calls must never be sent without a valid Supabase bearer.
 - Cached snapshots must remain visible during transient backend failures.
@@ -47,7 +49,10 @@ Create a native Android app for Gaia Eyes using Kotlin + Jetpack Compose with pa
 7. Implement WorkManager-backed upload queues for symptoms and Health Connect samples.
 8. Implement Health Connect read flow for sleep, steps, heart rate, resting heart rate, respiratory rate, and SpO2 only.
 9. Implement RevenueCat Android purchase and restore flow for Plus monthly/yearly.
-10. Implement core screens: onboarding, Home, Body, Patterns, Outlook, Explore, Guide, Settings, Diagnostics, Subscribe/Restore, and share cards.
+10. Implement core screens: onboarding, Home, Body, Patterns, Outlook, Explore, Guide, Settings, Diagnostics, and Subscribe/Restore.
+11. Implement Android V1 notifications with FCM delivery, token lifecycle,
+    Settings controls, quiet hours/cooldowns, and relevant deep links.
+12. Defer social share cards to V1.1 and omit them from V1 launch marketing.
 
 ## Health Connect upload contract
 
