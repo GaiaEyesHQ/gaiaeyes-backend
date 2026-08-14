@@ -288,6 +288,16 @@ def test_public_card_title_prefers_stored_llm_title():
     assert title == "A good day to catch up"
 
 
+def test_public_card_title_prefers_shared_reel_hook_when_title_diverges():
+    title = _public_card_title(
+        "Feeling Off For No Reason?",
+        fallback="Ready for a calmer day?",
+        preferred_hook="Does the day feel a little steadier?",
+    )
+
+    assert title == "Does the day feel a little steadier?"
+
+
 def test_public_card_title_uses_fallback_for_generic_or_dated_titles():
     assert _public_card_title("Daily EarthScope", fallback="Ready to focus?") == "Ready to focus?"
     assert _public_card_title("Daily EarthScope - Jun 21, 2026", fallback="Ready to focus?") == "Ready to focus?"

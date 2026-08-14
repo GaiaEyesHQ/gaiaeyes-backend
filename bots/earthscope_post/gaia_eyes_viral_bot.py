@@ -1483,7 +1483,13 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
     )
 
 
-def _public_card_title(title: Any, *, fallback: str) -> str:
+def _public_card_title(title: Any, *, fallback: str, preferred_hook: Any = None) -> str:
+    preferred = strip_hashtags_and_emojis(_safe_text(preferred_hook) or "")
+    preferred = preferred.strip().strip("\"'“”‘’").strip()
+    preferred = re.sub(r"\s+", " ", preferred)
+    if preferred and len(preferred) <= 46:
+        return preferred
+
     cleaned = strip_hashtags_and_emojis(_safe_text(title))
     cleaned = cleaned.strip().strip("\"'“”‘’").strip()
     cleaned = re.sub(r"\s+", " ", cleaned)
@@ -2050,7 +2056,12 @@ def main(args: Optional[argparse.Namespace] = None):
     caption_im = render_card(energy, caption_text, sch, kp, kind="square")
     fallback_title = _earthscope_hook_title(affects_txt, tone=str(tone_val or ""), energy=energy)
     post_title = post.get("title") if isinstance(post, dict) else ""
-    affects_title = _public_card_title(post_title, fallback=fallback_title)
+    story_hook = ""
+    if isinstance(sections, dict):
+        story = sections.get("reel_story")
+        if isinstance(story, dict):
+            story_hook = story.get("hook") or ""
+    affects_title = _public_card_title(post_title, fallback=fallback_title, preferred_hook=story_hook)
     affects_im = render_text_card(affects_title, affects_txt, energy, kind="tall")
     play_im    = render_text_card("Care notes", playbook_txt, energy, kind="tall")
 
