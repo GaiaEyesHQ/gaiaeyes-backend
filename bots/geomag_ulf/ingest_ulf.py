@@ -587,6 +587,24 @@ def _build_context_rows(station_rows: Sequence[StationWindow]) -> list[ContextWi
     return [compute_context_row(ts_utc, windows) for ts_utc, windows in sorted(windows_by_ts.items())]
 
 
+def _require_derived_rows(
+    station_windows_by_station: dict[str, int],
+    station_rows: Sequence[StationWindow],
+    context_rows: Sequence[ContextWindow],
+) -> None:
+    if station_rows and context_rows:
+        return
+
+    counts = ", ".join(
+        f"{station_id}={window_count}"
+        for station_id, window_count in sorted(station_windows_by_station.items())
+    ) or "none"
+    raise RuntimeError(
+        "ULF ingest produced no fresh derived rows "
+        f"(station_windows={counts}, station_rows={len(station_rows)}, context_rows={len(context_rows)})"
+    )
+
+
 async def upsert_station_rows(conn: asyncpg.Connection, rows: list[StationWindow]) -> int:
     if not rows:
         return 0
@@ -747,16 +765,21 @@ async def _run() -> None:
     )
 
     station_rows: list[StationWindow] = []
+    station_windows_by_station: dict[str, int] = {}
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
         conn = await asyncpg.connect(dsn)
         try:
             for station_id in ULF_STATIONS:
                 try:
-                    station_rows.extend(await _process_station(conn, client, station_id, start_utc, end_utc))
+                    station_windows = await _process_station(conn, client, station_id, start_utc, end_utc)
+                    station_windows_by_station[station_id] = len(station_windows)
+                    station_rows.extend(station_windows)
                 except Exception as exc:
+                    station_windows_by_station[station_id] = 0
                     logger.exception("ulf station failed station=%s error=%s", station_id, exc)
 
             context_rows = _build_context_rows(station_rows)
+            _require_derived_rows(station_windows_by_station, station_rows, context_rows)
             station_upserts = await upsert_station_rows(conn, station_rows)
             context_upserts = await upsert_context_rows(conn, context_rows)
         finally:

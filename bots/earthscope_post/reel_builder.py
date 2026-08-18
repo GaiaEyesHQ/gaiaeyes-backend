@@ -239,8 +239,29 @@ def _metrics_sections(row: dict) -> dict:
 
 
 def _clean_vo_sentence(text: object) -> str:
-    cleaned = " ".join(str(text or "").replace("•", " ").split())
+    cleaned = " ".join(_safe_reel_text(text).replace("•", " ").split())
     return cleaned.strip(" -")
+
+
+def _safe_reel_text(text: object) -> str:
+    value = str(text or "")
+    replacements = {
+        "\u2010": "-",
+        "\u2011": "-",
+        "\u2012": "-",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2015": "-",
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201a": ",",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u201e": '"',
+    }
+    for source, target in replacements.items():
+        value = value.replace(source, target)
+    return value
 
 
 def _first_action(text: object) -> str:
@@ -398,10 +419,10 @@ def reel_story_from_post(row: Optional[dict]) -> dict:
     if not pattern or _story_similarity(pattern, effects) >= 0.7:
         pattern = _story_sentence(sections.get("affects"), 2)
     return {
-        "hook": str(stored.get("hook") or hook_text_from_post(row)).strip(),
-        "signal": signal,
-        "effects": effects,
-        "pattern": pattern,
+        "hook": _safe_reel_text(stored.get("hook") or hook_text_from_post(row)).strip(),
+        "signal": _safe_reel_text(signal),
+        "effects": _safe_reel_text(effects),
+        "pattern": _safe_reel_text(pattern),
     }
 
 
@@ -413,7 +434,7 @@ _DANGLING_STORY_WORDS = {
 
 
 def _story_lines(text: object) -> List[str]:
-    return [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    return [line.strip() for line in _safe_reel_text(text).splitlines() if line.strip()]
 
 
 def _valid_story_beat(text: object) -> str:
@@ -485,7 +506,7 @@ def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
     font_path = Path(__file__).resolve().parent / "fonts" / "BebasNeue.ttf"
     label_font = ImageFont.truetype(str(font_path), size=64)
     measure_font = ImageFont.truetype(str(font_path), size=112)
-    words = str(hook_text or "Today, in your body").strip().upper().split()
+    words = _safe_reel_text(hook_text or "Today, in your body").strip().upper().split()
     lines: List[str] = []
     current = ""
     for word in words:
@@ -545,7 +566,7 @@ def _layout_story_text(
     max_width: int = 860,
     max_lines: int = 4,
 ) -> tuple[ImageFont.FreeTypeFont, List[str]]:
-    source_lines = [line.strip().upper() for line in str(text or "").splitlines() if line.strip()]
+    source_lines = [line.strip().upper() for line in _safe_reel_text(text).splitlines() if line.strip()]
     if not source_lines:
         source_lines = ["TODAY'S SIGNALS ARE MOSTLY STEADY"]
     source_lines = source_lines[:2]

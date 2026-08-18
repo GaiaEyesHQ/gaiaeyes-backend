@@ -682,6 +682,15 @@ def test_caption_uses_approved_hook_when_same_lane_drift_conflicts():
     assert caption == "Tiny aches getting louder? The sky feels calm, so there is room to recoup."
 
 
+def test_caption_uses_squirrely_approved_hook_for_jittery_lane():
+    caption = _caption_with_approved_hook(
+        "Feeling jittery today? Energy may buzz and focus can skid a bit.",
+        "Feeling squirrely today?",
+    )
+
+    assert caption == "Feeling squirrely today? Energy may buzz and focus can skid a bit."
+
+
 def test_social_variants_align_default_caption_to_approved_title(monkeypatch):
     monkeypatch.setattr(earthscope_generate, "EARTHSCOPE_FORCE_RULES", True)
 

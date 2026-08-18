@@ -653,7 +653,7 @@ HOOK_LANES: Dict[str, Dict[str, Any]] = {
     },
     "wired_tired": {
         "label": "wired/tired body stress",
-        "terms": ("wired", "jittery", "buzz", "shaky", "overdrive", "on edge", "body stress"),
+        "terms": ("wired", "jittery", "squirrely", "buzz", "shaky", "overdrive", "on edge", "body stress"),
         "examples": ["Body buzzing for no clear reason?", "Feeling jittery today?", "Feeling squirrely today?"],
     },
     "brain_fog": {

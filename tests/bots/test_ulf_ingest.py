@@ -1,9 +1,11 @@
+import asyncio
 from datetime import UTC, datetime
 
 import pytest
 
 from bots.geomag_ulf import ingest_ulf
 from bots.geomag_ulf.ingest_ulf import (
+    _require_derived_rows,
     _apply_station_history,
     StationWindow,
     choose_component,
@@ -92,3 +94,37 @@ def test_compute_coherence_is_none_for_single_station() -> None:
 )
 def test_classify_context_mapping(intensity: float, coherence: float | None, expected: str) -> None:
     assert classify_context(intensity, coherence) == expected
+
+
+def test_require_derived_rows_raises_when_all_station_windows_are_empty() -> None:
+    with pytest.raises(RuntimeError, match="ULF ingest produced no fresh derived rows"):
+        _require_derived_rows({"BOU": 0, "CMO": 0}, [], [])
+
+
+def test_run_raises_when_no_station_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ingest_ulf, "_resolve_dsn", lambda: "postgresql://example")
+    monkeypatch.setattr(ingest_ulf, "ULF_STATIONS", ["BOU", "CMO"])
+
+    class _DummyClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _DummyConn:
+        async def close(self) -> None:
+            return None
+
+    async def _fake_connect(dsn: str):  # noqa: ARG001
+        return _DummyConn()
+
+    async def _fake_process_station(conn, client, station_id, start_utc, end_utc):  # noqa: ARG001
+        return []
+
+    monkeypatch.setattr(ingest_ulf.httpx, "AsyncClient", lambda *args, **kwargs: _DummyClient())
+    monkeypatch.setattr(ingest_ulf.asyncpg, "connect", _fake_connect)
+    monkeypatch.setattr(ingest_ulf, "_process_station", _fake_process_station)
+
+    with pytest.raises(RuntimeError, match="ULF ingest produced no fresh derived rows"):
+        asyncio.run(ingest_ulf._run())

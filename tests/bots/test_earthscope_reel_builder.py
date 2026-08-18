@@ -129,6 +129,30 @@ def test_reel_story_prefers_structured_writer_payload():
     assert story["effects"].splitlines() == ["Restless or jittery", "Energy may spike, then dip"]
 
 
+def test_reel_story_normalizes_smart_punctuation_for_slide_fonts():
+    row = {
+        "title": "Body whispering today?",
+        "metrics_json": {
+            "sections": {
+                "snapshot": "Sky is calm and even.",
+                "affects": "Felted-wool heaviness may show up.",
+                "reel_story": {
+                    "hook": "Body\u2011whispering today?",
+                    "signal": "Sky is calm\u2014no flare spikes",
+                    "effects": "Felted\u2011wool heaviness, energy running low",
+                    "pattern": "Use tiny work loops and light movement today",
+                },
+            }
+        },
+    }
+
+    story = reel_builder.reel_story_from_post(row)
+
+    assert story["hook"] == "Body-whispering today?"
+    assert story["signal"] == "Sky is calm-no flare spikes"
+    assert story["effects"] == "Felted-wool heaviness, energy running low"
+
+
 def test_reel_story_rejects_stored_fragments_and_duplicate_variants():
     row = {
         "title": "Headache threshold lower today?",
@@ -198,6 +222,16 @@ def test_reel_story_layout_keeps_every_word_when_sentence_needs_five_large_lines
     assert len(wrapped) <= 4
     assert " ".join(wrapped) == text.upper()
     assert font.size < 112
+
+
+def test_reel_story_layout_replaces_nonbreaking_hyphen():
+    canvas = Image.new("RGB", (1080, 1920), (0, 0, 0))
+    draw = reel_builder.ImageDraw.Draw(canvas)
+    font_path = ROOT / "bots" / "earthscope_post" / "fonts" / "BebasNeue.ttf"
+
+    _, wrapped = reel_builder._layout_story_text(draw, "Felted\u2011wool heaviness", font_path)
+
+    assert " ".join(wrapped) == "FELTED-WOOL HEAVINESS"
 
 
 def test_reel_opening_clip_uses_motion_from_frame_one(monkeypatch, tmp_path):
