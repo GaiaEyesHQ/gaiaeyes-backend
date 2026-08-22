@@ -1,0 +1,72 @@
+[
+  {
+    "capabilities": {
+      "browser": [
+        {
+          "description": "Controls an explicit browser viewport override for responsive or device-size testing. Use it when a task calls for specific dimensions or breakpoint validation; otherwise leave it unset so the browser uses its normal viewport. Reset temporary overrides before finishing unless the user asked to keep them.",
+          "id": "viewport"
+        }
+      ],
+      "tab": [
+        {
+          "description": "List assets already observed in the current page state and bundle selected assets into a temporary local artifact.",
+          "id": "pageAssets"
+        },
+        {
+          "id": "cdp",
+          "description": "Send raw Chrome DevTools Protocol commands and read debugger events through a supported tab for developer use cases."
+        }
+      ]
+    },
+    "family": "chrome",
+    "id": "-98a9-410a-b3b5-49b45b9a26a5",
+    "name": "Chrome",
+    "type": "extension",
+    "metadata": {
+      "extensionId": "hehggadaopoacecdllhhajmbjkdcmajg",
+      "extensionInstanceId": "0b68d4ee-cbea-4c8d-8ecb-07721b7ccbc7",
+      "profileName": "Jennifer",
+      "profileIsLastUsed": "true",
+      "profileOrdering": "0"
+    }
+  },
+  {
+    "apiSupportOverrides": {
+      "BrowserUser.history": true,
+      "BrowserUser.claimTab": true,
+      "Tab.markDeliverable": true,
+      "Tab.markHandoff": true,
+      "Tabs.finalize": true
+    },
+    "capabilities": {
+      "browser": [
+        {
+          "id": "visibility",
+          "description": "Use to show or hide the browser to the user, and to determine the browser's current visibility. Keep browser work in the background unless the user asks to see it or live viewing is useful. When the browser should be visible, call set(true)."
+        },
+        {
+          "id": "viewport",
+          "description": "Controls an explicit browser viewport override for responsive or device-size testing. Use it when a task calls for specific dimensions or breakpoint validation; otherwise leave it unset so the browser uses its normal viewport. Reset temporary overrides before finishing unless the user asked to keep them."
+        }
+      ],
+      "tab": [
+        {
+          "id": "pageAssets",
+          "description": "List assets already observed in the current page state and bundle selected assets into a temporary local artifact."
+        },
+        {
+          "id": "cdp",
+          "description": "Send raw Chrome DevTools Protocol commands and read debugger events through a supported tab for developer use cases."
+        }
+      ]
+    },
+    "id": "-55d1-47bc-909a-8748789a8483",
+    "name": "Codex In-app Browser",
+    "type": "iab",
+    "metadata": {
+      "codexAppBuildFlavor": "prod",
+      "codexAppSessionId": "b3c58c73-2acc-4881-84dd-044e87a19e07",
+      "codexSessionId": "01a02901-d26c-77b0-8163-57a43ffeab4f"
+    }
+  }
+]

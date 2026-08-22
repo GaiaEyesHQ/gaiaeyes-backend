@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bots.earthscope_post.gaia_eyes_viral_bot import (
+    _cta_context_from_stats,
     _energy_from_tone_and_bands,
     _earthscope_hook_title,
     _format_public_playbook,
@@ -37,6 +38,41 @@ def test_stats_card_uses_health_forward_title_and_plain_url_footer():
     assert STATS_CARD_FOOTER == "gaiaeyes.com/app"
     assert "EarthScope" not in STATS_CARD_TITLE
     assert "Download" not in STATS_CARD_FOOTER
+
+
+def test_stats_card_cta_context_carries_public_pain_lane():
+    context = _cta_context_from_stats(
+        {
+            "kp_max": 5,
+            "title": "Pain feeling extra loud?",
+            "caption": "Pain feeling extra loud? Space is stormy today.",
+            "affects": "Joints may ache louder and tension stacks faster.",
+            "voiceover": "Pain feeling extra loud?",
+            "reel_hook": "Pain feeling extra loud?",
+        }
+    )
+
+    assert context["title"] == "Pain feeling extra loud?"
+    assert context["caption"].startswith("Pain feeling")
+    assert context["affects"].startswith("Joints")
+
+
+def test_stats_card_cta_context_carries_public_nervous_system_lane():
+    context = _cta_context_from_stats(
+        {
+            "cmes_24h": 1,
+            "flares_24h": 2,
+            "title": "Body buzzing for no clear reason?",
+            "caption": "Body buzzing for no clear reason? The sky is steady and quiet.",
+            "affects": "Wired/tired can pop up for some, where the body feels revved.",
+            "voiceover": "Body buzzing for no clear reason?",
+            "reel_hook": "Body buzzing for no clear reason?",
+        }
+    )
+
+    assert context["title"] == "Body buzzing for no clear reason?"
+    assert context["caption"].startswith("Body buzzing")
+    assert context["affects"].startswith("Wired/tired")
 
 
 def test_public_cards_label_environmental_state_as_signal(monkeypatch):

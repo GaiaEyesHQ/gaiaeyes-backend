@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Query
 
 from services.forecast_outlook import ensure_local_forecast_daily_via_pool, serialize_local_forecast_rows
+from services.geo.zip_lookup import zip_to_latlon
 from services.local_signals.aggregator import assemble_for_zip, ensure_weather_fields
 from services.local_signals.cache import latest_for_zip, latest_row, nearest_row_to, upsert_zip_payload
 
@@ -136,6 +137,11 @@ async def _attach_forecast_daily(conn, zip_code: str, payload: dict) -> dict:
     where_info = payload.get("where") if isinstance(payload.get("where"), dict) else {}
     lat = where_info.get("lat")
     lon = where_info.get("lon")
+    if zip_code:
+        try:
+            lat, lon = await asyncio.to_thread(zip_to_latlon, zip_code)
+        except Exception:
+            pass
     try:
         rows = await ensure_local_forecast_daily(conn, zip_code=zip_code, lat=lat, lon=lon)
     except Exception:
@@ -153,14 +159,36 @@ async def _attach_forecast_daily_best_effort(
     if not isinstance(payload, dict):
         return payload
 
+    where_info = payload.get("where") if isinstance(payload.get("where"), dict) else {}
+    lat = where_info.get("lat")
+    lon = where_info.get("lon")
+    if zip_code:
+        try:
+            lat, lon = await asyncio.to_thread(zip_to_latlon, zip_code)
+        except Exception:
+            pass
+
     try:
         async with asyncio.timeout(LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS):
-            rows = await ensure_local_forecast_daily_via_pool(
-                zip_code=zip_code,
-                lat=None,
-                lon=None,
-                refresh_if_stale=refresh_if_stale,
-            )
+            rows = []
+            if lat is not None and lon is not None:
+                try:
+                    rows = await ensure_local_forecast_daily_via_pool(
+                        zip_code=zip_code,
+                        lat=lat,
+                        lon=lon,
+                        prefer_geo=True,
+                        refresh_if_stale=refresh_if_stale,
+                    )
+                except Exception:
+                    rows = []
+            if not rows:
+                rows = await ensure_local_forecast_daily_via_pool(
+                    zip_code=zip_code,
+                    lat=None,
+                    lon=None,
+                    refresh_if_stale=refresh_if_stale,
+                )
             payload["forecast_daily"] = serialize_local_forecast_rows(rows)
             return payload
     except Exception:

@@ -1,0 +1,13 @@
+{
+  "agentKeys": [
+    "documentation",
+    "browsers"
+  ],
+  "chromeKeys": [
+    "browserId",
+    "capabilities",
+    "tabs",
+    "user"
+  ],
+  "chromeType": "object"
+}

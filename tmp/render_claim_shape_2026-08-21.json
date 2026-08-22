@@ -1,0 +1,26 @@
+{
+  "tabKeys": [
+    "capabilities",
+    "clipboard",
+    "content",
+    "cua",
+    "dev",
+    "dom_cua",
+    "id",
+    "playwright"
+  ],
+  "protoKeys": [
+    "back",
+    "close",
+    "constructor",
+    "forward",
+    "getJsDialog",
+    "goto",
+    "markDeliverable",
+    "markHandoff",
+    "reload",
+    "screenshot",
+    "title",
+    "url"
+  ]
+}

@@ -1,0 +1,156 @@
+{
+  "title": "Meta Business Suite",
+  "url": "https://business.facebook.com/latest/?asset_id=1837840972918350&ir_qe_exposed=1&nav_ref=typo_redirect"
+}
+
+- button "Facebook":
+  - img "Facebook"
+- button "Edit cover photo":
+  - generic: Edit cover photo
+- link "Facebook":
+  - /url: "#"
+  - img "Facebook"
+- img "Instagram"
+- heading "Texas Hellbilly Coalition" [level=1]
+- img "Facebook"
+- generic: Texas Hellbilly Coalition
+- link "Connect Instagram":
+  - /url: "#"
+- button "Facebook followers Facebook 437":
+  - generic: Facebook followers
+  - img "Facebook"
+  - generic: "437"
+- button "Create post":
+  - generic: Create post
+- button "Create ad":
+  - generic: Create ad
+- button "Create reel":
+  - generic: Create reel
+- button "Create story":
+  - generic: Create story
+- button "More":
+  - generic: More
+- heading "To-do list" [level=1]
+- generic: Check unread messages, comments and other things that may require your attention.
+- list:
+  - button "Comments 7 See all" [expanded]:
+    - heading "Comments" [level=3]
+    - generic: "7"
+    - status: 7 new s
+    - link "See all":
+      - /url: https://business.facebook.com/latest/inbox/facebook?asset_id=1837840972918350&folder=TODO
+  - region:
+    - link "Facebook Melody Douglas ❤️❤️❤️❤️ 47w":
+      - /url: https://business.facebook.com/latest/inbox/facebook?asset_id=1837840972918350&folder=TODO&selected_item_id=24486149027660889
+      - img "Facebook"
+      - generic: Melody Douglas
+      - generic: ❤️❤️❤️❤️
+      - generic: 47w
+    - link "Facebook Ready Betty ❤️❤️❤️ 1y":
+      - /url: https://business.facebook.com/latest/inbox/facebook?asset_id=1837840972918350&folder=TODO&selected_item_id=24002921732650290
+      - img "Facebook"
+      - generic: Ready Betty
+      - generic: ❤️❤️❤️
+      - generic: 1y
+    - link "Facebook Ready Betty ❤️❤️❤️ 1y":
+      - /url: https://business.facebook.com/latest/inbox/facebook?asset_id=1837840972918350&folder=TODO&selected_item_id=24002919835983813
+      - img "Facebook"
+      - generic: Ready Betty
+      - generic: ❤️❤️❤️
+      - generic: 1y
+    - link "Facebook Marvin Junior Yep. I always thought the same thing. Congratulations. 1y":
+      - /url: https://business.facebook.com/latest/inbox/facebook?asset_id=1837840972918350&folder=TODO&selected_item_id=10093765127325852
+      - img "Facebook"
+      - generic: Marvin Junior
+      - generic: Yep. I always thought the same thing. Congratulations.
+      - generic: 1y
+    - link "Facebook Eric Vasquez Yeah she never shuts up. Sorry Sally mother fish sticker....hahaha 7y":
+      - /url: https://business.facebook.com/latest/inbox/facebook?asset_id=1837840972918350&folder=TODO&selected_item_id=2221842951184815
+      - img "Facebook"
+      - generic: Eric Vasquez
+      - generic: Yeah she never shuts up. Sorry Sally mother fish sticker....hahaha
+      - generic: 7y
+    - link "Facebook Lopez Lé Rock Roundup? 7y":
+      - /url: https://business.facebook.com/latest/inbox/facebook?asset_id=1837840972918350&folder=TODO&selected_item_id=2101212029914575
+      - img "Facebook"
+      - generic: Lopez Lé Rock
+      - generic: Roundup?
+      - generic: 7y
+    - link "Facebook Anthony Wright Hell yeah I’m down! 7y":
+      - /url: https://business.facebook.com/latest/inbox/facebook?asset_id=1837840972918350&folder=TODO&selected_item_id=1837913652911082
+      - img "Facebook"
+      - generic: Anthony Wright
+      - generic: Hell yeah I’m down!
+      - generic: 7y
+  - separator
+  - button "Messages":
+    - heading "Messages" [level=3]
+- progressbar
+- button "Meta AI business assistant"
+- button "Meta Business Suite":
+  - generic: Meta Business Suite
+- combobox "Facebook Texas Hellbilly Coalition":
+  - img "Facebook"
+  - generic: Texas Hellbilly Coalition
+- navigation "Links":
+  - generic: Links
+  - list:
+    - link "Home":
+      - /url: https://business.facebook.com/latest/home?asset_id=1837840972918350
+      - generic: Home
+    - generic: Home
+    - link "Notifications":
+      - generic: Notifications
+    - generic: Notifications
+    - link "Ads Manager":
+      - generic: Ads Manager
+    - generic: Ads Manager
+    - link "Inbox":
+      - /url: https://business.facebook.com/latest/inbox?asset_id=1837840972918350
+      - generic: Inbox
+    - generic: Inbox
+    - link "Content":
+      - /url: https://business.facebook.com/latest/posts?asset_id=1837840972918350
+      - generic: Content
+    - generic: Content
+    - link "Creator marketplace":
+      - /url: https://business.facebook.com/latest/creator_marketplace?asset_id=1837840972918350&cm_entrypoint=biz_kit_nav_route_item
+      - generic: Creator marketplace
+    - generic: Creator marketplace
+    - link "Planner":
+      - /url: https://business.facebook.com/latest/content_calendar?asset_id=1837840972918350
+      - generic: Planner
+    - generic: Planner
+    - link "Ads":
+      - /url: https://business.facebook.com/latest/ad_center/ads_summary?asset_id=1837840972918350
+      - generic: Ads
+    - generic: Ads
+    - link "Insights":
+      - /url: https://business.facebook.com/latest/insights?asset_id=1837840972918350
+      - generic: Insights
+    - generic: Insights
+    - link "Monetization":
+      - /url: https://business.facebook.com/latest/monetization?asset_id=1837840972918350
+      - generic: Monetization
+    - generic: Monetization
+    - link "All tools":
+      - generic: All tools
+    - generic: All tools
+    - button "Edit sidebar navigation":
+      - generic: Edit
+- link "Create":
+  - generic: Create
+- generic: Create
+- link "Search":
+  - generic: Search
+- generic: Search
+- navigation "Links":
+  - generic: Links
+  - list:
+    - link "Settings":
+      - /url: https://business.facebook.com/latest/settings/profiles?asset_id=1837840972918350
+      - generic: Settings
+    - generic: Settings
+- link "Help":
+  - generic: Help
+- generic: Help

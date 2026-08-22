@@ -1,0 +1,5 @@
+{
+  "title": "Render Dashboard",
+  "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+  "visibleDom": "<a node_id=1 href=\"https://render.com/\" />\n<button node_id=2 type=\"button\">GitHub</button>\n<button node_id=3 type=\"button\">GitLab</button>\n<button node_id=4 type=\"button\">Bitbucket</button>\n<button node_id=5 type=\"button\">Google</button>\n<input node_id=6 name=\"email\" placeholder=\"your@email.com\" type=\"email\" />\n<input node_id=7 name=\"password\" placeholder=\"correct horse battery staple\" type=\"password\" />\n<button node_id=8 aria-label=\"Show password\" type=\"button\" />\n<button node_id=9 type=\"submit\">Sign in</button>"
+}

@@ -94,6 +94,7 @@ REQUEST_TIMEOUT = float(os.getenv("GAIA_MONITOR_TIMEOUT_SECONDS") or "20")
 REQUEST_RETRIES = max(1, int(os.getenv("GAIA_MONITOR_REQUEST_RETRIES") or "2"))
 REQUEST_RETRY_BACKOFF_SECONDS = float(os.getenv("GAIA_MONITOR_REQUEST_RETRY_BACKOFF_SECONDS") or "1.0")
 LAST_PROBE_WARN_MS = int(os.getenv("GAIA_MONITOR_LAST_PROBE_WARN_MS") or "60000")
+LOCAL_CURRENT_WARN_MS = int(float(os.getenv("GAIA_MONITOR_LOCAL_CURRENT_WARN_MINUTES") or "30") * 60 * 1000)
 ANALYTICS_MIN_EVENTS_24H = int(os.getenv("GAIA_MONITOR_ANALYTICS_MIN_EVENTS_24H") or "1")
 QUEUE_DEPTH_WARN = int(os.getenv("GAIA_MONITOR_QUEUE_DEPTH_WARN") or "0")
 LOCAL_OUTLOOK_DRIVER_KEYS = {"pressure", "temp", "humidity", "aqi", "allergens"}
@@ -264,7 +265,20 @@ def check_local_forecast() -> CheckResult:
         return _result("local_forecast", "warn", f"zip={ZIP_CODE} returned no forecast_daily rows")
     if allergens and not pollen_days:
         return _result("local_forecast", "warn", f"current allergens present but forecast pollen rows missing for zip={ZIP_CODE}")
-    return _result("local_forecast", "pass", f"zip={ZIP_CODE} forecast_days={len(forecast)} pollen_days={pollen_days}")
+    weather = payload.get("weather") if isinstance(payload.get("weather"), dict) else {}
+    local_asof = payload.get("asof")
+    weather_obs_time = weather.get("obs_time")
+    weather_obs_age_ms = _iso_age_ms(weather_obs_time)
+    local_asof_age_ms = _iso_age_ms(local_asof)
+    detail = f"zip={ZIP_CODE} forecast_days={len(forecast)} pollen_days={pollen_days}"
+    if weather_obs_age_ms is not None:
+        detail += f" weather_obs_age_minutes={weather_obs_age_ms // 60000}"
+    if local_asof_age_ms is not None:
+        detail += f" local_asof_age_minutes={local_asof_age_ms // 60000}"
+    stale_age_ms = weather_obs_age_ms if weather_obs_age_ms is not None else local_asof_age_ms
+    if stale_age_ms is not None and stale_age_ms > LOCAL_CURRENT_WARN_MS:
+        return _result("local_forecast", "warn", detail)
+    return _result("local_forecast", "pass", detail)
 
 
 def check_features_today() -> CheckResult:

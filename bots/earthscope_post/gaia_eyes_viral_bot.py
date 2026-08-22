@@ -1279,6 +1279,11 @@ def build_stats_rows(
 # ---------------------------------------
 def _cta_context_from_stats(feats: Mapping[str, Any], pulse: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     return {
+        "title": feats.get("title"),
+        "caption": feats.get("caption"),
+        "affects": feats.get("affects"),
+        "voiceover": feats.get("voiceover"),
+        "reel_hook": feats.get("reel_hook"),
         "kp_max": feats.get("kp_max") or feats.get("kp_current"),
         "kp_current": feats.get("kp_current"),
         "cmes_count": feats.get("cmes_count") or feats.get("cmes_24h"),
@@ -2030,6 +2035,15 @@ def main(args: Optional[argparse.Namespace] = None):
     if metrics_now.get("sw") is not None:
         stats_feats["sw_speed_current"] = metrics_now["sw"]
         stats_feats.setdefault("sw_speed_avg", stats_feats.get("sw_speed_avg"))
+    stats_feats.setdefault("caption", caption_text)
+    stats_feats.setdefault("affects", affects_txt)
+    if isinstance(metrics, dict):
+        sections_for_cta = metrics.get("sections") if isinstance(metrics.get("sections"), dict) else {}
+        reel_story_for_cta = sections_for_cta.get("reel_story") if isinstance(sections_for_cta.get("reel_story"), dict) else {}
+        stats_feats.setdefault("voiceover", sections_for_cta.get("voiceover"))
+        stats_feats.setdefault("reel_hook", reel_story_for_cta.get("hook"))
+    if isinstance(post, dict):
+        stats_feats.setdefault("title", post.get("title"))
 
     # Override energy label from tone/bands if provided by metrics_json
     if tone_band_energy:

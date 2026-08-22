@@ -1,0 +1,30 @@
+{
+  "browserKeys": [
+    "browserId",
+    "capabilities",
+    "tabs",
+    "user"
+  ],
+  "browserProtoKeys": [
+    "constructor",
+    "documentation",
+    "nameSession"
+  ],
+  "userKeys": [],
+  "userProtoKeys": [
+    "constructor",
+    "openTabs",
+    "claimTab",
+    "history"
+  ],
+  "tabsKeys": [],
+  "tabsProtoKeys": [
+    "constructor",
+    "new",
+    "selected",
+    "list",
+    "finalize",
+    "content",
+    "get"
+  ]
+}

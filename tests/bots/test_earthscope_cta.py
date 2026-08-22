@@ -46,6 +46,53 @@ def test_select_earthscope_cta_uses_schumann_context():
     assert cta["key"] == "frequency-sensitive"
 
 
+def test_select_earthscope_cta_uses_pain_context_before_active_weather():
+    cta = select_earthscope_cta(
+        "2026-08-19",
+        context={
+            "kp_max": 5,
+            "title": "Pain feeling extra loud?",
+            "affects": "Joints may ache louder and muscle tension can stack faster.",
+        },
+    )
+
+    assert cta["key"] == "pain-patterns"
+    assert "Headaches" not in cta["card"]
+
+
+def test_select_earthscope_cta_uses_nervous_system_context_before_solar_activity():
+    cta = select_earthscope_cta(
+        "2026-08-20",
+        context={
+            "cmes_24h": 1,
+            "flares_24h": 2,
+            "title": "Body buzzing for no clear reason?",
+            "caption": "Body buzzing for no clear reason? The sky is steady and quiet.",
+            "affects": "Wired/tired can pop up for some, where the body feels revved.",
+        },
+    )
+
+    assert cta["key"] == "nervous-system-patterns"
+    assert "heart" not in cta["card"].lower()
+
+
+def test_select_earthscope_cta_uses_fatigue_context_before_solar_activity():
+    cta = select_earthscope_cta(
+        "2026-08-21",
+        context={
+            "cmes_24h": 1,
+            "flares_24h": 1,
+            "title": "Finally, a little breathing room?",
+            "caption": "Heavy-limb drag can ease and energy comes back in small steps.",
+            "affects": "If you still feel drained, recent stress or local factors could be prolonging the dip.",
+            "reel_hook": "Finally, a little breathing room?",
+        },
+    )
+
+    assert cta["key"] == "fatigue-recovery-patterns"
+    assert "heart" not in cta["card"].lower()
+
+
 def test_frequency_cta_uses_plain_language():
     cta = select_earthscope_cta("2026-06-09", context={"schumann_value_hz": 7.8})
 

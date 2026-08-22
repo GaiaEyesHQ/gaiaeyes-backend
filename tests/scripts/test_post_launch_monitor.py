@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from http.client import IncompleteRead
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from scripts import post_launch_monitor as monitor
 
@@ -108,6 +108,50 @@ def test_user_outlook_passes_with_space_only_drivers(monkeypatch):
     assert result.status == "pass"
     assert "domain=space" in result.detail
     assert "kp" in result.detail
+
+
+def test_local_forecast_warns_when_current_conditions_are_stale(monkeypatch):
+    now = datetime.now(timezone.utc)
+    stale = (now - timedelta(minutes=45)).isoformat()
+    monkeypatch.setattr(monitor, "LOCAL_CURRENT_WARN_MS", 30 * 60 * 1000)
+    monkeypatch.setattr(
+        monitor,
+        "_get_json",
+        lambda path, **kwargs: {
+            "forecast_daily": [{"day": "2026-08-21"}],
+            "allergens": {},
+            "asof": stale,
+            "weather": {"obs_time": stale},
+        },
+    )
+
+    result = monitor.check_local_forecast()
+
+    assert result.status == "warn"
+    assert "weather_obs_age_minutes=45" in result.detail
+    assert "local_asof_age_minutes=45" in result.detail
+
+
+def test_local_forecast_passes_when_current_conditions_are_recent(monkeypatch):
+    now = datetime.now(timezone.utc)
+    fresh = (now - timedelta(minutes=5)).isoformat()
+    monkeypatch.setattr(monitor, "LOCAL_CURRENT_WARN_MS", 30 * 60 * 1000)
+    monkeypatch.setattr(
+        monitor,
+        "_get_json",
+        lambda path, **kwargs: {
+            "forecast_daily": [{"day": "2026-08-21"}],
+            "allergens": {},
+            "asof": fresh,
+            "weather": {"obs_time": fresh},
+        },
+    )
+
+    result = monitor.check_local_forecast()
+
+    assert result.status == "pass"
+    assert "weather_obs_age_minutes=5" in result.detail
+    assert "local_asof_age_minutes=5" in result.detail
 
 
 def test_get_json_retries_incomplete_read_once(monkeypatch):

@@ -336,3 +336,79 @@ async def test_local_check_returns_current_payload_when_forecast_attachment_fail
     assert data["where"]["zip"] == "78750"
     assert data["air"]["aqi"] == 57
     assert data["allergens"]["source"] == "google-pollen:forecast"
+
+
+@pytest.mark.anyio
+async def test_attach_forecast_daily_best_effort_prefers_geo_rows_from_payload(monkeypatch):
+    payload = {
+        "where": {"zip": "78754", "lat": 30.3504, "lon": -97.6140},
+    }
+    calls: list[dict] = []
+    geo_rows = [{"location_key": "geo:30.350,-97.614", "day": "2026-08-22"}]
+
+    async def _fake_ensure_local_forecast_daily_via_pool(**kwargs):
+        calls.append(dict(kwargs))
+        return geo_rows
+
+    monkeypatch.setattr(local, "zip_to_latlon", lambda zip_code: (30.3504046258412, -97.61398783976))  # noqa: ARG005
+    monkeypatch.setattr(local, "ensure_local_forecast_daily_via_pool", _fake_ensure_local_forecast_daily_via_pool)
+    monkeypatch.setattr(local, "serialize_local_forecast_rows", lambda rows: list(rows))
+
+    result = await local._attach_forecast_daily_best_effort(
+        "78754",
+        dict(payload),
+        refresh_if_stale=False,
+    )
+
+    assert result["forecast_daily"] == geo_rows
+    assert calls == [
+        {
+            "zip_code": "78754",
+            "lat": 30.3504046258412,
+            "lon": -97.61398783976,
+            "prefer_geo": True,
+            "refresh_if_stale": False,
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_attach_forecast_daily_best_effort_falls_back_to_zip_rows_when_geo_rows_missing(monkeypatch):
+    payload = {
+        "where": {"zip": "78754", "lat": 30.3504, "lon": -97.6140},
+    }
+    calls: list[dict] = []
+    zip_rows = [{"location_key": "zip:78754", "day": "2026-08-22"}]
+
+    async def _fake_ensure_local_forecast_daily_via_pool(**kwargs):
+        calls.append(dict(kwargs))
+        if kwargs.get("prefer_geo"):
+            return []
+        return zip_rows
+
+    monkeypatch.setattr(local, "zip_to_latlon", lambda zip_code: (30.3504046258412, -97.61398783976))  # noqa: ARG005
+    monkeypatch.setattr(local, "ensure_local_forecast_daily_via_pool", _fake_ensure_local_forecast_daily_via_pool)
+    monkeypatch.setattr(local, "serialize_local_forecast_rows", lambda rows: list(rows))
+
+    result = await local._attach_forecast_daily_best_effort(
+        "78754",
+        dict(payload),
+        refresh_if_stale=False,
+    )
+
+    assert result["forecast_daily"] == zip_rows
+    assert calls == [
+        {
+            "zip_code": "78754",
+            "lat": 30.3504046258412,
+            "lon": -97.61398783976,
+            "prefer_geo": True,
+            "refresh_if_stale": False,
+        },
+        {
+            "zip_code": "78754",
+            "lat": None,
+            "lon": None,
+            "refresh_if_stale": False,
+        },
+    ]

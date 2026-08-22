@@ -1,0 +1,33 @@
+{
+  "title": "Render Dashboard",
+  "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+  "contentKeys": [],
+  "contentProtoKeys": [
+    "constructor",
+    "export",
+    "exportGsuite"
+  ],
+  "cuaKeys": [],
+  "cuaProtoKeys": [
+    "constructor",
+    "click",
+    "scroll",
+    "double_click",
+    "type",
+    "keypress",
+    "drag",
+    "move",
+    "downloadMedia"
+  ],
+  "domCuaKeys": [],
+  "domCuaProtoKeys": [
+    "constructor",
+    "get_visible_dom",
+    "click",
+    "double_click",
+    "scroll",
+    "type",
+    "keypress",
+    "downloadMedia"
+  ]
+}

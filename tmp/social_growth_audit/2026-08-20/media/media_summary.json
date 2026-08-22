@@ -1,0 +1,32 @@
+[
+  {
+    "file": "tmp/social_growth_audit/2026-08-20/media/daily_caption.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_caption.jpg",
+    "bytes": 173619,
+    "content_type": "image/jpeg"
+  },
+  {
+    "file": "tmp/social_growth_audit/2026-08-20/media/daily_affects.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_affects.jpg",
+    "bytes": 324384,
+    "content_type": "image/jpeg"
+  },
+  {
+    "file": "tmp/social_growth_audit/2026-08-20/media/daily_stats.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_stats.jpg",
+    "bytes": 161109,
+    "content_type": "image/jpeg"
+  },
+  {
+    "file": "tmp/social_growth_audit/2026-08-20/media/daily_playbook.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_playbook.jpg",
+    "bytes": 227456,
+    "content_type": "image/jpeg"
+  },
+  {
+    "file": "tmp/social_growth_audit/2026-08-20/media/latest.mp4",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4",
+    "bytes": 1378418,
+    "content_type": "video/mp4"
+  }
+]

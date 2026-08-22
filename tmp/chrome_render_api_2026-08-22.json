@@ -1,0 +1,31 @@
+{
+  "contentKeys": [],
+  "contentProtoKeys": [
+    "constructor",
+    "export",
+    "exportGsuite"
+  ],
+  "cuaKeys": [],
+  "cuaProtoKeys": [
+    "constructor",
+    "click",
+    "scroll",
+    "double_click",
+    "type",
+    "keypress",
+    "drag",
+    "move",
+    "downloadMedia"
+  ],
+  "domKeys": [],
+  "domProtoKeys": [
+    "constructor",
+    "get_visible_dom",
+    "click",
+    "double_click",
+    "scroll",
+    "type",
+    "keypress",
+    "downloadMedia"
+  ]
+}

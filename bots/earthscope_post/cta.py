@@ -36,6 +36,33 @@ CTA_VARIANTS = [
         ),
     },
     {
+        "key": "pain-patterns",
+        "themes": ("pain",),
+        "card": "Pain flaring louder than usual? Gaia Eyes helps compare symptoms with environmental patterns.",
+        "caption": (
+            "Pain flaring louder than usual? Gaia Eyes helps compare symptoms with environmental "
+            "patterns and the week ahead."
+        ),
+    },
+    {
+        "key": "nervous-system-patterns",
+        "themes": ("nervous_system",),
+        "card": "Body buzzing for no clear reason? Gaia Eyes helps compare nervous-system patterns with your day.",
+        "caption": (
+            "Body buzzing for no clear reason? Gaia Eyes helps compare nervous-system patterns "
+            "with your day."
+        ),
+    },
+    {
+        "key": "fatigue-recovery-patterns",
+        "themes": ("fatigue", "recovery"),
+        "card": "Energy coming back in small steps? Gaia Eyes helps compare recovery patterns with your day.",
+        "caption": (
+            "Energy coming back in small steps? Gaia Eyes helps compare recovery patterns "
+            "with your day."
+        ),
+    },
+    {
         "key": "provider-stats",
         "themes": ("general", "symptom"),
         "card": "Tired of being dismissed? Turn symptom patterns into stats you can share.",
@@ -86,6 +113,33 @@ def _safe_float(value: Any) -> float | None:
 def _context_themes(context: Mapping[str, Any] | None) -> Sequence[str]:
     if not isinstance(context, Mapping):
         return ("general",)
+    context_text = " ".join(
+        str(context.get(key) or "")
+        for key in ("title", "caption", "affects", "voiceover", "reel_hook")
+    ).lower()
+    if any(term in context_text for term in ("pain", "ache", "aches", "joint", "joints", "muscle", "muscles")):
+        return ("pain",)
+    if any(
+        term in context_text
+        for term in ("buzzing", "buzz", "wired/tired", "wired tired", "jitters", "jittery", "revved")
+    ):
+        return ("nervous_system",)
+    if any(
+        term in context_text
+        for term in (
+            "fatigue",
+            "fatigued",
+            "heavy-limb",
+            "heavy limb",
+            "heavy-limbed",
+            "drained",
+            "recovery",
+            "energy comes back",
+            "energy returns",
+            "breathing room",
+        )
+    ):
+        return ("fatigue", "recovery")
     tone = str(context.get("tone") or "").lower()
     bands = context.get("bands") if isinstance(context.get("bands"), Mapping) else {}
     kp_band = str(bands.get("kp") or "").lower()

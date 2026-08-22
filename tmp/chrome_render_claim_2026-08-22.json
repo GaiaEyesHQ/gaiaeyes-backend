@@ -1,0 +1,36 @@
+{
+  "keys": [
+    "id",
+    "playwright",
+    "dom_cua",
+    "cua",
+    "content",
+    "clipboard",
+    "dev",
+    "capabilities"
+  ],
+  "protoKeys": [
+    "constructor",
+    "goto",
+    "markHandoff",
+    "markDeliverable",
+    "back",
+    "forward",
+    "reload",
+    "close",
+    "screenshot",
+    "title",
+    "url",
+    "getJsDialog"
+  ],
+  "tab": {
+    "id": "1623397987",
+    "playwright": {},
+    "dom_cua": {},
+    "cua": {},
+    "content": {},
+    "clipboard": {},
+    "dev": {},
+    "capabilities": {}
+  }
+}

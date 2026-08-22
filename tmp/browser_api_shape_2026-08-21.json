@@ -1,0 +1,19 @@
+{
+  "tabsKeys": [],
+  "tabsProtoKeys": [
+    "constructor",
+    "content",
+    "finalize",
+    "get",
+    "list",
+    "new",
+    "selected"
+  ],
+  "userKeys": [],
+  "userProtoKeys": [
+    "claimTab",
+    "constructor",
+    "history",
+    "openTabs"
+  ]
+}

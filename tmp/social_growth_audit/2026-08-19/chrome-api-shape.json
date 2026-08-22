@@ -1,0 +1,10 @@
+{
+  "chromeKeys": [
+    "browserId",
+    "capabilities",
+    "tabs",
+    "user"
+  ],
+  "tabsKeys": [],
+  "userKeys": []
+}

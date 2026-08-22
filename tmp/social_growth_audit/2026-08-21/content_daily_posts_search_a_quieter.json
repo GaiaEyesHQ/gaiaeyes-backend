@@ -1,0 +1,1202 @@
+[
+  {
+    "id": 807,
+    "day": "2026-08-12",
+    "platform": "ig",
+    "title": "A quieter day to catch your breath?",
+    "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+    "metrics_json": {
+      "tone": "neutral",
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -5.47,
+      "cmes_24h": 1.0,
+      "sections": {
+        "affects": "This quieter stretch may help some people feel more settled and less on-edge. Focus can hold a bit longer when the external push eases. If your system is still unwinding from earlier in the week, it may take a little time to fully feel the ease.",
+        "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "playbook": "- Pick one or two light tasks and pause between them\n- Take slow breaths and add a short walk or stretch\n- Keep screens dimmer and sound lower than usual\n- Check local pressure, air quality, and pollen\n- Hydrate and avoid overdoing caffeine",
+        "snapshot": "Signals are on the quiet side today with steady conditions and no notable flare activity. Solar wind is in a normal range and the magnetic field is only slightly tilted south. A CME was observed recently, but it’s background context for now.",
+        "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "reel_story": {
+          "hook": "A quieter day to catch your breath?",
+          "signal": "Space weather is quiet and the solar wind steady",
+          "effects": "Focus may hold a bit longer today",
+          "pattern": "Tackle one or two light tasks with pauses",
+          "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk."
+        }
+      },
+      "harmonics": {
+        "f1": 7.57,
+        "f2": 14.7,
+        "h3": null,
+        "h4": null
+      },
+      "flares_24h": 0,
+      "kp_max_24h": 2.67,
+      "space_json": {
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null,
+        "aurora_window": "Next 72h",
+        "aurora_headline": null
+      },
+      "space_outlook": {
+        "kp_now": 2.0,
+        "kp_max_24h": 2.67,
+        "aurora_window": "Next 72h",
+        "aurora_headline": "Confined to polar regions"
+      },
+      "solar_wind_kms": 438.0,
+      "voice_semantic": {
+        "date": "2026-08-12",
+        "kind": "earthscope_public_post",
+        "facts": {
+          "bz_min": -5.47,
+          "kp_now": 2.0,
+          "cmes_24h": 1.0,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.67,
+          "first_person": true,
+          "quakes_count": null,
+          "aurora_window": "Next 72h",
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "severe_summary": null,
+          "solar_wind_kms": 438.0,
+          "aurora_headline": null,
+          "schumann_value_hz": 7.57
+        },
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "reason": "neutral",
+              "priority": 1
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "reason": "neutral",
+              "priority": 2
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "reason": "neutral",
+              "priority": 3
+            }
+          ],
+          "secondary": []
+        },
+        "guardrails": {
+          "max_urgency": "notable",
+          "claim_strength": "observe_only",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "confidence_overall": "high",
+          "avoid_fear_language": true,
+          "avoid_causal_language": true,
+          "medical_disclaimer_level": "light"
+        },
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_summary_length": "medium",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ]
+        },
+        "user_context": {
+          "channel": "social_public",
+          "audience": "public"
+        },
+        "interpretation": {
+          "tone": "neutral",
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ]
+        },
+        "schema_version": "1.0"
+      },
+      "social_variants": {
+        "ig": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        },
+        "default": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        }
+      },
+      "schumann_value_hz": 7.57
+    },
+    "created_at": "2026-08-12T15:07:42.278107+00:00",
+    "updated_at": "2026-08-12T15:07:42.278107+00:00"
+  },
+  {
+    "id": 806,
+    "day": "2026-08-12",
+    "platform": "default",
+    "title": "A quieter day to catch your breath?",
+    "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+    "metrics_json": {
+      "tone": "neutral",
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -5.47,
+      "cmes_24h": 1.0,
+      "sections": {
+        "affects": "This quieter stretch may help some people feel more settled and less on-edge. Focus can hold a bit longer when the external push eases. If your system is still unwinding from earlier in the week, it may take a little time to fully feel the ease.",
+        "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "playbook": "- Pick one or two light tasks and pause between them\n- Take slow breaths and add a short walk or stretch\n- Keep screens dimmer and sound lower than usual\n- Check local pressure, air quality, and pollen\n- Hydrate and avoid overdoing caffeine",
+        "snapshot": "Signals are on the quiet side today with steady conditions and no notable flare activity. Solar wind is in a normal range and the magnetic field is only slightly tilted south. A CME was observed recently, but it’s background context for now.",
+        "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "reel_story": {
+          "hook": "A quieter day to catch your breath?",
+          "signal": "Space weather is quiet and the solar wind steady",
+          "effects": "Focus may hold a bit longer today",
+          "pattern": "Tackle one or two light tasks with pauses",
+          "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk."
+        }
+      },
+      "harmonics": {
+        "f1": 7.57,
+        "f2": 14.7,
+        "h3": null,
+        "h4": null
+      },
+      "flares_24h": 0,
+      "kp_max_24h": 2.67,
+      "space_json": {
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null,
+        "aurora_window": "Next 72h",
+        "aurora_headline": null
+      },
+      "space_outlook": {
+        "kp_now": 2.0,
+        "kp_max_24h": 2.67,
+        "aurora_window": "Next 72h",
+        "aurora_headline": "Confined to polar regions"
+      },
+      "solar_wind_kms": 438.0,
+      "voice_semantic": {
+        "date": "2026-08-12",
+        "kind": "earthscope_public_post",
+        "facts": {
+          "bz_min": -5.47,
+          "kp_now": 2.0,
+          "cmes_24h": 1.0,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.67,
+          "first_person": true,
+          "quakes_count": null,
+          "aurora_window": "Next 72h",
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "severe_summary": null,
+          "solar_wind_kms": 438.0,
+          "aurora_headline": null,
+          "schumann_value_hz": 7.57
+        },
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "reason": "neutral",
+              "priority": 1
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "reason": "neutral",
+              "priority": 2
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "reason": "neutral",
+              "priority": 3
+            }
+          ],
+          "secondary": []
+        },
+        "guardrails": {
+          "max_urgency": "notable",
+          "claim_strength": "observe_only",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "confidence_overall": "high",
+          "avoid_fear_language": true,
+          "avoid_causal_language": true,
+          "medical_disclaimer_level": "light"
+        },
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_summary_length": "medium",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ]
+        },
+        "user_context": {
+          "channel": "social_public",
+          "audience": "public"
+        },
+        "interpretation": {
+          "tone": "neutral",
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ]
+        },
+        "schema_version": "1.0"
+      },
+      "social_variants": {
+        "ig": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        },
+        "default": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        }
+      },
+      "schumann_value_hz": 7.57
+    },
+    "created_at": "2026-08-12T15:07:42.278107+00:00",
+    "updated_at": "2026-08-12T15:07:42.278107+00:00"
+  },
+  {
+    "id": 779,
+    "day": "2026-07-31",
+    "platform": "ig",
+    "title": "Mood Feeling Hard To Place?",
+    "caption": "A quieter day to catch your breath? Things look steady, so mood and body may ease in pockets, and any wired-and-tired edges can fade bit by bit. Keep plans light with gaps, and take a short walk or easy stretch to help your rhythm settle.",
+    "metrics_json": {
+      "tone": "neutral",
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -3.71,
+      "cmes_24h": 1.0,
+      "sections": {
+        "affects": "For some, mood and body tension can ease in pockets, making pacing smoother. Others may notice leftover wired-and-tired edges that fade gradually. Local weather and air factors may still amplify sensitivity in certain spots. The day supports recovery without demanding big output.",
+        "caption": "A quieter day to catch your breath? Things look steady, so mood and body may ease in pockets, and any wired-and-tired edges can fade bit by bit. Keep plans light with gaps, and take a short walk or easy stretch to help your rhythm settle.",
+        "playbook": "- Keep plans light; leave white space between\n- Do a short walk or gentle mobility\n- Practice slow breathing before transitions\n- Favor steady meals and hydration\n- Scan local storms, wind, AQI, and pollen",
+        "snapshot": "The geomagnetic picture is quiet and consistent. Solar wind sits in a normal range with a slight southward lean at moments. No solar flares showed up. One CME was observed with no evidence it’s on track for Earth.",
+        "voiceover": "A quieter day to catch your breath? Space weather sits steady—quiet geomagnetic conditions, normal solar wind, and no flares, with a slight southward lean like a light crosswind. Your body may feel steadier, with wired‑and‑tired edges softening bit by bit. Alternatively, energy may run a little flat, with attention drifting in small waves.",
+        "reel_story": {
+          "hook": "A quieter day to catch your breath?",
+          "signal": "Mostly calm space weather supports a breather",
+          "effects": "Steadier mood and tension easing in pockets",
+          "pattern": "Energy a bit flat, focus drifts gently",
+          "voiceover": "A quieter day to catch your breath? Space weather sits steady—quiet geomagnetic conditions, normal solar wind, and no flares, with a slight southward lean like a light crosswind. Your body may feel steadier, with wired‑and‑tired edges softening bit by bit. Alternatively, energy may run a little flat, with attention drifting in small waves."
+        }
+      },
+      "harmonics": {
+        "f1": 7.54,
+        "f2": 14.61,
+        "h3": null,
+        "h4": null
+      },
+      "flares_24h": 0,
+      "kp_max_24h": 2.0,
+      "space_json": {
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null,
+        "aurora_window": "Next 72h",
+        "aurora_headline": null
+      },
+      "space_outlook": {
+        "kp_now": 0.3,
+        "kp_max_24h": 2.0,
+        "aurora_window": "Next 72h",
+        "aurora_headline": "Confined to polar regions"
+      },
+      "solar_wind_kms": 315.0439203354298,
+      "voice_semantic": {
+        "date": "2026-07-31",
+        "kind": "earthscope_public_post",
+        "facts": {
+          "bz_min": -3.71,
+          "kp_now": 2.0,
+          "cmes_24h": 1.0,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "first_person": true,
+          "quakes_count": null,
+          "aurora_window": "Next 72h",
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "severe_summary": null,
+          "solar_wind_kms": 315.0439203354298,
+          "aurora_headline": null,
+          "schumann_value_hz": 7.54
+        },
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "reason": "neutral",
+              "priority": 1
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "reason": "neutral",
+              "priority": 2
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "reason": "neutral",
+              "priority": 3
+            }
+          ],
+          "secondary": []
+        },
+        "guardrails": {
+          "max_urgency": "notable",
+          "claim_strength": "observe_only",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "confidence_overall": "high",
+          "avoid_fear_language": true,
+          "avoid_causal_language": true,
+          "medical_disclaimer_level": "light"
+        },
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_summary_length": "medium",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ]
+        },
+        "user_context": {
+          "channel": "social_public",
+          "audience": "public"
+        },
+        "interpretation": {
+          "tone": "neutral",
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ]
+        },
+        "schema_version": "1.0"
+      },
+      "social_variants": {
+        "ig": {
+          "caption": "A quieter day to catch your breath? Things look steady, so mood and body may ease in pockets, and any wired-and-tired edges can fade bit by bit. Keep plans light with gaps, and take a short walk or easy stretch to help your rhythm settle.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Pacing #ChronicIllness #MigraineCommunity #Mood #SelfCare #Wellbeing #Allergens"
+        },
+        "default": {
+          "caption": "A quieter day to catch your breath? Things look steady, so mood and body may ease in pockets, and any wired-and-tired edges can fade bit by bit. Keep plans light with gaps, and take a short walk or easy stretch to help your rhythm settle.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Pacing #ChronicIllness #MigraineCommunity #Mood #SelfCare #Wellbeing #Allergens"
+        }
+      },
+      "schumann_value_hz": 7.54
+    },
+    "created_at": "2026-07-31T16:05:47.238717+00:00",
+    "updated_at": "2026-07-31T16:05:47.238717+00:00"
+  },
+  {
+    "id": 778,
+    "day": "2026-07-31",
+    "platform": "default",
+    "title": "Mood Feeling Hard To Place?",
+    "caption": "A quieter day to catch your breath? Things look steady, so mood and body may ease in pockets, and any wired-and-tired edges can fade bit by bit. Keep plans light with gaps, and take a short walk or easy stretch to help your rhythm settle.",
+    "metrics_json": {
+      "tone": "neutral",
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -3.71,
+      "cmes_24h": 1.0,
+      "sections": {
+        "affects": "For some, mood and body tension can ease in pockets, making pacing smoother. Others may notice leftover wired-and-tired edges that fade gradually. Local weather and air factors may still amplify sensitivity in certain spots. The day supports recovery without demanding big output.",
+        "caption": "A quieter day to catch your breath? Things look steady, so mood and body may ease in pockets, and any wired-and-tired edges can fade bit by bit. Keep plans light with gaps, and take a short walk or easy stretch to help your rhythm settle.",
+        "playbook": "- Keep plans light; leave white space between\n- Do a short walk or gentle mobility\n- Practice slow breathing before transitions\n- Favor steady meals and hydration\n- Scan local storms, wind, AQI, and pollen",
+        "snapshot": "The geomagnetic picture is quiet and consistent. Solar wind sits in a normal range with a slight southward lean at moments. No solar flares showed up. One CME was observed with no evidence it’s on track for Earth.",
+        "voiceover": "A quieter day to catch your breath? Space weather sits steady—quiet geomagnetic conditions, normal solar wind, and no flares, with a slight southward lean like a light crosswind. Your body may feel steadier, with wired‑and‑tired edges softening bit by bit. Alternatively, energy may run a little flat, with attention drifting in small waves.",
+        "reel_story": {
+          "hook": "A quieter day to catch your breath?",
+          "signal": "Mostly calm space weather supports a breather",
+          "effects": "Steadier mood and tension easing in pockets",
+          "pattern": "Energy a bit flat, focus drifts gently",
+          "voiceover": "A quieter day to catch your breath? Space weather sits steady—quiet geomagnetic conditions, normal solar wind, and no flares, with a slight southward lean like a light crosswind. Your body may feel steadier, with wired‑and‑tired edges softening bit by bit. Alternatively, energy may run a little flat, with attention drifting in small waves."
+        }
+      },
+      "harmonics": {
+        "f1": 7.54,
+        "f2": 14.61,
+        "h3": null,
+        "h4": null
+      },
+      "flares_24h": 0,
+      "kp_max_24h": 2.0,
+      "space_json": {
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null,
+        "aurora_window": "Next 72h",
+        "aurora_headline": null
+      },
+      "space_outlook": {
+        "kp_now": 0.3,
+        "kp_max_24h": 2.0,
+        "aurora_window": "Next 72h",
+        "aurora_headline": "Confined to polar regions"
+      },
+      "solar_wind_kms": 315.0439203354298,
+      "voice_semantic": {
+        "date": "2026-07-31",
+        "kind": "earthscope_public_post",
+        "facts": {
+          "bz_min": -3.71,
+          "kp_now": 2.0,
+          "cmes_24h": 1.0,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "first_person": true,
+          "quakes_count": null,
+          "aurora_window": "Next 72h",
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "severe_summary": null,
+          "solar_wind_kms": 315.0439203354298,
+          "aurora_headline": null,
+          "schumann_value_hz": 7.54
+        },
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "reason": "neutral",
+              "priority": 1
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "reason": "neutral",
+              "priority": 2
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "reason": "neutral",
+              "priority": 3
+            }
+          ],
+          "secondary": []
+        },
+        "guardrails": {
+          "max_urgency": "notable",
+          "claim_strength": "observe_only",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "confidence_overall": "high",
+          "avoid_fear_language": true,
+          "avoid_causal_language": true,
+          "medical_disclaimer_level": "light"
+        },
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_summary_length": "medium",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ]
+        },
+        "user_context": {
+          "channel": "social_public",
+          "audience": "public"
+        },
+        "interpretation": {
+          "tone": "neutral",
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ]
+        },
+        "schema_version": "1.0"
+      },
+      "social_variants": {
+        "ig": {
+          "caption": "A quieter day to catch your breath? Things look steady, so mood and body may ease in pockets, and any wired-and-tired edges can fade bit by bit. Keep plans light with gaps, and take a short walk or easy stretch to help your rhythm settle.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Pacing #ChronicIllness #MigraineCommunity #Mood #SelfCare #Wellbeing #Allergens"
+        },
+        "default": {
+          "caption": "A quieter day to catch your breath? Things look steady, so mood and body may ease in pockets, and any wired-and-tired edges can fade bit by bit. Keep plans light with gaps, and take a short walk or easy stretch to help your rhythm settle.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Pacing #ChronicIllness #MigraineCommunity #Mood #SelfCare #Wellbeing #Allergens"
+        }
+      },
+      "schumann_value_hz": 7.54
+    },
+    "created_at": "2026-07-31T16:05:47.238717+00:00",
+    "updated_at": "2026-07-31T16:05:47.238717+00:00"
+  },
+  {
+    "id": 767,
+    "day": "2026-07-25",
+    "platform": "ig",
+    "title": "A quieter day to catch your breath?",
+    "caption": "A quieter day to catch your breath? The sky feels steady today, like a smooth stretch of road—you may feel clearer, and a little buzz or tired can still hang around. Keep plans light, take slow breathing breaks and easy movement, and save heavy lifts for later.",
+    "metrics_json": {
+      "tone": "neutral",
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "elevated"
+      },
+      "bz_min": -3.64,
+      "cmes_24h": 0,
+      "sections": {
+        "affects": "Many people may feel steadier and a touch clearer. Some may still notice lingering buzz or fatigue from recent days. Local pressure, heat, humidity, or allergens can add their own load for sensitive folks.",
+        "caption": "A quieter day to catch your breath? The sky feels steady today, like a smooth stretch of road—you may feel clearer, and a little buzz or tired can still hang around. Keep plans light, take slow breathing breaks and easy movement, and save heavy lifts for later.",
+        "playbook": "- Take slow breathing breaks and easy movement\n- Keep plans light; save heavy lifts for later\n- Get natural light early and dim light in the evening\n- Hydrate and keep caffeine earlier in the day\n- Check local storms, AQI, and pollen if you’re sensitive",
+        "snapshot": "Geomagnetic conditions are quiet. Solar wind is moving a bit fast, with a slight south tilt. No flares or eruptions reported. Overall, a steadier day with room to recover.",
+        "voiceover": "A quieter day to catch your breath? Geomagnetic conditions are quiet. Solar wind is moving a bit fast, with a slight south tilt. Many people may feel steadier and a touch clearer.",
+        "reel_story": {
+          "hook": "A quieter day to catch your breath?",
+          "signal": "Geomagnetic conditions are quiet.",
+          "effects": "Many people may feel steadier and a touch clearer.",
+          "pattern": "Some may still notice lingering buzz or fatigue from recent days.",
+          "voiceover": "A quieter day to catch your breath? Geomagnetic conditions are quiet. Solar wind is moving a bit fast, with a slight south tilt. Many people may feel steadier and a touch clearer."
+        }
+      },
+      "harmonics": {
+        "f1": 7.61,
+        "f2": 15.0,
+        "h3": null,
+        "h4": null
+      },
+      "flares_24h": 0,
+      "kp_max_24h": 2.33,
+      "space_json": {
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null,
+        "aurora_window": "Next 72h",
+        "aurora_headline": null
+      },
+      "space_outlook": {
+        "kp_now": 1.0,
+        "kp_max_24h": 2.33,
+        "aurora_window": "Next 72h",
+        "aurora_headline": "Confined to polar regions"
+      },
+      "solar_wind_kms": 505.75106145251397,
+      "voice_semantic": {
+        "date": "2026-07-25",
+        "kind": "earthscope_public_post",
+        "facts": {
+          "bz_min": -3.64,
+          "kp_now": 2.0,
+          "cmes_24h": 0.0,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.33,
+          "first_person": true,
+          "quakes_count": null,
+          "aurora_window": "Next 72h",
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "severe_summary": null,
+          "solar_wind_kms": 505.75106145251397,
+          "aurora_headline": null,
+          "schumann_value_hz": 7.61
+        },
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "reason": "neutral",
+              "priority": 1
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "reason": "neutral",
+              "priority": 2
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "reason": "neutral",
+              "priority": 3
+            }
+          ],
+          "secondary": []
+        },
+        "guardrails": {
+          "max_urgency": "notable",
+          "claim_strength": "observe_only",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "confidence_overall": "high",
+          "avoid_fear_language": true,
+          "avoid_causal_language": true,
+          "medical_disclaimer_level": "light"
+        },
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_summary_length": "medium",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ]
+        },
+        "user_context": {
+          "channel": "social_public",
+          "audience": "public"
+        },
+        "interpretation": {
+          "tone": "neutral",
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "elevated"
+          },
+          "driver_bits": [
+            "southward field orientation",
+            "faster solar wind"
+          ]
+        },
+        "schema_version": "1.0"
+      },
+      "social_variants": {
+        "fb": {
+          "caption": "Feeling a little steadier and clearer today? hitting a smooth stretch of road after recent bumps—there can still be a faint buzz or a wave of tired tagging along. A quieter backdrop gives your system room to reset, but local pressure, heat, humidity, or allergens can still stack the load if you’re sensitive. Keep plans light, sprinkle in slow breathing and easy movement, and save the heavy lifts for another day. Get morning light, keep caffeine earlier, hydrate, and dim things down this evening to help the reset stick. Are you noticing the calm, or is the leftover buzz or tired still the loudest note?",
+          "hashtags": "#GaiaEyes #ListenToYourBody #Pacing #NervousSystemCare #Hydration"
+        },
+        "ig": {
+          "caption": "A quieter day to catch your breath? The sky feels steady today, like a smooth stretch of road—you may feel clearer, and a little buzz or tired can still hang around. Keep plans light, take slow breathing breaks and easy movement, and save heavy lifts for later.",
+          "hashtags": "#GaiaEyes #SpaceWeather #NervousSystem #ChronicIllness #MigraineCommunity #Sensitivity #Pacing #SelfCare #Wellbeing"
+        },
+        "default": {
+          "caption": "A quieter day to catch your breath? The sky feels steady today, like a smooth stretch of road—you may feel clearer, and a little buzz or tired can still hang around. Keep plans light, take slow breathing breaks and easy movement, and save heavy lifts for later.",
+          "hashtags": "#GaiaEyes #SpaceWeather #NervousSystem #ChronicIllness #MigraineCommunity #Sensitivity #Pacing #SelfCare #Wellbeing"
+        }
+      },
+      "schumann_value_hz": 7.61
+    },
+    "created_at": "2026-07-25T15:07:16.481994+00:00",
+    "updated_at": "2026-07-25T15:07:16.481994+00:00"
+  },
+  {
+    "id": 766,
+    "day": "2026-07-25",
+    "platform": "default",
+    "title": "A quieter day to catch your breath?",
+    "caption": "A quieter day to catch your breath? The sky feels steady today, like a smooth stretch of road—you may feel clearer, and a little buzz or tired can still hang around. Keep plans light, take slow breathing breaks and easy movement, and save heavy lifts for later.",
+    "metrics_json": {
+      "tone": "neutral",
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "elevated"
+      },
+      "bz_min": -3.64,
+      "cmes_24h": 0,
+      "sections": {
+        "affects": "Many people may feel steadier and a touch clearer. Some may still notice lingering buzz or fatigue from recent days. Local pressure, heat, humidity, or allergens can add their own load for sensitive folks.",
+        "caption": "A quieter day to catch your breath? The sky feels steady today, like a smooth stretch of road—you may feel clearer, and a little buzz or tired can still hang around. Keep plans light, take slow breathing breaks and easy movement, and save heavy lifts for later.",
+        "playbook": "- Take slow breathing breaks and easy movement\n- Keep plans light; save heavy lifts for later\n- Get natural light early and dim light in the evening\n- Hydrate and keep caffeine earlier in the day\n- Check local storms, AQI, and pollen if you’re sensitive",
+        "snapshot": "Geomagnetic conditions are quiet. Solar wind is moving a bit fast, with a slight south tilt. No flares or eruptions reported. Overall, a steadier day with room to recover.",
+        "voiceover": "A quieter day to catch your breath? Geomagnetic conditions are quiet. Solar wind is moving a bit fast, with a slight south tilt. Many people may feel steadier and a touch clearer.",
+        "reel_story": {
+          "hook": "A quieter day to catch your breath?",
+          "signal": "Geomagnetic conditions are quiet.",
+          "effects": "Many people may feel steadier and a touch clearer.",
+          "pattern": "Some may still notice lingering buzz or fatigue from recent days.",
+          "voiceover": "A quieter day to catch your breath? Geomagnetic conditions are quiet. Solar wind is moving a bit fast, with a slight south tilt. Many people may feel steadier and a touch clearer."
+        }
+      },
+      "harmonics": {
+        "f1": 7.61,
+        "f2": 15.0,
+        "h3": null,
+        "h4": null
+      },
+      "flares_24h": 0,
+      "kp_max_24h": 2.33,
+      "space_json": {
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null,
+        "aurora_window": "Next 72h",
+        "aurora_headline": null
+      },
+      "space_outlook": {
+        "kp_now": 1.0,
+        "kp_max_24h": 2.33,
+        "aurora_window": "Next 72h",
+        "aurora_headline": "Confined to polar regions"
+      },
+      "solar_wind_kms": 505.75106145251397,
+      "voice_semantic": {
+        "date": "2026-07-25",
+        "kind": "earthscope_public_post",
+        "facts": {
+          "bz_min": -3.64,
+          "kp_now": 2.0,
+          "cmes_24h": 0.0,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.33,
+          "first_person": true,
+          "quakes_count": null,
+          "aurora_window": "Next 72h",
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "severe_summary": null,
+          "solar_wind_kms": 505.75106145251397,
+          "aurora_headline": null,
+          "schumann_value_hz": 7.61
+        },
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "reason": "neutral",
+              "priority": 1
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "reason": "neutral",
+              "priority": 2
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "reason": "neutral",
+              "priority": 3
+            }
+          ],
+          "secondary": []
+        },
+        "guardrails": {
+          "max_urgency": "notable",
+          "claim_strength": "observe_only",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "confidence_overall": "high",
+          "avoid_fear_language": true,
+          "avoid_causal_language": true,
+          "medical_disclaimer_level": "light"
+        },
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_summary_length": "medium",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ]
+        },
+        "user_context": {
+          "channel": "social_public",
+          "audience": "public"
+        },
+        "interpretation": {
+          "tone": "neutral",
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "elevated"
+          },
+          "driver_bits": [
+            "southward field orientation",
+            "faster solar wind"
+          ]
+        },
+        "schema_version": "1.0"
+      },
+      "social_variants": {
+        "fb": {
+          "caption": "Feeling a little steadier and clearer today? hitting a smooth stretch of road after recent bumps—there can still be a faint buzz or a wave of tired tagging along. A quieter backdrop gives your system room to reset, but local pressure, heat, humidity, or allergens can still stack the load if you’re sensitive. Keep plans light, sprinkle in slow breathing and easy movement, and save the heavy lifts for another day. Get morning light, keep caffeine earlier, hydrate, and dim things down this evening to help the reset stick. Are you noticing the calm, or is the leftover buzz or tired still the loudest note?",
+          "hashtags": "#GaiaEyes #ListenToYourBody #Pacing #NervousSystemCare #Hydration"
+        },
+        "ig": {
+          "caption": "A quieter day to catch your breath? The sky feels steady today, like a smooth stretch of road—you may feel clearer, and a little buzz or tired can still hang around. Keep plans light, take slow breathing breaks and easy movement, and save heavy lifts for later.",
+          "hashtags": "#GaiaEyes #SpaceWeather #NervousSystem #ChronicIllness #MigraineCommunity #Sensitivity #Pacing #SelfCare #Wellbeing"
+        },
+        "default": {
+          "caption": "A quieter day to catch your breath? The sky feels steady today, like a smooth stretch of road—you may feel clearer, and a little buzz or tired can still hang around. Keep plans light, take slow breathing breaks and easy movement, and save heavy lifts for later.",
+          "hashtags": "#GaiaEyes #SpaceWeather #NervousSystem #ChronicIllness #MigraineCommunity #Sensitivity #Pacing #SelfCare #Wellbeing"
+        }
+      },
+      "schumann_value_hz": 7.61
+    },
+    "created_at": "2026-07-25T15:07:16.481994+00:00",
+    "updated_at": "2026-07-25T15:07:16.481994+00:00"
+  },
+  {
+    "id": 807,
+    "day": "2026-08-12",
+    "platform": "ig",
+    "title": "A quieter day to catch your breath?",
+    "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+    "metrics_json": {
+      "tone": "neutral",
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -5.47,
+      "cmes_24h": 1.0,
+      "sections": {
+        "affects": "This quieter stretch may help some people feel more settled and less on-edge. Focus can hold a bit longer when the external push eases. If your system is still unwinding from earlier in the week, it may take a little time to fully feel the ease.",
+        "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "playbook": "- Pick one or two light tasks and pause between them\n- Take slow breaths and add a short walk or stretch\n- Keep screens dimmer and sound lower than usual\n- Check local pressure, air quality, and pollen\n- Hydrate and avoid overdoing caffeine",
+        "snapshot": "Signals are on the quiet side today with steady conditions and no notable flare activity. Solar wind is in a normal range and the magnetic field is only slightly tilted south. A CME was observed recently, but it’s background context for now.",
+        "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "reel_story": {
+          "hook": "A quieter day to catch your breath?",
+          "signal": "Space weather is quiet and the solar wind steady",
+          "effects": "Focus may hold a bit longer today",
+          "pattern": "Tackle one or two light tasks with pauses",
+          "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk."
+        }
+      },
+      "harmonics": {
+        "f1": 7.57,
+        "f2": 14.7,
+        "h3": null,
+        "h4": null
+      },
+      "flares_24h": 0,
+      "kp_max_24h": 2.67,
+      "space_json": {
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null,
+        "aurora_window": "Next 72h",
+        "aurora_headline": null
+      },
+      "space_outlook": {
+        "kp_now": 2.0,
+        "kp_max_24h": 2.67,
+        "aurora_window": "Next 72h",
+        "aurora_headline": "Confined to polar regions"
+      },
+      "solar_wind_kms": 438.0,
+      "voice_semantic": {
+        "date": "2026-08-12",
+        "kind": "earthscope_public_post",
+        "facts": {
+          "bz_min": -5.47,
+          "kp_now": 2.0,
+          "cmes_24h": 1.0,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.67,
+          "first_person": true,
+          "quakes_count": null,
+          "aurora_window": "Next 72h",
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "severe_summary": null,
+          "solar_wind_kms": 438.0,
+          "aurora_headline": null,
+          "schumann_value_hz": 7.57
+        },
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "reason": "neutral",
+              "priority": 1
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "reason": "neutral",
+              "priority": 2
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "reason": "neutral",
+              "priority": 3
+            }
+          ],
+          "secondary": []
+        },
+        "guardrails": {
+          "max_urgency": "notable",
+          "claim_strength": "observe_only",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "confidence_overall": "high",
+          "avoid_fear_language": true,
+          "avoid_causal_language": true,
+          "medical_disclaimer_level": "light"
+        },
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_summary_length": "medium",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ]
+        },
+        "user_context": {
+          "channel": "social_public",
+          "audience": "public"
+        },
+        "interpretation": {
+          "tone": "neutral",
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ]
+        },
+        "schema_version": "1.0"
+      },
+      "social_variants": {
+        "ig": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        },
+        "default": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        }
+      },
+      "schumann_value_hz": 7.57
+    },
+    "created_at": "2026-08-12T15:07:42.278107+00:00",
+    "updated_at": "2026-08-12T15:07:42.278107+00:00"
+  },
+  {
+    "id": 806,
+    "day": "2026-08-12",
+    "platform": "default",
+    "title": "A quieter day to catch your breath?",
+    "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+    "metrics_json": {
+      "tone": "neutral",
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -5.47,
+      "cmes_24h": 1.0,
+      "sections": {
+        "affects": "This quieter stretch may help some people feel more settled and less on-edge. Focus can hold a bit longer when the external push eases. If your system is still unwinding from earlier in the week, it may take a little time to fully feel the ease.",
+        "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "playbook": "- Pick one or two light tasks and pause between them\n- Take slow breaths and add a short walk or stretch\n- Keep screens dimmer and sound lower than usual\n- Check local pressure, air quality, and pollen\n- Hydrate and avoid overdoing caffeine",
+        "snapshot": "Signals are on the quiet side today with steady conditions and no notable flare activity. Solar wind is in a normal range and the magnetic field is only slightly tilted south. A CME was observed recently, but it’s background context for now.",
+        "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+        "reel_story": {
+          "hook": "A quieter day to catch your breath?",
+          "signal": "Space weather is quiet and the solar wind steady",
+          "effects": "Focus may hold a bit longer today",
+          "pattern": "Tackle one or two light tasks with pauses",
+          "voiceover": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk."
+        }
+      },
+      "harmonics": {
+        "f1": 7.57,
+        "f2": 14.7,
+        "h3": null,
+        "h4": null
+      },
+      "flares_24h": 0,
+      "kp_max_24h": 2.67,
+      "space_json": {
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null,
+        "aurora_window": "Next 72h",
+        "aurora_headline": null
+      },
+      "space_outlook": {
+        "kp_now": 2.0,
+        "kp_max_24h": 2.67,
+        "aurora_window": "Next 72h",
+        "aurora_headline": "Confined to polar regions"
+      },
+      "solar_wind_kms": 438.0,
+      "voice_semantic": {
+        "date": "2026-08-12",
+        "kind": "earthscope_public_post",
+        "facts": {
+          "bz_min": -5.47,
+          "kp_now": 2.0,
+          "cmes_24h": 1.0,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.67,
+          "first_person": true,
+          "quakes_count": null,
+          "aurora_window": "Next 72h",
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "severe_summary": null,
+          "solar_wind_kms": 438.0,
+          "aurora_headline": null,
+          "schumann_value_hz": 7.57
+        },
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "reason": "neutral",
+              "priority": 1
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "reason": "neutral",
+              "priority": 2
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "reason": "neutral",
+              "priority": 3
+            }
+          ],
+          "secondary": []
+        },
+        "guardrails": {
+          "max_urgency": "notable",
+          "claim_strength": "observe_only",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "confidence_overall": "high",
+          "avoid_fear_language": true,
+          "avoid_causal_language": true,
+          "medical_disclaimer_level": "light"
+        },
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_summary_length": "medium",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ]
+        },
+        "user_context": {
+          "channel": "social_public",
+          "audience": "public"
+        },
+        "interpretation": {
+          "tone": "neutral",
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ]
+        },
+        "schema_version": "1.0"
+      },
+      "social_variants": {
+        "ig": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        },
+        "default": {
+          "caption": "A quieter day to catch your breath? Space is mostly steady, so focus may hold a bit longer. Pick one or two light tasks, pause between them, and add slow breathing or a short walk.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #MigraineCommunity #HeadacheAwareness #BrainFog #Pacing #SelfCare #NervousSystem"
+        }
+      },
+      "schumann_value_hz": 7.57
+    },
+    "created_at": "2026-08-12T15:07:42.278107+00:00",
+    "updated_at": "2026-08-12T15:07:42.278107+00:00"
+  }
+]

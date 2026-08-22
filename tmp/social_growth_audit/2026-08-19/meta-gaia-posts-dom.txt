@@ -1,0 +1,564 @@
+{
+  "title": "Meta Business Suite",
+  "url": "https://business.facebook.com/latest/posts/published_posts/?asset_id=772867052570153&business_id=762318242937819&ir_qe_exposed=1"
+}
+
+- heading "Content" [level=1]
+- generic: Schedule, publish and manage posts, reels and stories, and more.
+- toolbar:
+  - button "Export data":
+    - generic: Export data
+  - button "Open export options":
+    - generic: Open export options
+  - button "Create reel":
+    - generic: Create reel
+  - button "Create post":
+    - generic: Create post
+  - button "Create post":
+    - generic: Create post
+  - button "Facebook":
+    - img "Facebook"
+- navigation "Content":
+  - generic: Content
+  - list:
+    - link "Posts & reels":
+      - /url: https://business.facebook.com/latest/posts/published_posts?business_id=762318242937819&asset_id=772867052570153
+    - generic: Posts & reels
+    - link "Stories":
+      - /url: https://business.facebook.com/latest/posts/active_stories?business_id=762318242937819&asset_id=772867052570153
+    - generic: Stories
+    - link "A/B tests":
+      - /url: https://business.facebook.com/latest/posts/ab_testing?business_id=762318242937819&asset_id=772867052570153
+    - generic: A/B tests
+    - link "Feed & grid":
+      - /url: https://business.facebook.com/latest/posts/feed_and_grid?business_id=762318242937819&asset_id=772867052570153
+    - generic: Feed & grid
+    - link "Mentions & tags":
+      - /url: https://business.facebook.com/latest/posts/tagged_content?business_id=762318242937819&asset_id=772867052570153
+    - generic: Mentions & tags
+    - link "Clips":
+      - /url: https://business.facebook.com/latest/posts/all_clips?business_id=762318242937819&asset_id=772867052570153
+    - generic: Clips
+- navigation "Collections":
+  - generic: Collections
+  - list:
+    - link "Playlists":
+      - /url: https://business.facebook.com/latest/posts/playlists?business_id=762318242937819&asset_id=772867052570153
+    - generic: Playlists
+    - link "Series":
+      - /url: https://business.facebook.com/latest/posts/series?business_id=762318242937819&asset_id=772867052570153
+    - generic: Series
+- navigation "Creative assets":
+  - generic: Creative assets
+  - list:
+    - link "Ready-made reels":
+      - /url: https://business.facebook.com/latest/posts/ready_made_reels?business_id=762318242937819&asset_id=772867052570153
+    - generic: Ready-made reels
+    - link "Videos you can crosspost":
+      - /url: https://business.facebook.com/latest/posts/videos_you_can_crosspost?business_id=762318242937819&asset_id=772867052570153
+    - generic: Videos you can crosspost
+- button "Expand":
+  - generic: Expand
+- heading "New viewers metric for content published after July 31, 2025" [level=4]
+- button "Close":
+  - generic: Close
+- generic: Use this new metric to help better understand who sees your content across Meta technologies. The reach metric will no longer be shown on Meta Business Suite, but you can still find it in Ads Manager.
+- button "See more":
+  - generic: See more
+- tablist:
+  - tab "Published" [selected]:
+    - generic: Published
+  - tab "Scheduled":
+    - generic: Scheduled
+  - tab "Drafts":
+    - generic: Drafts
+  - tab "Expiring":
+    - generic: Expiring
+  - tab "Expired":
+    - generic: Expired
+  - tab "Ad Posts":
+    - generic: Ad Posts
+- generic: Filter
+- combobox "Filter Filter":
+  - generic: Filter
+- text: Search by ID or caption
+- textbox "Search by ID or caption"
+- button "Last 90 days":
+  - generic: Last 90 days
+- button "Columns":
+  - generic: Columns
+- grid "Published posts":
+  - rowgroup:
+    - row "Select all Title Date published Status Reach Views Viewers Follows Interactions Likes and reactions Comments Shares Saves Link clicks Watch time Video average play time 3-second views Approximate in-stream ad earnings":
+      - columnheader "Select all":
+        - checkbox "Select all"
+      - columnheader "Title":
+        - heading "Title" [level=4]:
+          - generic: Title
+      - columnheader "Date published":
+        - button "Date published":
+          - heading "Date published" [level=4]:
+            - generic: Date published
+        - separator:
+          - separator
+      - columnheader "Status":
+        - button "Status":
+          - heading "Status" [level=4]:
+            - generic: Status
+        - separator:
+          - separator
+      - columnheader "Reach":
+        - button "Reach":
+          - heading "Reach" [level=4]:
+            - generic: Reach
+        - separator:
+          - separator
+      - columnheader "Views":
+        - button "Views":
+          - heading "Views" [level=4]:
+            - generic: Views
+        - separator:
+          - separator
+      - columnheader "Viewers":
+        - button "Viewers":
+          - heading "Viewers" [level=4]:
+            - generic: Viewers
+        - separator:
+          - separator
+      - columnheader "Follows":
+        - button "Follows":
+          - heading "Follows" [level=4]:
+            - generic: Follows
+        - separator:
+          - separator
+      - columnheader "Interactions":
+        - button "Interactions":
+          - heading "Interactions" [level=4]:
+            - generic: Interactions
+        - separator:
+          - separator
+      - columnheader "Likes and reactions":
+        - button "Likes and reactions":
+          - heading "Likes and reactions" [level=4]:
+            - generic: Likes and reactions
+        - separator:
+          - separator
+      - columnheader "Comments":
+        - button "Comments":
+          - heading "Comments" [level=4]:
+            - generic: Comments
+        - separator:
+          - separator
+      - columnheader "Shares":
+        - button "Shares":
+          - heading "Shares" [level=4]:
+            - generic: Shares
+        - separator:
+          - separator
+      - columnheader "Saves":
+        - button "Saves":
+          - heading "Saves" [level=4]:
+            - generic: Saves
+        - separator:
+          - separator
+      - columnheader "Link clicks":
+        - button "Link clicks":
+          - heading "Link clicks" [level=4]:
+            - generic: Link clicks
+        - separator:
+          - separator
+      - columnheader "Watch time":
+        - button "Watch time":
+          - heading "Watch time" [level=4]:
+            - generic: Watch time
+        - separator:
+          - separator
+      - columnheader "Video average play time":
+        - button "Video average play time":
+          - heading "Video average play time" [level=4]:
+            - generic: Video average play time
+        - separator:
+          - separator
+      - columnheader "3-second views":
+        - button "3-second views":
+          - heading "3-second views" [level=4]:
+            - generic: 3-second views
+        - separator:
+          - separator
+      - columnheader "Approximate in-stream ad earnings":
+        - button "Approximate in-stream ad earnings":
+          - heading "Approximate in-stream ad earnings" [level=4]:
+            - generic: Approximate in-stream ad earnings
+        - separator:
+          - separator
+  - rowgroup:
+    - 'row "Select item with id 122179080680961753 Facebook 0:18 Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery Reel Gaia Eyes Boost Open Dropdown Wed Aug 19, 9:53am Not currently boosted Not a crosspost 193 219 193 0 1 1 0 0 0 ‑‑ 663,743 3s 39 $0.00"':
+      - gridcell "Select item with id 122179080680961753":
+        - checkbox "Select item with id 122179080680961753"
+      - 'gridcell "Facebook 0:18 Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery Reel Gaia Eyes Boost Open Dropdown"':
+        - img "Facebook"
+        - generic: 0:18
+        - generic: "Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery"
+        - generic: Reel
+        - generic: Gaia Eyes
+        - button "Boost":
+          - generic: Boost
+        - button "Open Dropdown":
+          - generic: Open Dropdown
+      - gridcell "Wed Aug 19, 9:53am":
+        - button "Wed Aug 19, 9:53am":
+          - generic: Wed Aug 19, 9:53am
+      - gridcell "Not currently boosted Not a crosspost":
+        - button "Not currently boosted Not a crosspost":
+          - generic "Not currently boosted":
+          - generic "Not a crosspost":
+      - gridcell "193":
+        - button "193":
+          - generic: "193"
+      - gridcell "219":
+        - button "219":
+          - generic: "219"
+      - gridcell "193":
+        - button "193":
+          - generic: "193"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "1":
+        - button "1":
+          - generic: "1"
+      - gridcell "1":
+        - button "1":
+          - generic: "1"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "663,743":
+        - button "663,743":
+          - generic: 663,743
+      - gridcell "3s":
+        - button "3s":
+          - generic: 3s
+      - gridcell "39":
+        - button "39":
+          - generic: "39"
+      - gridcell "$0.00":
+        - button "$0.00":
+          - generic: $0.00
+    - 'row "Select item with id 18067493954720549 Instagram 0:18 Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. Headaches or sinus pressure flaring? Gaia Eyes helps compare symptoms with environmental factors and the week ahead. Download Gaia Eyes: gaiaeyes.com/app #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery Reel eyes.gaia Boost Open Dropdown Wed Aug 19, 9:52am Not currently boosted 22 23 ‑‑ 0 0 0 0 0 0 ‑‑ 26s 1s ‑‑ ‑‑"':
+      - gridcell "Select item with id 18067493954720549":
+        - checkbox "Select item with id 18067493954720549"
+      - 'gridcell "Instagram 0:18 Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. Headaches or sinus pressure flaring? Gaia Eyes helps compare symptoms with environmental factors and the week ahead. Download Gaia Eyes: gaiaeyes.com/app #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery Reel eyes.gaia Boost Open Dropdown"':
+        - img "Instagram"
+        - generic: 0:18
+        - generic: "Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. Headaches or sinus pressure flaring? Gaia Eyes helps compare symptoms with environmental factors and the week ahead. Download Gaia Eyes: gaiaeyes.com/app #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery"
+        - generic: Reel
+        - generic: eyes.gaia
+        - button "Boost":
+          - generic: Boost
+        - button "Open Dropdown":
+          - generic: Open Dropdown
+      - gridcell "Wed Aug 19, 9:52am":
+        - button "Wed Aug 19, 9:52am":
+          - generic: Wed Aug 19, 9:52am
+      - gridcell "Not currently boosted":
+        - button "Not currently boosted":
+          - generic "Not currently boosted":
+      - gridcell "22":
+        - button "22":
+          - generic: "22"
+      - gridcell "23":
+        - button "23":
+          - generic: "23"
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "26s":
+        - button "26s":
+          - generic: 26s
+      - gridcell "1s":
+        - button "1s":
+          - generic: 1s
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+    - 'row "Select item with id 18108727715169895 Instagram Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. Headaches or sinus pressure flaring? Gaia Eyes helps compare symptoms with environmental factors and the week ahead. Download Gaia Eyes: gaiaeyes.com/app #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery Carousel eyes.gaia Boost Open Dropdown Wed Aug 19, 9:48am Not currently boosted 1 1 ‑‑ 0 2 1 1 0 0 ‑‑ ‑‑ ‑‑ ‑‑ ‑‑"':
+      - gridcell "Select item with id 18108727715169895":
+        - checkbox "Select item with id 18108727715169895"
+      - 'gridcell "Instagram Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. Headaches or sinus pressure flaring? Gaia Eyes helps compare symptoms with environmental factors and the week ahead. Download Gaia Eyes: gaiaeyes.com/app #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery Carousel eyes.gaia Boost Open Dropdown"':
+        - img "Instagram"
+        - generic: "Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. Headaches or sinus pressure flaring? Gaia Eyes helps compare symptoms with environmental factors and the week ahead. Download Gaia Eyes: gaiaeyes.com/app #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery"
+        - generic: Carousel
+        - generic: eyes.gaia
+        - button "Boost":
+          - generic: Boost
+        - button "Open Dropdown":
+          - generic: Open Dropdown
+      - gridcell "Wed Aug 19, 9:48am":
+        - button "Wed Aug 19, 9:48am":
+          - generic: Wed Aug 19, 9:48am
+      - gridcell "Not currently boosted":
+        - button "Not currently boosted":
+          - generic "Not currently boosted":
+      - gridcell "1":
+        - button "1":
+          - generic: "1"
+      - gridcell "1":
+        - button "1":
+          - generic: "1"
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "2":
+        - button "2":
+          - generic: "2"
+      - gridcell "1":
+        - button "1":
+          - generic: "1"
+      - gridcell "1":
+        - button "1":
+          - generic: "1"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+    - 'row "Select item with id 122179079432961753 Facebook Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery Multi media Gaia Eyes Boost Open Dropdown Wed Aug 19, 9:48am Not currently boosted 5 8 5 0 0 0 0 0 0 ‑‑ ‑‑ ‑‑ 0 ‑‑"':
+      - gridcell "Select item with id 122179079432961753":
+        - checkbox "Select item with id 122179079432961753"
+      - 'gridcell "Facebook Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery Multi media Gaia Eyes Boost Open Dropdown"':
+        - img "Facebook"
+        - generic: "Pain feeling extra loud? Space is stormy today, and that can make joints and muscles grumble and stack tension faster, then ease when you move gently. Keep plans soft: try easy stretches and short walks, and swap heavy lifts for lighter, slower reps. #GaiaEyes #SpaceWeather #PainSensitivity #ChronicPain #AuroraWatch #SelfCare #Pacing #BodyAwareness #Recovery"
+        - generic: Multi media
+        - generic: Gaia Eyes
+        - button "Boost":
+          - generic: Boost
+        - button "Open Dropdown":
+          - generic: Open Dropdown
+      - gridcell "Wed Aug 19, 9:48am":
+        - button "Wed Aug 19, 9:48am":
+          - generic: Wed Aug 19, 9:48am
+      - gridcell "Not currently boosted":
+        - button "Not currently boosted":
+          - generic "Not currently boosted":
+      - gridcell "5":
+        - button "5":
+          - generic: "5"
+      - gridcell "8":
+        - button "8":
+          - generic: "8"
+      - gridcell "5":
+        - button "5":
+          - generic: "5"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+    - row:
+      - gridcell "Select item with id 122178925502961753":
+        - checkbox "Select item with id 122178925502961753"
+      - gridcell:
+        - img "Facebook"
+        - generic: 0:29
+        - generic: "Migraine-prone today? If your head feels like a dull, vise-grip pressure behind the eyes and brightness turns sharp fast, you’re not imagining it—some people may be more light- and screen-sensitive right now, and noise or visual clutter can pile on quickly. The background: a geomagnetic storm is active and Earth’s magnetic field is tilted southward, which tends to stir our sensory load even though solar wind speeds are only average and there aren’t fresh solar eruptions in play. Make the day easier by softening inputs: set devices to their darkest comfortable settings, wear sunglasses or a brim outside, and lower overhead lights at home. Try bundling screen tasks into tidy blocks, then close your eyes for a couple of minutes to let your visual system reset; steady water and regular meals help keep the ramps from steepening. Aim for fewer moving parts—choose low-glare errands and quieter rooms so small signals don’t stack. Gaia Eyes watches how storm-tilted magnetic fields tend to line up with light-triggered headache days, and today fits that pattern. #migraine #headache #lightsensitivity #spaceweather #geomagneticstorm #selfcare #screens"
+        - generic: Reel
+        - generic: Gaia Eyes
+        - button "Boost":
+          - generic: Boost
+        - button "Open Dropdown":
+          - generic: Open Dropdown
+      - gridcell "Tue Aug 18, 9:48am":
+        - button "Tue Aug 18, 9:48am":
+          - generic: Tue Aug 18, 9:48am
+      - gridcell "Not currently boosted Not a crosspost":
+        - button "Not currently boosted Not a crosspost":
+          - generic "Not currently boosted":
+          - generic "Not a crosspost":
+      - gridcell "207":
+        - button "207":
+          - generic: "207"
+      - gridcell "254":
+        - button "254":
+          - generic: "254"
+      - gridcell "210":
+        - button "210":
+          - generic: "210"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "2":
+        - button "2":
+          - generic: "2"
+      - gridcell "1":
+        - button "1":
+          - generic: "1"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "0":
+        - button "0":
+          - generic: "0"
+      - gridcell "1":
+        - button "1":
+          - generic: "1"
+      - gridcell "‑‑":
+        - button "‑‑":
+          - generic: ‑‑
+      - gridcell "3,336,286":
+        - button "3,336,286":
+          - generic: 3,336,286
+      - gridcell "15s":
+        - button "15s":
+          - generic: 15s
+      - gridcell "30":
+        - button "30":
+          - generic: "30"
+      - gridcell "$0.00":
+        - button "$0.00":
+          - generic: $0.00
+  - rowgroup
+- button "Meta AI business assistant"
+- button "Meta Business Suite":
+  - generic: Meta Business Suite
+- button "Pressable":
+  - img "Instagram"
+  - img "Facebook"
+- navigation "Links":
+  - generic: Links
+  - list:
+    - link "Home":
+      - /url: https://business.facebook.com/latest/home?business_id=762318242937819&asset_id=772867052570153
+      - generic: Home
+    - generic: Home
+    - link "Notifications":
+      - generic: Notifications
+    - generic: Notifications
+    - link "Ads Manager":
+      - generic: Ads Manager
+    - generic: Ads Manager
+    - link "Inbox":
+      - /url: https://business.facebook.com/latest/inbox?business_id=762318242937819&asset_id=772867052570153
+      - generic: Inbox
+    - generic: Inbox
+    - link "Content":
+      - /url: https://business.facebook.com/latest/posts?business_id=762318242937819&asset_id=772867052570153
+      - generic: Content
+    - generic: Content
+    - link "Creator marketplace":
+      - /url: https://business.facebook.com/latest/creator_marketplace?business_id=762318242937819&asset_id=772867052570153&cm_entrypoint=biz_kit_nav_route_item
+      - generic: Creator marketplace
+    - generic: Creator marketplace
+    - link "Ads":
+      - /url: https://business.facebook.com/latest/ad_center/ads_summary?business_id=762318242937819&asset_id=772867052570153
+      - generic: Ads
+    - generic: Ads
+    - link "Insights":
+      - /url: https://business.facebook.com/latest/insights?business_id=762318242937819&asset_id=772867052570153
+      - generic: Insights
+    - generic: Insights
+    - link "Monetization":
+      - /url: https://business.facebook.com/latest/monetization?business_id=762318242937819&asset_id=772867052570153
+      - generic: Monetization
+    - generic: Monetization
+    - link "All tools":
+      - generic: All tools
+    - generic: All tools
+    - button "Edit sidebar navigation":
+      - generic: Edit
+- link "Create":
+  - generic: Create
+- generic: Create
+- link "Search":
+  - generic: Search
+- generic: Search
+- navigation "Links":
+  - generic: Links
+  - list:
+    - link "Settings":
+      - /url: https://business.facebook.com/latest/settings/business_users?business_id=762318242937819&asset_id=772867052570153
+      - generic: Settings
+    - generic: Settings
+- link "Help":
+  - generic: Help
+- generic: Help

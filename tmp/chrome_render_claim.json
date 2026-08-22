@@ -1,0 +1,33 @@
+{
+  "target": {
+    "id": "1623397987",
+    "providerTabId": "[\"4656a1f7-a361-481a-9a81-056cd725c4ea\",\"1623397987\"]",
+    "title": "Render Dashboard",
+    "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+    "lastOpened": "2026-08-13T05:58:41.150Z"
+  },
+  "claimedKeys": [
+    "id",
+    "playwright",
+    "dom_cua",
+    "cua",
+    "content",
+    "clipboard",
+    "dev",
+    "capabilities"
+  ],
+  "claimedProtoKeys": [
+    "constructor",
+    "goto",
+    "markHandoff",
+    "markDeliverable",
+    "back",
+    "forward",
+    "reload",
+    "close",
+    "screenshot",
+    "title",
+    "url",
+    "getJsDialog"
+  ]
+}

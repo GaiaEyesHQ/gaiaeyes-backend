@@ -1,0 +1,14 @@
+{
+  "hasChrome": true,
+  "chromeKeys": [
+    "browserId",
+    "capabilities",
+    "tabs",
+    "user"
+  ],
+  "protoKeys": [
+    "constructor",
+    "documentation",
+    "nameSession"
+  ]
+}
