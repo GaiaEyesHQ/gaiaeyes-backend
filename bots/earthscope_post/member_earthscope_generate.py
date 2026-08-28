@@ -82,20 +82,16 @@ def _parse_json_value(raw: Any) -> Optional[Dict[str, Any]]:
 
 def _fetch_paid_users() -> List[str]:
     keys = [k.strip() for k in os.getenv("ENTITLEMENT_KEYS", "plus,pro").split(",") if k.strip()]
-    try:
-        rows = pg.fetch(
-            """
-            select distinct user_id
-              from public.app_user_entitlements_active
-             where is_active = true
-               and entitlement_key = any(%s)
-            """,
-            keys,
-        )
-        return [r["user_id"] for r in rows if r.get("user_id")]
-    except Exception as exc:
-        logger.warning("[member] entitlements lookup failed: %s", exc)
-        return []
+    rows = pg.fetch(
+        """
+        select distinct user_id
+          from public.app_user_entitlements_active
+         where is_active = true
+           and entitlement_key = any(%s)
+        """,
+        keys,
+    )
+    return [r["user_id"] for r in rows if r.get("user_id")]
 
 
 def _fetch_gauges_row(user_id: str, day: date) -> Optional[Dict[str, Any]]:
@@ -1060,31 +1056,53 @@ def run_for_user(
     return generate_member_post_for_user(user_id, day, force=force, trigger_events=trigger_events)
 
 
-def main() -> None:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Generate member EarthScope posts.")
     parser.add_argument("--day", default=None, help="Day in YYYY-MM-DD (UTC).")
     parser.add_argument("--user-id", default=None, help="Single user_id override.")
     parser.add_argument("--limit", type=int, default=None, help="Limit user count.")
     parser.add_argument("--force", action="store_true", help="Recompute even if inputs_hash matches.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     day = _coerce_day(args.day)
     if args.user_id:
         users = [args.user_id]
     else:
-        users = _fetch_paid_users()
+        try:
+            users = _fetch_paid_users()
+        except Exception as exc:
+            logger.exception("[member] paid users lookup failed: %s", exc)
+            return 1
 
     if args.limit:
         users = users[: args.limit]
 
     logger.info("[member] users=%d day=%s", len(users), day)
+    ok_count = 0
+    skipped_count = 0
+    failure_count = 0
     for uid in users:
         try:
             result = generate_member_post_for_user(uid, day, force=args.force)
             logger.info("[member] user=%s ok=%s skipped=%s", uid, result.get("ok"), result.get("skipped"))
+            if result.get("ok"):
+                ok_count += 1
+                if result.get("skipped"):
+                    skipped_count += 1
+            else:
+                failure_count += 1
         except Exception as exc:
+            failure_count += 1
             logger.exception("[member] user=%s failed: %s", uid, exc)
+    logger.info(
+        "[member] summary users=%d ok=%d skipped=%d failures=%d",
+        len(users),
+        ok_count,
+        skipped_count,
+        failure_count,
+    )
+    return 1 if failure_count else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

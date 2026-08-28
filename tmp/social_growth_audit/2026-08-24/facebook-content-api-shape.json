@@ -1,0 +1,33 @@
+{
+  "url": "about:blank",
+  "title": "about:blank",
+  "contentKeys": [],
+  "contentProto": [
+    "constructor",
+    "export",
+    "exportGsuite"
+  ],
+  "domCuaKeys": [],
+  "domCuaProto": [
+    "constructor",
+    "get_visible_dom",
+    "click",
+    "double_click",
+    "scroll",
+    "type",
+    "keypress",
+    "downloadMedia"
+  ],
+  "cuaKeys": [],
+  "cuaProto": [
+    "constructor",
+    "click",
+    "scroll",
+    "double_click",
+    "type",
+    "keypress",
+    "drag",
+    "move",
+    "downloadMedia"
+  ]
+}

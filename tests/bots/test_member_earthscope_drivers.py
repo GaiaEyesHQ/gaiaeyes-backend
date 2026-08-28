@@ -22,6 +22,7 @@ from bots.earthscope_post.member_earthscope_generate import (
     _active_state_lines,
     _observed_driver_lines,
     _render_member_post,
+    main,
 )
 
 
@@ -99,3 +100,51 @@ def test_render_member_post_uses_now_headings_and_live_tone() -> None:
     assert rendered["title"] == "Your EarthScope"
     assert rendered["caption"] is None
     assert rendered["voice_semantic"]["kind"] == "earthscope_member_post"
+
+
+def test_main_returns_nonzero_when_member_generation_reports_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate._fetch_paid_users",
+        lambda: ["user-1", "user-2"],
+    )
+
+    def fake_generate(user_id: str, day, *, force: bool = False, trigger_events=None):
+        if user_id == "user-2":
+            return {"ok": False, "error": "gauges unavailable"}
+        return {"ok": True, "skipped": False}
+
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate.generate_member_post_for_user",
+        fake_generate,
+    )
+
+    assert main(["--day", "2026-03-13"]) == 1
+
+
+def test_main_returns_nonzero_when_member_generation_raises(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate._fetch_paid_users",
+        lambda: ["user-1"],
+    )
+
+    def fake_generate(user_id: str, day, *, force: bool = False, trigger_events=None):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate.generate_member_post_for_user",
+        fake_generate,
+    )
+
+    assert main(["--day", "2026-03-13"]) == 1
+
+
+def test_main_returns_nonzero_when_paid_user_lookup_raises(monkeypatch) -> None:
+    def fake_users():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate._fetch_paid_users",
+        fake_users,
+    )
+
+    assert main(["--day", "2026-03-13"]) == 1

@@ -1,0 +1,54 @@
+{
+  "tabsKeys": [],
+  "tabsProps": [
+    [],
+    [
+      "constructor",
+      "new",
+      "selected",
+      "list",
+      "finalize",
+      "content",
+      "get"
+    ],
+    [
+      "constructor",
+      "__defineGetter__",
+      "__defineSetter__",
+      "hasOwnProperty",
+      "__lookupGetter__",
+      "__lookupSetter__",
+      "isPrototypeOf",
+      "propertyIsEnumerable",
+      "toString",
+      "valueOf",
+      "__proto__",
+      "toLocaleString"
+    ]
+  ],
+  "userKeys": [],
+  "userProps": [
+    [],
+    [
+      "constructor",
+      "openTabs",
+      "claimTab",
+      "history"
+    ],
+    [
+      "constructor",
+      "__defineGetter__",
+      "__defineSetter__",
+      "hasOwnProperty",
+      "__lookupGetter__",
+      "__lookupSetter__",
+      "isPrototypeOf",
+      "propertyIsEnumerable",
+      "toString",
+      "valueOf",
+      "__proto__",
+      "toLocaleString"
+    ]
+  ],
+  "caps": {}
+}

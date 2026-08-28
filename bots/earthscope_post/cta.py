@@ -54,6 +54,14 @@ CTA_VARIANTS = [
         ),
     },
     {
+        "key": "sleep-wind-down-patterns",
+        "themes": ("sleep", "rest"),
+        "card": "Sleep hard to settle? Gaia Eyes helps compare wind-down patterns with your day.",
+        "caption": (
+            "Sleep hard to settle? Gaia Eyes helps compare wind-down patterns with your day."
+        ),
+    },
+    {
         "key": "fatigue-recovery-patterns",
         "themes": ("fatigue", "recovery"),
         "card": "Energy coming back in small steps? Gaia Eyes helps compare recovery patterns with your day.",
@@ -119,6 +127,24 @@ def _context_themes(context: Mapping[str, Any] | None) -> Sequence[str]:
     ).lower()
     if any(term in context_text for term in ("pain", "ache", "aches", "joint", "joints", "muscle", "muscles")):
         return ("pain",)
+    if any(
+        term in context_text
+        for term in (
+            "sleep",
+            "settle",
+            "restless",
+            "restlessness",
+            "wind-down",
+            "wind down",
+            "bedtime",
+            "tossing",
+            "nights",
+            "caffeine",
+            "lights warm",
+            "lights warmer",
+        )
+    ):
+        return ("sleep", "rest")
     if any(
         term in context_text
         for term in ("buzzing", "buzz", "wired/tired", "wired tired", "jitters", "jittery", "revved")

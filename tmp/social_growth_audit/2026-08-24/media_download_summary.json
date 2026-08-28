@@ -1,0 +1,27 @@
+{
+  "daily_caption.jpg": {
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 154724
+  },
+  "daily_stats.jpg": {
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 138404
+  },
+  "daily_affects.jpg": {
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 244173
+  },
+  "daily_playbook.jpg": {
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 226882
+  },
+  "latest.mp4": {
+    "status": 200,
+    "content_type": "video/mp4",
+    "bytes": 1530613
+  }
+}

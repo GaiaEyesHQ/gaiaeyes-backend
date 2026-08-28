@@ -61,7 +61,7 @@ PUBLIC_WRITER_VOICE_REFERENCE = {
         ),
         "strengths": [
             "opens with a recognizable human problem",
-            "uses one specific felt texture instead of generic wellness language",
+            "describes a recognizable feeling in ordinary words",
             "connects the environmental read to the body in plain but distinctive language",
             "gives a practical ritual with a reason behind it",
             "sounds authored rather than assembled from stock phrases",
@@ -72,7 +72,7 @@ PUBLIC_WRITER_VOICE_REFERENCE = {
         "keep plans gentle and take short breaks",
         "quiet and steady up there",
         "a vague question that could fit almost any day",
-        "forced browser-tab, pocket, window, or signal-noise metaphors",
+        "forced browser-tab, pocket, window, signal-noise, fabric, or object metaphors",
     ],
     "instruction": (
         "Learn the qualities, cadence, and specificity of the golden example. Do not copy its phrases, "
@@ -1100,7 +1100,7 @@ def _fallback_social_title(
         candidate = options[(seed + offset) % len(options)]
         if _clean_llm_title(candidate, recent_lower):
             return candidate
-    return "Track The Body Pattern"
+    return "Feeling Different Today?"
 
 
 # --- LLM-based title generator using cached rewrite ---
@@ -1133,7 +1133,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "Do not default to sleep just because a previous sleep post performed well; use sleep only when it is the best lane for today's facts. "
         "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
-        "Avoid these fallback labels and vague metaphors: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note, Is Your Body Running Loud, Head Pressure Asking For Space. "
+        "Avoid these fallback labels and vague metaphors: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Body Pattern, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note, Is Your Body Running Loud, Head Pressure Asking For Space. "
         "Use both clear statements and natural questions. Good shapes: 'Brain Fog Comes In Waves', 'Body Buzzing Today?', 'Feeling Jittery Today?', 'Feeling Squirrely Today?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
@@ -2128,7 +2128,7 @@ def _rewrite_json_candidates(
             ],
         },
         "candidate_requirements": {
-            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, a recovery score, parasympathetic, or autonomic. Preserve one specific felt texture and avoid the anti-pattern cadence in public_voice_reference.",
+            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, a recovery score, parasympathetic, or autonomic. Describe the feeling in ordinary words; do not invent a sensory image or metaphor. Avoid the anti-pattern cadence in public_voice_reference.",
             "snapshot": "2-4 plain-language sentences with no numeric space-weather measurements.",
             "affects": "2-4 sentences about one primary possible felt pattern without certainty. Supporting effects must reinforce that pattern, not reverse it.",
             "playbook": "3-5 short bullets.",
@@ -3055,7 +3055,9 @@ def _rewrite_facebook_caption_from_spine(
         "to express the supported human pattern. "
         "Expand only for Facebook: add useful context, natural paragraphing, and a practical pacing "
         "or ritual note with a reason behind it. Keep the founder voice human, lightly playful, grounded, and non-fearful. "
-        "Use one specific felt texture and one natural Gaia Eyes identity line when they fit. An audience question is optional. "
+        "Describe the supported feeling in ordinary words. Do not invent a sensory image, analogy, or metaphor to make the copy sound original. "
+        "A natural Gaia Eyes identity line and an audience question are optional. "
+        "Make the first paragraph 45-65 words so it can also serve as the reel voiceover without rewriting. "
         "Study public_voice_reference for quality and cadence, but do not copy its wording, sleep lane, claims, or advice. "
         "Do not add paragraph labels or internal scaffolding such as 'Why it matters,' 'Big picture,' or 'Pacing note.' "
         "Use evidence-scaled phrases such as "
@@ -3212,6 +3214,17 @@ def _recent_history_supports_carryover(history: Any) -> bool:
     return False
 
 
+def _reel_text_has_unitless_timed_activity(text: str) -> bool:
+    return bool(
+        re.search(
+            r"\b\d+\s*(?:[-–—]|to)\s*\d+\s+"
+            r"(?:sprints?|bursts?|blocks?|sessions?|rounds?)\b",
+            str(text or ""),
+            re.I,
+        )
+    )
+
+
 def _validate_reel_spine(
     obj: Any,
     *,
@@ -3234,6 +3247,8 @@ def _validate_reel_spine(
 
     beats = [out["reel_signal"], out["reel_effects"], out["reel_pattern"]]
     if any(len(beat.split()) > 12 or _reel_text_is_fragment(beat) for beat in beats):
+        return None
+    if any(_reel_text_has_unitless_timed_activity(beat) for beat in beats):
         return None
     for index, beat in enumerate(beats):
         for other in beats[index + 1:]:
@@ -3279,15 +3294,17 @@ def _rewrite_reel_from_final_caption(
         "or 'No'. Prefer concrete everyday phrases such as 'your body may feel steadier,' 'energy may feel lower,' or "
         "'some tiredness may hang around.' Avoid abstract shorthand such as 'systems reset,' 'low-drive pause,' "
         "'genuine recovery space,' or 'signal mix.' "
-        "Carry forward the caption's most distinctive concrete image or felt texture when it remains accurate. Avoid "
-        "generic filler such as 'a little buzz,' 'room to recoup,' or 'keep it gentle' unless that exact idea is essential. "
+        "Use the caption's plain wording for the body pattern. Do not invent or extend metaphors, sensory textures, "
+        "cute shorthand, or unusual phrases. Avoid generic filler such as 'a little buzz,' 'room to recoup,' or "
+        "'keep it gentle' unless that exact idea is essential. "
         "Do not invent local weather, allergens, symptoms, or events. Do not imply that a space signal causes a health "
         "effect. Explain any necessary space-weather term in ordinary language. "
         "Return only JSON with exactly these string keys: voiceover, reel_signal, reel_effects, reel_pattern. "
         "Voiceover: copy required_voiceover exactly, with no additions or omissions. "
-        "Each reel field: one complete standalone thought, 4-12 words, no bullets or newline. "
+        "Each reel field: one complete standalone thought, 4-10 words, no bullets or newline. "
         "reel_signal answers why the hook fits today. reel_effects gives one primary possible felt pattern. "
         "reel_pattern supports the primary interpretation and must not repeat or reverse reel_effects. "
+        "When giving a timed activity, include the time unit, such as '5-10 minute focus sprints.' "
         "Never use 'others may', 'alternatively', or another construction that introduces an opposing outcome."
     )
     payload = {

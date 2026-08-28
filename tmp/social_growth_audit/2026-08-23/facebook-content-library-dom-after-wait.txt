@@ -1,0 +1,294 @@
+- banner:
+  - button [disabled]:
+  - link "Facebook":
+    - /url: /
+  - button:
+  - combobox "Search Facebook"
+  - navigation "Facebook":
+    - list:
+      - status "Loading..."
+      - status "Loading..."
+      - status "Loading..."
+      - status "Loading..."
+      - status "Loading..."
+  - navigation "Account Controls and Settings":
+    - button "Facebook menu":
+    - link "Messenger":
+      - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+      - link "Messenger":
+        - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+    - button "Notifications, 4 unread":
+    - button:
+      - generic: Number of unread notifications
+      - generic: "4"
+    - button "Your profile":
+      - img "Your profile"
+- navigation:
+  - heading "Professional dashboard" [level=1]
+  - button "Collapse navigation"
+  - list:
+    - link "Home":
+      - /url: https://www.facebook.com/professional_dashboard/
+      - generic: Home
+    - link "Insights":
+      - /url: https://www.facebook.com/professional_dashboard/profile_insights/views/
+      - generic: Insights
+    - link "Content" [expanded]:
+      - /url: https://www.facebook.com/professional_dashboard/content/content_library/
+      - generic: Content
+    - list:
+      - link "Content Library":
+        - /url: https://www.facebook.com/professional_dashboard/content/content_library/
+        - generic: Content Library
+      - link "Planner":
+        - /url: https://www.facebook.com/professional_dashboard/content_calendar/?ref=prodash_left_nav
+        - generic: Planner
+    - link "Monetization":
+      - /url: https://www.facebook.com/professional_dashboard/monetization/
+      - generic: Monetization
+    - link "Engagement":
+      - /url: https://www.facebook.com/professional_dashboard/engagement/comments_manager/
+      - generic: Engagement
+    - link "All tools":
+      - /url: https://www.facebook.com/professional_dashboard/tools/
+      - generic: All tools
+  - button "Create a post":
+    - generic: Create a post
+- main:
+  - main:
+    - heading "Videos you post on Facebook are now reels" [level=2]:
+      - generic: Videos you post on Facebook are now reels
+    - generic: You can still view your previously posted videos, but they will be combined under the reels filter.
+    - button "Dismiss Videos you post on Facebook are now reels card"
+    - heading "Content Library" [level=2]:
+      - generic: Content Library
+    - tablist:
+      - button "More":
+        - generic: More
+      - tab "Published":
+        - generic: Published
+      - tab "Scheduled":
+        - generic: Scheduled
+      - tab "Drafts":
+        - generic: Drafts
+    - textbox "Search for posts"
+    - button "Create":
+      - generic: Create
+    - button "Filters":
+      - generic: Filters
+    - button "Columns":
+      - generic: Columns
+    - 'button "Last 28 days: Jul 26 - Aug 23"':
+      - generic: "Last 28 days: Jul 26 - Aug 23"
+    - button "Export data":
+      - generic: Export data
+    - strong: "0"
+    - strong: /50
+    - text: posts selected
+    - grid "Content Library":
+      - rowgroup:
+        - row "Preview Views Viewers Engagement Earnings Net follows Impressions Comments Distribution Watch time Average watch time 3-second views 1-minute views":
+          - columnheader:
+            - checkbox
+          - columnheader "Preview":
+            - button "Preview":
+              - generic: Preview
+          - columnheader
+          - columnheader "Views":
+            - button "Views":
+              - generic: Views
+          - columnheader "Viewers":
+            - button "Viewers":
+              - generic: Viewers
+          - columnheader "Engagement":
+            - button "Engagement":
+              - generic: Engagement
+          - columnheader "Earnings":
+            - button "Earnings":
+              - generic: Earnings
+          - columnheader "Net follows":
+            - button "Net follows":
+              - generic: Net follows
+          - columnheader "Impressions":
+            - button "Impressions":
+              - generic: Impressions
+          - columnheader "Comments":
+            - button "Comments":
+              - generic: Comments
+          - columnheader "Distribution":
+            - button "Distribution":
+              - generic: Distribution
+          - columnheader "Watch time":
+            - button "Watch time":
+              - generic: Watch time
+          - columnheader "Average watch time":
+            - button "Average watch time":
+              - generic: Average watch time
+          - columnheader "3-second views":
+            - button "3-second views":
+              - generic: 3-second views
+          - columnheader "1-minute views":
+            - button "1-minute views":
+              - generic: 1-minute views
+      - rowgroup:
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+        - row:
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+          - gridcell
+      - rowgroup

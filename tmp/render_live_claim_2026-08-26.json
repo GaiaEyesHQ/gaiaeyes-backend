@@ -1,0 +1,13 @@
+{
+  "found": true,
+  "renderTabInfo": {
+    "id": "1623397987",
+    "providerTabId": "[\"001327d5-8b8d-4625-8995-a6a15d93c13a\",\"1623397987\"]",
+    "title": "Render Dashboard",
+    "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+    "lastOpened": "2026-08-13T05:58:41.150Z"
+  },
+  "currentUrl": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+  "title": "Render Dashboard",
+  "snapshot": "- banner:\n  - link \"Render\":\n    - /url: https://render.com/\n    - img \"Render\"\n- heading \"Sign In to Render\" [level=1]\n- button \"GitHub GitHub\":\n  - img \"GitHub\"\n  - generic: GitHub\n- button \"GitLab\":\n  - generic: GitLab\n- button \"Bitbucket\":\n  - generic: Bitbucket\n- button \"Google\":\n  - generic: Google\n- generic: Last used\n- generic: or\n- generic: Email\n- textbox \"Email\":\n  - /placeholder: your@email.com\n- generic: Password\n- textbox \"Password\":\n  - /placeholder: correct horse battery staple\n- button \"Show password\":\n- button \"Sign in\"\n- paragraph:\n  - link \"Sign in with SSO\":\n    - /url: /login/sso?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents\n- text: Need an account?\n- link \"Sign up\":\n  - /url: /register?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents\n- text: Forgot your password?\n- link \"Reset it\":\n  - /url: /password-reset\n- iframe"
+}

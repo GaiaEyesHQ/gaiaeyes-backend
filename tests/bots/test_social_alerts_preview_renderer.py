@@ -68,6 +68,7 @@ def test_render_shadow_previews_for_schumann_flare_and_cme(tmp_path: Path) -> No
             assert path.exists()
             with Image.open(path) as image:
                 assert image.size in {(1080, 1080), (1080, 1350), (1080, 1920)}
+            assert not any("layout preflight" in warning for warning in output["warnings"])
             formats.append(output["format"])
     assert formats.count("square_image") == 3
     assert formats.count("feed_card") == 3

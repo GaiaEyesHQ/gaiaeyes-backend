@@ -34,6 +34,21 @@ def test_reel_story_uses_a_different_generated_background_for_each_beat(tmp_path
     assert len(set(backgrounds)) == 4
 
 
+def test_reel_visual_contract_uses_two_story_beats_and_not_pattern():
+    beats = reel_builder.visual_story_beats(
+        {
+            "signal": "Solar wind is elevated today.",
+            "effects": "Sleep may feel lighter.\nEnergy may dip sooner.",
+            "pattern": "Keep the day flexible.",
+        }
+    )
+
+    assert beats == [
+        ("Why today", "Solar wind is elevated today."),
+        ("What some may notice", "Sleep may feel lighter.\nEnergy may dip sooner."),
+    ]
+
+
 def test_reel_story_never_falls_back_to_finished_cards(tmp_path):
     for name in ("daily_affects.jpg", "daily_caption.jpg", "daily_playbook.jpg", "daily_stats.jpg"):
         (tmp_path / name).write_bytes(b"finished-card")
@@ -214,24 +229,24 @@ def test_reel_story_card_is_vertical_and_readable(tmp_path):
 def test_reel_story_layout_keeps_every_word_when_sentence_needs_five_large_lines():
     canvas = Image.new("RGB", (1080, 1920), (0, 0, 0))
     draw = reel_builder.ImageDraw.Draw(canvas)
-    font_path = ROOT / "bots" / "earthscope_post" / "fonts" / "BebasNeue.ttf"
+    font_path = ROOT / "bots" / "earthscope_post" / "fonts" / "Poppins-Regular.ttf"
     text = "Brief shifts in pressure or tightness around the head may appear without a clear cause."
 
     font, wrapped = reel_builder._layout_story_text(draw, text, font_path)
 
     assert len(wrapped) <= 4
-    assert " ".join(wrapped) == text.upper()
-    assert font.size < 112
+    assert " ".join(wrapped) == text
+    assert font.size < 82
 
 
 def test_reel_story_layout_replaces_nonbreaking_hyphen():
     canvas = Image.new("RGB", (1080, 1920), (0, 0, 0))
     draw = reel_builder.ImageDraw.Draw(canvas)
-    font_path = ROOT / "bots" / "earthscope_post" / "fonts" / "BebasNeue.ttf"
+    font_path = ROOT / "bots" / "earthscope_post" / "fonts" / "Poppins-Regular.ttf"
 
     _, wrapped = reel_builder._layout_story_text(draw, "Felted\u2011wool heaviness", font_path)
 
-    assert " ".join(wrapped) == "FELTED-WOOL HEAVINESS"
+    assert " ".join(wrapped) == "Felted-wool heaviness"
 
 
 def test_reel_opening_clip_uses_motion_from_frame_one(monkeypatch, tmp_path):
@@ -250,7 +265,7 @@ def test_reel_opening_clip_uses_motion_from_frame_one(monkeypatch, tmp_path):
     assert "zoompan" in video_filter
     assert "d=1" in video_filter
     assert command[command.index("-framerate") + 1] == "30"
-    assert command[command.index("-t") + 1] == "2.300"
+    assert command[command.index("-t") + 1] == "2.500"
 
 
 def test_reel_crossfade_respects_short_hook_duration(monkeypatch, tmp_path):

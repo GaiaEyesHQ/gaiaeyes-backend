@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-08-24T03:50:19.630Z",
+  "renderTabs": [
+    {
+      "title": "Render Dashboard",
+      "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+      "providerTabId": "[\"001327d5-8b8d-4625-8995-a6a15d93c13a\",\"1623397987\"]",
+      "lastOpened": "2026-08-13T05:58:41.150Z"
+    },
+    {
+      "title": "Render Dashboard",
+      "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61n0%2Fevents",
+      "providerTabId": "[\"001327d5-8b8d-4625-8995-a6a15d93c13a\",\"1623398358\"]",
+      "lastOpened": "2026-08-11T14:23:19.689Z"
+    }
+  ],
+  "page": {
+    "error": "TypeError: browser.open is not a function",
+    "stack": "TypeError: browser.open is not a function\n    at /Users/gennwu/Documents/GitHub/gaiaeyes-backend/.node_repl_cell_3.mjs:26:29\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+  }
+}

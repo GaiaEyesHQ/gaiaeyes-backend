@@ -1,0 +1,253 @@
+- banner:
+  - button [disabled]:
+  - link "Facebook":
+    - /url: /
+  - button:
+  - combobox "Search Facebook"
+  - navigation "Facebook":
+    - list:
+      - link "Home":
+        - /url: /
+      - link "Pages":
+        - /url: /pages/?category=your_pages&ref=bookmarks
+      - link "Professional dashboard":
+        - /url: /professional_dashboard/?ref=tab_bar
+      - link "Ad Center":
+        - /url: /61578852613452/ad_center/
+      - link "Reels":
+        - /url: /reel/?s=tab
+  - navigation "Account Controls and Settings":
+    - button "Facebook menu":
+    - link "Messenger":
+      - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+      - link "Messenger":
+        - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+    - button "Notifications, 6 unread":
+    - button:
+      - generic: Number of unread notifications
+      - generic: "6"
+    - button "Your profile":
+      - img "Your profile"
+- navigation:
+  - button "back"
+  - navigation "Breadcrumb":
+    - generic: Content Library
+  - heading "Post insights" [level=1]
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - link "Gaia Eyes, view story":
+    - /url: /stories/122104739894961753/UzpfSVNDOjE2MTE1Mzc3MzA2MDkzNDM=/?view_single=false&__cft__[0]=AZYPKZFF4AnTr3Q3EVb_QzvR08BIW5O3fP6RAx3PUcH_datoTTR4YOKIuf6LnBms6wjWoETIyDBxxbL2HvmHsQiaOmAmqSJAx5-xOcd-EaLPvoTpffMj1Bl51GPfst4H2HbPJMYCWJMmUurGiJSj57cU&__tn__=%3C%3C%2CP-R
+    - img "Gaia Eyes, view story"
+  - heading "Gaia Eyes" [level=3]:
+    - link "Gaia Eyes":
+      - /url: https://www.facebook.com/profile.php?id=61578852613452&__cft__[0]=AZYPKZFF4AnTr3Q3EVb_QzvR08BIW5O3fP6RAx3PUcH_datoTTR4YOKIuf6LnBms6wjWoETIyDBxxbL2HvmHsQiaOmAmqSJAx5-xOcd-EaLPvoTpffMj1Bl51GPfst4H2HbPJMYCWJMmUurGiJSj57cU&__tn__=-UC%2CP-R
+      - generic: Gaia Eyes
+  - text: Published by Gaia Eyes
+  - img "(tooltip)Only people who manage this Page can see who published"
+  - generic: ·
+  - link:
+    - /url: "?__cft__[0]=AZYPKZFF4AnTr3Q3EVb_QzvR08BIW5O3fP6RAx3PUcH_datoTTR4YOKIuf6LnBms6wjWoETIyDBxxbL2HvmHsQiaOmAmqSJAx5-xOcd-EaLPvoTpffMj1Bl51GPfst4H2HbPJMYCWJMmUurGiJSj57cU&__tn__=%2CO%2CP-R#?dkj"
+  - generic: ·
+  - img "Shared with Public"
+  - button "Actions for this post by Gaia Eyes":
+  - text: Finally, a little breathing room? Space feels calm and a bit wobbly—more gentle wave than storm—which can help that heavy-limb drag ease and let energy come back in sma…
+  - button "See more"
+  - link "May be an image of text that says 'FINALLY, A LITTLE BREATHING ROOM? Low, steady conditions can ease that heavy-limbed heavy- drag and make gentle activity feel more doable. For some, energy comes back in small steps rather than a surge. If you still feel drained, recent stress or local factors could be prolonging the dip. QUICK TIP Move gently, breathe deeper, drink water. Decodetheunseen. Decode the unseen.'":
+    - /url: https://www.facebook.com/photo/?fbid=122179356140961753&set=pcb.122179356290961753&__cft__[0]=AZYPKZFF4AnTr3Q3EVb_QzvR08BIW5O3fP6RAx3PUcH_datoTTR4YOKIuf6LnBms6wjWoETIyDBxxbL2HvmHsQiaOmAmqSJAx5-xOcd-EaLPvoTpffMj1Bl51GPfst4H2HbPJMYCWJMmUurGiJSj57cU&__tn__=*b0H-R
+  - link "May be a graphic of text that says 'CARE NOTES early. •Choose one or two light priorities and stop •Use a 10-15 minute walk or stretch break. •Sip water through the afternoon. Keep snacks simple with some protein and salt. Decode Decodetheunseer the unseen.'":
+    - /url: https://www.facebook.com/photo/?fbid=122179356200961753&set=pcb.122179356290961753&__cft__[0]=AZYPKZFF4AnTr3Q3EVb_QzvR08BIW5O3fP6RAx3PUcH_datoTTR4YOKIuf6LnBms6wjWoETIyDBxxbL2HvmHsQiaOmAmqSJAx5-xOcd-EaLPvoTpffMj1Bl51GPfst4H2HbPJMYCWJMmUurGiJSj57cU&__tn__=*b1H-R
+  - 'link "May be a graphic of digital watch and text that says ''SIGNAL WATCH -AUG21,2026 AUG 21, 2026 Signal: Elevated METRIC VALUE Bz Kp (max) Bz (min) SW SW speed (current) Sch Schumann (avg) Flares CMEs Fl 3.33 -4.6 nT 498 km/s 7.25 Hz 1 1 Could solar activity affect your heart? Gaia Eyes checks your wearable patterns. gaiaeyes.com/app''"':
+    - /url: https://www.facebook.com/photo/?fbid=122179356248961753&set=pcb.122179356290961753&__cft__[0]=AZYPKZFF4AnTr3Q3EVb_QzvR08BIW5O3fP6RAx3PUcH_datoTTR4YOKIuf6LnBms6wjWoETIyDBxxbL2HvmHsQiaOmAmqSJAx5-xOcd-EaLPvoTpffMj1Bl51GPfst4H2HbPJMYCWJMmUurGiJSj57cU&__tn__=*b2H-R
+  - button "Like"
+  - button "React":
+  - button "Leave a comment"
+  - button "Send this to friends or post it on your profile."
+  - button "Available Voices, switch profile":
+  - textbox "Comment as Gaia Eyes":
+    - paragraph
+  - generic: Comment as Gaia Eyes
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+- main:
+  - main:
+    - main:
+      - heading "Views over time More info about Views over time" [level=2]:
+        - text: Views over time
+        - button "More info about Views over time":
+      - generic: This post
+      - generic: Your typical content
+      - heading "Views" [level=2]:
+        - generic: Views
+      - generic: "7"
+      - heading "Viewers" [level=2]:
+        - generic: Viewers
+      - generic: "4"
+      - heading "$0.00 Approximate earnings More info about Approximate earnings" [level=2]:
+        - text: $0.00 Approximate earnings
+        - button "More info about Approximate earnings":
+      - heading "Stars" [level=2]:
+        - generic: Stars
+      - generic: $0.00
+      - heading "Content monetization" [level=2]:
+        - generic: Content monetization
+      - generic: Not eligible
+      - heading "Instream ads" [level=2]:
+        - generic: Instream ads
+      - generic: Not eligible
+      - heading "Ads on reels" [level=2]:
+        - generic: Ads on reels
+      - generic: Not eligible
+      - heading "Subscriptions" [level=2]:
+        - generic: Subscriptions
+      - generic: Not eligible
+      - heading "0 Engagement More info about Engagement" [level=2]:
+        - text: 0 Engagement
+        - button "More info about Engagement":
+      - button "0 Reactions" [disabled]:
+        - generic: "0"
+        - generic: Reactions
+      - button "0 Clicks" [disabled]:
+        - generic: "0"
+        - generic: Clicks
+      - button "0 Comments" [disabled]:
+        - generic: "0"
+        - generic: Comments
+      - button "0 Shares" [disabled]:
+        - generic: "0"
+        - generic: Shares
+      - heading "Reaction by type" [level=2]:
+        - generic: Reaction by type
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - heading "Followers vs. Non-followers" [level=2]:
+        - generic: Followers vs. Non-followers
+      - button "More info (collapsed)":
+      - generic: 85.7%
+      - generic: "6"
+      - generic: Followers
+      - generic: 14.3%
+      - generic: "1"
+      - generic: Non-followers
+      - heading "Follows More info about Follows" [level=2]:
+        - text: Follows
+        - button "More info about Follows":
+      - generic: "0"
+      - generic: Follows
+      - heading "How people find your content More info about How people find your content" [level=2]:
+        - text: How people find your content
+        - button "More info about How people find your content":
+      - button "Traffic" [pressed]:
+        - generic: Traffic
+      - button "Source":
+        - generic: Source
+      - generic: Not enough data to show yet.
+      - heading "Who viewed your content More info about Who viewed your content" [level=2]:
+        - text: Who viewed your content
+        - button "More info about Who viewed your content":
+      - button "Age and gender" [pressed]:
+        - generic: Age and gender
+      - button "Top countries":
+        - generic: Top countries
+      - generic: Women
+      - generic: Men
+      - generic: Unknown
+      - generic: 65+
+      - generic: 42.9%
+      - generic: 55-64
+      - generic: 42.8%
+      - generic: 35-44
+      - generic: 14.3%
+      - heading "Link clicks More info about Link clicks" [level=2]:
+        - text: Link clicks
+        - button "More info about Link clicks":
+      - generic: Insights not available
+      - generic: There may not be enough data on your content yet. Check back again later.

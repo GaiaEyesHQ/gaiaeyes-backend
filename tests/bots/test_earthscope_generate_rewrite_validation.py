@@ -162,6 +162,7 @@ def test_clean_llm_title_rejects_generic_or_recent_fallback_labels():
     assert _clean_llm_title("Wearable Trends Need Context", set()) is None
     assert _clean_llm_title("Check The Body Pattern", set()) is None
     assert _clean_llm_title("Sensitive Systems Take Note", set()) is None
+    assert _clean_llm_title("Track The Body Pattern", set()) is None
     assert _clean_llm_title("Brain Tabs Closing", {"brain tabs closing"}) is None
 
 
@@ -799,6 +800,22 @@ def test_validate_reel_spine_requires_evidence_for_carryover_language():
     ) is not None
 
 
+def test_validate_reel_spine_rejects_unitless_timed_activity():
+    caption = "Energy jumpy but tired? Use 5-10 minute focus sprints."
+    candidate = {
+        "voiceover": caption,
+        "reel_signal": "The outside push has eased today",
+        "reel_effects": "Focus may feel steadier in bursts",
+        "reel_pattern": "Turn tasks into single steps and use 5-10 sprints",
+    }
+
+    assert _validate_reel_spine(candidate, caption=caption, facts={}) is None
+
+    candidate["reel_pattern"] = "Use 5-10 minute focus sprints"
+
+    assert _validate_reel_spine(candidate, caption=caption, facts={}) is not None
+
+
 def test_rewrite_reel_from_final_caption_passes_history_and_returns_aligned_spine(monkeypatch):
     captured = {}
 
@@ -848,10 +865,13 @@ def test_rewrite_reel_from_final_caption_passes_history_and_returns_aligned_spin
     )
 
     supplied = json.loads(captured["messages"][1]["content"])
+    system_prompt = captured["messages"][0]["content"]
     assert supplied["required_exact_hook"] == "A quieter day to catch your breath?"
     assert supplied["required_voiceover"] == "A quieter day to catch your breath? Keep plans light."
     assert supplied["carryover_supported"] is True
     assert supplied["recent_signal_history"][0]["day"] == "2026-07-24"
+    assert "Do not invent or extend metaphors" in system_prompt
+    assert "4-10 words" in system_prompt
     assert result is not None
     assert result["voiceover"] == supplied["required_voiceover"]
 

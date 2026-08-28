@@ -203,3 +203,91 @@ async def test_dashboard_refreshes_space_on_fresh_cache_hit(monkeypatch):
     assert out["cache_hit"] is True
     assert out["stale"] is False
     assert out["refresh_scheduled"] is False
+
+
+class _FakeCursor:
+    def __init__(self, row):
+        self._row = row
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def execute(self, sql, params, prepare=False):  # noqa: ARG002
+        return None
+
+    async def fetchone(self):
+        return self._row
+
+
+class _FakeConn:
+    def __init__(self, rows):
+        self._rows = list(rows)
+
+    def cursor(self, row_factory=None):  # noqa: ARG002
+        row = self._rows.pop(0) if self._rows else None
+        return _FakeCursor(row)
+
+
+@pytest.mark.anyio
+async def test_fetch_member_post_ignores_older_rows():
+    target_day = date(2026, 8, 24)
+    old_row = {
+        "day": date(2026, 3, 7),
+        "title": "Your EarthScope — 2026-03-07",
+        "caption": "Old caption",
+        "body_markdown": "Old body",
+        "metrics_json": {},
+        "sources_json": {},
+        "updated_at": None,
+    }
+
+    payload = await dashboard_router._fetch_member_post(_FakeConn([old_row]), "user-1", target_day)
+
+    assert payload is None
+
+
+@pytest.mark.anyio
+async def test_earthscope_member_regenerates_when_only_older_row_exists(monkeypatch):
+    target_day = date(2026, 8, 24)
+    old_row = {
+        "day": date(2026, 3, 7),
+        "title": "Your EarthScope — 2026-03-07",
+        "caption": "Old caption",
+        "body_markdown": "Old body",
+        "hashtags": "#Old",
+        "metrics_json": {},
+        "sources_json": {},
+        "updated_at": None,
+    }
+    new_row = {
+        "day": target_day,
+        "title": "Your EarthScope",
+        "caption": "Fresh caption",
+        "body_markdown": "Fresh body",
+        "hashtags": "#Fresh",
+        "metrics_json": {},
+        "sources_json": {},
+        "updated_at": None,
+    }
+    regen_calls = []
+
+    async def fake_to_thread(fn):
+        regen_calls.append(True)
+        return {"ok": True}
+
+    monkeypatch.setattr(dashboard_router.asyncio, "to_thread", fake_to_thread)
+
+    request = SimpleNamespace(state=SimpleNamespace(user_id="user-1"))
+    out = await dashboard_router.earthscope_member(
+        request,
+        day=target_day,
+        conn=_FakeConn([old_row, new_row]),
+    )
+
+    assert regen_calls == [True]
+    assert out["ok"] is True
+    assert out["post"]["day"] == target_day
+    assert out["post"]["title"] == "Your EarthScope"

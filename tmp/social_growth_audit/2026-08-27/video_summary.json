@@ -1,0 +1,71 @@
+{
+  "fps": 30.0,
+  "frame_count": 704.0,
+  "duration": 23.466666666666665,
+  "frames": [
+    {
+      "time": 0.5,
+      "path": "tmp/social_growth_audit/2026-08-27/media/reel_frames/frame_00.5s.jpg",
+      "shape": [
+        1920,
+        1080,
+        3
+      ]
+    },
+    {
+      "time": 4,
+      "path": "tmp/social_growth_audit/2026-08-27/media/reel_frames/frame_04.0s.jpg",
+      "shape": [
+        1920,
+        1080,
+        3
+      ]
+    },
+    {
+      "time": 8,
+      "path": "tmp/social_growth_audit/2026-08-27/media/reel_frames/frame_08.0s.jpg",
+      "shape": [
+        1920,
+        1080,
+        3
+      ]
+    },
+    {
+      "time": 12,
+      "path": "tmp/social_growth_audit/2026-08-27/media/reel_frames/frame_12.0s.jpg",
+      "shape": [
+        1920,
+        1080,
+        3
+      ]
+    },
+    {
+      "time": 16,
+      "path": "tmp/social_growth_audit/2026-08-27/media/reel_frames/frame_16.0s.jpg",
+      "shape": [
+        1920,
+        1080,
+        3
+      ]
+    },
+    {
+      "time": 20,
+      "path": "tmp/social_growth_audit/2026-08-27/media/reel_frames/frame_20.0s.jpg",
+      "shape": [
+        1920,
+        1080,
+        3
+      ]
+    },
+    {
+      "time": 23,
+      "path": "tmp/social_growth_audit/2026-08-27/media/reel_frames/frame_23.0s.jpg",
+      "shape": [
+        1920,
+        1080,
+        3
+      ]
+    }
+  ],
+  "contact_sheet": "tmp/social_growth_audit/2026-08-27/media/reel_frames/contact_sheet.jpg"
+}

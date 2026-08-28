@@ -1,0 +1,13 @@
+{
+  "browserKeys": [
+    "browserId",
+    "capabilities",
+    "tabs",
+    "user"
+  ],
+  "protoKeys": [
+    "constructor",
+    "documentation",
+    "nameSession"
+  ]
+}

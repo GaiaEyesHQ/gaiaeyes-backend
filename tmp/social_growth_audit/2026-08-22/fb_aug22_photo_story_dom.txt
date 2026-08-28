@@ -1,0 +1,89 @@
+- banner:
+  - button [disabled]:
+  - link "Facebook":
+    - /url: /
+  - button:
+  - combobox "Search Facebook"
+  - navigation "Facebook":
+    - list:
+      - link "Home":
+        - /url: /
+      - link "Pages":
+        - /url: /pages/?category=your_pages&ref=bookmarks
+      - link "Professional dashboard":
+        - /url: /professional_dashboard/?ref=tab_bar
+      - link "Ad Center":
+        - /url: /61578852613452/ad_center/
+      - link "Reels":
+        - /url: /reel/?s=tab
+  - navigation "Account Controls and Settings":
+    - button "Facebook menu":
+    - link "Messenger":
+      - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+      - link "Messenger":
+        - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+    - button "Notifications, 6 unread":
+    - button:
+      - generic: Number of unread notifications
+      - generic: "6"
+    - button "Your profile":
+      - img "Your profile"
+- navigation:
+  - button "back"
+  - navigation "Breadcrumb":
+    - generic: Content Library
+  - heading "Post insights" [level=1]
+  - heading "Photo story" [level=2]:
+    - generic: Photo story
+  - generic: Published •
+  - generic: Today at 9:35 AM
+- main:
+  - main:
+    - main:
+      - heading "Views over time More info about Views over time" [level=2]:
+        - text: Views over time
+        - button "More info about Views over time":
+      - heading "Views" [level=2]:
+        - generic: Views
+      - generic: "0"
+      - heading "Viewers" [level=2]:
+        - generic: Viewers
+      - generic: "0"
+      - heading "$0.00 Approximate earnings More info about Approximate earnings" [level=2]:
+        - text: $0.00 Approximate earnings
+        - button "More info about Approximate earnings":
+      - heading "Stars" [level=2]:
+        - generic: Stars
+      - generic: $0.00
+      - heading "Content monetization" [level=2]:
+        - generic: Content monetization
+      - generic: Not eligible
+      - heading "Instream ads" [level=2]:
+        - generic: Instream ads
+      - generic: Not eligible
+      - heading "Ads on reels" [level=2]:
+        - generic: Ads on reels
+      - generic: Not eligible
+      - heading "Subscriptions" [level=2]:
+        - generic: Subscriptions
+      - generic: Not eligible
+      - heading "Follows More info about Follows" [level=2]:
+        - text: Follows
+        - button "More info about Follows":
+      - generic: "0"
+      - generic: Follows
+      - heading "0 Engagement More info about Engagement" [level=2]:
+        - text: 0 Engagement
+        - button "More info about Engagement":
+      - button "0 Reactions" [disabled]:
+        - generic: "0"
+        - generic: Reactions
+      - button "0 Clicks" [disabled]:
+        - generic: "0"
+        - generic: Clicks
+      - button "0 Comments" [disabled]:
+        - generic: "0"
+        - generic: Comments
+      - button "0 Shares" [disabled]:
+        - generic: "0"
+        - generic: Shares

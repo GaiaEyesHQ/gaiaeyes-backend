@@ -1,0 +1,18 @@
+{
+  "openTab": {
+    "id": "1623397987",
+    "providerTabId": "[\"001327d5-8b8d-4625-8995-a6a15d93c13a\",\"1623397987\"]",
+    "title": "Render Dashboard",
+    "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+    "lastOpened": "2026-08-13T05:58:41.150Z"
+  },
+  "currentUrl": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+  "currentTitle": "Render Dashboard",
+  "contentKeys": [],
+  "contentProtoKeys": [
+    "constructor",
+    "export",
+    "exportGsuite"
+  ],
+  "bodyText": "Sign In to Render\nGitHub\nGitLab\nBitbucket\nGoogle\nLast used\nor\nEmail\nPassword\nSign in\n\nSign in with SSO\n\nNeed an account? Sign up\nForgot your password? Reset it"
+}

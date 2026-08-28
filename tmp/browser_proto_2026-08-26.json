@@ -1,0 +1,26 @@
+{
+  "browserNames": [
+    "browserId",
+    "capabilities",
+    "constructor",
+    "documentation",
+    "nameSession",
+    "tabs",
+    "user"
+  ],
+  "tabsNames": [
+    "constructor",
+    "content",
+    "finalize",
+    "get",
+    "list",
+    "new",
+    "selected"
+  ],
+  "userNames": [
+    "claimTab",
+    "constructor",
+    "history",
+    "openTabs"
+  ]
+}

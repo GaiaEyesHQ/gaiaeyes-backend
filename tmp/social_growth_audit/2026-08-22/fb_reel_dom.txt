@@ -1,0 +1,305 @@
+- banner:
+  - button [disabled]:
+  - link "Facebook":
+    - /url: /
+  - button:
+  - combobox "Search Facebook"
+  - navigation "Facebook":
+    - list:
+      - link "Home":
+        - /url: /
+      - link "Pages":
+        - /url: /pages/?category=your_pages&ref=bookmarks
+      - link "Professional dashboard":
+        - /url: /professional_dashboard/?ref=tab_bar
+      - link "Ad Center":
+        - /url: /61578852613452/ad_center/
+      - link "Reels":
+        - /url: /reel/?s=tab
+  - navigation "Account Controls and Settings":
+    - button "Facebook menu":
+    - link "Messenger":
+      - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+      - link "Messenger":
+        - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+    - button "Notifications, 6 unread":
+    - button:
+      - generic: Number of unread notifications
+      - generic: "6"
+    - button "Your profile":
+      - img "Your profile"
+- navigation:
+  - button "back"
+  - navigation "Breadcrumb":
+    - generic: Content Library
+  - heading "Post insights" [level=1]
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - link "Gaia Eyes, view story":
+    - /url: /stories/122104739894961753/UzpfSVNDOjE2MTE1Mzc3MzA2MDkzNDM=/?view_single=false&__cft__[0]=AZagyeS9hEt-uoB18ZM1rKdIP0hZilmmkUbYSAYXN5zETNPdeVrI7DvY2Zi7SFMfNCHhStVZR2Sxadr7ZnJzs7ZjlSpVyNBAlscMmG8qWTZNmIkfEhJFdTCHLeb_Ptp9Oea-9NVbaoXNXP7DK0x8eK1sGhfVwO4jCgYXM2T21vd4HA&__tn__=%3C%3C%2CP-R
+    - img "Gaia Eyes, view story"
+  - heading "Gaia Eyes" [level=3]:
+    - link "Gaia Eyes":
+      - /url: https://www.facebook.com/profile.php?id=61578852613452&__cft__[0]=AZagyeS9hEt-uoB18ZM1rKdIP0hZilmmkUbYSAYXN5zETNPdeVrI7DvY2Zi7SFMfNCHhStVZR2Sxadr7ZnJzs7ZjlSpVyNBAlscMmG8qWTZNmIkfEhJFdTCHLeb_Ptp9Oea-9NVbaoXNXP7DK0x8eK1sGhfVwO4jCgYXM2T21vd4HA&__tn__=-UC%2CP-R
+      - generic: Gaia Eyes
+  - text: Published by Gaia Eyes
+  - img "(tooltip)Only people who manage this Page can see who published"
+  - generic: ·
+  - link:
+    - /url: "?__cft__[0]=AZagyeS9hEt-uoB18ZM1rKdIP0hZilmmkUbYSAYXN5zETNPdeVrI7DvY2Zi7SFMfNCHhStVZR2Sxadr7ZnJzs7ZjlSpVyNBAlscMmG8qWTZNmIkfEhJFdTCHLeb_Ptp9Oea-9NVbaoXNXP7DK0x8eK1sGhfVwO4jCgYXM2T21vd4HA&__tn__=%2CO%2CP-R#?kdj"
+  - generic: ·
+  - img "Shared with Public"
+  - button "Actions for this post by Gaia Eyes":
+  - text: Finally, a little breathing room? Space feels calm and a bit wobbly—more gentle wave than storm—which can help that heavy-limb drag ease and let energy come back in sma…
+  - button "See more"
+  - group "Video player":
+    - generic: Finally, a little breathing
+    - generic: room. Space feels calm and a
+    - button "Play video"
+    - button "Play"
+    - generic: 0:00 / 0:20
+    - slider "Change Position"
+    - button "Settings"
+    - button "Captions"
+    - button "Enter fullscreen":
+    - slider "Change volume"
+    - button "Unmute":
+  - button "Like":
+    - generic: "1"
+  - button "React":
+  - button "Leave a comment"
+  - button "Send this to friends or post it on your profile."
+  - toolbar "See who reacted to this":
+    - 'button "Like: 1 person"'
+  - button "Available Voices, switch profile":
+  - textbox "Comment as Gaia Eyes":
+    - paragraph
+  - generic: Comment as Gaia Eyes
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+  - blockquote:
+    - generic: Facebook
+- main:
+  - main:
+    - main:
+      - heading "Views over time More info about Views over time" [level=2]:
+        - text: Views over time
+        - button "More info about Views over time":
+      - generic: This post
+      - generic: Your typical content
+      - heading "Views" [level=2]:
+        - generic: Views
+      - generic: "244"
+      - heading "Viewers" [level=2]:
+        - generic: Viewers
+      - generic: "222"
+      - heading "$0.00 Approximate earnings More info about Approximate earnings" [level=2]:
+        - text: $0.00 Approximate earnings
+        - button "More info about Approximate earnings":
+      - heading "Stars" [level=2]:
+        - generic: Stars
+      - generic: $0.00
+      - heading "Content monetization" [level=2]:
+        - generic: Content monetization
+      - generic: Not eligible
+      - heading "Instream ads" [level=2]:
+        - generic: Instream ads
+      - generic: Not eligible
+      - heading "Ads on reels" [level=2]:
+        - generic: Ads on reels
+      - generic: Not eligible
+      - heading "Subscriptions" [level=2]:
+        - generic: Subscriptions
+      - generic: Not eligible
+      - heading "Audience retention More info about Audience retention" [level=2]:
+        - text: Audience retention
+        - button "More info about Audience retention":
+      - generic: "Average watch time: 3s"
+      - heading "More viewers dropped off at the 0:01 mark than at any other point in your reel." [level=2]:
+        - generic: More viewers dropped off at the 0:01 mark than at any other point in your reel.
+      - generic: 3-second views
+      - generic: "38"
+      - generic: Watch time
+      - generic: 11:42
+      - generic: Average percentage watched
+      - generic: 15%
+      - generic: Player completion rate
+      - generic: 0.5%
+      - heading "1 Engagement More info about Engagement" [level=2]:
+        - text: 1 Engagement
+        - button "More info about Engagement":
+      - button "1 Reactions" [disabled]:
+        - generic: "1"
+        - generic: Reactions
+      - button "0 Clicks" [disabled]:
+        - generic: "0"
+        - generic: Clicks
+      - button "0 Comments" [disabled]:
+        - generic: "0"
+        - generic: Comments
+      - button "0 Shares" [disabled]:
+        - generic: "0"
+        - generic: Shares
+      - heading "Reaction by type" [level=2]:
+        - generic: Reaction by type
+      - generic: "1"
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - generic: "0"
+      - heading "Distribution signals" [level=2]:
+        - generic: Distribution signals
+      - button "0.48% Select like rate" [disabled]:
+        - generic: 0.48%
+        - generic: Select like rate
+      - button "0.00% Select hide rate" [disabled]:
+        - generic: 0.00%
+        - generic: Select hide rate
+      - heading "Followers vs. Non-followers" [level=2]:
+        - generic: Followers vs. Non-followers
+      - button "More info (collapsed)":
+      - generic: 86.1%
+      - generic: "210"
+      - generic: Non-followers
+      - generic: 13.9%
+      - generic: "34"
+      - generic: Followers
+      - heading "Follows More info about Follows" [level=2]:
+        - text: Follows
+        - button "More info about Follows":
+      - generic: "0"
+      - generic: Follows
+      - heading "How people find your content More info about How people find your content" [level=2]:
+        - text: How people find your content
+        - button "More info about How people find your content":
+      - button "Traffic" [pressed]:
+        - generic: Traffic
+      - button "Source":
+        - generic: Source
+      - generic: Reels
+      - button "Reels"
+      - generic: 88.1%
+      - generic: Feed
+      - button "Feed"
+      - generic: 6.6%
+      - generic: Stories
+      - button "Stories"
+      - generic: 3.3%
+      - generic: Your Page
+      - button "Your Page"
+      - generic: 2%
+      - heading "Who viewed your content More info about Who viewed your content" [level=2]:
+        - text: Who viewed your content
+        - button "More info about Who viewed your content":
+      - button "Age and gender" [pressed]:
+        - generic: Age and gender
+      - button "Top countries":
+        - generic: Top countries
+      - generic: Women
+      - generic: Men
+      - generic: Unknown
+      - generic: 25-34
+      - generic: 35.5%
+      - generic: 35-44
+      - generic: 18.2%
+      - generic: 18-24
+      - generic: 17.3%
+      - generic: 45-54
+      - generic: 14.5%
+      - generic: 55-64
+      - generic: 9.1%
+      - generic: 65+
+      - generic: 5.4%
+      - heading "Voice translations More info about Voice translations" [level=2]:
+        - text: Voice translations
+        - button "More info about Voice translations":
+      - generic: Not enough data to show yet.
+      - heading "Link clicks More info about Link clicks" [level=2]:
+        - text: Link clicks
+        - button "More info about Link clicks":
+      - generic: Insights not available
+      - generic: There may not be enough data on your content yet. Check back again later.

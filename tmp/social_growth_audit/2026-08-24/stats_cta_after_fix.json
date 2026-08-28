@@ -1,0 +1,25 @@
+{
+  "selected_cta": {
+    "key": "sleep-wind-down-patterns",
+    "themes": [
+      "sleep",
+      "rest"
+    ],
+    "card": "Sleep hard to settle? Gaia Eyes helps compare wind-down patterns with your day.",
+    "caption": "Sleep hard to settle? Gaia Eyes helps compare wind-down patterns with your day."
+  },
+  "context": {
+    "title": "Can't settle even when you're tired?",
+    "caption": "Can't settle even when you're tired? The sky is calm today, a small breather with room to recoup, and your body may need a little time to catch up. Keep lights warm and dim after sunset and ease off caffeine earlier, and take it slow this evening.",
+    "affects": "Sleep may come a bit easier for some, especially if nights have felt jumpy lately. The steadier backdrop can help the body’s wind-down signals line up. If rest is still patchy, that can be lag from recent days or from local factors like heat, pressure swings, or allergens.",
+    "voiceover": "Can't settle even when you're tired? Even with a calmer backdrop today, some people may still feel that thin, papery restlessness at the edges. Space weather is quiet—no disruptive solar bursts pointing our way—so the body’s wind‑down cues have a cleaner lane to line up. If you’re still tossing, that can be leftover momentum from recent days or from local stuff like heat, pressure swings, or allergens.",
+    "reel_hook": "Can't settle even when you're tired?",
+    "kp_max": 2.33,
+    "kp_current": null,
+    "cmes_count": 2.0,
+    "flares_count": 0,
+    "sch_any_fundamental_avg_hz": 7.27,
+    "aurora_headline": null
+  },
+  "output": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-08-24/daily_stats_after_cta_fix.jpg"
+}

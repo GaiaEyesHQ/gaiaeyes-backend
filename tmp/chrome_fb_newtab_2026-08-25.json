@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "keys": [
+    "id",
+    "playwright",
+    "dom_cua",
+    "cua",
+    "content",
+    "clipboard",
+    "dev",
+    "capabilities"
+  ],
+  "props": [
+    [
+      "id",
+      "playwright",
+      "dom_cua",
+      "cua",
+      "content",
+      "clipboard",
+      "dev",
+      "capabilities"
+    ],
+    [
+      "constructor",
+      "goto",
+      "markHandoff",
+      "markDeliverable",
+      "back",
+      "forward",
+      "reload",
+      "close",
+      "screenshot",
+      "title",
+      "url",
+      "getJsDialog"
+    ],
+    [
+      "constructor",
+      "__defineGetter__",
+      "__defineSetter__",
+      "hasOwnProperty",
+      "__lookupGetter__",
+      "__lookupSetter__",
+      "isPrototypeOf",
+      "propertyIsEnumerable",
+      "toString",
+      "valueOf",
+      "__proto__",
+      "toLocaleString"
+    ]
+  ]
+}

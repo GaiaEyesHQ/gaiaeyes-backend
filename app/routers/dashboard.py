@@ -752,6 +752,18 @@ def _member_post_requires_refresh(post: Optional[Dict[str, Any]]) -> bool:
     return bool(re.search(r"\s+—\s+\d{4}-\d{2}-\d{2}$", title))
 
 
+def _member_post_is_current(
+    row: Optional[Dict[str, Any]],
+    payload: Optional[Dict[str, Any]],
+    day: date,
+) -> bool:
+    if not isinstance(row, dict):
+        return False
+    if row.get("day") != day:
+        return False
+    return not _member_post_requires_refresh(payload)
+
+
 async def _fetch_public_post(conn, day: date) -> Optional[Dict[str, Any]]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
@@ -786,8 +798,7 @@ async def _fetch_member_post(conn, user_id: str, day: date) -> Optional[Dict[str
         )
         row = await cur.fetchone()
     payload = _post_row_to_payload(row)
-    row_day = row.get("day") if isinstance(row, dict) else None
-    if row_day == day and _member_post_requires_refresh(payload):
+    if not _member_post_is_current(row, payload, day):
         return None
     return payload
 
@@ -1342,7 +1353,7 @@ async def earthscope_member(
         return {"ok": False, "error": f"member earthscope fetch failed: {exc}"}
 
     payload = _post_row_to_payload(row)
-    if row and row.get("day") == day and _member_post_requires_refresh(payload):
+    if not _member_post_is_current(row, payload, day):
         row = None
 
     if not row:

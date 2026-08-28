@@ -1,0 +1,66 @@
+{
+  "schema_version": "social_alerts_preview_v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "generated_at": "2026-08-28T01:32:42Z",
+  "source_payload_generated_at": "2026-07-10T00:01:09Z",
+  "rendered_count": 1,
+  "rendered": [
+    {
+      "draft_id": "social_alert.cme.high.6b0d08c27bee",
+      "category": "cme",
+      "severity": "high",
+      "title": "Nerves on overdrive?",
+      "outputs": [
+        {
+          "format": "square_image",
+          "path": "tmp/social_alerts_shadow/previews-preflight-2026-08-27/cme-high-6b0d08c27bee-square.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1080
+          },
+          "asset_source": "bootstrap:social_alerts/cme_wave",
+          "video_candidates": [],
+          "warnings": [
+            "social/share/backgrounds/cme.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/cme.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/solar_wind.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_wind.jpg: HTTP Error 400: Bad Request"
+          ]
+        },
+        {
+          "format": "feed_card",
+          "path": "tmp/social_alerts_shadow/previews-preflight-2026-08-27/cme-high-6b0d08c27bee-feed.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          },
+          "asset_source": "bootstrap:social_alerts/cme_wave",
+          "video_candidates": [],
+          "warnings": [
+            "social/share/backgrounds/cme.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/cme.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/solar_wind.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_wind.jpg: HTTP Error 400: Bad Request"
+          ]
+        },
+        {
+          "format": "story_reel_frame",
+          "path": "tmp/social_alerts_shadow/previews-preflight-2026-08-27/cme-high-6b0d08c27bee-story.png",
+          "canvas": {
+            "width": 1080,
+            "height": 1920
+          },
+          "asset_source": "bootstrap:social_alerts/cme_wave",
+          "video_candidates": [
+            "nasa/ccor1/latest.mp4",
+            "nasa/enlil/latest.mp4"
+          ],
+          "warnings": [
+            "social/share/backgrounds/cme.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/cme.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/space_weather.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/space_weather.jpg: HTTP Error 400: Bad Request",
+            "social/share/backgrounds/solar_wind.jpg: remote image failed at https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/share/backgrounds/solar_wind.jpg: HTTP Error 400: Bad Request"
+          ]
+        }
+      ]
+    }
+  ]
+}

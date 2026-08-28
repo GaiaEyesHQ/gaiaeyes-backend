@@ -1,0 +1,20 @@
+{
+  "count": 35,
+  "renderTabs": [
+    {
+      "id": "1623397987",
+      "providerTabId": "[\"001327d5-8b8d-4625-8995-a6a15d93c13a\",\"1623397987\"]",
+      "title": "Render Dashboard",
+      "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61mg%2Fevents",
+      "lastOpened": "2026-08-13T05:58:41.150Z"
+    },
+    {
+      "id": "1623398358",
+      "providerTabId": "[\"001327d5-8b8d-4625-8995-a6a15d93c13a\",\"1623398358\"]",
+      "title": "Render Dashboard",
+      "url": "https://dashboard.render.com/login?next=%2Fcron%2Fcrn-d99r7pecjfls738o61n0%2Fevents",
+      "lastOpened": "2026-08-11T14:23:19.689Z",
+      "tabGroup": "🔎 Gaia Render watch"
+    }
+  ]
+}

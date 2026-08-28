@@ -43,6 +43,18 @@ def anyio_backend():
     return "asyncio"
 
 
+def test_device_token_normalization_preserves_case_sensitive_fcm_tokens():
+    token = "fcm:AbC_def-123"
+
+    assert profile._normalize_device_token(f" <{token}> ") == token
+
+
+def test_device_token_normalization_canonicalizes_apns_hex_tokens():
+    token = "ABCDEF0123456789" * 4
+
+    assert profile._normalize_device_token(f"<{token}>") == token.lower()
+
+
 @pytest.mark.anyio
 async def test_profile_notifications_disable_turns_off_tokens_and_queued_events(monkeypatch):
     conn = FakeConn()

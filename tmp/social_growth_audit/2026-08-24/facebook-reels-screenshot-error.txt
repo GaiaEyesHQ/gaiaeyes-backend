@@ -1,0 +1,1 @@
+TypeError: fbTab.playwright.screenshot is not a function

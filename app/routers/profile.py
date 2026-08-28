@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import smtplib
 import ssl
 from datetime import datetime, timezone
@@ -774,7 +775,11 @@ def _normalize_device_token(value: str) -> str:
     )
     if not cleaned:
         raise HTTPException(status_code=400, detail="device_token is required")
-    return cleaned.lower()
+    # APNs tokens are hexadecimal and conventionally normalized to lowercase.
+    # FCM registration tokens are opaque and case-sensitive, so preserve them.
+    if re.fullmatch(r"[0-9a-fA-F]{64}", cleaned):
+        return cleaned.lower()
+    return cleaned
 
 
 async def _fetch_location_row(conn, user_id: str) -> Optional[Dict[str, Any]]:

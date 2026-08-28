@@ -161,6 +161,7 @@ dependencies {
 val validateReleaseConfiguration by tasks.registering {
     group = "verification"
     description = "Fails release builds when secure account access is not configured."
+    notCompatibleWithConfigurationCache("Reads release configuration resolved by this build script")
 
     doLast {
         if (

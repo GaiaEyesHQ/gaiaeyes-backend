@@ -76,6 +76,23 @@ def test_select_earthscope_cta_uses_nervous_system_context_before_solar_activity
     assert "heart" not in cta["card"].lower()
 
 
+def test_select_earthscope_cta_uses_sleep_context_before_solar_activity():
+    cta = select_earthscope_cta(
+        "2026-08-24",
+        context={
+            "cmes_24h": 2,
+            "title": "Can't settle even when you're tired?",
+            "caption": "Keep lights warm and dim after sunset and ease off caffeine earlier.",
+            "affects": "Sleep may come a bit easier if nights have felt jumpy lately.",
+            "voiceover": "The body's wind-down cues have a cleaner lane to line up.",
+            "reel_hook": "Can't settle even when you're tired?",
+        },
+    )
+
+    assert cta["key"] == "sleep-wind-down-patterns"
+    assert "heart" not in cta["card"].lower()
+
+
 def test_select_earthscope_cta_uses_fatigue_context_before_solar_activity():
     cta = select_earthscope_cta(
         "2026-08-21",

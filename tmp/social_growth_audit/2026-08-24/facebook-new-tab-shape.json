@@ -1,0 +1,26 @@
+{
+  "keys": [
+    "id",
+    "playwright",
+    "dom_cua",
+    "cua",
+    "content",
+    "clipboard",
+    "dev",
+    "capabilities"
+  ],
+  "proto": [
+    "constructor",
+    "goto",
+    "markHandoff",
+    "markDeliverable",
+    "back",
+    "forward",
+    "reload",
+    "close",
+    "screenshot",
+    "title",
+    "url",
+    "getJsDialog"
+  ]
+}

@@ -650,7 +650,7 @@ def _render_alert_card(
         subtitle_size = 34
         body_gap = 24
     else:
-        panel = (margin, 500, width - margin, height - 640)
+        panel = (margin, 430, width - margin, height - 300)
         title_max = 84
         subtitle_size = 36
         body_gap = 28
@@ -713,7 +713,11 @@ def _render_alert_card(
     cta_height += sum(_text_size(draw, line, cta_body_font)[1] for line in cta_body_lines)
     if cta_body_lines:
         cta_height += 7 * (len(cta_body_lines) - 1)
-    cta_y = min(max(y, y2 - cta_height - 24), y2 - cta_height - 12)
+    cta_y = y2 - cta_height - 52
+    if y > cta_y - body_gap:
+        warnings.append(
+            f"layout preflight: body content reaches reserved CTA region ({y} > {cta_y - body_gap})"
+        )
     if cta_title_lines:
         cta_y = _draw_wrapped_text(
             draw,

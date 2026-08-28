@@ -1,0 +1,333 @@
+- banner:
+  - button [disabled]:
+  - link "Facebook":
+    - /url: /
+  - button:
+  - combobox "Search Facebook"
+  - navigation "Facebook":
+    - list:
+      - link "Home, 1 notification":
+        - /url: /
+        - generic: New posts
+      - link "Pages":
+        - /url: /pages/?category=your_pages&ref=bookmarks
+      - link "Professional dashboard":
+        - /url: /professional_dashboard/?ref=tab_bar
+      - link "Ad Center":
+        - /url: /61578852613452/ad_center/
+      - link "Reels":
+        - /url: /reel/?s=tab
+  - navigation "Account Controls and Settings":
+    - button "Facebook menu":
+    - link "Messenger":
+      - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+      - link "Messenger":
+        - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+    - button "Notifications, 6 unread":
+    - button:
+      - generic: Number of unread notifications
+      - generic: "6"
+    - button "Your profile":
+      - img "Your profile"
+- navigation:
+  - heading "Professional dashboard" [level=1]
+  - button "Collapse navigation"
+  - list:
+    - link "Home":
+      - /url: https://www.facebook.com/professional_dashboard/
+      - generic: Home
+    - link "Insights":
+      - /url: https://www.facebook.com/professional_dashboard/profile_insights/views/
+      - generic: Insights
+    - link "Content" [expanded]:
+      - /url: https://www.facebook.com/professional_dashboard/content/content_library/
+      - generic: Content
+    - list:
+      - link "Content Library":
+        - /url: https://www.facebook.com/professional_dashboard/content/content_library/
+        - generic: Content Library
+      - link "Planner":
+        - /url: https://www.facebook.com/professional_dashboard/content_calendar/?ref=prodash_left_nav
+        - generic: Planner
+    - link "Monetization":
+      - /url: https://www.facebook.com/professional_dashboard/monetization/
+      - generic: Monetization
+    - link "Engagement":
+      - /url: https://www.facebook.com/professional_dashboard/engagement/comments_manager/
+      - generic: Engagement
+    - link "All tools":
+      - /url: https://www.facebook.com/professional_dashboard/tools/
+      - generic: All tools
+  - button "Create a post":
+    - generic: Create a post
+- main:
+  - main:
+    - heading "Videos you post on Facebook are now reels" [level=2]:
+      - generic: Videos you post on Facebook are now reels
+    - generic: You can still view your previously posted videos, but they will be combined under the reels filter.
+    - button "Dismiss Videos you post on Facebook are now reels card"
+    - heading "Content Library" [level=2]:
+      - generic: Content Library
+    - tablist:
+      - button "More":
+        - generic: More
+      - tab "Published":
+        - generic: Published
+      - tab "Scheduled":
+        - generic: Scheduled
+      - tab "Drafts":
+        - generic: Drafts
+    - textbox "Search for posts"
+    - button "Create":
+      - generic: Create
+    - button "Filters":
+      - generic: Filters
+    - button "Columns":
+      - generic: Columns
+    - 'button "Last 28 days: Jul 24 - Aug 21"':
+      - generic: "Last 28 days: Jul 24 - Aug 21"
+    - button "Export data":
+      - generic: Export data
+    - strong: "0"
+    - strong: /50
+    - text: posts selected
+    - grid "Content Library":
+      - rowgroup:
+        - row "Select all Preview Views Viewers Engagement Earnings Net follows Impressions Comments Distribution Watch time Average watch time 3-second views 1-minute views":
+          - columnheader "Select all":
+            - checkbox "Select all"
+          - columnheader "Preview":
+            - button "Preview":
+              - generic: Preview
+          - columnheader
+          - columnheader "Views":
+            - button "Views":
+              - generic: Views
+          - columnheader "Viewers":
+            - button "Viewers":
+              - generic: Viewers
+          - columnheader "Engagement":
+            - button "Engagement":
+              - generic: Engagement
+          - columnheader "Earnings":
+            - button "Earnings":
+              - generic: Earnings
+          - columnheader "Net follows":
+            - button "Net follows":
+              - generic: Net follows
+          - columnheader "Impressions":
+            - button "Impressions":
+              - generic: Impressions
+          - columnheader "Comments":
+            - button "Comments":
+              - generic: Comments
+          - columnheader "Distribution":
+            - button "Distribution":
+              - generic: Distribution
+          - columnheader "Watch time":
+            - button "Watch time":
+              - generic: Watch time
+          - columnheader "Average watch time":
+            - button "Average watch time":
+              - generic: Average watch time
+          - columnheader "3-second views":
+            - button "3-second views":
+              - generic: 3-second views
+          - columnheader "1-minute views":
+            - button "1-minute views":
+              - generic: 1-minute views
+      - rowgroup:
+        - row "Select a post Link to view a post page Actions for this post 226 209 1 $0.00 0 205 0 +0.2x 10m 10s 3s 29 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE3OTM1NzA0MDk2MTc1MzoxMjIxNzkzNTcwNDA5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - 'heading "Finally, a little breathing room? Space feels calm and a bit wobbly—more gentle wave than storm—which can help that heavy-limb drag ease and let energy come back in small steps. Pick one or two light tasks and stop early; add a short walk or stretch break. #GaiaEyes #SpaceWeather #Fatigue #ChronicIllness #Pacing #Recovery #BrainFog #Migraines #Allergies #AirQuality" [level=2]':
+                - generic: "Finally, a little breathing room? Space feels calm and a bit wobbly—more gentle wave than storm—which can help that heavy-limb drag ease and let energy come back in small steps. Pick one or two light tasks and stop early; add a short walk or stretch break. #GaiaEyes #SpaceWeather #Fatigue #ChronicIllness #Pacing #Recovery #BrainFog #Migraines #Allergies #AirQuality"
+              - generic: Published •
+              - generic: Today at 9:51 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "226":
+            - generic: "226"
+          - gridcell "209":
+            - generic: "209"
+          - gridcell "1":
+            - generic: "1"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "205":
+            - generic: "205"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "+0.2x":
+            - generic: +0.2x
+          - gridcell "10m 10s":
+            - generic: 10m 10s
+          - gridcell "3s":
+            - generic: 3s
+          - gridcell "29":
+            - generic: "29"
+          - gridcell "0":
+            - generic: "0"
+        - row "Select a post Link to view a post page Actions for this post 0 0 0 $0.00 0 0 0 -- ‑‑ ‑‑ -- --":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSVNDOjEwNzM4OTI5NTg0NjE2ODg%3D&entry_point=ProdashCometContentLibraryTable
+              - heading "Photo story" [level=2]:
+                - generic: Photo story
+              - generic: Published •
+              - generic: Today at 9:51 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "--":
+            - generic: "--"
+          - gridcell "‑‑":
+            - generic: ‑‑
+          - gridcell "‑‑":
+            - generic: ‑‑
+          - gridcell "--":
+            - generic: "--"
+          - gridcell "--":
+            - generic: "--"
+        - row "Select a post Link to view a post page Actions for this post 4 2 0 $0.00 0 2 0 -- ‑‑ ‑‑ 0 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE3OTM1NjI5MDk2MTc1MzoxMjIxNzkzNTYyOTA5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - 'heading "Finally, a little breathing room? Space feels calm and a bit wobbly—more gentle wave than storm—which can help that heavy-limb drag ease and let energy come back in small steps. Pick one or two light tasks and stop early; add a short walk or stretch break. #GaiaEyes #SpaceWeather #Fatigue #ChronicIllness #Pacing #Recovery #BrainFog #Migraines #Allergies #AirQuality" [level=2]':
+                - generic: "Finally, a little breathing room? Space feels calm and a bit wobbly—more gentle wave than storm—which can help that heavy-limb drag ease and let energy come back in small steps. Pick one or two light tasks and stop early; add a short walk or stretch break. #GaiaEyes #SpaceWeather #Fatigue #ChronicIllness #Pacing #Recovery #BrainFog #Migraines #Allergies #AirQuality"
+              - generic: Published •
+              - generic: Today at 9:48 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "4":
+            - generic: "4"
+          - gridcell "2":
+            - generic: "2"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "2":
+            - generic: "2"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "--":
+            - generic: "--"
+          - gridcell "‑‑":
+            - generic: ‑‑
+          - gridcell "‑‑":
+            - generic: ‑‑
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "0":
+            - generic: "0"
+        - row "Select a post Link to view a post page Actions for this post 267 223 0 $0.00 0 209 0 +0.2x 16m 31s 4s 63 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE3OTIzMTIxNDk2MTc1MzoxMjIxNzkyMzEyMTQ5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - heading [level=2]:
+                - generic: "Body buzzing for no clear reason? That under‑the‑skin hum can show up even when the external field is calm—wired/tired for some people, where the body presses the gas while the mind wants park. Today’s backdrop is softer than earlier in the week: space weather is settled overall, even though the solar wind is still a bit brisk with a slight southward lean. In plain terms, there isn’t a strong push on the system, so the buzz tends to ebb once you lower input. We watch how the solar wind brushes Earth’s magnetic field and compare that with how the body’s tempo can drift—today favors reset over escalation. Keep caffeine earlier and smaller so the rev doesn’t outrun your evening, and use quick movement bursts (a stair flight, a hallway walk) to siphon off extra charge and clear focus. If you’re sensitive, let errands and screens run in smaller chunks; on a day like this, tiny stressors may pile faster than expected, then dissolve as soon as you pause. Dim screen brightness, trim notifications, and step outside for a few minutes of daylight to steady your rhythm. #BodyWeather #NervousSystemCare #SomaticCheckIn #SolarWind #DailyRhythm #SensitiveDays #GaiaEyes"
+              - generic: Published •
+              - generic: Yesterday at 9:52 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "267":
+            - generic: "267"
+          - gridcell "223":
+            - generic: "223"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "209":
+            - generic: "209"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "+0.2x":
+            - generic: +0.2x
+          - gridcell "16m 31s":
+            - generic: 16m 31s
+          - gridcell "4s":
+            - generic: 4s
+          - gridcell "63":
+            - generic: "63"
+          - gridcell "0":
+            - generic: "0"
+        - row "Select a post Link to view a post page Actions for this post 16 8 1 $0.00 0 8 0 -- ‑‑ ‑‑ 0 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE3OTIzMDUyNDk2MTc1MzoxMjIxNzkyMzA1MjQ5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - heading [level=2]:
+                - generic: "Body buzzing for no clear reason? That under‑the‑skin hum can show up even when the external field is calm—wired/tired for some people, where the body presses the gas while the mind wants park. Today’s backdrop is softer than earlier in the week: space weather is settled overall, even though the solar wind is still a bit brisk with a slight southward lean. In plain terms, there isn’t a strong push on the system, so the buzz tends to ebb once you lower input. We watch how the solar wind brushes Earth’s magnetic field and compare that with how the body’s tempo can drift—today favors reset over escalation. Keep caffeine earlier and smaller so the rev doesn’t outrun your evening, and use quick movement bursts (a stair flight, a hallway walk) to siphon off extra charge and clear focus. If you’re sensitive, let errands and screens run in smaller chunks; on a day like this, tiny stressors may pile faster than expected, then dissolve as soon as you pause. Dim screen brightness, trim notifications, and step outside for a few minutes of daylight to steady your rhythm. #BodyWeather #NervousSystemCare #SomaticCheckIn #SolarWind #DailyRhythm #SensitiveDays #GaiaEyes"
+              - generic: Published •
+              - generic: Yesterday at 9:48 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "16":
+            - generic: "16"
+          - gridcell "8":
+            - generic: "8"
+          - gridcell "1":
+            - generic: "1"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "8":
+            - generic: "8"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "--":
+            - generic: "--"
+          - gridcell "‑‑":
+            - generic: ‑‑
+          - gridcell "‑‑":
+            - generic: ‑‑
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "0":
+            - generic: "0"
+      - rowgroup
+- list:
+  - complementary "New notification":
+    - heading "New notification" [level=2]:
+      - generic: New notification
+    - button "Close"
+    - link "Unread Your reel hit 100 plays! Make another to keep up the momentum. 2 hours ago Mark as read, Your reel hit 100 plays! Make another to keep up the momentum.":
+      - /url: https://www.facebook.com/content/insights/?content_id=122179485536961753&notif_id=1787416904895721&notif_t=fb_shorts_video_views&ref=notif
+      - generic: Unread
+      - text: Your reel hit 100 plays! Make another to keep up the momentum.
+      - generic "2 hours ago": 2h
+      - button "Mark as read, Your reel hit 100 plays! Make another to keep up the momentum."
+    - button "Manage Gaia Eyes notification settings"
+    - alert: Your reel hit 100 plays! Make another to keep up the momentum.
