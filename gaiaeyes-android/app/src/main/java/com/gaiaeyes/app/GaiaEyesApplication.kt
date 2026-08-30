@@ -5,6 +5,7 @@ import com.gaiaeyes.app.core.di.AppContainer
 import com.gaiaeyes.app.core.work.JournalDrainScheduler
 import com.gaiaeyes.app.core.work.HealthSampleDrainScheduler
 import com.gaiaeyes.app.notifications.FirebaseConfiguration
+import com.gaiaeyes.app.notifications.GaiaNotificationChannels
 
 class GaiaEyesApplication : Application() {
     val container: AppContainer by lazy {
@@ -18,6 +19,7 @@ class GaiaEyesApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        GaiaNotificationChannels.ensureCreated(this)
         FirebaseConfiguration.initialize(this)
         JournalDrainScheduler.schedulePeriodic(this)
         HealthSampleDrainScheduler.schedulePeriodic(this)

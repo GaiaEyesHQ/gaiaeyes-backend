@@ -640,6 +640,33 @@ def _first_nonempty_line(txt: str) -> str:
     return ""
 
 
+HOOK_FORMS = ("question", "today_feel", "conversational", "statement")
+
+
+def _hook_form_for_text(text: str) -> str:
+    opener = _first_sentence(str(text or "")).strip()
+    lowered = opener.lower().replace("’", "'")
+    if opener.endswith("?"):
+        return "question"
+    if lowered.startswith(("today's feel:", "todays feel:", "today feels:")):
+        return "today_feel"
+    if re.search(r"\b(one of those|back (?:in|into) bed|may sound (?:good|better)|kind of day)\b", lowered):
+        return "conversational"
+    return "statement"
+
+
+def _preferred_hook_form(ctx: Dict[str, Any]) -> str:
+    recent = list(ctx.get("banned_openers") or []) + list(ctx.get("recent_captions") or [])
+    counts = {form: 0 for form in HOOK_FORMS}
+    for value in recent:
+        counts[_hook_form_for_text(str(value or ""))] += 1
+    lowest = min(counts.values())
+    choices = [form for form in HOOK_FORMS if counts[form] == lowest]
+    seed_text = f"{ctx.get('day') or ''}|{ctx.get('platform') or PLATFORM}|hook-form"
+    seed = int(hashlib.sha256(seed_text.encode("utf-8")).hexdigest(), 16)
+    return choices[seed % len(choices)]
+
+
 HOOK_LANES: Dict[str, Dict[str, Any]] = {
     "recovery_breather": {
         "label": "a quieter stretch to recover",
@@ -819,8 +846,15 @@ def _hook_lane_brief(ctx: Dict[str, Any]) -> Dict[str, Any]:
             for lane in preferred
         ],
         "recent_lanes": recent[-6:],
+        "preferred_form": _preferred_hook_form(ctx),
+        "form_examples": {
+            "question": "Feeling unusually wiped out today?",
+            "today_feel": "Today's feel: wiped out.",
+            "conversational": "Crawling back into bed may sound good today.",
+            "statement": "Energy may run lower today.",
+        },
         "instruction": (
-            "Choose one preferred lane for the opening hook. Sleep can win when it fits, "
+            "Choose one preferred lane and use preferred_form for the opening hook. Questions are one form, not the default. Sleep can win when it fits, "
             "but do not keep using sleep just because a previous sleep post performed well."
         ),
     }
@@ -1134,7 +1168,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "Do not use HRV, recovery, heart-rate variability, parasympathetic, autonomic, or wearable jargon in the title/hook. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases and never reuse recent_titles. "
         "Avoid these fallback labels and vague metaphors: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Body Pattern, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note, Is Your Body Running Loud, Head Pressure Asking For Space. "
-        "Use both clear statements and natural questions. Good shapes: 'Brain Fog Comes In Waves', 'Body Buzzing Today?', 'Feeling Jittery Today?', 'Feeling Squirrely Today?', 'Can Your Body Exhale Today?', 'Pain Feeling Extra Loud?' "
+        "Match hook_lane_brief.preferred_form. Rotate among questions, direct statements, a 'Today's feel:' label, and conversational observations. Good shapes: 'Brain Fog Comes In Waves', 'Today's Feel: Wiped Out', 'Crawling Back Into Bed Sounds Good', 'Body Buzzing Today?' "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
         "Output ONLY the title text with no quotes."
     )
@@ -1750,7 +1784,7 @@ def _caption_creativity_score(caption: str, ctx: Dict[str, Any], recent_caps: Li
         score += 5.0
     if len(first.split()) <= 12:
         score += 1.0
-    if re.search(r"\b(body|sleep|hrv|heart|mood|pain|migraine|headache|sinus|pressure|nervous system|wired|foggy|scattered|reset|restless|recovery|symptoms?|wearable|sensitive systems?)\b", first_l):
+    if re.search(r"\b(body|sleep|hrv|heart|head|mood|pain|migraine|headache|sinus|pressure|energy|drained|tired|nervous system|wired|foggy|scattered|reset|restless|recovery|symptoms?|wearable|sensitive systems?)\b", first_l):
         score += 3.0
     if lane in preferred_lanes:
         score += 3.0 - preferred_lanes.index(lane) * 0.5
@@ -1760,12 +1794,12 @@ def _caption_creativity_score(caption: str, ctx: Dict[str, Any], recent_caps: Li
         score -= 3.0
     if lane == "sleep" and "sleep" not in preferred_lanes[:2]:
         score -= 2.0
-    if "?" in first:
-        score += 1.0
+    if _hook_form_for_text(first) == _preferred_hook_form(ctx):
+        score += 3.0
+    else:
+        score -= 1.5
     if re.search(r"\b(focused? work blocks?|work blocks?|deep-work|tasks?|productiv(e|ity)|catch up|clear runway|focus day)\b", first_l):
         score -= 2.5
-    if re.search(r"\b(today|the day)\s+(feels|has|is)\b", first_l):
-        score -= 6.0
     if re.search(r"\b(geomagnetic conditions|space weather|magnetic backdrop|steady magnetic backdrop|standard energy field)\b", first_l):
         score -= 3.0
     if _caption_too_similar(text, recent_caps, EARTHSCOPE_SIM_THRESH):
@@ -2075,7 +2109,7 @@ def _rewrite_json_candidates(
         "Do not open with HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. "
         "Write in clear public language without flattening the voice: vary sentence length, use concrete words, and avoid medical/science lecture voice. "
         "Avoid technical or medical terms such as parasympathetic, autonomic, coherence, modulation, and biomarkers. If a technical term is truly needed, explain it in a final Plain English note after the main caption, max two notes. "
-        "You may use a question as the opening hook if it feels natural. Humor is welcome when warm and grounded. "
+        "Match hook_lane_brief.preferred_form. Across the candidate batch, vary grammatical shape and do not make every opener a question. Humor is welcome when warm and grounded. "
         "Avoid report-like openings, labels, and repeated phrasing. Do not reuse recent_openers. "
         "Avoid overusing work-block advice. If you mention focus, make it feel like body-pattern guidance, not productivity coaching. "
         "Avoid the ban_phrases exactly; choose natural wording instead of trying to synonym-swap them. "
@@ -2115,6 +2149,12 @@ def _rewrite_json_candidates(
                 "joint stiffness or body aches",
                 "heart pounding or fluttery body awareness",
             ],
+            "hook_forms_to_rotate": [
+                "a natural question",
+                "a direct statement",
+                "a Today's feel label",
+                "a conversational observation about the kind of day it may be",
+            ],
             "avoid": [
                 "weather report voice",
                 "generic wellness slogans",
@@ -2128,7 +2168,7 @@ def _rewrite_json_candidates(
             ],
         },
         "candidate_requirements": {
-            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and must not mention HRV, heart-rate variability, a recovery score, parasympathetic, or autonomic. Describe the feeling in ordinary words; do not invent a sensory image or metaphor. Avoid the anti-pattern cadence in public_voice_reference.",
+            "caption": f"{caption_profile['caption_instruction']} First sentence is the social hook, must differ across candidates, and should match hook_lane_brief.preferred_form. The batch must include both question and non-question forms. The hook must not mention HRV, heart-rate variability, a recovery score, parasympathetic, or autonomic. Describe the feeling in ordinary words; do not invent a sensory image or metaphor. Avoid the anti-pattern cadence in public_voice_reference.",
             "snapshot": "2-4 plain-language sentences with no numeric space-weather measurements.",
             "affects": "2-4 sentences about one primary possible felt pattern without certainty. Supporting effects must reinforce that pattern, not reverse it.",
             "playbook": "3-5 short bullets.",

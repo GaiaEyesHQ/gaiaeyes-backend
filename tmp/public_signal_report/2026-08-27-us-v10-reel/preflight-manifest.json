@@ -1,0 +1,304 @@
+{
+  "schema_version": "us-health-snapshot-reel-preflight.v1",
+  "mode": "shadow",
+  "auto_publish": false,
+  "passed": true,
+  "generated_at": "2026-08-28T02:05:53Z",
+  "source_day": "2026-08-27",
+  "source_public_name": "Gaia Eyes U.S. Health Snapshot",
+  "errors": [],
+  "warnings": [],
+  "slides": [
+    {
+      "index": 1,
+      "key": "hook",
+      "label": "U.S. HEALTH SNAPSHOT",
+      "text": "Feeling drained in the heat?",
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/01-hook.png",
+      "background_source": "bootstrap:social_alerts/migraine_pressure",
+      "background_digest": "5f302256e8caaa39f21aa030d7acd6b32b2a4199e613f201a84a658e9bd4530a",
+      "background_warnings": [],
+      "brand_font_size": 44,
+      "label_font_size": 76,
+      "font_size": 128,
+      "wrapped_lines": [
+        "Feeling",
+        "drained in",
+        "the heat?"
+      ],
+      "text_bbox": [
+        88,
+        690,
+        752,
+        1158
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 2,
+      "key": "drivers",
+      "label": "WHAT MAY BE BEHIND IT",
+      "text": "That tired, sloggy feeling may be tied to heat and humidity.",
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/02-drivers.png",
+      "background_source": "bootstrap:social_alerts/weather_pressure",
+      "background_digest": "6e50c8a524a0b730141e58a1e612727613bd0c005726ee52962833c8375428d6",
+      "background_warnings": [],
+      "brand_font_size": 44,
+      "label_font_size": 76,
+      "font_size": 92,
+      "wrapped_lines": [
+        "That tired, sloggy",
+        "feeling may be",
+        "tied to heat and",
+        "humidity."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        897,
+        1088
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 3,
+      "key": "effects",
+      "label": "WHAT SOME MAY NOTICE",
+      "text": "Some people may feel more fatigued, sleep may feel off, and effort may feel harder.",
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/03-effects.png",
+      "background_source": "bootstrap:social_alerts/air_quality_haze",
+      "background_digest": "21e12f93eeac31ee254264c85a28ea96e53ba4f09f844047e6910594a9f96423",
+      "background_warnings": [],
+      "brand_font_size": 44,
+      "label_font_size": 76,
+      "font_size": 84,
+      "wrapped_lines": [
+        "Some people may",
+        "feel more fatigued,",
+        "sleep may feel off,",
+        "and effort may feel",
+        "harder."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        903,
+        1150
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 4,
+      "key": "where",
+      "label": "WHERE IT'S STRONGEST",
+      "text": "Strongest today in the Desert Southwest, especially Phoenix and Las Vegas.",
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/04-where.png",
+      "background_source": "bootstrap:social_alerts/nervous_system_static",
+      "background_digest": "a812c4f4d427f132731afd49a7fa452ae3786fd51008544283ba187cd4aee2a0",
+      "background_warnings": [],
+      "brand_font_size": 44,
+      "label_font_size": 76,
+      "font_size": 86,
+      "wrapped_lines": [
+        "Strongest today in",
+        "the Desert",
+        "Southwest,",
+        "especially Phoenix",
+        "and Las Vegas."
+      ],
+      "text_bbox": [
+        88,
+        640,
+        898,
+        1160
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ]
+    },
+    {
+      "index": 5,
+      "key": "summary",
+      "label": "TODAY'S BOTTOM LINE",
+      "text": "Heat and humidity lead in the Desert Southwest. Space readings are quiet today. Ground sensors saw an active, organized pattern.",
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/05-summary.png",
+      "background_source": "bootstrap:social_alerts/earthscope_cosmic",
+      "background_digest": "b550f91ef48b7d5155f68dda7908ae8ccabdd1e0013a747f6143c6f618f0523b",
+      "background_warnings": [],
+      "brand_font_size": 44,
+      "label_font_size": 76,
+      "summary_row_label_font_size": 44,
+      "font_size": 58,
+      "wrapped_lines": [
+        "Heat and humidity lead in",
+        "the Desert Southwest.",
+        "Space readings are quiet",
+        "today.",
+        "Ground sensors saw an",
+        "active, organized pattern."
+      ],
+      "text_bbox": [
+        88,
+        520,
+        850,
+        1352
+      ],
+      "safe_text_box": [
+        88,
+        520,
+        910,
+        1430
+      ],
+      "summary_rows": [
+        {
+          "label": "MAIN STORY",
+          "key": "bottom_line",
+          "text": "Heat and humidity lead in the Desert Southwest.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            584,
+            850,
+            724
+          ]
+        },
+        {
+          "label": "SPACE WEATHER",
+          "key": "space",
+          "text": "Space readings are quiet today.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            898,
+            823,
+            1038
+          ]
+        },
+        {
+          "label": "EARTH SENSORS",
+          "key": "earth",
+          "text": "Ground sensors saw an active, organized pattern.",
+          "font_size": 58,
+          "bbox": [
+            88,
+            1212,
+            843,
+            1352
+          ]
+        }
+      ]
+    }
+  ],
+  "slide_health": [
+    {
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/01-hook.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 34.71,
+      "variance": 2032.68,
+      "pixel_digest": "84966e3014636c4af735ccfae411ba23b39ad974083a3cc67a45b4ab97501a12"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/02-drivers.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 36.69,
+      "variance": 2197.24,
+      "pixel_digest": "679b72665a1bbebe8f50aa3da49a0fc18fbcfeb54303e9fd41cf35daa91f898c"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/03-effects.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 38.09,
+      "variance": 2455.79,
+      "pixel_digest": "e905869891abd0e9b31c1eaa25c1eb096876ff046b55025b8f196d966fb6d1a4"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/04-where.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 44.35,
+      "variance": 2374.36,
+      "pixel_digest": "d0a6fe65f2bf5342c3679018ebd0106b7768d109392704fb1c4334deefb1c442"
+    },
+    {
+      "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/slides/05-summary.png",
+      "width": 1080,
+      "height": 1920,
+      "mean_luma": 38.94,
+      "variance": 2031.46,
+      "pixel_digest": "3fca786842289ff086b747a3dc109a46c30471196fd58338f069068d6ba798f9"
+    }
+  ],
+  "video": {
+    "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/us-health-snapshot-preview.mp4",
+    "duration_seconds": 15.0,
+    "stream_count": 2,
+    "sampled_frames": [
+      {
+        "timestamp": 1.0,
+        "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/preflight-frames/frame-1.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 33.37,
+        "variance": 1999.03,
+        "pixel_digest": "dd0f0512d251db4e332b92145ba750d69634386b8b8389fbc21411f0fbb5e482"
+      },
+      {
+        "timestamp": 3.55,
+        "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/preflight-frames/frame-2.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 35.33,
+        "variance": 2152.35,
+        "pixel_digest": "4e63ebf01085b131dba985611dab2e3c3a65ee684c92f79f76d73d3edddb260b"
+      },
+      {
+        "timestamp": 6.5,
+        "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/preflight-frames/frame-3.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 36.66,
+        "variance": 2397.64,
+        "pixel_digest": "f41c894ddc0c3b09f565600461b51ab787ecfe7358d491a4c61ab1333e917f95"
+      },
+      {
+        "timestamp": 9.45,
+        "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/preflight-frames/frame-4.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 43.02,
+        "variance": 2325.36,
+        "pixel_digest": "973306b8cf8c235c8b825c33e8cb17060bc4c19a75fcc42e312f38167bf2c70b"
+      },
+      {
+        "timestamp": 12.399999999999999,
+        "path": "tmp/public_signal_report/2026-08-27-us-v10-reel/preflight-frames/frame-5.png",
+        "width": 1080,
+        "height": 1920,
+        "mean_luma": 37.62,
+        "variance": 1965.32,
+        "pixel_digest": "03a5c1d2647d991d3cc05f28eb063e393b47c44c0731f083864746916a121b68"
+      }
+    ]
+  }
+}

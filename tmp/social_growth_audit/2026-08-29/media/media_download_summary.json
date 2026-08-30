@@ -1,0 +1,45 @@
+[
+  {
+    "name": "daily_caption.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_caption.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 171250
+  },
+  {
+    "name": "daily_stats.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_stats.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 140119
+  },
+  {
+    "name": "daily_affects.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_affects.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 221369
+  },
+  {
+    "name": "daily_playbook.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_playbook.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "bytes": 195898
+  },
+  {
+    "name": "latest.mp4",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4",
+    "status": 200,
+    "content_type": "video/mp4",
+    "bytes": 1246751
+  },
+  {
+    "name": "earthscope_daily.json",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/earthscope_daily.json",
+    "status": 400,
+    "content_type": "application/json; charset=utf-8",
+    "bytes": 88,
+    "body": "{\"statusCode\":\"404\",\"error\":\"not_found\",\"message\":\"Object not found\",\"code\":\"NoSuchKey\"}"
+  }
+]

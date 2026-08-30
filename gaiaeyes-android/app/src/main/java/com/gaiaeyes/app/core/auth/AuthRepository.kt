@@ -105,6 +105,15 @@ class AuthRepository(
         return session.accessToken
     }
 
+    suspend fun refreshAccessToken(): String {
+        val auth = requireClient().auth
+        auth.currentSessionOrNull()
+            ?: error("Sign in before refreshing your Gaia Eyes session")
+        auth.refreshCurrentSession()
+        return auth.currentSessionOrNull()?.accessToken
+            ?: error("Your Gaia Eyes session could not be refreshed")
+    }
+
     fun currentAccountId(): String? = client?.auth?.currentUserOrNull()?.id
 
     suspend fun signOut() {

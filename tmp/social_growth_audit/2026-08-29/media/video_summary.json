@@ -1,0 +1,14 @@
+{
+  "fps": 30.0,
+  "frame_count": 638.0,
+  "duration_sec": 21.266666666666666,
+  "sampled_frames": [
+    "tmp/social_growth_audit/2026-08-29/media/reel_frames/frame_00.5s.jpg",
+    "tmp/social_growth_audit/2026-08-29/media/reel_frames/frame_04.0s.jpg",
+    "tmp/social_growth_audit/2026-08-29/media/reel_frames/frame_08.0s.jpg",
+    "tmp/social_growth_audit/2026-08-29/media/reel_frames/frame_12.0s.jpg",
+    "tmp/social_growth_audit/2026-08-29/media/reel_frames/frame_16.0s.jpg",
+    "tmp/social_growth_audit/2026-08-29/media/reel_frames/frame_20.0s.jpg"
+  ],
+  "contact_sheet": "tmp/social_growth_audit/2026-08-29/media/reel_frames/contact_sheet.jpg"
+}

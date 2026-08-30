@@ -106,6 +106,7 @@ data class CurrentSymptomDeleteData(
 data class ProfileLocationEnvelope(
     val ok: Boolean = false,
     val location: ProfileLocation? = null,
+    val error: String? = null,
 )
 
 @Serializable

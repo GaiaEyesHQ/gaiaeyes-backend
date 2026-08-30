@@ -109,14 +109,22 @@ class GaiaApiClient(
     }
 
     suspend fun profileLocation(accessToken: String): ProfileLocation? {
-        val response = authenticatedGet("/v1/profile/location", accessToken)
+        val response = authenticatedGet(
+            "/v1/profile/location",
+            accessToken,
+            OPTIONAL_PROFILE_SETUP_TIMEOUT_MILLIS,
+        )
         val envelope = response.body<ProfileLocationEnvelope>()
         check(envelope.ok) { "Your saved location was unavailable" }
         return envelope.location
     }
 
     suspend fun profilePreferences(accessToken: String): ProfilePreferences {
-        val envelope = authenticatedGet("/v1/profile/preferences", accessToken)
+        val envelope = authenticatedGet(
+            "/v1/profile/preferences",
+            accessToken,
+            PROFILE_SETUP_TIMEOUT_MILLIS,
+        )
             .body<ProfilePreferencesEnvelope>()
         check(envelope.ok) { envelope.error ?: "Your profile preferences were unavailable" }
         return envelope.preferences
@@ -138,19 +146,27 @@ class GaiaApiClient(
     ): ProfileLocation? {
         val envelope = authenticatedPut("/v1/profile/location", accessToken, request)
             .body<ProfileLocationEnvelope>()
-        check(envelope.ok) { "Your location could not be saved" }
+        check(envelope.ok) { envelope.error ?: "Your location could not be saved" }
         return envelope.location
     }
 
     suspend fun profileTagCatalog(accessToken: String): List<ProfileTagOption> {
-        val envelope = authenticatedGet("/v1/profile/tags/catalog", accessToken)
+        val envelope = authenticatedGet(
+            "/v1/profile/tags/catalog",
+            accessToken,
+            OPTIONAL_PROFILE_SETUP_TIMEOUT_MILLIS,
+        )
             .body<ProfileTagCatalogEnvelope>()
         check(envelope.ok) { envelope.error ?: "Health context choices were unavailable" }
         return envelope.items
     }
 
     suspend fun profileTags(accessToken: String): List<String> {
-        val envelope = authenticatedGet("/v1/profile/tags", accessToken)
+        val envelope = authenticatedGet(
+            "/v1/profile/tags",
+            accessToken,
+            OPTIONAL_PROFILE_SETUP_TIMEOUT_MILLIS,
+        )
             .body<ProfileTagsEnvelope>()
         check(envelope.ok) { envelope.error ?: "Your health context was unavailable" }
         return envelope.tags
@@ -376,9 +392,18 @@ class GaiaApiClient(
         return result
     }
 
-    private suspend fun authenticatedGet(path: String, accessToken: String) =
+    private suspend fun authenticatedGet(
+        path: String,
+        accessToken: String,
+        timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
+    ) =
         httpClient.get(path) {
             header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
+            timeout {
+                requestTimeoutMillis = timeoutMillis
+                connectTimeoutMillis = timeoutMillis
+                socketTimeoutMillis = timeoutMillis
+            }
         }.also(::throwIfUnauthorizedOrFailed)
 
     private suspend inline fun <reified T> publicGet(path: String): T {
@@ -485,6 +510,8 @@ class GaiaApiClient(
         }
 
         private const val DEFAULT_TIMEOUT_MILLIS = 15_000L
+        private const val PROFILE_SETUP_TIMEOUT_MILLIS = 15_000L
+        private const val OPTIONAL_PROFILE_SETUP_TIMEOUT_MILLIS = 15_000L
         private const val JOURNAL_WRITE_TIMEOUT_MILLIS = 60_000L
         private const val DRIVERS_TIMEOUT_MILLIS = 60_000L
         private const val PATTERNS_TIMEOUT_MILLIS = 30_000L

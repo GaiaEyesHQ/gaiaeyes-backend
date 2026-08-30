@@ -165,4 +165,20 @@ class HomeContextResponsesTest {
         assertEquals(null, envelope.location?.useGps)
         assertEquals(null, envelope.location?.localInsightsEnabled)
     }
+
+    @Test
+    fun decodesLocationSaveError() {
+        val envelope = json.decodeFromString<ProfileLocationEnvelope>(
+            """
+            {
+              "ok": false,
+              "error": "Location write failed"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(false, envelope.ok)
+        assertEquals("Location write failed", envelope.error)
+        assertEquals(null, envelope.location)
+    }
 }

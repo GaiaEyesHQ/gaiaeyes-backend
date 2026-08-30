@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import hashlib
 from difflib import SequenceMatcher
 from typing import Any, Mapping
 
@@ -19,6 +20,26 @@ REQUIRED_COPY_KEYS = {
     "reel_story",
     "section_copy",
 }
+
+HOOK_FORMS = {
+    "question": "Ask one natural, specific body-first question.",
+    "today_feel": "Use a short 'Today's feel:' label followed by a relatable state. Do not use a question mark.",
+    "conversational": "Use a warm conversational observation, such as what may sound appealing or what kind of day this is. Do not use a question mark.",
+    "statement": "Use a direct body-first statement about what some people may notice today. Do not use a question mark.",
+}
+
+
+def _preferred_hook_form(report: Mapping[str, Any]) -> str | None:
+    day = str(report.get("day") or "").strip()
+    if not day:
+        return None
+    forms = tuple(HOOK_FORMS)
+    seed = int(hashlib.sha256(f"{day}|{report.get('edition') or ''}|hook-form".encode("utf-8")).hexdigest(), 16)
+    return forms[seed % len(forms)]
+
+
+def _opening_sentence(text: Any) -> str:
+    return re.split(r"(?<=[.!?])\s+|\n+", str(text or "").strip(), maxsplit=1)[0].strip()
 
 COPY_RESPONSE_FORMAT = {
     "type": "json_schema",
@@ -47,8 +68,9 @@ COPY_RESPONSE_FORMAT = {
                         "summary": {
                             "type": "object",
                             "additionalProperties": False,
-                            "required": ["space", "earth", "major_event"],
+                            "required": ["bottom_line", "space", "earth", "major_event"],
                             "properties": {
+                                "bottom_line": {"type": "string"},
                                 "space": {"type": "string"},
                                 "earth": {"type": "string"},
                                 "major_event": {"type": "string"},
@@ -80,11 +102,20 @@ def _writer_facts(report: Mapping[str, Any]) -> dict[str, Any]:
     earth = report.get("earth_signal") if isinstance(report.get("earth_signal"), Mapping) else {}
     schumann = earth.get("schumann") if isinstance(earth.get("schumann"), Mapping) else {}
     ulf = earth.get("ulf") if isinstance(earth.get("ulf"), Mapping) else {}
-    schumann_values = {
-        key: schumann.get(key)
-        for key in ("f0", "f1", "f2", "f3", "f4", "f5", "combined_f1")
-        if schumann.get(key) is not None
-    }
+    schumann_values: dict[str, Any] = {}
+    seen_schumann_values: set[float | str] = set()
+    for key in ("f0", "f1", "f2", "f3", "f4", "f5", "combined_f1"):
+        value = schumann.get(key)
+        if value is None:
+            continue
+        try:
+            identity: float | str = round(float(value), 4)
+        except (TypeError, ValueError):
+            identity = str(value).strip()
+        if identity in seen_schumann_values:
+            continue
+        schumann_values[key] = value
+        seen_schumann_values.add(identity)
     ulf_usable = earth.get("ulf_usable") is True
 
     return {
@@ -137,11 +168,17 @@ def _writer_facts(report: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def writer_payload(report: Mapping[str, Any]) -> dict[str, Any]:
+    preferred_hook_form = _preferred_hook_form(report)
     return {
         "task": f"Write the public {report.get('public_name') or 'Gaia Eyes Health Snapshot'} from this factual report object.",
         "report_name": report.get("public_name") or "Gaia Eyes Health Snapshot",
         "geographic_scope": report.get("geographic_scope") or "global",
         "required_flow": ["Regional Watch", "Space Watch", "Earth Signal", "Major Events when present"],
+        "preferred_hook_form": {
+            "key": preferred_hook_form,
+            "instruction": HOOK_FORMS.get(preferred_hook_form or "", "Use a fresh emotional or body-first opening."),
+            "rotation_rule": "Questions are only one available form. Match this preferred form instead of defaulting to a question.",
+        },
         "audience_and_voice": {
             "reader": "A general adult reader with no science or weather background.",
             "voice": "Warm, clear, conversational, and useful; like a trusted daily health-and-environment update.",
@@ -150,17 +187,18 @@ def writer_payload(report: Mapping[str, Any]) -> dict[str, Any]:
         },
         "facts": _writer_facts(report),
         "outputs": {
-            "headline": "A plain-English emotional or body-first hook, no more than 12 words.",
+            "headline": "A plain-English emotional or body-first hook matching preferred_hook_form, no more than 12 words.",
             "quick_read": "Two or three sentences that give the useful rundown first.",
-            "facebook": "A readable 200-450 word report with the quick read followed by the required sections. Explain the public meaning before naming technical measurements.",
-            "instagram": "A conversational summary of 60-110 words, naming only the strongest in-scope regional, space, and Earth conditions in everyday language and ending with 'Full daily report: gaiaeyes.com'.",
-            "voiceover": "A natural 55-75 word spoken reel script for a general audience. Open with an emotional or body-first hook, translate technical evidence into everyday language, and do not end with a CTA or wellness tip.",
+            "facebook": "A readable 160-450 word report opening with a hook matching preferred_hook_form, then the quick read and required sections. Explain the public meaning before naming technical measurements; do not pad a complete report to reach the target.",
+            "instagram": "A conversational summary of 50-110 words opening with a hook matching preferred_hook_form, naming only the strongest in-scope regional, space, and Earth conditions in everyday language and ending with 'Full daily report: gaiaeyes.com'.",
+            "voiceover": "A natural 50-75 word spoken reel script for a general audience. Open with an emotional or body-first hook matching preferred_hook_form, translate technical evidence into everyday language, and do not end with a CTA or wellness tip.",
             "reel_story": {
-                "hook": "Slide 1: a concrete, human body-first question, no more than 8 words.",
-                "drivers": "Slide 2: directly answer the hook with one natural complete sentence linking the actual environmental conditions to what the hook describes, using cautious language such as may be contributing or may be part of it. Do not name the region yet, and do not imply conditions are building, rising, or worsening without supplied trend evidence.",
-                "effects": "Slide 3: continue the same thought with one warm, direct complete sentence naming only supplied health effects. Faithfully simplify them when needed, such as effort may feel harder for lower exercise tolerance, but do not invent a new bodily sensation.",
-                "where": "Slide 4: complete the regional story with one natural sentence naming where the conditions are strongest. Do not mention sampling, anchors, coverage, or signals.",
+                "hook": "Slide 1: a concrete, human body-first hook matching preferred_hook_form, no more than 8 words.",
+                "drivers": "Slide 2: directly answer the hook with one natural complete sentence naming the actual environmental conditions, using cautious language such as may be contributing or may be part of it. State the condition plainly; do not add cute, slangy, or coined feeling adjectives such as sloggy. Do not name the region yet, and do not imply conditions are building, rising, or worsening without supplied trend evidence.",
+                "effects": "Slide 3: continue the same thought with one warm, direct complete sentence naming only supplied health effects. Use natural grammar such as 'sleep may feel off,' never shorthand such as 'sleep off.' Faithfully simplify effects when needed, such as effort may feel harder for lower exercise tolerance, but do not invent a new bodily sensation.",
+                "where": "Slide 4: complete the regional story with one natural sentence naming where the conditions are strongest. Name supplied standout cities when available. Do not mention sampling, anchors, coverage, or signals.",
                 "summary": {
+                    "bottom_line": "Slide 5 Main Story row: one plain complete sentence of 5-16 words that tells readers which supplied condition is the main story today. Name the condition and scope directly. Do not introduce a new symptom, repeat the hook, or merely say several things are in the mix.",
                     "space": "Slide 5 Space Weather row: one concrete everyday-language sentence of 4-12 words. When current and daily measurements are both supplied, report the most useful change between earlier and now instead of a generic activity label.",
                     "earth": "Slide 5 Earth Sensors row: one concrete everyday-language sentence of 4-12 words saying what sensors detected. Prefer natural atmospheric tones or a ground-sensor pattern over unexplained terms such as resonance, frequency, or classifiers; omit acronyms and raw values.",
                     "major_event": "Slide 5 optional Major Event row: one complete sentence of up to 12 words, or an empty string when none is supplied.",
@@ -179,9 +217,9 @@ def writer_payload(report: Mapping[str, Any]) -> dict[str, Any]:
 def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] | None = None) -> list[str]:
     errors: list[str] = []
     ranges = {
-        "facebook": (200, 450),
-        "instagram": (60, 110),
-        "voiceover": (55, 75),
+        "facebook": (160, 450),
+        "instagram": (50, 110),
+        "voiceover": (50, 75),
     }
     for key, (minimum, maximum) in ranges.items():
         count = len(str(copy.get(key) or "").split())
@@ -191,6 +229,32 @@ def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] |
     if not 1 <= headline_count <= 12:
         errors.append(f"headline must be 1-12 words; received {headline_count}")
     reel_story = copy.get("reel_story") if isinstance(copy.get("reel_story"), Mapping) else {}
+    preferred_hook_form = _preferred_hook_form(report) if isinstance(report, Mapping) else None
+    hook_text = str(reel_story.get("hook") or "").strip()
+    opening_fields = {
+        "headline": _opening_sentence(copy.get("headline")),
+        "facebook": _opening_sentence(copy.get("facebook")),
+        "instagram": _opening_sentence(copy.get("instagram")),
+        "voiceover": _opening_sentence(copy.get("voiceover")),
+        "reel_story.hook": hook_text,
+    }
+    if preferred_hook_form:
+        mismatched = [
+            key
+            for key, opening in opening_fields.items()
+            if opening and (opening.endswith("?") != (preferred_hook_form == "question"))
+        ]
+        if mismatched:
+            punctuation = "as questions" if preferred_hook_form == "question" else "without questions"
+            errors.append(
+                f"shared openings must use the preferred {preferred_hook_form} form {punctuation}: "
+                + ", ".join(mismatched)
+            )
+    if preferred_hook_form == "today_feel":
+        for key in ("headline", "reel_story.hook"):
+            opening = opening_fields[key].lower().replace("’", "'")
+            if opening and not opening.startswith(("today's feel:", "todays feel:", "today feels:")):
+                errors.append(f"{key} must use the preferred Today's feel label")
     slide_ranges = {
         "hook": (1, 8),
         "where": (3, 24),
@@ -208,11 +272,12 @@ def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] |
         normalized = re.sub(r"[^a-z0-9 ]+", " ", text.lower())
         normalized_slides.append((key, " ".join(normalized.split())))
     summary = reel_story.get("summary") if isinstance(reel_story.get("summary"), Mapping) else {}
-    for key in ("space", "earth"):
+    for key in ("bottom_line", "space", "earth"):
         text = str(summary.get(key) or "").strip()
         count = len(text.split())
-        if not 4 <= count <= 12:
-            errors.append(f"reel_story.summary.{key} must be 4-12 words; received {count}")
+        minimum, maximum = (5, 16) if key == "bottom_line" else (4, 12)
+        if not minimum <= count <= maximum:
+            errors.append(f"reel_story.summary.{key} must be {minimum}-{maximum} words; received {count}")
         if text and text[-1] not in ".?!":
             errors.append(f"reel_story.summary.{key} must be a complete sentence ending in punctuation")
         if ";" in text or "(" in text or ")" in text:
@@ -236,7 +301,7 @@ def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] |
             for key in ("quick_read", "facebook", "instagram", "voiceover")
         ]
         public_fields.extend(str(reel_story.get(key) or "") for key in slide_ranges)
-        public_fields.extend(str(summary.get(key) or "") for key in ("space", "earth", "major_event"))
+        public_fields.extend(str(summary.get(key) or "") for key in ("bottom_line", "space", "earth", "major_event"))
         if any("major event" in text.lower() for text in public_fields):
             errors.append("copy must omit Major Events when no qualifying events are supplied")
         if major_event_text:
@@ -244,7 +309,13 @@ def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] |
     factual_text = "\n".join(
         [str(copy.get(key) or "") for key in ("quick_read", "facebook", "instagram", "voiceover")]
         + [str(reel_story.get(key) or "") for key in slide_ranges]
-        + [str(summary.get(key) or "") for key in ("space", "earth", "major_event")]
+        + [str(summary.get(key) or "") for key in ("bottom_line", "space", "earth", "major_event")]
+        + [
+            str(value or "")
+            for value in (
+                copy.get("section_copy") if isinstance(copy.get("section_copy"), Mapping) else {}
+            ).values()
+        ]
     )
     earth_signal = report.get("earth_signal") if isinstance(report, Mapping) else {}
     if isinstance(earth_signal, Mapping) and earth_signal.get("ulf_usable") is not True:
@@ -252,6 +323,28 @@ def _copy_validation_errors(copy: Mapping[str, Any], report: Mapping[str, Any] |
             errors.append("copy must not call ULF classified when no usable ULF class is supplied")
     if re.search(r"\blow-strength\b", factual_text, flags=re.IGNORECASE):
         errors.append("copy must describe supplied low space activity in plain language")
+    if re.search(
+        r"\b(?:not (?:a |an )?(?:health|medical) (?:forecast|outlook|claim|prediction|rating)"
+        r"|(?:do not|does not|don't|doesn't|cannot|can't) predict how (?:anyone|people|you) (?:feel|will feel)"
+        r"|rather than how (?:anyone|people|you) (?:feel|will feel)"
+        r"|no human effects? (?:are |is )?inferred)\b",
+        factual_text,
+        flags=re.IGNORECASE,
+    ):
+        errors.append("copy must not append a health or medical disclaimer to Earth Signal")
+    if re.search(
+        r"\b(?:(?:normal|familiar|usual|typical)\b.{0,40}\b(?:tones?|frequenc(?:y|ies))"
+        r"|(?:tones?|frequenc(?:y|ies))\b.{0,40}\b(?:normal|familiar|usual|typical))\b",
+        factual_text,
+        flags=re.IGNORECASE,
+    ):
+        errors.append("copy must not give measured Earth tones an unsupported comparison")
+    if re.search(
+        r"\b(?:atmospheric drum|base notes?|higher notes?|low pitches?|sky(?:'s|’s) natural (?:tones?|frequencies))\b",
+        factual_text,
+        flags=re.IGNORECASE,
+    ):
+        errors.append("copy must describe measured Earth frequencies without invented analogies")
     if re.search(r"\b(?:active|quiet|variable)\s+(?:diffuse|coherent)\s+ulf\b", factual_text, flags=re.IGNORECASE):
         errors.append("copy must translate ULF classifiers into grammatical public prose")
     earth_summary = str(summary.get("earth") or "")
@@ -295,7 +388,8 @@ def generate_platform_copy(
         "In short-form copy, avoid terms such as sampled, anchors, coverage, supported drivers, current readings, harmonics, context class, ULF, Kp, Bz, low-frequency, and diffuse. Do not merely delete technical terms or invent abstract synonyms such as push, factor, or influence; state the actual condition or simple public takeaway naturally. "
         "The longer Facebook report and detailed section_copy may name relevant technical measurements, including Schumann frequencies or ULF, after first explaining their plain-English meaning. "
         "Write the report in this exact order: Regional Watch, Space Watch, Earth Signal, then Major Events when present. "
-        "The headline and voiceover must open with a natural emotional or body-first hook, not a list of conditions, metrics, or regions. Avoid vague metaphors. "
+        "The headline, Facebook caption, Instagram caption, voiceover, and reel must open with a natural emotional or body-first hook, not a list of conditions, metrics, or regions. Avoid vague metaphors. "
+        "Match preferred_hook_form across those openings. Questions are only one hook form; do not turn a requested statement, Today's feel label, or conversational observation into a question. Vary grammatical shape over time so the feed does not sound scripted. "
         "Facebook must also open with the emotional or body-first hook before its quick rundown. "
         "Do not say readings explain why someone feels a certain way; say supplied conditions may be part of what they notice. "
         "Give the rundown before details. Name regions precisely; never broaden one event to a continent or the whole world. In detailed report copy, say conditions were observed across a region rather than reported by the region. "
@@ -310,13 +404,13 @@ def generate_platform_copy(
         "Say space weather is low, moderate, or high as supplied; never write low-strength. If ULF is unusable, say it is unavailable and never call it classified. If ULF is usable, name its supplied context_class whenever saying it is classified. "
         "In detailed report copy, translate supplied ULF classifiers into natural prose, such as 'an active pattern spread across the measured frequencies'; never stack bare internal labels such as 'Active diffuse ULF'. Explain Earth measurements concretely without mystical heartbeat, energy, or beneath-our-feet metaphors. "
         "In the reel summary Earth Sensors row, state what was actually detected instead of saying only that background signals were active. A natural construction is 'Ground sensors detected an active, spread-out pattern.' Do not use the words Schumann, ULF, low-frequency, or diffuse there, and never write 'Schumann is' followed by a value or state. "
-        "Do not append a disclaimer, caveat paragraph, or research defense to Earth Signal. "
+        "Do not append a disclaimer, caveat paragraph, or research defense to Earth Signal. Never write 'not a health rating,' 'doesn't predict how anyone will feel,' 'no human effects are inferred,' or equivalent wording. Do not explain what creates or carries the measured Earth tones unless that mechanism is supplied in the facts; simply report the measured frequencies in plain language. Do not turn them into an atmospheric drum, base notes, higher notes, low pitches, a sky hum, or another analogy. "
         "Use recovery or recoup language only when space_watch.recovery_frame is true. When it is false, describe current versus daily activity without a recovery claim. "
         "When Earth measurements are unavailable, state that once in plain English without exposing internal confidence-threshold language. "
         "Distinguish daily space peaks from current readings. Do not mention a CME catalog count as an active impact unless Earth-directed or impact evidence is supplied. "
         "Use reader-friendly metric names rather than source field identifiers. Do not invent active weather, AQI, pollen, hazards, health effects, measurements, locations, or causality. "
         "Major Events is conditional and must not list events absent from the supplied facts. "
-        "The five reel_story slides must form one clear reading sequence: body-first hook, direct environmental answer without a location, what some people may notice, then where it is strongest. Each slide must be a complete, distinct thought; never split one sentence across slides or repeat the same statement with one changed word. Slide 5 is a separate 'Beyond the Weather' view with concrete Space Weather and Earth Sensors rows, plus Major Event only when supplied. The Space Weather row should prioritize a meaningful earlier-versus-now change when both are supplied. The Earth Sensors row should say what was detected in familiar words, such as natural atmospheric tones or a ground-sensor pattern. It must add information rather than recap slides 1-4, and must not compress rows into classifier fragments. "
+        "The five reel_story slides must form one clear reading sequence: body-first hook, direct environmental answer without a location, what some people may notice, then where it is strongest. Each slide must be a complete, distinct thought; never split one sentence across slides or repeat the same statement with one changed word. Slide 5 is 'Today's Bottom Line.' Its Main Story row must plainly identify which supplied regional, space, Earth, or major-event condition leads today's public read. Follow it with concrete Space Weather and Earth Sensors context, plus Major Event only when supplied. The Space Weather row should prioritize a meaningful earlier-versus-now change when both are supplied. The Earth Sensors row should say what was detected in familiar words, such as natural atmospheric tones or a ground-sensor pattern. The rows must add information rather than recap slides 1-4, and must not compress into classifier fragments. "
         "Facebook may end with 'Full report: gaiaeyes.com' and 'Personalized patterns: gaiaeyes.com/app'. "
         "Voiceover must end on the factual rundown, with no CTA, advice, wellness tip, reflection prompt, or filler sign-off. No emojis. Return only JSON."
     )

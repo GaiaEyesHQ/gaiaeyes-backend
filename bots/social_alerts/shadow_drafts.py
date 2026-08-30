@@ -56,13 +56,13 @@ MEDIA_ASSETS = {
 }
 SCHUMANN_HOOKS = [
     "Feeling mentally noisy?",
-    "Issues sleeping lately?",
-    "HRV lower than normal?",
-    "Feeling scattered?",
-    "Nerve pain flaring?",
-    "Headache or sinus pressure?",
-    "Wired but tired?",
-    "Hard to settle?",
+    "Today's feel: wired but tired.",
+    "Sleep may be harder to settle into.",
+    "This may be one of those scattered days.",
+    "Headaches may feel more noticeable today.",
+    "Nerve pain may be running louder.",
+    "Crawling back into bed may sound good.",
+    "Hard to settle today?",
 ]
 SCHUMANN_SYMPTOM_CHIPS = [
     "Sleep issues",
@@ -103,16 +103,16 @@ SCHUMANN_ALERT_CHIPS = [
     "Headache",
 ]
 GEOMAGNETIC_HOOKS = {
-    "watch": ["Body feeling buzzy?", "Feeling extra wired?", "Head pressure kicking up?"],
-    "high": ["Feeling extra wired?", "Restless for no reason?", "Nervous system on alert?"],
+    "watch": ["Body feeling buzzy?", "Today's feel: extra wired.", "Head pressure may be more noticeable."],
+    "high": ["Feeling extra wired?", "This may be one of those restless days.", "Your nervous system may feel on alert."],
 }
 CME_HOOKS = {
-    "watch": ["Feeling drained today?", "Moving in slow motion today?", "Feeling restless today?"],
-    "high": ["Battery on empty today?", "Nerves on overdrive?", "Pain level worse today?"],
+    "watch": ["Feeling drained today?", "Today's feel: moving in slow motion.", "Restlessness may be harder to shake."],
+    "high": ["Battery on empty today?", "This may be a nerves-on-overdrive day.", "Pain may feel louder today."],
 }
 FLARE_HOOKS = {
-    "watch": ["Focus feeling patchy?", "Energy coming in waves?", "Brain tabs everywhere?"],
-    "high": ["Energy feeling jumpy?", "Focus feeling scattered?", "Feeling overstimulated?"],
+    "watch": ["Focus feeling patchy?", "Today's feel: energy in waves.", "This may be one of those scattered days."],
+    "high": ["Energy feeling jumpy?", "Focus may feel harder to hold.", "Today may feel overstimulating."],
 }
 SIGNAL_SUBTITLES = {
     "geomagnetic": "Geomagnetic activity is up. Gaia Eyes watches signal periods like this alongside sleep, HRV, headaches, focus, and restless energy.",
@@ -402,11 +402,32 @@ def _signal_caption(category: str, title: str, *, hashtags: str = SOCIAL_ALERT_D
     )
 
 
+def _hook_form(text: str) -> str:
+    cleaned = _clean_text(text).lower().replace("’", "'")
+    if cleaned.endswith("?"):
+        return "question"
+    if cleaned.startswith(("today's feel:", "todays feel:", "today feels:")):
+        return "today_feel"
+    if "one of those" in cleaned or "back into bed" in cleaned:
+        return "conversational"
+    return "statement"
+
+
+def _pick_from_balanced_forms(options: Sequence[str], seed: str) -> str:
+    grouped: Dict[str, List[str]] = {}
+    for option in options:
+        grouped.setdefault(_hook_form(option), []).append(option)
+    forms = sorted(grouped)
+    if not forms:
+        return "Worth watching today."
+    form = forms[_variant_index(f"{seed}:form", len(forms))]
+    choices = grouped[form]
+    return choices[_variant_index(f"{seed}:{form}", len(choices))]
+
+
 def _pick_hook(hooks: Mapping[str, Sequence[str]], severity: str, seed: str) -> str:
     options = list(hooks.get(severity) or hooks.get("watch") or [])
-    if not options:
-        return "Worth watching today?"
-    return options[_variant_index(seed, len(options))]
+    return _pick_from_balanced_forms(options, seed)
 
 
 def _draft(
@@ -739,7 +760,7 @@ def _schumann_draft(snapshot: Mapping[str, Any], asof: Optional[str]) -> Optiona
         sort_keys=True,
         default=str,
     )
-    hook = SCHUMANN_HOOKS[_variant_index(f"{variant_seed}:hook", len(SCHUMANN_HOOKS))]
+    hook = _pick_from_balanced_forms(SCHUMANN_HOOKS, f"{variant_seed}:hook")
     subtitle = SCHUMANN_SUBTITLES[_variant_index(f"{variant_seed}:subtitle", len(SCHUMANN_SUBTITLES))]
     caption_template = SCHUMANN_CAPTION_TEMPLATES[
         _variant_index(f"{variant_seed}:caption", len(SCHUMANN_CAPTION_TEMPLATES))

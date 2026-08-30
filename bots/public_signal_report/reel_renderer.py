@@ -26,7 +26,7 @@ SLIDE_SPECS = (
     ("drivers", "WHAT MAY BE BEHIND IT", "02-drivers.png"),
     ("effects", "WHAT SOME MAY NOTICE", "03-effects.png"),
     ("where", "WHERE IT'S STRONGEST", "04-where.png"),
-    ("summary", "WIDER PICTURE", "05-summary.png"),
+    ("summary", "TODAY'S BOTTOM LINE", "05-summary.png"),
 )
 
 BOOTSTRAP_BACKGROUNDS = (
@@ -99,8 +99,8 @@ def _validate_input(bundle: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mappi
     for key, _label, _filename in SLIDE_SPECS:
         if key == "summary":
             summary = story.get("summary") if isinstance(story.get("summary"), Mapping) else {}
-            if not all(str(summary.get(row) or "").strip() for row in ("space", "earth")):
-                errors.append("missing reel_story.summary Space Weather or Earth Sensors row")
+            if not all(str(summary.get(row) or "").strip() for row in ("bottom_line", "space", "earth")):
+                errors.append("missing reel_story.summary Main Story, Space Weather, or Earth Sensors row")
         elif not str(story.get(key) or "").strip():
             errors.append(f"missing reel_story.{key}")
     if errors:
@@ -303,7 +303,7 @@ def _render_summary_slide(
     )
     draw.text((88, 400), summary_label, font=label_font, fill=(78, 224, 230, 255))
 
-    rows = [("SPACE WEATHER", "space"), ("EARTH SENSORS", "earth")]
+    rows = [("MAIN STORY", "bottom_line"), ("SPACE WEATHER", "space"), ("EARTH SENSORS", "earth")]
     if str(summary.get("major_event") or "").strip():
         rows.append(("MAJOR EVENT", "major_event"))
     left, top, right, bottom = SAFE_TEXT_BOX

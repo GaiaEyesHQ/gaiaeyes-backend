@@ -58,6 +58,8 @@ def test_select_earthscope_cta_uses_pain_context_before_active_weather():
 
     assert cta["key"] == "pain-patterns"
     assert "Headaches" not in cta["card"]
+    assert "flaring louder" not in cta["card"].lower()
+    assert "shifting" in cta["card"].lower()
 
 
 def test_select_earthscope_cta_uses_nervous_system_context_before_solar_activity():

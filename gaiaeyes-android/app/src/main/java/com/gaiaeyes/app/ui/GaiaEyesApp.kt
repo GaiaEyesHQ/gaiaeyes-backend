@@ -278,6 +278,13 @@ fun GaiaEyesApp(
         )
         is AuthState.SignedIn -> if (uiState.onboardingStatus == OnboardingStatus.CHECKING) {
             LoadingScreen(modifier)
+        } else if (uiState.onboardingStatus == OnboardingStatus.ERROR) {
+            SetupUnavailableScreen(
+                message = uiState.onboardingMessage,
+                onRetry = viewModel::refresh,
+                onSignOut = viewModel::signOut,
+                modifier = modifier,
+            )
         } else if (uiState.onboardingStatus == OnboardingStatus.REQUIRED) {
             OnboardingScreen(
                 uiState = uiState,
@@ -449,6 +456,39 @@ fun GaiaEyesApp(
         onSubmitExposure = viewModel::submitExposure,
         onSubmitDailyCheckIn = viewModel::submitDailyCheckIn,
     )
+}
+
+@Composable
+private fun SetupUnavailableScreen(
+    message: String?,
+    onRetry: () -> Unit,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ScreenFrame(modifier = modifier) {
+        ContentColumn(bottomPadding = 32.dp) {
+            Header(subtitle = "Account setup")
+            Spacer(Modifier.height(28.dp))
+            OnboardingTitle(
+                title = "Setup is temporarily unavailable",
+                body = message ?: "Gaia Eyes couldn't load your setup choices right now.",
+            )
+            OnboardingInfoCard(
+                "Your account and existing data are safe. Check your connection, then try loading setup again.",
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(containerColor = GaiaBlue),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Try again", color = GaiaNavy, fontWeight = FontWeight.Bold)
+            }
+            TextButton(onClick = onSignOut, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text("Sign out", color = Color(0xFF9BA6B4))
+            }
+        }
+    }
 }
 
 @Composable

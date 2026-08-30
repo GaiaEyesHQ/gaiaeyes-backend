@@ -122,14 +122,6 @@ def test_space_alerts_keep_health_pattern_context() -> None:
 
     cme_caption = drafts["cme"]["caption"]
     assert drafts["cme"]["title"] in {hook for hooks in CME_HOOKS.values() for hook in hooks}
-    assert drafts["cme"]["title"] in {
-        "Feeling drained today?",
-        "Moving in slow motion today?",
-        "Battery on empty today?",
-        "Nerves on overdrive?",
-        "Feeling restless today?",
-        "Pain level worse today?",
-    }
     assert "Feeling off today?" not in cme_caption
     assert "Recovery feeling off?" not in cme_caption
     assert "Body signals look noisier today." not in cme_caption
@@ -161,6 +153,27 @@ def test_space_alerts_keep_health_pattern_context() -> None:
     assert "health conditions are the kinds of patterns Gaia Eyes can help you compare" not in geomagnetic_caption
     assert "Sleep changes, HRV dips" not in geomagnetic_caption
     assert geomagnetic_caption.count("sleep") == 1
+
+
+def test_alert_hook_pools_include_question_and_non_question_forms() -> None:
+    for hooks in (shadow_drafts.GEOMAGNETIC_HOOKS, CME_HOOKS, shadow_drafts.FLARE_HOOKS):
+        for options in hooks.values():
+            forms = {shadow_drafts._hook_form(option) for option in options}
+            assert "question" in forms
+            assert forms - {"question"}
+
+    schumann_forms = {shadow_drafts._hook_form(option) for option in SCHUMANN_HOOKS}
+    assert {"question", "today_feel", "conversational", "statement"} <= schumann_forms
+
+
+def test_alert_hook_picker_varies_grammatical_form_by_seed() -> None:
+    forms = {
+        shadow_drafts._hook_form(shadow_drafts._pick_hook(CME_HOOKS, "watch", f"seed-{index}"))
+        for index in range(24)
+    }
+
+    assert "question" in forms
+    assert forms - {"question"}
 
 
 def test_schumann_caption_includes_brief_public_explainer_and_app_cta() -> None:

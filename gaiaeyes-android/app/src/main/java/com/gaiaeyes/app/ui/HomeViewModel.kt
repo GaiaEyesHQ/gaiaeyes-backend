@@ -1,5 +1,6 @@
 package com.gaiaeyes.app.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -334,7 +335,8 @@ class HomeViewModel(
                     },
                 )
                 loadLocalWeather(account.accountId, showCachedFirst = false)
-            }.onFailure {
+            }.onFailure { error ->
+                Log.w(LOCATION_LOG_TAG, "Profile location save failed: ${error.message}")
                 if (isCurrentAccount(account.accountId)) {
                     _uiState.value = _uiState.value.copy(
                         isSavingLocation = false,
@@ -1251,11 +1253,14 @@ class HomeViewModel(
                         refreshHealthConnect()
                     }
                 }
-                .onFailure {
+                .onFailure { error ->
+                    Log.e(
+                        "GaiaSetup",
+                        "Onboarding load failed type=${error.javaClass.simpleName} message=${error.message}",
+                    )
                     if (isCurrentAccount(accountId)) {
                         _uiState.value = _uiState.value.copy(
-                            onboardingStatus = OnboardingStatus.REQUIRED,
-                            onboardingStep = OnboardingStep.WELCOME,
+                            onboardingStatus = OnboardingStatus.ERROR,
                             onboardingMessage = "Setup couldn't load. Check your connection and try again.",
                         )
                     }
@@ -1429,7 +1434,8 @@ class HomeViewModel(
                                 },
                             )
                             loadLocalWeather(account.accountId, showCachedFirst = false)
-                        }.onFailure {
+                        }.onFailure { error ->
+                            Log.w(LOCATION_LOG_TAG, "Device location save failed: ${error.message}")
                             if (isCurrentAccount(account.accountId)) {
                                 _uiState.value = _uiState.value.copy(
                                     isLocatingDevice = false,
@@ -2023,6 +2029,7 @@ data class HomeUiState(
 
 enum class OnboardingStatus {
     CHECKING,
+    ERROR,
     REQUIRED,
     COMPLETE,
 }
@@ -2087,5 +2094,6 @@ private fun String.looksLikeEmail(): Boolean {
 private const val FOREGROUND_LOCATION_REFRESH_INTERVAL_MS = 5 * 60 * 1_000L
 private const val FOREGROUND_HEALTH_IMPORT_INTERVAL_MS = 15 * 60 * 1_000L
 private const val FOREGROUND_HEALTH_IMPORT_DAYS = 2L
+private const val LOCATION_LOG_TAG = "GaiaLocation"
 private const val TRANSIENT_SESSION_MESSAGE =
     "Connection interrupted. Gaia Eyes will keep your saved view while it reconnects."

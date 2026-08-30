@@ -49,11 +49,13 @@ def _context() -> dict:
 
 
 def _reel_summary(
+    bottom_line: str = "Desert heat and humidity are today's main story.",
     space: str = "Space weather is quiet right now.",
     earth: str = "Ground sensors detected a spread-out pattern.",
     major_event: str = "",
 ) -> dict:
     return {
+        "bottom_line": bottom_line,
         "space": space,
         "earth": earth,
         "major_event": major_event,
@@ -250,7 +252,7 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
         "instagram": " ".join(["Instagram"] * 60),
         "voiceover": " ".join(["Voiceover"] * 55),
         "reel_story": {
-            "hook": "Head pressure building today?",
+            "hook": "Head pressure may be more noticeable today.",
             "where": "New England may feel the biggest shift today.",
             "drivers": "Changing air pressure is the main condition behind it.",
             "effects": "Some people may notice headaches or migraine sensitivity.",
@@ -298,7 +300,7 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
     assert "longer Facebook report and detailed section_copy may name relevant technical measurements" in captured["messages"][0]["content"]
     assert "without mystical heartbeat, energy, or beneath-our-feet metaphors" in captured["messages"][0]["content"]
     assert "body-first hook, direct environmental answer" in captured["messages"][0]["content"]
-    assert "separate 'Beyond the Weather' view" in captured["messages"][0]["content"]
+    assert "Its Main Story row must plainly identify" in captured["messages"][0]["content"]
     assert "Do not say a condition is building, rising, worsening" in captured["messages"][0]["content"]
     assert "must not add a new bodily sensation" in captured["messages"][0]["content"]
     assert captured["response_format"]["type"] == "json_schema"
@@ -311,17 +313,21 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
         "summary",
     ]
     assert captured["response_format"]["json_schema"]["schema"]["properties"]["reel_story"]["properties"]["summary"]["required"] == [
+        "bottom_line",
         "space",
         "earth",
         "major_event",
     ]
     supplied_payload = json.loads(captured["messages"][1]["content"])
+    assert supplied_payload["preferred_hook_form"]["key"] == "conversational"
+    assert "Questions are only one available form" in supplied_payload["preferred_hook_form"]["rotation_rule"]
     assert supplied_payload["audience_and_voice"]["reader"] == "A general adult reader with no science or weather background."
     assert "without substituting new abstract terms" in supplied_payload["audience_and_voice"]["short_form_rule"]
     assert "Do not name the region yet" in supplied_payload["outputs"]["reel_story"]["drivers"]
     assert "effort may feel harder for lower exercise tolerance" in supplied_payload["outputs"]["reel_story"]["effects"]
     assert supplied_payload["outputs"]["reel_story"]["where"].startswith("Slide 4: complete the regional story")
     assert "most useful change between earlier and now" in supplied_payload["outputs"]["reel_story"]["summary"]["space"]
+    assert "which supplied condition is the main story today" in supplied_payload["outputs"]["reel_story"]["summary"]["bottom_line"]
     assert "Prefer natural atmospheric tones or a ground-sensor pattern" in supplied_payload["outputs"]["reel_story"]["summary"]["earth"]
     supplied_facts = supplied_payload["facts"]
     assert "source_row" not in supplied_facts["space_watch"]
@@ -334,6 +340,24 @@ def test_writer_uses_structured_report_and_no_voiceover_cta(monkeypatch) -> None
         "regional_persistence": None,
         "stations_used": None,
     }
+
+
+def test_writer_rotates_hook_form_by_report_day() -> None:
+    statement_report = {"day": "2026-08-27", "edition": "global"}
+    today_feel_report = {"day": "2026-08-29", "edition": "global"}
+
+    assert writer._preferred_hook_form(statement_report) == "statement"
+    assert writer._preferred_hook_form(today_feel_report) == "today_feel"
+
+    statement_copy = {
+        "headline": "Energy may run lower today.",
+        "facebook": "Energy may run lower today. More follows.",
+        "instagram": "Energy may run lower today. More follows.",
+        "voiceover": "Feeling unusually wiped out today? More follows.",
+        "reel_story": {"hook": "Energy may run lower today."},
+    }
+    errors = writer._copy_validation_errors(statement_copy, statement_report)
+    assert any("preferred statement form" in error and "voiceover" in error for error in errors)
 
 
 def test_writer_omits_low_confidence_ulf_measurements() -> None:
@@ -350,6 +374,20 @@ def test_writer_omits_low_confidence_ulf_measurements() -> None:
     assert facts["earth_signal"]["ulf_usable"] is False
     assert facts["earth_signal"]["ulf"] is None
     assert "Do not interpret" in facts["earth_signal"]["unavailable_reason"]
+
+
+def test_writer_facts_deduplicate_equal_schumann_frequencies() -> None:
+    report = build_daily_signal_report(day="2026-07-15", observations=[], context=_context())
+    report["earth_signal"]["schumann"] = {
+        "f0": 7.43,
+        "f1": 7.43,
+        "f2": 14.51,
+        "f3": 21.99,
+    }
+
+    values = writer.writer_payload(report)["facts"]["earth_signal"]["schumann_values"]
+
+    assert values == {"f0": 7.43, "f2": 14.51, "f3": 21.99}
 
 
 def test_writer_revises_copy_once_when_word_ranges_fail(monkeypatch) -> None:
@@ -397,7 +435,7 @@ def test_writer_revises_copy_once_when_word_ranges_fail(monkeypatch) -> None:
     assert result["status"] == "generated"
     assert result["writer_attempts"] == 2
     assert len(calls) == 2
-    assert "instagram must be 60-110 words" in calls[1]["messages"][-1]["content"]
+    assert "instagram must be 50-110 words" in calls[1]["messages"][-1]["content"]
 
 
 def test_writer_rejects_fragmented_or_duplicate_reel_story(monkeypatch) -> None:
@@ -533,6 +571,63 @@ def test_writer_validation_rejects_unsupplied_ulf_classification_and_low_strengt
 
     assert "copy must not call ULF classified when no usable ULF class is supplied" in errors
     assert "copy must describe supplied low space activity in plain language" in errors
+
+
+def test_writer_validation_rejects_appended_earth_signal_disclaimer() -> None:
+    copy = {
+        "headline": "Feeling drained by the heat?",
+        "quick_read": "Heat and humidity lead today.",
+        "facebook": "Ground sensors found an organized pattern. These describe field patterns, not a health forecast.",
+        "instagram": "Heat and humidity lead today.",
+        "voiceover": "Heat and humidity lead today.",
+        "reel_story": {
+            "hook": "Feeling drained today?",
+            "where": "The Desert Southwest is strongest today.",
+            "drivers": "Heat and humidity may be contributing today.",
+            "effects": "Some people may feel more tired today.",
+            "summary": _reel_summary(),
+        },
+        "section_copy": {},
+    }
+
+    errors = writer._copy_validation_errors(copy, {"major_events": {"items": []}})
+
+    assert "copy must not append a health or medical disclaimer to Earth Signal" in errors
+
+    copy["facebook"] = "Ground sensors found an organized pattern. These readings don't predict how anyone will feel."
+    errors = writer._copy_validation_errors(copy, {"major_events": {"items": []}})
+    assert "copy must not append a health or medical disclaimer to Earth Signal" in errors
+
+    copy["facebook"] = "Ground sensors found an organized pattern."
+    copy["section_copy"] = {"earth_signal": "No human effects are inferred here."}
+    errors = writer._copy_validation_errors(copy, {"major_events": {"items": []}})
+    assert "copy must not append a health or medical disclaimer to Earth Signal" in errors
+
+
+def test_writer_validation_rejects_unsupported_earth_tone_comparison() -> None:
+    copy = {
+        "headline": "Feeling drained by the heat?",
+        "quick_read": "Heat and humidity lead today.",
+        "facebook": "Natural atmospheric tones were detected at familiar low frequencies.",
+        "instagram": "Heat and humidity lead today.",
+        "voiceover": "Heat and humidity lead today.",
+        "reel_story": {
+            "hook": "Feeling drained today?",
+            "where": "The Desert Southwest is strongest today.",
+            "drivers": "Heat and humidity may be contributing today.",
+            "effects": "Some people may feel more tired today.",
+            "summary": _reel_summary(),
+        },
+        "section_copy": {},
+    }
+
+    errors = writer._copy_validation_errors(copy, {"major_events": {"items": []}})
+
+    assert "copy must not give measured Earth tones an unsupported comparison" in errors
+
+    copy["facebook"] = "The atmospheric drum showed base notes near 7.46 hertz."
+    errors = writer._copy_validation_errors(copy, {"major_events": {"items": []}})
+    assert "copy must describe measured Earth frequencies without invented analogies" in errors
 
 
 def test_writer_validation_rejects_bare_ulf_classifier_stack() -> None:

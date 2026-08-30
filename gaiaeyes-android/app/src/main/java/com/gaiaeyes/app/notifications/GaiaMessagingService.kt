@@ -1,7 +1,6 @@
 package com.gaiaeyes.app.notifications
 
 import android.Manifest
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
@@ -38,10 +37,8 @@ class GaiaMessagingService : FirebaseMessagingService() {
             PackageManager.PERMISSION_GRANTED
         ) return
 
+        GaiaNotificationChannels.ensureCreated(this)
         val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Gaia Eyes alerts", NotificationManager.IMPORTANCE_DEFAULT),
-        )
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             (message.data["deep_link"] ?: message.data["deeplink"])
@@ -52,7 +49,7 @@ class GaiaMessagingService : FirebaseMessagingService() {
             this, message.messageId?.hashCode() ?: 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, GaiaNotificationChannels.ALERTS_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(message.notification?.title ?: message.data["title"] ?: "Gaia Eyes")
             .setContentText(message.notification?.body ?: message.data["body"] ?: "Open Gaia Eyes for details.")
@@ -60,9 +57,5 @@ class GaiaMessagingService : FirebaseMessagingService() {
             .setContentIntent(pendingIntent)
             .build()
         manager.notify(message.messageId?.hashCode() ?: System.currentTimeMillis().toInt(), notification)
-    }
-
-    private companion object {
-        const val CHANNEL_ID = "gaia_alerts"
     }
 }

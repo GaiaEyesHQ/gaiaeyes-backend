@@ -26,6 +26,8 @@ from bots.earthscope_post.earthscope_generate import (
     _clean_llm_title,
     _fallback_social_title,
     _finalize_rewrite_payload,
+    _hook_form_for_text,
+    _preferred_hook_form,
     _preferred_hook_lanes,
     _normalize_rewrite_payload,
     _platform_caption_profile,
@@ -38,6 +40,24 @@ from bots.earthscope_post.earthscope_generate import (
     _voiceover_caption_from_variants,
     _rewrite_facebook_caption_from_spine,
 )
+
+
+def test_hook_form_rotation_prefers_underused_non_question_shapes() -> None:
+    ctx = {
+        "day": "2026-08-27",
+        "platform": "facebook",
+        "recent_captions": [
+            "Feeling tired today? Details follow.",
+            "Head pressure building? Details follow.",
+            "Sleep feeling off? Details follow.",
+        ],
+    }
+
+    assert _preferred_hook_form(ctx) != "question"
+    assert _hook_form_for_text("Today's feel: wiped out.") == "today_feel"
+    assert _hook_form_for_text("Crawling back into bed may sound good today.") == "conversational"
+    assert _hook_form_for_text("Energy may run lower today.") == "statement"
+    assert _hook_form_for_text("Feeling unusually wiped out today?") == "question"
 
 
 def _rewrite_with(text: str) -> dict[str, str]:

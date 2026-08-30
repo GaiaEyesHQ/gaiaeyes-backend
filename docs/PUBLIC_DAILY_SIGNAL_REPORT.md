@@ -62,7 +62,7 @@ venv/bin/python -m bots.public_signal_report.shadow \
 
 Global artifacts default to `tmp/public_signal_report/<day>.json`; U.S. artifacts default to `tmp/public_signal_report/<day>-us.json`. Both retain every collected observation under `review_inputs`, while the report and writer facts contain only edition-qualified regions and events. Artifacts always contain `auto_publish: false`.
 
-The writer uses a strict JSON schema and validates platform word ranges. It also returns a five-beat reel story: body-first hook, strongest regions, supported drivers, supported effects, and summary. Non-hook slides must be complete sentences, and near-duplicate slides are rejected. A draft that misses those requirements receives one complete model revision; a second failure is stored as `invalid` with no platform copy applied to the report. The runner never repairs copy with phrase replacements.
+The writer uses a strict JSON schema and validates platform word ranges. It also returns a five-beat reel story: body-first hook, strongest regions, supported drivers, supported effects, and summary. Hook form rotates deterministically among a natural question, a `Today's feel:` label, a conversational observation, and a direct statement; the writer creates the wording and no post-generation phrase replacement is used. Non-hook slides must be complete sentences, and near-duplicate slides are rejected. A draft that misses those requirements receives one complete model revision; a second failure is stored as `invalid` with no platform copy applied to the report. The runner never repairs copy with phrase replacements.
 
 ## U.S. reel preview and visual preflight
 

@@ -38,9 +38,9 @@ CTA_VARIANTS = [
     {
         "key": "pain-patterns",
         "themes": ("pain",),
-        "card": "Pain flaring louder than usual? Gaia Eyes helps compare symptoms with environmental patterns.",
+        "card": "Pain patterns shifting today? Gaia Eyes helps compare symptoms with environmental patterns.",
         "caption": (
-            "Pain flaring louder than usual? Gaia Eyes helps compare symptoms with environmental "
+            "Pain patterns shifting today? Gaia Eyes helps compare symptoms with environmental "
             "patterns and the week ahead."
         ),
     },

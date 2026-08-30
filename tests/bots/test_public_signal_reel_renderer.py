@@ -24,6 +24,7 @@ def _bundle() -> dict:
                     "effects": "Some people may sleep poorly, feel drained, or find effort harder.",
                     "where": "The Desert Southwest, including Phoenix and Las Vegas, is seeing the worst of it.",
                     "summary": {
+                        "bottom_line": "Desert heat and humidity are today's main story.",
                         "space": "Conditions were moderate earlier and are quieter now.",
                         "earth": "Ground sensors detected an active, spread‑out pattern.",
                         "major_event": "",
@@ -76,7 +77,7 @@ def test_five_slides_use_distinct_blank_backgrounds_and_keep_text_safe(tmp_path)
         "where",
         "summary",
     ]
-    assert reel_renderer.SLIDE_SPECS[-1][1] == "WIDER PICTURE"
+    assert reel_renderer.SLIDE_SPECS[-1][1] == "TODAY'S BOTTOM LINE"
     label_canvas = Image.new("RGB", reel_renderer.CANVAS)
     label_draw = ImageDraw.Draw(label_canvas)
     for _key, label, _filename in reel_renderer.SLIDE_SPECS:
@@ -124,7 +125,7 @@ def test_five_slides_use_distinct_blank_backgrounds_and_keep_text_safe(tmp_path)
         safe_left, safe_top, safe_right, safe_bottom = reel_renderer.SAFE_TEXT_BOX
         assert safe_left <= left < right <= safe_right
         assert safe_top <= top < bottom <= safe_bottom
-    assert [row["label"] for row in rendered[-1]["summary_rows"]] == ["SPACE WEATHER", "EARTH SENSORS"]
+    assert [row["label"] for row in rendered[-1]["summary_rows"]] == ["MAIN STORY", "SPACE WEATHER", "EARTH SENSORS"]
     assert rendered[-1]["summary_row_label_font_size"] == 44
     assert rendered[-1]["summary_rows"][-1]["text"] == "Ground sensors detected an active, spread-out pattern."
 
