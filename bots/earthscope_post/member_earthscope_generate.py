@@ -1036,7 +1036,7 @@ def generate_member_post_for_user(
         "title": rendered.get("title"),
         "caption": rendered.get("caption"),
         "body_markdown": rendered.get("body_markdown"),
-        "metrics_json": json.dumps(metrics_payload),
+        "metrics_json": json.dumps(metrics_payload, default=str),
         "sources_json": json.dumps({}),
         "inputs_hash": inputs_hash,
         "updated_at": datetime.now(timezone.utc),

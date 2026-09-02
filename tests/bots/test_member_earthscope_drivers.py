@@ -1,6 +1,7 @@
 import os
 import sys
 import types
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +23,7 @@ from bots.earthscope_post.member_earthscope_generate import (
     _active_state_lines,
     _observed_driver_lines,
     _render_member_post,
+    generate_member_post_for_user,
     main,
 )
 
@@ -148,3 +150,74 @@ def test_main_returns_nonzero_when_paid_user_lookup_raises(monkeypatch) -> None:
     )
 
     assert main(["--day", "2026-03-13"]) == 1
+
+
+def test_generate_member_post_for_user_serializes_uuid_metrics_payload(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    tag_id = uuid.uuid4()
+
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate.load_definition_base",
+        lambda: ({"global_disclaimer": "Test disclaimer."}, "v1"),
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate._fetch_gauges_row",
+        lambda user_id, day: {"day": "2026-03-13", "health_status": 22, "alerts_json": []},
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate.fetch_local_payload",
+        lambda user_id, day: {},
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate.resolve_signals",
+        lambda user_id, day, local_payload=None, definition=None: [],
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate.fetch_user_tags",
+        lambda user_id: [{"id": tag_id, "label": "plus"}],
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate.fetch_symptom_summary",
+        lambda user_id, day: {},
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate._fetch_existing_member_post",
+        lambda user_id, day: None,
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate._fetch_existing_inputs_hash",
+        lambda user_id, day: None,
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate._member_post_requires_refresh",
+        lambda existing: False,
+    )
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate._render_member_post",
+        lambda *args, **kwargs: {
+            "title": "Your EarthScope",
+            "caption": "Caption",
+            "body_markdown": "Body",
+            "voice_semantic": {"kind": "earthscope_member_post"},
+        },
+    )
+
+    def fake_upsert(schema, table, payload, keys):
+        captured["schema"] = schema
+        captured["table"] = table
+        captured["payload"] = payload
+        captured["keys"] = keys
+
+    monkeypatch.setattr(
+        "bots.earthscope_post.member_earthscope_generate.upsert_row",
+        fake_upsert,
+    )
+
+    result = generate_member_post_for_user("user-123", "2026-03-13", force=True)
+
+    assert result == {"ok": True, "skipped": False}
+    assert captured["schema"] == "content"
+    assert captured["table"] == "daily_posts_user"
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert f'"id": "{tag_id}"' in payload["metrics_json"]
