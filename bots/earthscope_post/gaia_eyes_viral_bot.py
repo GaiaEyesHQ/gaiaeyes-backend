@@ -1547,6 +1547,32 @@ def _public_card_text(text: str) -> str:
     return cleaned
 
 
+def _public_section_sentences(text: str, max_sentences: int) -> str:
+    cleaned = _public_card_text(text).replace("\r", "").strip()
+    if not cleaned:
+        return ""
+    fragments: List[str] = []
+    for raw in cleaned.splitlines():
+        line = re.sub(r"^(?:[-*•]\s*|\d+[.)]\s*)", "", raw.strip())
+        if not line:
+            continue
+        m = re.match(r"^([^:]{1,32}):\s*(.+)$", line)
+        if m:
+            line = m.group(2).strip()
+        fragments.extend(item.strip() for item in re.split(r"(?<=[.!?])\s+", line) if item.strip())
+    out: List[str] = []
+    for item in fragments:
+        item = item.strip(" -")
+        if not item:
+            continue
+        if not item.endswith((".", "!", "?")):
+            item += "."
+        out.append(item)
+        if len(out) >= max_sentences:
+            break
+    return " ".join(out)
+
+
 def _format_public_playbook(text: str) -> str:
     cleaned = _public_card_text(text).replace("\r", "").strip()
     if not cleaned:
@@ -1580,9 +1606,23 @@ def _format_public_playbook(text: str) -> str:
 
 
 def _trim_public_affects(text: str, max_sentences: int = 3) -> str:
-    cleaned = _public_card_text(text)
-    parts = [item.strip() for item in re.split(r"(?<=[.!?])\s+", cleaned) if item.strip()]
-    return " ".join(parts[:max_sentences]).strip() if parts else cleaned
+    return _public_section_sentences(text, max_sentences)
+
+
+def _font_that_fits(
+    draw: ImageDraw.ImageDraw,
+    candidates: Union[str, List[str]],
+    text: str,
+    *,
+    start: int,
+    minimum: int,
+    max_width: int,
+) -> ImageFont.ImageFont:
+    for size in range(start, minimum - 1, -2):
+        font = _load_font(candidates, size)
+        if draw.textlength(text, font=font) <= max_width:
+            return font
+    return _load_font(candidates, minimum)
 
 def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: str = "square") -> Image.Image:
     if kind == "tall":
@@ -1592,7 +1632,8 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
     im = _compose_bg(W, H, energy, kind)
     _add_top_gradient(im, height=220, alpha_top=170)
     draw = ImageDraw.Draw(im)
-    font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 66)
+    title_faces = ["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"]
+    font_h1   = _load_font(title_faces, 66)
     font_tip  = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "Oswald-Bold.ttf"], 54)
     font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 36)
     fg = (235,245,255,255)
@@ -1616,6 +1657,7 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
     title_norm = (title or "").strip().lower()
     is_affects_card = title_norm in ("how this affects you", "how it may feel") or title_norm.endswith("?") or bool(tip_head)
     is_care_card = title_norm in ("self-care playbook", "care notes")
+    font_h1 = _font_that_fits(draw, title_faces, title, start=66, minimum=44, max_width=W - x0 - 120)
 
     accent = _earthscope_hook_accent(title, energy)
     if is_affects_card and not is_care_card:

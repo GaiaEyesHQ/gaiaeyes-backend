@@ -112,6 +112,25 @@ def test_select_earthscope_cta_uses_fatigue_context_before_solar_activity():
     assert "heart" not in cta["card"].lower()
 
 
+def test_select_earthscope_cta_uses_focus_energy_before_incidental_sleep():
+    cta = select_earthscope_cta(
+        "2026-09-02",
+        context={
+            "title": "Feeling Off For No Reason?",
+            "caption": "Standard energy field-consistency wins today.",
+            "affects": (
+                "Focus/energy: Steadier conditions make longer focus stretches easier to use. "
+                "Autonomic/HRV: A quieter field can make recovery work feel more cooperative. "
+                "Sleep: Keep evening light warm and low."
+            ),
+            "reel_hook": "Standard energy field-consistency wins today",
+        },
+    )
+
+    assert cta["key"] == "fatigue-recovery-patterns"
+    assert "Sleep hard to settle" not in cta["card"]
+
+
 def test_frequency_cta_uses_plain_language():
     cta = select_earthscope_cta("2026-06-09", context={"schumann_value_hz": 7.8})
 

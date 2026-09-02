@@ -195,6 +195,33 @@ def test_reel_story_rejects_stored_fragments_and_duplicate_variants():
     assert story["pattern"] == "Focus can come in short bursts with quicker dips."
 
 
+def test_reel_story_rejects_bulleted_stored_beats():
+    row = {
+        "title": "Feeling Off For No Reason?",
+        "metrics_json": {
+            "sections": {
+                "snapshot": "The field looks fairly middle-of-the-road today. Consistency wins.",
+                "affects": (
+                    "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n"
+                    "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative."
+                ),
+                "reel_story": {
+                    "hook": "Standard energy field-consistency wins today",
+                    "signal": "The field looks fairly middle-of-the-road today.",
+                    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+                    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+                },
+            }
+        },
+    }
+
+    story = reel_builder.reel_story_from_post(row)
+
+    assert story["effects"] == "Steadier conditions make longer focus stretches easier to use."
+    assert story["pattern"] == "A quieter field can make recovery work feel more cooperative."
+    assert not story["effects"].startswith("-")
+
+
 def test_reel_hook_card_is_vertical_and_hides_dense_source_copy(tmp_path):
     source = tmp_path / "daily_affects.jpg"
     Image.new("RGB", (1080, 1920), (35, 110, 85)).save(source)

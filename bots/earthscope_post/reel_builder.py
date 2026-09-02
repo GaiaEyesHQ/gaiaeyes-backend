@@ -450,6 +450,8 @@ def _valid_story_beat(text: object) -> str:
     if not lines:
         return ""
     for line in lines:
+        if re.match(r"^\s*(?:[-*•]|\d+[.)])\s+", line):
+            return ""
         words = re.findall(r"[A-Za-z']+", line.lower())
         if not words or words[-1] in _DANGLING_STORY_WORDS:
             return ""
@@ -460,6 +462,9 @@ def _story_sentences(text: object) -> List[str]:
     sentences: List[str] = []
     for line in _story_lines(text):
         clean = re.sub(r"^(?:[-*•]|\d+[.)])\s*", "", line).strip()
+        label = re.match(r"^[A-Za-z][A-Za-z /&-]{1,32}:\s*(.+)$", clean)
+        if label:
+            clean = label.group(1).strip()
         sentences.extend(part.strip() for part in re.split(r"(?<=[.!?])\s+", clean) if part.strip())
     return sentences
 

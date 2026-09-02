@@ -129,6 +129,30 @@ def _context_themes(context: Mapping[str, Any] | None) -> Sequence[str]:
         return ("pain",)
     if any(
         term in context_text
+        for term in ("buzzing", "buzz", "wired/tired", "wired tired", "jitters", "jittery", "revved")
+    ):
+        return ("nervous_system",)
+    if any(
+        term in context_text
+        for term in (
+            "fatigue",
+            "fatigued",
+            "heavy-limb",
+            "heavy limb",
+            "heavy-limbed",
+            "drained",
+            "recovery",
+            "focus/energy",
+            "longer focus",
+            "focused task",
+            "energy comes back",
+            "energy returns",
+            "breathing room",
+        )
+    ):
+        return ("fatigue", "recovery")
+    if any(
+        term in context_text
         for term in (
             "sleep",
             "settle",
@@ -145,27 +169,6 @@ def _context_themes(context: Mapping[str, Any] | None) -> Sequence[str]:
         )
     ):
         return ("sleep", "rest")
-    if any(
-        term in context_text
-        for term in ("buzzing", "buzz", "wired/tired", "wired tired", "jitters", "jittery", "revved")
-    ):
-        return ("nervous_system",)
-    if any(
-        term in context_text
-        for term in (
-            "fatigue",
-            "fatigued",
-            "heavy-limb",
-            "heavy limb",
-            "heavy-limbed",
-            "drained",
-            "recovery",
-            "energy comes back",
-            "energy returns",
-            "breathing room",
-        )
-    ):
-        return ("fatigue", "recovery")
     tone = str(context.get("tone") or "").lower()
     bands = context.get("bands") if isinstance(context.get("bands"), Mapping) else {}
     kp_band = str(bands.get("kp") or "").lower()
