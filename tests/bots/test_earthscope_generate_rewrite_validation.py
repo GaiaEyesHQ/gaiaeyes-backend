@@ -25,6 +25,7 @@ from bots.earthscope_post.earthscope_generate import (
     _canonical_public_platform,
     _clean_llm_title,
     _fallback_social_title,
+    _fallback_caption_for_tone,
     _finalize_rewrite_payload,
     _hook_form_for_text,
     _preferred_hook_form,
@@ -730,6 +731,26 @@ def test_social_variants_align_default_caption_to_approved_title(monkeypatch):
 def test_public_generation_uses_one_canonical_platform():
     assert _canonical_public_platform("default") == "default"
     assert _canonical_public_platform("ig") == "default"
+
+
+def test_public_generator_fallback_caption_varies_across_neutral_days():
+    base_ctx = {
+        "platform": "default",
+        "kp_max_24h": 2.3,
+        "bz_min": -5.0,
+        "solar_wind_kms": 390.0,
+        "recent_captions": [],
+        "banned_openers": [],
+    }
+    captions = {
+        _fallback_caption_for_tone(
+            "neutral",
+            {**base_ctx, "day": f"2026-09-0{day}"},
+        )
+        for day in (1, 2, 3)
+    }
+
+    assert len(captions) > 1
 
 
 def test_reel_story_uses_writer_fields_without_changing_web_sections():

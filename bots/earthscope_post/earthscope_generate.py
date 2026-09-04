@@ -621,6 +621,36 @@ def _stable_choice(
     return usable[seed % len(usable)]
 
 
+def _fallback_caption_for_tone(tone: str, ctx: Dict[str, Any]) -> str:
+    """Stable fallback variety for no-rewrite days; facts still live in sections/metrics."""
+    options_by_tone = {
+        "stormy": [
+            "Charged atmosphere—work in bursts, expect longer recoveries.",
+            "The field is louder today—shorter loops beat pushing through.",
+        ],
+        "unsettled": [
+            "A few bumps in the road—keep a slow and steady pace today.",
+            "Uneven signal day—leave extra room between the big things.",
+        ],
+        "calm": [
+            "Steady magnetic backdrop—set your goals and enjoy the flow.",
+            "Quieter sky today—use the steadier window without overloading it.",
+        ],
+        "neutral": [
+            "Standard energy field—consistency wins today.",
+            "Ordinary signal mix today—small steady choices do the work.",
+            "Middle-lane space weather today—keep the rhythm simple.",
+        ],
+    }
+    options = options_by_tone.get(tone, options_by_tone["neutral"])
+    banned = list(ctx.get("banned_openers") or []) + list(ctx.get("recent_captions") or [])
+    return _stable_choice(
+        options,
+        seed_text=f"{_ctx_day_iso(ctx)}|{_ctx_platform(ctx)}|{tone}|fallback_caption",
+        banned_openers=banned,
+    )
+
+
 # --- Recent opener helpers for hook variation ---
 SENT_SPLIT_RE = re.compile(r"(?<=\.)\s+|(?<=! )\s+|(?<=\?)\s+", re.X)
 
@@ -2277,13 +2307,7 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
     rc_fallback = _rule_copy(ctx)
     qual_snap = _qualitative_snapshot(ctx)
     tone = _tone_from_ctx(ctx)
-    cap_map = {
-        "stormy":   "Charged atmosphere—work in bursts, expect longer recoveries.",
-        "unsettled": "A few bumps in the road—keep a slow and steady pace today.",
-        "calm":     "Steady magnetic backdrop—set your goals and enjoy the flow.",
-        "neutral":  "Standard energy field—consistency wins today.",
-    }
-    cap_out = cap_map.get(tone, cap_map["neutral"])
+    cap_out = _fallback_caption_for_tone(tone, ctx)
 
     return {
         "caption": _scrub_banned_phrases(_sanitize_caption(cap_out)),

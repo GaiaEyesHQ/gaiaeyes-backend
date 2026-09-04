@@ -346,14 +346,31 @@ def render_public_earthscope_post(
         snapshot_lines.append(f"- Schumann f0: {_fmt_num(schumann, 2)} Hz")
     snapshot = "\n".join(snapshot_lines)
 
-    if tone == "stormy":
-        qualitative_lines = ["It's an electrified day. Expect shorter surges and dips in energy."]
-    elif tone == "unsettled":
-        qualitative_lines = ["Things are looking lively in the field today, so expect some fluctuations."]
-    elif tone == "calm":
-        qualitative_lines = ["Steadier field today. It is a good day for focused work and cleaner recovery."]
-    else:
-        qualitative_lines = ["The field looks fairly middle-of-the-road today. Consistency wins."]
+    lead_options = {
+        "stormy": [
+            "It's an electrified day. Expect shorter surges and dips in energy.",
+            "The field is running hotter today. Shorter effort loops may feel easier to manage.",
+        ],
+        "unsettled": [
+            "Things are looking lively in the field today, so expect some fluctuations.",
+            "The field has a choppier edge today. Keep your pacing flexible.",
+        ],
+        "calm": [
+            "Steadier field today. It is a good day for focused work and cleaner recovery.",
+            "The outside signal is quieter today. Use the steadier backdrop without overloading it.",
+        ],
+        "neutral": [
+            "The field looks fairly middle-of-the-road today. Consistency wins.",
+            "Signals are sitting in a fairly ordinary range today. Small steady choices matter most.",
+            "The background looks steady enough to keep the day simple. Let rhythm do the heavy lifting.",
+        ],
+    }
+    qualitative_lines = [
+        _stable_pick(
+            lead_options.get(tone, lead_options["neutral"]),
+            f"{payload.date}|{voice_profile.channel}|{tone}|qualitative_lead",
+        )
+    ]
     if driver_bits:
         qualitative_lines.append("Drivers: " + ", ".join(driver_bits) + ".")
     if schumann is not None:

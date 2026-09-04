@@ -47,6 +47,31 @@ def test_public_earthscope_post_renderer_builds_playful_public_bundle() -> None:
     assert rendered["hashtags"].startswith("#GaiaEyes")
 
 
+def test_public_earthscope_post_renderer_varies_neutral_fallback_by_day() -> None:
+    base_ctx = {
+        "platform": "default",
+        "kp_now": 2.3,
+        "kp_max_24h": 2.3,
+        "bz_min": -5.0,
+        "solar_wind_kms": 390.0,
+        "flares_24h": 0,
+        "cmes_24h": 2,
+        "schumann_value_hz": 7.77,
+        "first_person": True,
+    }
+    leads = set()
+
+    for day_value in (date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3)):
+        payload = build_public_earthscope_semantic(
+            day=day_value,
+            ctx={**base_ctx, "day": day_value.isoformat()},
+        )
+        rendered = render_public_earthscope_post(payload)
+        leads.add(rendered["qualitative_snapshot"].split(" Drivers:", 1)[0])
+
+    assert len(leads) > 1
+
+
 def test_member_earthscope_post_renderer_preserves_seeded_sections() -> None:
     payload = build_member_earthscope_semantic(
         day=date(2026, 3, 30),
