@@ -930,13 +930,14 @@ def _safe_text(s: str) -> str:
     if not s:
         return s
     repl = {
-        "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-", "\u2014": "-", "\u2015": "-",
+        "\u2010": "-", "\u2011": "-", "\u2012": "-",
+        "\u2013": " - ", "\u2014": " - ", "\u2015": " - ",
         "\u2018": "'", "\u2019": "'", "\u201A": ",",
         "\u201C": '"', "\u201D": '"', "\u201E": '"',
     }
     for k, v in repl.items():
         s = s.replace(k, v)
-    return s
+    return re.sub(r"[^\S\r\n]+", " ", s).strip()
 
 _EMOJI_PATTERN = re.compile(r"[\U0001F300-\U0001FAFF\U00002700-\U000027BF\U0001F1E6-\U0001F1FF]", flags=re.UNICODE)
 def strip_hashtags_and_emojis(text: str) -> str:

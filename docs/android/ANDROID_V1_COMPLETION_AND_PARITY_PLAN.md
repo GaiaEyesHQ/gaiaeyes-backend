@@ -1,13 +1,15 @@
 # Android V1 Completion and iOS Parity Plan
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-08-12 · Owner feedback and source-review correction: 2026-09-06
 
 This is the canonical implementation plan for finishing the first Gaia Eyes
-Android release and then bringing its user-facing surfaces up to the current
-iOS experience. It complements [ANDROID_PARITY_MATRIX.md](ANDROID_PARITY_MATRIX.md)
+Android release, including bringing its user-facing surfaces up to the current
+iOS experience before product acceptance. It complements [ANDROID_PARITY_MATRIX.md](ANDROID_PARITY_MATRIX.md)
 and does not expand V1 into the next-phase personalization roadmap.
 
 ## Executive assessment
+
+**September 6 priority correction:** Jennifer reports weak iOS parity, jumbled/partial Explore sections, confusing weather placement, wording issues and sluggishness. Product polish precedes continued Android store/release preparation. Source presence and earlier local checks did not establish product acceptance. See [the repair brief](ANDROID_POLISH_REPAIR_BRIEF.md) for current evidence, proposed work and device-verification gaps. Older implementation claims below remain historical; Android quality acceptance is open.
 
 Android is a functional beta with the planned Explore, Guide, and notification
 code now implemented locally, but it is not yet ready for public submission.
@@ -39,8 +41,9 @@ The largest remaining release gaps are:
 - Body with shared account history plus optional Health Connect import for
   sleep, steps, heart rate, resting heart rate, respiratory rate, and SpO2.
 - Cache-first Patterns and Outlook using shared backend evidence language.
-- Complete Explore hub with All Drivers, Space Weather, Local Conditions,
+- Implemented Explore destinations with All Drivers, Space Weather, Local Conditions,
   Magnetosphere, Schumann Resonance, Earthquakes, and Hazards detail surfaces.
+  Hub organization, detail completeness and product acceptance remain open.
 - Guide with Support Right Now, daily check-in and poll, follow-ups, and help.
 - Symptom, exposure, and daily-check-in writes with account-scoped persistence,
   foreground delivery, and WorkManager retry.
@@ -57,8 +60,10 @@ The largest remaining release gaps are:
 
 #### 1. Complete Explore
 
-**Implemented locally.** The remaining requirement is release/device validation
-of freshness, partial-data, and responsive-layout states.
+**Implemented locally; product parity is incomplete.** The September 6 source
+review found a different hub hierarchy, conditionally missing cards and a full
+inline driver grid. Repair organization, detail completeness and wording, then
+verify freshness, partial-data, responsive layout and performance on a device.
 
 Match the current non-personal iOS Explore hub:
 

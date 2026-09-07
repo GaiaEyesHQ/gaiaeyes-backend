@@ -1,6 +1,6 @@
 # Android Parity Matrix
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-08-12 · Explore acceptance corrected: 2026-09-06
 
 This matrix defines Android v1 parity against the live iOS app. It is intentionally scoped to a practical first Android release, not every iOS-only or future feature.
 
@@ -16,7 +16,7 @@ The implementation sequence and release gates are defined in
 | Body | Required | `/v1/features/today`, `/v1/samples/batch` | Cache-first sleep stages, efficiency, health stats, personal deltas, steps, and heart range are implemented from shared account data. Optional 30-day Health Connect import is implemented for sleep, steps, heart rate, resting heart rate, respiratory rate, and oxygen saturation, with account-scoped durable retry. HRV remains deferred under the explicit RMSSD/SDNN boundary. |
 | Patterns | Required | `/v1/patterns`, `/v1/patterns/summary` | Read-only cache-first parity is implemented with a fast summary, expanded background refresh, shared confidence/evidence language, varied category accents, three-card previews, and explicit Show all/Show fewer controls. Deeper drilldowns and subscription presentation can follow. |
 | Outlook | Required | `/v1/users/me/outlook`, `/v1/space/forecast/outlook` | Read-only cache-first parity is implemented with the shared daily signal cards, likely symptom domains, corrected signal labels, and responsive phone/tablet layouts. Narrative summary blocks removed from iOS remain omitted. |
-| Explore / All Drivers | Required | `/v1/users/me/drivers`, profile location, `/v1/local/check`, space/Earth endpoints | **Implemented locally.** Includes All Drivers, Space Weather, Local Conditions, Magnetosphere, Schumann Resonance, Earthquakes, and Hazards with shared backend data and cached fallback states. Release/device validation remains. |
+| Explore / All Drivers | Required | `/v1/users/me/drivers`, profile location, `/v1/local/check`, space/Earth endpoints | **Implemented locally; product parity incomplete.** Destinations and shared data exist, but Jennifer's September 6 feedback and source review reopen hub organization, partial/missing sections, weather discoverability, wording and responsiveness. See [repair brief](ANDROID_POLISH_REPAIR_BRIEF.md). Source presence is not product or device acceptance. |
 | Symptoms | Required | `/v1/symptoms/codes`, `/v1/symptoms`, `/v1/symptoms/current` | Implemented with server-driven choices, authenticated writes, and an account-scoped persistent queue with WorkManager background retry. Body and Home link to an active-symptom review page where users can mark an item ongoing, improving, worse, or resolved; edit severity/notes; or delete an accidental entry. |
 | Hands-free migraine log | Required | `/v1/symptoms` | Android V1 accepts an Assistant/App Action or `gaiaeyes://log/migraine`, records the invocation time with the shared `MIGRAINE` code and default severity 5, and uses the existing persistent symptom queue. It opens Gaia Eyes for confirmation; Android does not guarantee invisible background fulfillment. |
 | Exposures | Required | `/v1/exposures/catalog`, `/v1/exposures` | Implemented with the shared backend allowlist, authenticated writes, and the same persistent queue with WorkManager background retry. The catalog endpoint must be deployed before production end-to-end testing. |

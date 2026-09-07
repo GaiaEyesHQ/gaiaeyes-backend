@@ -1,0 +1,16 @@
+{
+  "coverage": {
+    "from": "2026-09-10T00:00:00Z",
+    "through": "2026-09-20T12:00:00Z"
+  },
+  "events": [
+    {"user_id": "synthetic-public-1", "client_event_id": "p1-onboarding", "event_name": "onboarding_completed", "event_ts_utc": "2026-09-10T00:15:00Z", "platform": "ios", "session_id": "p1"},
+    {"user_id": "synthetic-public-1", "client_event_id": "p1-auto-insight", "event_name": "first_insight_viewed", "event_ts_utc": "2026-09-10T00:16:00Z", "platform": "ios", "session_id": "p1"},
+    {"user_id": "synthetic-public-1", "client_event_id": "p1-symptom", "event_name": "symptom_logged", "event_ts_utc": "2026-09-10T00:20:00Z", "platform": "ios", "session_id": "p1"},
+    {"user_id": "synthetic-public-1", "client_event_id": "p1-symptom", "event_name": "symptom_logged", "event_ts_utc": "2026-09-10T00:20:00Z", "platform": "ios", "session_id": "p1"},
+    {"user_id": "synthetic-public-1", "client_event_id": "p1-return", "event_name": "guide_opened", "event_ts_utc": "2026-09-16T00:20:00Z", "platform": "ios", "session_id": "p1-return"},
+    {"user_id": "synthetic-public-2", "client_event_id": "p2-onboarding", "event_name": "onboarding_completed", "event_ts_utc": "2026-09-10T01:10:00Z", "platform": "ios", "session_id": "p2"},
+    {"user_id": "synthetic-internal", "client_event_id": "internal-symptom", "event_name": "symptom_logged", "event_ts_utc": "2026-09-10T02:10:00Z", "platform": "ios", "session_id": "internal"},
+    {"user_id": "synthetic-old", "client_event_id": "old-symptom", "event_name": "symptom_logged", "event_ts_utc": "2026-09-10T03:00:00Z", "platform": "ios", "session_id": "old"}
+  ]
+}

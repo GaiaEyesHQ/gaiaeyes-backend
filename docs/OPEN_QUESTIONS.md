@@ -1,5 +1,9 @@
 # Open Questions
 
+## Reconciled September 2026 questions
+
+Use [HUMAN_INPUT_NEEDED.md](recovery/HUMAN_INPUT_NEEDED.md) for the prioritized current questions, why they matter, who can answer, and work that can continue. In particular: production access-control approval, signed-in Render/provider evidence, historical credential-remediation status, privacy/store review, device acceptance, and organization account actions. [RECOVERY_AUDIT.md](recovery/RECOVERY_AUDIT.md) records what was verified. The historical list below is preserved for context; several entries (including absence of Render cron configuration and Android migration status elsewhere) have been superseded and must be checked against current source before action.
+
 1. **Render services + cron jobs**
    - **Why needed**: backend + scheduled ingest jobs are not defined in repo (`render.yaml` missing).
    - **Where to fill**: Render dashboard (service list, cron schedules, env vars).
@@ -103,3 +107,8 @@
 26. **Gaia Eyes phone voice-assistant entry contract**
    - **Why needed**: Siri/Google-style symptom and exposure entry is preferable to an always-listening Gaia Home microphone, but the supported commands, authentication behavior, confirmation, undo, failure handling, follow-up timing, privacy copy, and iOS/Android parity are not yet defined.
    - **Where to fill**: iOS/Android product and privacy design using the existing canonical symptom/exposure APIs before advertising hands-free logging.
+
+## September 7, 2026 stability follow-up
+
+- **Unknown:** Which SiteGround control is challenging authenticated WordPress publishing, and what supported configuration restores access? September 6 publisher run `34047437381`, job `101524948761`, returned HTTP 202 `sgcaptcha` HTML for media and posts; public latest EarthScope remains September 4. **Why it matters:** publication is blocked; the secondary `NoneType` exception is not the cause. **Who/where:** Jennifer or the SiteGround administrator should inspect hosting security/access logs and record the approved remedy here. Check existing posts before any approved retry.
+- **Unknown:** Why September 7 Daily Pipeline and member-writer runs were absent from GitHub at 15:02 UTC despite active schedules. **Why it matters:** public EarthScope is still September 6; eight September 7 member rows exist, but scheduled member coverage is unverified. **Who/where:** technical lead can inspect subsequent GitHub run timestamps and outcomes; Jennifer can authorize recovery dispatch if the scheduled lane remains missing.

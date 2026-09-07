@@ -17,6 +17,7 @@ from bots.earthscope_post.gaia_eyes_viral_bot import (
     _merge_post_metrics_into_features,
     _public_card_title,
     _public_card_text,
+    _safe_text,
     _trim_public_affects,
     build_stats_rows,
     StatRow,
@@ -87,6 +88,12 @@ def test_public_cards_label_environmental_state_as_signal(monkeypatch):
 
     assert "Signal: Calm" in labels
     assert "Energy: Calm" not in labels
+
+
+def test_safe_text_keeps_spaced_render_dash():
+    assert _safe_text("Middle-lane space weather today\u2014keep the rhythm simple.") == (
+        "Middle-lane space weather today - keep the rhythm simple."
+    )
 
 
 def test_stats_card_labels_environmental_state_as_signal(monkeypatch):

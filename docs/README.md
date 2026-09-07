@@ -1,5 +1,9 @@
 # Gaia Eyes Docs Index
 
+## Current recovery handoff — September 2026
+
+Start with [the recovery audit and handoff](recovery/README.md) for reconciled production, mobile, security, PMF, costs and open-work status. It records verified facts separately from older plans and unresolved questions. This local operational report contains sensitive findings; review before public distribution.
+
 ## Core docs (new canonical set)
 - `ARCHITECTURE.md` — system overview + data flows
 - `SUPABASE.md` — schema + auth + storage

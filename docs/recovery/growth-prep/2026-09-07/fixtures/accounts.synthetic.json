@@ -1,0 +1,11 @@
+{
+  "coverage": {
+    "through": "2026-09-11T00:00:00Z"
+  },
+  "accounts": [
+    {"id": "synthetic-public-1", "created_at": "2026-09-10T00:10:00Z"},
+    {"id": "synthetic-public-2", "created_at": "2026-09-10T01:00:00Z"},
+    {"id": "synthetic-internal", "created_at": "2026-09-10T02:00:00Z"},
+    {"id": "synthetic-old", "created_at": "2026-09-09T12:00:00Z"}
+  ]
+}

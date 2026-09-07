@@ -161,6 +161,7 @@ fun GaiaEyesApp(
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showCurrentSymptoms by rememberSaveable { mutableStateOf(false) }
     var showLocalWeather by rememberSaveable { mutableStateOf(false) }
+    var showAllDrivers by rememberSaveable { mutableStateOf(false) }
     var exploreDetail by rememberSaveable { mutableStateOf<ExploreDetail?>(null) }
     val context = LocalContext.current
     var locationRequestForOnboarding by rememberSaveable { mutableStateOf(false) }
@@ -237,6 +238,7 @@ fun GaiaEyesApp(
         showSettings = false
         showCurrentSymptoms = false
         showLocalWeather = false
+        showAllDrivers = false
         exploreDetail = null
         when (request.destination) {
             NotificationDestination.HOME -> viewModel.selectPage(SignedInPage.HOME)
@@ -350,6 +352,7 @@ fun GaiaEyesApp(
                     showSettings = false
                     showCurrentSymptoms = false
                     showLocalWeather = false
+                    showAllDrivers = false
                     exploreDetail = null
                     viewModel.signOut()
                 },
@@ -376,6 +379,13 @@ fun GaiaEyesApp(
                 onUseDeviceLocation = { requestCurrentLocation(false) },
                 onSaveLocation = viewModel::saveLocationSettings,
                 onDismissMessage = viewModel::dismissMessage,
+                modifier = modifier,
+            )
+        } else if (showAllDrivers) {
+            AllDriversScreen(
+                uiState = uiState,
+                onBack = { showAllDrivers = false },
+                onRefresh = viewModel::refresh,
                 modifier = modifier,
             )
         } else if (exploreDetail != null) {
@@ -442,6 +452,7 @@ fun GaiaEyesApp(
                 onOpenSettings = { showSettings = true },
                 onDismissMessage = viewModel::dismissMessage,
                 onSelectPage = viewModel::selectPage,
+                onOpenAllDrivers = { showAllDrivers = true },
                 onOpenLocalWeather = { showLocalWeather = true },
                 onOpenDetail = { exploreDetail = it },
                 modifier = modifier,
@@ -1339,7 +1350,7 @@ private fun SettingsScreen(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "Manage your account, local conditions, connections, and support information.",
+                text = "Manage your account, location preferences, connections, and support information.",
                 color = Color(0xFF9BA6B4),
                 fontSize = 15.sp,
                 lineHeight = 22.sp,
@@ -1674,7 +1685,7 @@ private fun LocalConditionsSettingsCard(
     onUseDeviceLocation: () -> Unit,
     onSaveLocation: () -> Unit,
 ) {
-    SettingsSectionCard(title = "Local conditions") {
+    SettingsSectionCard(title = "Location preferences") {
         Text(
             text = "Use your current area as you travel, or keep conditions tied to one saved ZIP code.",
             color = Color(0xFFB7C0CC),
@@ -1750,7 +1761,7 @@ private fun LocalConditionsSettingsCard(
                     modifier = Modifier.size(18.dp),
                 )
             } else {
-                Text("Save local settings", fontWeight = FontWeight.Bold)
+                Text("Save location preferences", fontWeight = FontWeight.Bold)
             }
         }
         uiState.locationSettingsMessage?.let { message ->
@@ -3003,13 +3014,13 @@ private fun ExploreScreen(
     onOpenSettings: () -> Unit,
     onDismissMessage: () -> Unit,
     onSelectPage: (SignedInPage) -> Unit,
+    onOpenAllDrivers: () -> Unit,
     onOpenLocalWeather: () -> Unit,
     onOpenDetail: (ExploreDetail) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ScreenFrame(modifier = modifier) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val columns = if (maxWidth > 660.dp) 2 else 1
+        Box(modifier = Modifier.fillMaxSize()) {
             ContentColumn(bottomPadding = 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
@@ -3084,13 +3095,13 @@ private fun ExploreScreen(
 
                 Spacer(modifier = Modifier.height(18.dp))
                 Text(
-                    text = "Explore the signals around you.",
+                    text = "Explore what Gaia Eyes is watching.",
                     color = Color.White,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "See the local, Earth, space, and body-context signals Gaia Eyes is comparing for you right now.",
+                    text = "Open any area for current readings and more context.",
                     color = Color(0xFF9BA6B4),
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
@@ -3101,18 +3112,22 @@ private fun ExploreScreen(
                 val response = uiState.drivers?.drivers
                 when {
                     response?.drivers?.isNotEmpty() == true -> {
-                        ExploreSummaryCard(response = response)
+                        ExploreSummaryCard(response = response, onClick = onOpenAllDrivers)
                     }
-                    uiState.isLoadingHomeContext -> ExploreLoadingCard()
-                    else -> ExploreEmptyCard()
+                    else -> ExploreSummaryPlaceholderCard(
+                        isLoading = uiState.isLoadingHomeContext,
+                        onClick = onOpenAllDrivers,
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
-                ExploreSignalCards(
+                val signalSummaries = exploreSignalSummaries(
                     snapshot = uiState.explore,
                     isLoading = uiState.isLoadingExplore,
-                    columns = columns,
-                    onOpenDetail = onOpenDetail,
+                ).associateBy { it.detail }
+                ExploreSignalCard(
+                    summary = checkNotNull(signalSummaries[ExploreDetail.SPACE_WEATHER]),
+                    onClick = { onOpenDetail(ExploreDetail.SPACE_WEATHER) },
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
@@ -3122,28 +3137,39 @@ private fun ExploreScreen(
                     onClick = onOpenLocalWeather,
                 )
 
-                if (response?.drivers?.isNotEmpty() == true) {
-                    Spacer(modifier = Modifier.height(18.dp))
-                    Text(
-                        text = "Current driver order",
-                        color = Color.White,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = "The signals Gaia Eyes is comparing right now.",
-                        color = Color(0xFF9BA6B4),
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(top = 5.dp, bottom = 14.dp),
-                    )
-                    ExploreDriverGrid(
-                        drivers = exploreDrivers(response),
-                        columns = columns,
-                    )
-                }
+                Spacer(modifier = Modifier.height(18.dp))
+                ExploreSignalCard(
+                    summary = checkNotNull(signalSummaries[ExploreDetail.MAGNETOSPHERE]),
+                    onClick = { onOpenDetail(ExploreDetail.MAGNETOSPHERE) },
+                )
 
                 Spacer(modifier = Modifier.height(18.dp))
-                BackendCard(uiState = uiState, onRetry = onRefresh)
+                ExploreSignalCard(
+                    summary = checkNotNull(signalSummaries[ExploreDetail.SCHUMANN]),
+                    onClick = { onOpenDetail(ExploreDetail.SCHUMANN) },
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+                Text(
+                    text = "More to Explore",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Optional global views for a broader look.",
+                    color = Color(0xFF9BA6B4),
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 5.dp, bottom = 14.dp),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    listOf(ExploreDetail.EARTHQUAKES, ExploreDetail.HAZARDS).forEach { detail ->
+                        ExploreSignalCard(
+                            summary = checkNotNull(signalSummaries[detail]),
+                            onClick = { onOpenDetail(detail) },
+                        )
+                    }
+                }
             }
             SignedInNavigation(
                 selectedPage = SignedInPage.EXPLORE,
@@ -3154,7 +3180,71 @@ private fun ExploreScreen(
     }
 }
 
-private enum class ExploreDetail {
+@Composable
+private fun AllDriversScreen(
+    uiState: HomeUiState,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onBack)
+    ScreenFrame(modifier = modifier) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val columns = if (maxWidth > 660.dp) 2 else 1
+            ContentColumn(bottomPadding = 36.dp) {
+                Header(
+                    subtitle = "Explore",
+                    trailing = { TextButton(onClick = onBack) { Text("Back") } },
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "All Drivers",
+                    color = Color.White,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "The signals Gaia Eyes is comparing for you, ordered by what looks most relevant now.",
+                    color = Color(0xFF9BA6B4),
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                val response = uiState.drivers?.drivers
+                when {
+                    response?.drivers?.isNotEmpty() == true -> {
+                        ExploreSummaryCard(response = response, onClick = null)
+                        Spacer(modifier = Modifier.height(18.dp))
+                        ExploreDriverGrid(
+                            drivers = exploreDrivers(response),
+                            columns = columns,
+                        )
+                    }
+                    uiState.isLoadingHomeContext -> ExploreLoadingCard()
+                    else -> ExploreEmptyCard()
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                Button(
+                    onClick = onRefresh,
+                    enabled = !uiState.isLoadingHomeContext,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GaiaBlue,
+                        contentColor = GaiaNavy,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        if (uiState.isLoadingHomeContext) "Refreshing…" else "Refresh drivers",
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+internal enum class ExploreDetail {
     SPACE_WEATHER,
     MAGNETOSPHERE,
     SCHUMANN,
@@ -3162,7 +3252,7 @@ private enum class ExploreDetail {
     HAZARDS,
 }
 
-private data class ExploreSignalSummary(
+internal data class ExploreSignalSummary(
     val detail: ExploreDetail,
     val title: String,
     val subtitle: String,
@@ -3170,53 +3260,6 @@ private data class ExploreSignalSummary(
     val color: Color,
     val metrics: List<Pair<String, String>>,
 )
-
-@Composable
-private fun ExploreSignalCards(
-    snapshot: ExploreSnapshot?,
-    isLoading: Boolean,
-    columns: Int,
-    onOpenDetail: (ExploreDetail) -> Unit,
-) {
-    val summaries = exploreSignalSummaries(snapshot)
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(
-            text = "Earth and space signals",
-            color = Color.White,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "Open a signal for current readings, source details, and freshness.",
-            color = Color(0xFF9BA6B4),
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-        )
-        if (summaries.isEmpty() && isLoading) {
-            ExploreLoadingCard()
-        } else if (summaries.isEmpty()) {
-            ExploreEmptyCard()
-        } else {
-            summaries.chunked(columns).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    rowItems.forEach { summary ->
-                        ExploreSignalCard(
-                            summary = summary,
-                            onClick = { onOpenDetail(summary.detail) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    repeat(columns - rowItems.size) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun ExploreSignalCard(
@@ -3256,19 +3299,21 @@ private fun ExploreSignalCard(
                 }
                 DriverPill(summary.status, summary.color)
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                summary.metrics.take(3).forEach { metric ->
-                    SupportingStatChip(
-                        label = metric.first,
-                        value = metric.second,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                repeat(3 - summary.metrics.take(3).size) {
-                    Spacer(modifier = Modifier.weight(1f))
+            if (summary.metrics.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    summary.metrics.take(3).forEach { metric ->
+                        SupportingStatChip(
+                            label = metric.first,
+                            value = metric.second,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(3 - summary.metrics.take(3).size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
             Text(
@@ -3292,7 +3337,8 @@ private fun ExploreDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
-    val summary = exploreSignalSummaries(snapshot).firstOrNull { it.detail == detail }
+    val summary = exploreSignalSummaries(snapshot, isLoading).first { it.detail == detail }
+    val hasData = hasExploreDetailData(detail, snapshot)
     ScreenFrame(modifier = modifier) {
         ContentColumn(bottomPadding = 32.dp) {
             Header(
@@ -3309,7 +3355,7 @@ private fun ExploreDetailScreen(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = summary?.subtitle ?: exploreDetailEmptyText(detail),
+                text = if (hasData) summary.subtitle else exploreDetailEmptyText(detail),
                 color = Color(0xFF9BA6B4),
                 fontSize = 15.sp,
                 lineHeight = 22.sp,
@@ -3317,7 +3363,7 @@ private fun ExploreDetailScreen(
             )
             Spacer(modifier = Modifier.height(18.dp))
 
-            if (summary != null && snapshot != null) {
+            if (hasData && snapshot != null) {
                 SettingsSectionCard(title = "Current readings") {
                     summary.metrics.forEach { metric ->
                         SettingsStatusRow(
@@ -3337,7 +3383,7 @@ private fun ExploreDetailScreen(
             } else if (isLoading) {
                 ExploreLoadingCard()
             } else {
-                ExploreEmptyCard()
+                ExploreUnavailableCard(detail)
             }
 
             message?.let {
@@ -3395,109 +3441,165 @@ private fun ExploreEvidenceCard(
                 lineHeight = 20.sp,
             )
         }
+        val usingSavedData = snapshot.source == com.gaiaeyes.app.data.ExploreSource.CACHE ||
+            exploreSourceUnavailable(detail, snapshot)
         Text(
-            text = if (snapshot.source == com.gaiaeyes.app.data.ExploreSource.NETWORK) {
-                "Live data refreshed in this session."
+            text = if (usingSavedData) {
+                "Showing the latest saved data for this area while live readings reconnect."
             } else {
-                "Showing the latest saved data while live readings reconnect."
+                "Live data refreshed in this session."
             },
-            color = if (snapshot.source == com.gaiaeyes.app.data.ExploreSource.NETWORK) GaiaGreen else GaiaAmber,
+            color = if (usingSavedData) GaiaAmber else GaiaGreen,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
         )
     }
 }
 
-private fun exploreSignalSummaries(snapshot: ExploreSnapshot?): List<ExploreSignalSummary> {
-    val payload = snapshot?.payload ?: return emptyList()
-    val magnetosphere = payload.magnetosphere?.data
-    val schumann = payload.schumann
-    val quakes = payload.quakes?.item
-    val hazards = payload.hazards
-    return buildList {
-        magnetosphere?.let { data ->
-            add(
-                ExploreSignalSummary(
-                    detail = ExploreDetail.SPACE_WEATHER,
-                    title = "Space Weather",
-                    subtitle = "Current solar-wind and geomagnetic readings.",
-                    status = data.kpis.storminess?.displaySignalText() ?: "Current",
-                    color = GaiaBlue,
-                    metrics = listOfNotNull(
-                        data.kpis.kp?.let { "Kp" to formatExploreNumber(it) },
-                        data.solarWind.speedKms?.let { "Wind" to "${it.roundToInt()} km/s" },
-                        data.solarWind.bzNt?.let { "Bz" to "${formatExploreNumber(it)} nT" },
-                    ),
-                ),
-            )
-            add(
-                ExploreSignalSummary(
-                    detail = ExploreDetail.MAGNETOSPHERE,
-                    title = "Magnetosphere",
-                    subtitle = "Modeled boundary and geomagnetic context.",
-                    status = data.kpis.geoRisk?.displaySignalText() ?: "Current",
-                    color = GaiaGreen,
-                    metrics = listOfNotNull(
-                        data.kpis.standoffDistanceEarthRadii?.let { "Standoff" to "${formatExploreNumber(it)} Re" },
-                        data.kpis.plasmapauseEarthRadii?.let { "Plasmapause" to "${formatExploreNumber(it)} Re" },
-                        data.solarWind.densityCm3?.let { "Density" to "${formatExploreNumber(it)} cm⁻³" },
-                    ),
-                ),
-            )
-        }
-        schumann?.let { value ->
-            val f0 = value.fusion.displayF0Hz ?: value.harmonics.f0 ?: value.harmonics.combinedF1
-            add(
-                ExploreSignalSummary(
-                    detail = ExploreDetail.SCHUMANN,
-                    title = "Schumann Resonance",
-                    subtitle = "Current resonance frequency and source quality.",
-                    status = when (value.quality.usable) {
-                        true -> "Available"
-                        false -> "Limited"
-                        null -> "Current"
-                    },
-                    color = GaiaAmber,
-                    metrics = listOfNotNull(
-                        f0?.let { "F0" to "${formatExploreNumber(it)} Hz" },
-                        value.quality.qualityScore?.let { "Quality" to formatExploreNumber(it) },
-                        value.amplitude.total0To20?.let { "Amplitude" to formatExploreNumber(it) },
-                    ),
-                ),
-            )
-        }
-        quakes?.let { value ->
-            add(
-                ExploreSignalSummary(
-                    detail = ExploreDetail.EARTHQUAKES,
-                    title = "Earthquakes",
-                    subtitle = "Today’s global earthquake activity.",
-                    status = "Daily",
-                    color = GaiaRose,
-                    metrics = listOfNotNull(
-                        value.allQuakes?.let { "All" to it.toString() },
-                        value.magnitude4Plus?.let { "M4+" to it.toString() },
-                        value.magnitude5Plus?.let { "M5+" to it.toString() },
-                    ),
-                ),
-            )
-        }
-        hazards?.let { value ->
-            add(
-                ExploreSignalSummary(
-                    detail = ExploreDetail.HAZARDS,
-                    title = "Global Hazards",
-                    subtitle = "Recent major hazards reported around the world.",
-                    status = if (value.items.isEmpty()) "Quiet" else "${value.items.size} listed",
-                    color = GaiaAmber,
-                    metrics = listOf(
-                        "Listed" to value.items.size.toString(),
-                        "Severe" to value.items.count { it.severity?.contains("severe", true) == true }.toString(),
-                    ),
-                ),
-            )
-        }
+internal fun exploreSignalSummaries(
+    snapshot: ExploreSnapshot?,
+    isLoading: Boolean = false,
+): List<ExploreSignalSummary> {
+    val payload = snapshot?.payload
+    val magnetosphere = payload?.magnetosphere?.data
+    val schumann = payload?.schumann
+    val quakes = payload?.quakes?.item
+    val hazards = payload?.hazards
+    fun unavailableStatus(hasData: Boolean): String = when {
+        hasData -> "Current"
+        isLoading -> "Updating"
+        else -> "Unavailable"
     }
+    fun sourceStatus(
+        detail: ExploreDetail,
+        hasData: Boolean,
+        liveStatus: String?,
+    ): String = when {
+        hasData && snapshot != null && exploreSourceUnavailable(detail, snapshot) -> "Saved"
+        !liveStatus.isNullOrBlank() -> liveStatus
+        else -> unavailableStatus(hasData)
+    }
+    val f0 = schumann?.fusion?.displayF0Hz
+        ?: schumann?.harmonics?.f0
+        ?: schumann?.harmonics?.combinedF1
+
+    return listOf(
+        ExploreSignalSummary(
+            detail = ExploreDetail.SPACE_WEATHER,
+            title = "Space Weather",
+            subtitle = "Current solar wind and geomagnetic readings.",
+            status = sourceStatus(
+                ExploreDetail.SPACE_WEATHER,
+                magnetosphere != null,
+                magnetosphere?.kpis?.storminess?.displaySignalText(),
+            ),
+            color = GaiaBlue,
+            metrics = listOfNotNull(
+                magnetosphere?.kpis?.kp?.let { "Kp" to formatExploreNumber(it) },
+                magnetosphere?.solarWind?.speedKms?.let { "Wind" to "${it.roundToInt()} km/s" },
+                magnetosphere?.solarWind?.bzNt?.let { "Bz" to "${formatExploreNumber(it)} nT" },
+            ),
+        ),
+        ExploreSignalSummary(
+            detail = ExploreDetail.MAGNETOSPHERE,
+            title = "Magnetosphere",
+            subtitle = "Modeled boundary and geomagnetic context.",
+            status = sourceStatus(
+                ExploreDetail.MAGNETOSPHERE,
+                magnetosphere != null,
+                magnetosphere?.kpis?.geoRisk?.displaySignalText(),
+            ),
+            color = GaiaGreen,
+            metrics = listOfNotNull(
+                magnetosphere?.kpis?.standoffDistanceEarthRadii?.let {
+                    "Standoff" to "${formatExploreNumber(it)} Re"
+                },
+                magnetosphere?.kpis?.plasmapauseEarthRadii?.let {
+                    "Plasmapause" to "${formatExploreNumber(it)} Re"
+                },
+                magnetosphere?.solarWind?.densityCm3?.let {
+                    "Density" to "${formatExploreNumber(it)} cm⁻³"
+                },
+            ),
+        ),
+        ExploreSignalSummary(
+            detail = ExploreDetail.SCHUMANN,
+            title = "Schumann Resonance",
+            subtitle = "Current resonance frequency and source quality.",
+            status = sourceStatus(
+                ExploreDetail.SCHUMANN,
+                schumann != null,
+                when (schumann?.quality?.usable) {
+                    true -> "Available"
+                    false -> "Limited"
+                    null -> null
+                },
+            ),
+            color = GaiaAmber,
+            metrics = listOfNotNull(
+                f0?.let { "F0" to "${formatExploreNumber(it)} Hz" },
+                schumann?.quality?.qualityScore?.let { "Quality" to formatExploreNumber(it) },
+                schumann?.amplitude?.total0To20?.let { "Amplitude" to formatExploreNumber(it) },
+            ),
+        ),
+        ExploreSignalSummary(
+            detail = ExploreDetail.EARTHQUAKES,
+            title = "Earthquakes",
+            subtitle = "Today’s global earthquake activity.",
+            status = sourceStatus(ExploreDetail.EARTHQUAKES, quakes != null, "Daily".takeIf { quakes != null }),
+            color = GaiaRose,
+            metrics = listOfNotNull(
+                quakes?.allQuakes?.let { "All" to it.toString() },
+                quakes?.magnitude4Plus?.let { "M4+" to it.toString() },
+                quakes?.magnitude5Plus?.let { "M5+" to it.toString() },
+            ),
+        ),
+        ExploreSignalSummary(
+            detail = ExploreDetail.HAZARDS,
+            title = "Global Hazards",
+            subtitle = "Recent major hazards reported around the world.",
+            status = sourceStatus(
+                ExploreDetail.HAZARDS,
+                hazards != null,
+                when {
+                    hazards == null -> null
+                    hazards.items.isEmpty() -> "Quiet"
+                    else -> "${hazards.items.size} listed"
+                },
+            ),
+            color = GaiaAmber,
+            metrics = if (hazards == null) {
+                emptyList()
+            } else {
+                listOf(
+                    "Listed" to hazards.items.size.toString(),
+                    "Severe" to hazards.items.count {
+                        it.severity?.contains("severe", true) == true
+                    }.toString(),
+                )
+            },
+        ),
+    )
+}
+
+private fun hasExploreDetailData(detail: ExploreDetail, snapshot: ExploreSnapshot?): Boolean =
+    when (detail) {
+        ExploreDetail.SPACE_WEATHER,
+        ExploreDetail.MAGNETOSPHERE -> snapshot?.payload?.magnetosphere?.data != null
+        ExploreDetail.SCHUMANN -> snapshot?.payload?.schumann != null
+        ExploreDetail.EARTHQUAKES -> snapshot?.payload?.quakes?.item != null
+        ExploreDetail.HAZARDS -> snapshot?.payload?.hazards != null
+    }
+
+internal fun exploreSourceUnavailable(detail: ExploreDetail, snapshot: ExploreSnapshot): Boolean {
+    val sourceName = when (detail) {
+        ExploreDetail.SPACE_WEATHER,
+        ExploreDetail.MAGNETOSPHERE -> "Space Weather and Magnetosphere"
+        ExploreDetail.SCHUMANN -> "Schumann Resonance"
+        ExploreDetail.EARTHQUAKES -> "Earthquakes"
+        ExploreDetail.HAZARDS -> "Global Hazards"
+    }
+    return sourceName in snapshot.unavailableSources
 }
 
 private fun exploreDetailTitle(detail: ExploreDetail): String = when (detail) {
@@ -3545,7 +3647,7 @@ private fun LocalConditionsSummaryCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Local Weather",
+                        text = "Local Conditions",
                         color = Color.White,
                         fontSize = 23.sp,
                         fontWeight = FontWeight.Bold,
@@ -3588,7 +3690,7 @@ private fun LocalConditionsSummaryCard(
                     }
                 }
                 Text(
-                    text = "Open current conditions and local health context ›",
+                    text = "Open weather, air quality, and pressure ›",
                     color = GaiaAmber,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -3598,7 +3700,7 @@ private fun LocalConditionsSummaryCard(
                     text = when {
                         isLoading -> "Checking your latest local conditions…"
                         snapshot?.location?.zip.isNullOrBlank() ->
-                            "Add a ZIP code in Gaia Eyes to connect weather, air quality, and pressure."
+                            "Open Local Conditions to use your current location or a saved ZIP code."
                         else -> "Current local conditions are not available yet. Tap to review or refresh."
                     },
                     color = Color(0xFFB7C0CC),
@@ -3644,7 +3746,7 @@ private fun LocalWeatherScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Local Weather",
+                        text = "Local Conditions",
                         color = Color.White,
                         fontSize = 30.sp,
                         fontWeight = FontWeight.Bold,
@@ -3673,15 +3775,6 @@ private fun LocalWeatherScreen(
                     onDismiss = onDismissMessage,
                 )
             }
-
-            Spacer(modifier = Modifier.height(18.dp))
-            LocalConditionsSettingsCard(
-                uiState = uiState,
-                onLocalInsightsChanged = onLocalInsightsChanged,
-                onZipChanged = onZipChanged,
-                onUseDeviceLocation = onUseDeviceLocation,
-                onSaveLocation = onSaveLocation,
-            )
 
             Spacer(modifier = Modifier.height(18.dp))
             Card(
@@ -3752,7 +3845,7 @@ private fun LocalWeatherScreen(
                 ) {
                     Text(
                         text = if (snapshot?.location?.zip.isNullOrBlank()) {
-                            "Local weather needs a ZIP code. Add or update your location in Gaia Eyes, then refresh this page."
+                            "Local conditions need a location. Use your current location or enter a ZIP code below, then refresh."
                         } else {
                             "Current conditions have not arrived yet. Refresh to try again."
                         },
@@ -3800,6 +3893,15 @@ private fun LocalWeatherScreen(
                         }
                     }
                 }
+
+            Spacer(modifier = Modifier.height(18.dp))
+            LocalConditionsSettingsCard(
+                uiState = uiState,
+                onLocalInsightsChanged = onLocalInsightsChanged,
+                onZipChanged = onZipChanged,
+                onUseDeviceLocation = onUseDeviceLocation,
+                onSaveLocation = onSaveLocation,
+            )
 
         }
     }
@@ -3849,6 +3951,7 @@ private fun LocalWeatherMetricCard(
 @Composable
 private fun ExploreSummaryCard(
     response: com.gaiaeyes.app.core.network.AllDriversResponse,
+    onClick: (() -> Unit)?,
 ) {
     val counts = driverRoleCounts(response)
     val visible = exploreDrivers(response).size
@@ -3857,7 +3960,9 @@ private fun ExploreSummaryCard(
         colors = CardDefaults.cardColors(containerColor = GaiaBlue.copy(alpha = 0.08f)),
         border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.28f)),
         shape = RoundedCornerShape(26.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -3876,10 +3981,7 @@ private fun ExploreSummaryCard(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = response.summary.note
-                            ?.trim()
-                            ?.takeIf(String::isNotEmpty)
-                            ?: "See the signals Gaia Eyes is comparing for you right now.",
+                        text = "See the signals Gaia Eyes is comparing for you right now.",
                         color = Color(0xFFB7C0CC),
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
@@ -3903,6 +4005,65 @@ private fun ExploreSummaryCard(
                 DriverMetric("Leading", counts.leading, Modifier.weight(1f))
                 DriverMetric("Supporting", counts.supporting, Modifier.weight(1f))
             }
+            if (onClick != null) {
+                Text(
+                    text = "View all drivers ›",
+                    color = GaiaBlue,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExploreSummaryPlaceholderCard(
+    isLoading: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaBlue.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, GaiaBlue.copy(alpha = 0.28f)),
+        shape = RoundedCornerShape(26.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    text = "All Drivers",
+                    color = Color.White,
+                    fontSize = 23.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                DriverPill(if (isLoading) "Updating" else "Unavailable", GaiaBlue)
+            }
+            Text(
+                text = if (isLoading) {
+                    "Open the full driver list while current values finish loading."
+                } else {
+                    "Open the full driver list and retry current values."
+                },
+                color = Color(0xFFB7C0CC),
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+            )
+            Text(
+                text = "View all drivers ›",
+                color = GaiaBlue,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -4123,6 +4284,23 @@ private fun ExploreEmptyCard() {
     ) {
         Text(
             text = "Drivers will appear after Gaia Eyes finishes loading your current context.",
+            color = Color(0xFFB7C0CC),
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            modifier = Modifier.padding(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun ExploreUnavailableCard(detail: ExploreDetail) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "${exploreDetailTitle(detail)} readings aren't available right now. You can retry without leaving this page.",
             color = Color(0xFFB7C0CC),
             fontSize = 15.sp,
             lineHeight = 21.sp,

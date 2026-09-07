@@ -1,0 +1,57 @@
+[
+  {
+    "name": "daily_caption.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_caption.jpg",
+    "head_status": 200,
+    "content_type": "image/jpeg",
+    "content_length": "149422",
+    "last_modified": "Fri, 04 Sep 2026 14:55:24 GMT",
+    "get_status": 200,
+    "bytes": 149422,
+    "path": "tmp/social_growth_audit/2026-09-04/media/daily_caption.jpg"
+  },
+  {
+    "name": "daily_stats.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_stats.jpg",
+    "head_status": 200,
+    "content_type": "image/jpeg",
+    "content_length": "147525",
+    "last_modified": "Fri, 04 Sep 2026 14:55:25 GMT",
+    "get_status": 200,
+    "bytes": 147525,
+    "path": "tmp/social_growth_audit/2026-09-04/media/daily_stats.jpg"
+  },
+  {
+    "name": "daily_affects.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_affects.jpg",
+    "head_status": 200,
+    "content_type": "image/jpeg",
+    "content_length": "239492",
+    "last_modified": "Fri, 04 Sep 2026 14:55:24 GMT",
+    "get_status": 200,
+    "bytes": 239492,
+    "path": "tmp/social_growth_audit/2026-09-04/media/daily_affects.jpg"
+  },
+  {
+    "name": "daily_playbook.jpg",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_playbook.jpg",
+    "head_status": 200,
+    "content_type": "image/jpeg",
+    "content_length": "227642",
+    "last_modified": "Fri, 04 Sep 2026 14:55:25 GMT",
+    "get_status": 200,
+    "bytes": 227642,
+    "path": "tmp/social_growth_audit/2026-09-04/media/daily_playbook.jpg"
+  },
+  {
+    "name": "latest.mp4",
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4",
+    "head_status": 200,
+    "content_type": "video/mp4",
+    "content_length": "1029040",
+    "last_modified": "Fri, 04 Sep 2026 14:57:24 GMT",
+    "get_status": 200,
+    "bytes": 1029040,
+    "path": "tmp/social_growth_audit/2026-09-04/media/latest.mp4"
+  }
+]

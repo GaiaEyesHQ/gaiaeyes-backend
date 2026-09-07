@@ -1,0 +1,316 @@
+- banner:
+  - button [disabled]:
+  - link "Facebook":
+    - /url: /
+  - button:
+  - combobox "Search Facebook"
+  - navigation "Facebook":
+    - list:
+      - link "Home":
+        - /url: /
+      - link "Pages":
+        - /url: /pages/?category=your_pages&ref=bookmarks
+      - link "Professional dashboard":
+        - /url: /professional_dashboard/?ref=tab_bar
+      - link "Ad Center":
+        - /url: /61578852613452/ad_center/
+      - link "Reels":
+        - /url: /reel/?s=tab
+  - navigation "Account Controls and Settings":
+    - button "Facebook menu":
+    - link "Messenger":
+      - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+      - link "Messenger":
+        - /url: https://business.facebook.com/latest/inbox/all/?nav_ref=manage_page_ap_plus_inbox_message_button&asset_id=772867052570153&business_id=762318242937819
+    - button "Notifications":
+    - button "Your profile":
+      - img "Your profile"
+- navigation:
+  - heading "Professional dashboard" [level=1]
+  - button "Collapse navigation"
+  - list:
+    - link "Home":
+      - /url: https://www.facebook.com/professional_dashboard/
+      - generic: Home
+    - link "Insights":
+      - /url: https://www.facebook.com/professional_dashboard/profile_insights/views/
+      - generic: Insights
+    - link "Content" [expanded]:
+      - /url: https://www.facebook.com/professional_dashboard/content/content_library/
+      - generic: Content
+    - list:
+      - link "Content Library":
+        - /url: https://www.facebook.com/professional_dashboard/content/content_library/
+        - generic: Content Library
+      - link "Planner":
+        - /url: https://www.facebook.com/professional_dashboard/content_calendar/?ref=prodash_left_nav
+        - generic: Planner
+    - link "Monetization":
+      - /url: https://www.facebook.com/professional_dashboard/monetization/
+      - generic: Monetization
+    - link "Engagement":
+      - /url: https://www.facebook.com/professional_dashboard/engagement/comments_manager/
+      - generic: Engagement
+    - link "All tools":
+      - /url: https://www.facebook.com/professional_dashboard/tools/
+      - generic: All tools
+  - button "Create a post":
+    - generic: Create a post
+- main:
+  - main:
+    - heading "Videos you post on Facebook are now reels" [level=2]:
+      - generic: Videos you post on Facebook are now reels
+    - generic: You can still view your previously posted videos, but they will be combined under the reels filter.
+    - button "Dismiss Videos you post on Facebook are now reels card"
+    - heading "Content Library" [level=2]:
+      - generic: Content Library
+    - tablist:
+      - button "More":
+        - generic: More
+      - tab "Published":
+        - generic: Published
+      - tab "Scheduled":
+        - generic: Scheduled
+      - tab "Drafts":
+        - generic: Drafts
+    - textbox "Search for posts"
+    - button "Create":
+      - generic: Create
+    - button "Filters (1)":
+      - generic: Filters (1)
+    - button "Columns":
+      - generic: Columns
+    - 'button "Last 28 days: Aug 7 - Sep 4"':
+      - generic: "Last 28 days: Aug 7 - Sep 4"
+    - button "Export data":
+      - generic: Export data
+    - strong: "0"
+    - strong: /50
+    - text: posts selected
+    - grid "Content Library":
+      - rowgroup:
+        - row "Select all Preview Views Viewers Engagement Earnings Net follows Impressions Comments Distribution Watch time Average watch time 3-second views 1-minute views":
+          - columnheader "Select all":
+            - checkbox "Select all"
+          - columnheader "Preview":
+            - button "Preview":
+              - generic: Preview
+          - columnheader
+          - columnheader "Views":
+            - button "Views":
+              - generic: Views
+          - columnheader "Viewers":
+            - button "Viewers":
+              - generic: Viewers
+          - columnheader "Engagement":
+            - button "Engagement":
+              - generic: Engagement
+          - columnheader "Earnings":
+            - button "Earnings":
+              - generic: Earnings
+          - columnheader "Net follows":
+            - button "Net follows":
+              - generic: Net follows
+          - columnheader "Impressions":
+            - button "Impressions":
+              - generic: Impressions
+          - columnheader "Comments":
+            - button "Comments":
+              - generic: Comments
+          - columnheader "Distribution":
+            - button "Distribution":
+              - generic: Distribution
+          - columnheader "Watch time":
+            - button "Watch time":
+              - generic: Watch time
+          - columnheader "Average watch time":
+            - button "Average watch time":
+              - generic: Average watch time
+          - columnheader "3-second views":
+            - button "3-second views":
+              - generic: 3-second views
+          - columnheader "1-minute views":
+            - button "1-minute views":
+              - generic: 1-minute views
+      - rowgroup:
+        - row "Select a post Link to view a post page Actions for this post 245 220 0 $0.00 0 225 0 -0.5x 8m 29s 2s 32 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE4MTQwOTI2ODk2MTc1MzoxMjIxODE0MDkyNjg5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - 'heading "Ordinary signal mix today—small steady choices do the work. — Kp 1.7 • Bz -4.8 nT • Schumann 7.78 Hz (snapshot at write time) #GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann" [level=2]':
+                - generic: "Ordinary signal mix today—small steady choices do the work. — Kp 1.7 • Bz -4.8 nT • Schumann 7.78 Hz (snapshot at write time) #GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+              - generic: Published •
+              - generic: Today at 9:59 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "245":
+            - generic: "245"
+          - gridcell "220":
+            - generic: "220"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "225":
+            - generic: "225"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "-0.5x":
+            - generic: "-0.5x"
+          - gridcell "8m 29s":
+            - generic: 8m 29s
+          - gridcell "2s":
+            - generic: 2s
+          - gridcell "32":
+            - generic: "32"
+          - gridcell "0":
+            - generic: "0"
+        - row "Select a post Link to view a post page Actions for this post 260 199 2 $0.00 1 197 0 -0.2x 12m 31s 3s 50 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE4MTI4MzI0NDk2MTc1MzoxMjIxODEyODMyNDQ5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - 'heading "Standard energy field—consistency wins today. — Kp 2.3 • Bz -5.0 nT • Schumann 7.77 Hz (snapshot at write time) #GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann" [level=2]':
+                - generic: "Standard energy field—consistency wins today. — Kp 2.3 • Bz -5.0 nT • Schumann 7.77 Hz (snapshot at write time) #GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+              - generic: Published •
+              - generic: Yesterday at 10:02 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "260":
+            - generic: "260"
+          - gridcell "199":
+            - generic: "199"
+          - gridcell "2":
+            - generic: "2"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "1":
+            - generic: "1"
+          - gridcell "197":
+            - generic: "197"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "-0.2x":
+            - generic: "-0.2x"
+          - gridcell "12m 31s":
+            - generic: 12m 31s
+          - gridcell "3s":
+            - generic: 3s
+          - gridcell "50":
+            - generic: "50"
+          - gridcell "0":
+            - generic: "0"
+        - row "Select a post Link to view a post page Actions for this post 277 242 3 $0.00 0 236 0 -0.6x 11m 54s 3s 49 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE4MTE1ODkzMDk2MTc1MzoxMjIxODExNTg5MzA5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - 'heading "Standard energy field—consistency wins today. — Kp 2.3 • Bz -4.3 nT • Schumann 7.81 Hz (snapshot at write time) #GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann" [level=2]':
+                - generic: "Standard energy field—consistency wins today. — Kp 2.3 • Bz -4.3 nT • Schumann 7.81 Hz (snapshot at write time) #GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+              - generic: Published •
+              - generic: Sep 2 at 10:07 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "277":
+            - generic: "277"
+          - gridcell "242":
+            - generic: "242"
+          - gridcell "3":
+            - generic: "3"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "236":
+            - generic: "236"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "-0.6x":
+            - generic: "-0.6x"
+          - gridcell "11m 54s":
+            - generic: 11m 54s
+          - gridcell "3s":
+            - generic: 3s
+          - gridcell "49":
+            - generic: "49"
+          - gridcell "0":
+            - generic: "0"
+        - row "Select a post Link to view a post page Actions for this post 220 197 0 $0.00 0 198 0 -0.7x 5m 49s 2s 21 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE4MDk2ODczNjk2MTc1MzoxMjIxODA5Njg3MzY5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - 'heading "Standard energy field—consistency wins today. — Kp 3.0 • Bz -5.8 nT • Schumann 7.78 Hz (snapshot at write time) #GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann" [level=2]':
+                - generic: "Standard energy field—consistency wins today. — Kp 3.0 • Bz -5.8 nT • Schumann 7.78 Hz (snapshot at write time) #GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+              - generic: Published •
+              - generic: Sep 1 at 10:31 AM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "220":
+            - generic: "220"
+          - gridcell "197":
+            - generic: "197"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "198":
+            - generic: "198"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "-0.7x":
+            - generic: "-0.7x"
+          - gridcell "5m 49s":
+            - generic: 5m 49s
+          - gridcell "2s":
+            - generic: 2s
+          - gridcell "21":
+            - generic: "21"
+          - gridcell "0":
+            - generic: "0"
+        - row "Select a post Link to view a post page Actions for this post 331 283 3 $0.00 1 286 0 -0.3x 19m 36s 4s 77 0":
+          - gridcell "Select a post":
+            - checkbox "Select a post"
+          - gridcell "Link to view a post page":
+            - link "Link to view a post page":
+              - /url: /content/insights/?content_id=UzpfSTYxNTc4ODUyNjEzNDUyOjEyMjE4MDg0OTM1NDk2MTc1MzoxMjIxODA4NDkzNTQ5NjE3NTM%3D&entry_point=ProdashCometContentLibraryTable
+              - 'heading "Mood may feel a bit wobbly today. Little ups and downs can nudge focus off track, like a small tide tug. Keep plans loose, take tiny steps, and use a short walk or stretch as a reset. #GaiaEyes #SpaceWeather #Schumann #Mood #Restless #Focus #ChronicIllness #SelfCare #NervousSystem" [level=2]':
+                - generic: "Mood may feel a bit wobbly today. Little ups and downs can nudge focus off track, like a small tide tug. Keep plans loose, take tiny steps, and use a short walk or stretch as a reset. #GaiaEyes #SpaceWeather #Schumann #Mood #Restless #Focus #ChronicIllness #SelfCare #NervousSystem"
+              - generic: Published •
+              - generic: Aug 31 at 1:05 PM
+          - gridcell "Actions for this post":
+            - button "Actions for this post":
+          - gridcell "331":
+            - generic: "331"
+          - gridcell "283":
+            - generic: "283"
+          - gridcell "3":
+            - generic: "3"
+          - gridcell "$0.00":
+            - generic: $0.00
+          - gridcell "1":
+            - generic: "1"
+          - gridcell "286":
+            - generic: "286"
+          - gridcell "0":
+            - generic: "0"
+          - gridcell "-0.3x":
+            - generic: "-0.3x"
+          - gridcell "19m 36s":
+            - generic: 19m 36s
+          - gridcell "4s":
+            - generic: 4s
+          - gridcell "77":
+            - generic: "77"
+          - gridcell "0":
+            - generic: "0"
+      - rowgroup

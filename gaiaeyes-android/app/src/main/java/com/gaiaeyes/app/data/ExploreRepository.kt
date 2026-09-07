@@ -30,10 +30,10 @@ class ExploreRepository(
         val quakesResult = quakes.await()
         val hazardsResult = hazards.await()
         val failures = buildList {
-            if (magnetosphereResult.isFailure) add("magnetosphere")
-            if (schumannResult.isFailure) add("Schumann Resonance")
-            if (quakesResult.isFailure) add("earthquakes")
-            if (hazardsResult.isFailure) add("hazards")
+            if (magnetosphereResult.getOrNull()?.ok != true) add("Space Weather and Magnetosphere")
+            if (schumannResult.getOrNull()?.ok != true) add("Schumann Resonance")
+            if (quakesResult.getOrNull()?.ok != true) add("Earthquakes")
+            if (hazardsResult.getOrNull()?.ok != true) add("Global Hazards")
         }
         val payload = ExplorePayload(
             magnetosphere = magnetosphereResult.getOrNull()?.takeIf { it.ok }
