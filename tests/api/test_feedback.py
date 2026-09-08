@@ -15,7 +15,9 @@ if str(ROOT) not in sys.path:
 from app.main import app
 from app.db import get_db
 from app.db import feedback as feedback_db
+from app.db import migraine as migraine_db
 from app.routers import symptoms as symptoms_router
+from services.migraine.episode_contract import MigraineEpisode
 
 
 @pytest.fixture(autouse=True)
@@ -117,6 +119,87 @@ async def test_respond_symptom_follow_up_returns_prompt_and_episode(monkeypatch,
     assert payload["data"]["prompt"]["status"] == "answered"
     assert payload["data"]["episode"]["current_state"] == "worse"
     assert payload["data"]["episode"]["note_preview"] == "Pressure ramped up quickly"
+    assert payload["data"]["migraine_detail"] is None
+
+
+@pytest.mark.anyio
+async def test_structured_migraine_follow_up_is_atomic_and_returns_detail(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": user_id}
+    calls = []
+
+    async def _respond(conn, user, prompt_id, **kwargs):  # noqa: ARG001
+        calls.append(("respond", user, prompt_id))
+        return {
+            "prompt": {
+                "id": prompt_id,
+                "episode_id": "10000000-0000-4000-8000-000000000001",
+                "symptom_code": "migraine",
+                "symptom_label": "Migraine",
+                "question_text": "How is your migraine now?",
+                "status": "answered",
+            },
+            "episode": {
+                "id": "10000000-0000-4000-8000-000000000001",
+                "symptom_code": "migraine",
+                "current_state": "improving",
+                "original_severity": 5,
+                "current_severity": 5,
+                "started_at": "2026-09-08T12:00:00Z",
+                "state_updated_at": "2026-09-08T13:00:00Z",
+                "last_interaction_at": "2026-09-08T13:00:00Z",
+            },
+        }
+
+    episode = MigraineEpisode.model_validate(
+        {
+            "episode_id": "10000000-0000-4000-8000-000000000001",
+            "symptom_event_id": "20000000-0000-4000-8000-000000000001",
+            "state": "improving",
+            "start": {"utc": "2026-09-08T12:00:00Z", "timezone_source": "user"},
+            "severity": 5,
+            "early_signs": [],
+            "contexts": [],
+            "medicines": [],
+            "notes": None,
+            "provenance": {"source_type": "follow_up", "source_platform": "api_test"},
+            "lifecycle": {
+                "revision": 1,
+                "created_at": "2026-09-08T12:00:00Z",
+                "updated_at": "2026-09-08T13:00:00Z",
+            },
+        }
+    )
+
+    async def _save(conn, user, episode_id, **kwargs):  # noqa: ARG001
+        calls.append(("save", user, episode_id, kwargs))
+        return {"episode": episode, "revision": 1, "changed": True}
+
+    monkeypatch.setattr(feedback_db, "respond_symptom_follow_up", _respond)
+    monkeypatch.setattr(migraine_db, "save_migraine_follow_up_detail", _save)
+    response = await client.post(
+        "/v1/symptoms/follow-ups/prompt-1/respond",
+        json={
+            "state": "improving",
+            "migraine": {
+                "expected_revision": 0,
+                "medicines": [
+                    {
+                        "name": "User-entered medicine",
+                        "taken_at": {"utc": "2026-09-08T12:15:00Z", "timezone_source": "user"},
+                    }
+                ],
+            },
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["migraine_detail"]["revision"] == 1
+    assert [call[0] for call in calls] == ["respond", "save"]
+    save_kwargs = calls[1][3]
+    assert save_kwargs["supplied_fields"] == {"state", "medicines"}
+    assert save_kwargs["canonical_fields"] == set()
 
 
 @pytest.mark.anyio

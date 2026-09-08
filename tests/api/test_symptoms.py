@@ -16,7 +16,10 @@ if str(ROOT) not in sys.path:
 
 from app.main import app
 from app.db import get_db, symptoms as symptoms_db
+from app.db import feedback as feedback_db
+from app.db import migraine as migraine_db
 from app.routers import symptoms as symptoms_router
+from services.migraine.episode_contract import MigraineEpisode
 
 UTC = timezone.utc
 REAL_REFRESH_GAUGES_FOR_SYMPTOM = symptoms_router._refresh_gauges_for_symptom
@@ -610,3 +613,148 @@ async def test_current_symptom_delete_returns_deleted_episode(monkeypatch, clien
     assert payload["ok"] is True
     assert payload["data"]["episode_id"] == "ep-1"
     assert payload["data"]["symptom_code"] == "PALPITATIONS"
+
+
+def _api_migraine_episode(*, revision: int = 1) -> MigraineEpisode:
+    return MigraineEpisode.model_validate(
+        {
+            "episode_id": "10000000-0000-4000-8000-000000000001",
+            "symptom_event_id": "20000000-0000-4000-8000-000000000001",
+            "state": "ongoing",
+            "start": {"utc": "2026-09-08T12:00:00Z", "timezone_source": "user"},
+            "severity": 5,
+            "early_signs": [{"label": "Visual shimmer"}],
+            "contexts": [],
+            "medicines": [],
+            "notes": None,
+            "provenance": {"source_type": "follow_up", "source_platform": "api_test"},
+            "lifecycle": {
+                "revision": revision,
+                "created_at": "2026-09-08T12:00:00Z",
+                "updated_at": "2026-09-08T12:05:00Z",
+            },
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_migraine_detail_get_uses_authenticated_owner(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": user_id}
+
+    async def _load(conn, user, episode_id):  # noqa: ARG001
+        assert user == user_id
+        assert episode_id == "episode-a"
+        return {"episode": _api_migraine_episode(), "revision": 0, "changed": False}
+
+    monkeypatch.setattr(migraine_db, "load_migraine_follow_up_detail", _load)
+    response = await client.get("/v1/symptoms/current/episode-a/migraine-detail", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["revision"] == 0
+    assert response.json()["data"]["episode"]["early_signs"][0]["label"] == "Visual shimmer"
+
+
+@pytest.mark.anyio
+async def test_migraine_detail_patch_saves_once_then_refreshes_only_owner(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": user_id}
+    events = []
+
+    async def _save(conn, user, episode_id, **kwargs):  # noqa: ARG001
+        events.append(("save", user, episode_id, kwargs))
+        return {"episode": _api_migraine_episode(), "revision": 1, "changed": True}
+
+    async def _schedule(conn, user, **kwargs):  # noqa: ARG001
+        events.append(("schedule", user, kwargs["episode_id"]))
+
+    async def _refresh(user, ts):
+        events.append(("refresh", user, ts))
+
+    monkeypatch.setattr(migraine_db, "save_migraine_follow_up_detail", _save)
+    monkeypatch.setattr(feedback_db, "maybe_schedule_symptom_follow_up", _schedule)
+    monkeypatch.setattr(symptoms_router, "_refresh_gauges_for_symptom", _refresh)
+
+    response = await client.patch(
+        "/v1/symptoms/current/episode-a/migraine-detail",
+        json={"expected_revision": 0, "early_signs": [{"label": "Visual shimmer"}]},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["changed"] is True
+    assert [event[0] for event in events] == ["save", "schedule", "refresh"]
+    assert all(event[1] == user_id for event in events)
+    save_kwargs = events[0][3]
+    assert save_kwargs["expected_revision"] == 0
+    assert save_kwargs["supplied_fields"] == {"early_signs"}
+
+
+@pytest.mark.anyio
+async def test_migraine_detail_patch_rejects_other_owner_without_refresh(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": user_id}
+    refreshed = False
+
+    async def _save(conn, user, episode_id, **kwargs):  # noqa: ARG001
+        assert user == user_id
+        raise migraine_db.MigraineEpisodeNotFound("not owned")
+
+    async def _refresh(user, ts):  # noqa: ARG001
+        nonlocal refreshed
+        refreshed = True
+
+    monkeypatch.setattr(migraine_db, "save_migraine_follow_up_detail", _save)
+    monkeypatch.setattr(symptoms_router, "_refresh_gauges_for_symptom", _refresh)
+    response = await client.patch(
+        "/v1/symptoms/current/other-users-episode/migraine-detail",
+        json={"expected_revision": 0, "medicines": []},
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+    assert refreshed is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("error", "status"),
+    [
+        (migraine_db.MigraineDetailUnavailable("migration unavailable"), 503),
+        (migraine_db.StaleMigraineRevision("stored 2"), 409),
+    ],
+)
+async def test_migraine_detail_patch_surfaces_capability_and_revision_errors(
+    monkeypatch,
+    client: AsyncClient,
+    error: Exception,
+    status: int,
+):
+    user_id = str(uuid4())
+    headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": user_id}
+
+    async def _save(conn, user, episode_id, **kwargs):  # noqa: ARG001
+        raise error
+
+    monkeypatch.setattr(migraine_db, "save_migraine_follow_up_detail", _save)
+    response = await client.patch(
+        "/v1/symptoms/current/episode-a/migraine-detail",
+        json={"expected_revision": 1, "notes": None},
+        headers=headers,
+    )
+
+    assert response.status_code == status
+
+
+@pytest.mark.anyio
+async def test_migraine_detail_requires_explicit_empty_list_to_clear(client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": user_id}
+
+    response = await client.patch(
+        "/v1/symptoms/current/episode-a/migraine-detail",
+        json={"expected_revision": 1, "medicines": None},
+        headers=headers,
+    )
+
+    assert response.status_code == 422

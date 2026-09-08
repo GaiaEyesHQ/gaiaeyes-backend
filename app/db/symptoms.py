@@ -292,6 +292,7 @@ async def record_symptom_episode_update(
     state: Optional[str] = None,
     severity: Optional[int] = None,
     note_text: Optional[str] = None,
+    clear_note: bool = False,
     occurred_at: Optional[datetime] = None,
     source: str = "ios",
     update_kind: Optional[str] = None,
@@ -369,8 +370,15 @@ async def record_symptom_episode_update(
                        when %s::jsonb is null then follow_up_state
                        else %s::jsonb
                    end,
-                   latest_note_text = coalesce(%s::text, latest_note_text),
-                   latest_note_at = case when %s::text is null then latest_note_at else %s end,
+                   latest_note_text = case
+                       when %s then null
+                       else coalesce(%s::text, latest_note_text)
+                   end,
+                   latest_note_at = case
+                       when %s then null
+                       when %s::text is null then latest_note_at
+                       else %s
+                   end,
                    updated_at = now()
              where id = %s
                and user_id = %s
@@ -400,7 +408,9 @@ async def record_symptom_episode_update(
                 normalized_state,
                 json.dumps(follow_up_state_payload, separators=(",", ":"), sort_keys=True) if follow_up_state_payload else None,
                 json.dumps(follow_up_state_payload, separators=(",", ":"), sort_keys=True) if follow_up_state_payload else None,
+                clear_note,
                 normalized_note,
+                clear_note,
                 normalized_note,
                 effective_ts,
                 episode_id,

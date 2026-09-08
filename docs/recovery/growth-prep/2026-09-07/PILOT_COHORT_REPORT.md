@@ -6,9 +6,9 @@
 
 - A **new account** comes only from an account row whose `created_at` is inside `[pilot_start, pilot_end)`. A first-seen analytics event never turns an older account into a new account.
 - A **known iOS account** is a new, non-excluded account with at least one `platform=ios` analytics event during its first 24 hours. Accounts without enough event coverage are censored; accounts with a complete window but no iOS event stay platform-unclassified.
-- **First meaningful use** is one of `symptom_logged`, `exposure_logged`, `daily_checkin_completed`, or `guide_opened` during `[account_created_at, account_created_at + 24 hours)`.
+- **First meaningful use** is an iOS event named `symptom_logged`, `exposure_logged`, `daily_checkin_completed`, or `guide_opened` during `[account_created_at, account_created_at + 24 hours)`. Android events and events with a missing platform do not satisfy this released-iPhone pilot metric.
 - `first_insight_viewed` is excluded because the current iOS app emits it automatically when onboarding changes to the activation step. `onboarding_completed` is also completion evidence, not meaningful use by itself.
-- **D7 return** means another meaningful event during `[first_meaningful_use + 6 days, first_meaningful_use + 9 days)`. Only accounts whose entire return window is covered appear in the denominator.
+- **D7 return** means another qualifying iOS meaningful event during `[first_meaningful_use + 6 days, first_meaningful_use + 9 days)`. Only accounts whose entire return window is covered appear in the denominator.
 - Rates use fully observed denominators. Incomplete export coverage and immature windows are counted as censored or emitted as `null`/unknown, never silently converted to zero.
 - Exact duplicate retries are removed by `(user_id, client_event_id)`. Rows without a client ID use the exact user/event/timestamp/platform/session tuple.
 - Source attribution remains `unknown`; this report does not manufacture a Facebook-to-account join.
@@ -54,6 +54,8 @@ Required event fields are `user_id`, `event_name`, `event_ts_utc`, and `platform
 
 Supply every known internal/test account with repeatable `--exclude-user-id` flags or a newline-delimited `--exclude-user-ids-file`. Do not commit a real identifier file or production export.
 
+The default output is stdout. If `--output` is supplied, the destination must not already exist and must not be the same file as the accounts, events, or exclusion input—even through a symlink or hard link. The CLI fails without replacing an existing checkpoint or input.
+
 ## Exact synthetic example
 
 ```sh
@@ -78,12 +80,14 @@ Expected aggregate:
     "old_accounts_excluded": 1
   },
   "first_meaningful_use_24h": {
+    "qualifying_platform": "ios",
     "numerator": 1,
     "matured_denominator": 2,
     "rate": 0.5,
     "censored_accounts": 0
   },
   "d7_return": {
+    "qualifying_platform": "ios",
     "numerator": 1,
     "matured_denominator": 1,
     "rate": 1.0,

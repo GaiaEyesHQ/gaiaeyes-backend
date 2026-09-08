@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
-from scripts.pilot_cohort_report import build_report
+import pytest
+
+from scripts.pilot_cohort_report import build_report, main
 
 
 UTC = timezone.utc
@@ -185,3 +189,138 @@ def test_aggregate_output_does_not_disclose_identity_or_health_text() -> None:
         "individual_user_ids_in_output": False,
         "health_text_in_output": False,
     }
+
+
+@pytest.mark.parametrize("platform", ["android", ""])
+def test_non_ios_or_missing_platform_does_not_satisfy_ios_first_use(platform: str) -> None:
+    report = _report(
+        [_account("new-user", "2026-09-10T01:00:00Z")],
+        [
+            _event("new-user", "onboarding_completed", "2026-09-10T01:05:00Z"),
+            _event(
+                "new-user",
+                "symptom_logged",
+                "2026-09-10T02:00:00Z",
+                platform=platform,
+            ),
+        ],
+    )
+
+    assert report["cohort"]["known_ios_accounts"] == 1
+    assert report["first_meaningful_use_24h"]["qualifying_platform"] == "ios"
+    assert report["first_meaningful_use_24h"]["matured_denominator"] == 1
+    assert report["first_meaningful_use_24h"]["numerator"] == 0
+
+
+def test_android_event_does_not_satisfy_ios_d7_return() -> None:
+    report = _report(
+        [_account("new-user", "2026-09-10T01:00:00Z")],
+        [
+            _event("new-user", "symptom_logged", "2026-09-10T01:05:00Z"),
+            _event(
+                "new-user",
+                "guide_opened",
+                "2026-09-16T01:05:00Z",
+                platform="android",
+            ),
+        ],
+    )
+
+    assert report["d7_return"]["qualifying_platform"] == "ios"
+    assert report["d7_return"]["matured_denominator"] == 1
+    assert report["d7_return"]["numerator"] == 0
+
+
+def _write_cli_fixtures(directory: Path) -> tuple[Path, Path]:
+    accounts = directory / "accounts.json"
+    events = directory / "events.json"
+    accounts.write_text(
+        json.dumps(
+            {
+                "coverage": {"through": "2026-09-11T00:00:00Z"},
+                "accounts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    events.write_text(
+        json.dumps(
+            {
+                "coverage": {
+                    "from": "2026-09-10T00:00:00Z",
+                    "through": "2026-09-20T12:00:00Z",
+                },
+                "events": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return accounts, events
+
+
+def _cli_args(accounts: Path, events: Path, output: Path) -> list[str]:
+    return [
+        "--accounts",
+        str(accounts),
+        "--events",
+        str(events),
+        "--pilot-start",
+        "2026-09-10T00:00:00Z",
+        "--pilot-end",
+        "2026-09-11T00:00:00Z",
+        "--as-of",
+        "2026-09-20T12:00:00Z",
+        "--output",
+        str(output),
+    ]
+
+
+def test_output_cannot_overwrite_input(tmp_path: Path) -> None:
+    accounts, events = _write_cli_fixtures(tmp_path)
+    original = accounts.read_bytes()
+
+    with pytest.raises(SystemExit):
+        main(_cli_args(accounts, events, accounts))
+
+    assert accounts.read_bytes() == original
+
+
+def test_existing_output_is_preserved(tmp_path: Path) -> None:
+    accounts, events = _write_cli_fixtures(tmp_path)
+    output = tmp_path / "checkpoint.json"
+    output.write_text("existing checkpoint\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        main(_cli_args(accounts, events, output))
+
+    assert output.read_text(encoding="utf-8") == "existing checkpoint\n"
+
+
+def test_output_cannot_overwrite_exclusion_input(tmp_path: Path) -> None:
+    accounts, events = _write_cli_fixtures(tmp_path)
+    exclusions = tmp_path / "excluded-users.txt"
+    exclusions.write_text("internal-user\n", encoding="utf-8")
+    original = exclusions.read_bytes()
+    args = _cli_args(accounts, events, exclusions)
+    args.extend(["--exclude-user-ids-file", str(exclusions)])
+
+    with pytest.raises(SystemExit):
+        main(args)
+
+    assert exclusions.read_bytes() == original
+
+
+@pytest.mark.parametrize("alias_kind", ["symlink", "hardlink"])
+def test_output_alias_cannot_overwrite_input(tmp_path: Path, alias_kind: str) -> None:
+    accounts, events = _write_cli_fixtures(tmp_path)
+    alias = tmp_path / f"accounts-{alias_kind}.json"
+    if alias_kind == "symlink":
+        alias.symlink_to(accounts)
+    else:
+        os.link(accounts, alias)
+    original = accounts.read_bytes()
+
+    with pytest.raises(SystemExit):
+        main(_cli_args(accounts, events, alias))
+
+    assert accounts.read_bytes() == original

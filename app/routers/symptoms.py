@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -9,7 +10,7 @@ from zoneinfo import ZoneInfo
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, conint
+from pydantic import AwareDatetime, BaseModel, Field, conint, model_validator
 
 from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.gauge_scorer import _SYMPTOM_GAUGE_EFFECTS, fetch_user_tags
@@ -23,8 +24,17 @@ from services.patterns.personal_relevance import (
     resolve_current_drivers,
 )
 from services.voice.symptoms import build_current_symptoms_semantic
+from services.migraine.episode_contract import (
+    EarlySign,
+    EpisodeContext,
+    EpisodeState,
+    LongText,
+    MedicineTaken,
+    MigraineEpisode,
+)
 from ..db import get_db
 from ..db import feedback as feedback_db
+from ..db import migraine as migraine_db
 from ..db import symptoms as symptoms_db
 
 router = APIRouter(prefix="/symptoms", tags=["symptoms"])
@@ -134,6 +144,49 @@ class CurrentSymptomUpdateIn(BaseModel):
     severity: Optional[conint(ge=0, le=10)] = None
     note_text: Optional[str] = None
     ts_utc: Optional[datetime] = None
+
+
+class MigraineStructuredFieldsIn(BaseModel):
+    early_signs: Optional[List[EarlySign]] = None
+    contexts: Optional[List[EpisodeContext]] = None
+    medicines: Optional[List[MedicineTaken]] = None
+    notes: Optional[LongText] = None
+
+    @model_validator(mode="after")
+    def reject_null_collections(self) -> "MigraineStructuredFieldsIn":
+        for field in ("early_signs", "contexts", "medicines"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} must be omitted to retain it or [] to clear it")
+        return self
+
+
+class MigraineFollowUpDetailsIn(MigraineStructuredFieldsIn):
+    expected_revision: conint(ge=0)
+
+
+class MigraineEpisodeDetailUpdateIn(MigraineStructuredFieldsIn):
+    expected_revision: conint(ge=0)
+    state: Optional[EpisodeState] = None
+    occurred_at: Optional[AwareDatetime] = None
+
+    @model_validator(mode="after")
+    def require_structured_change(self) -> "MigraineEpisodeDetailUpdateIn":
+        supplied = self.model_fields_set & {"state", "early_signs", "contexts", "medicines", "notes"}
+        if not supplied:
+            raise ValueError("At least one structured migraine field must be supplied")
+        if "state" in supplied and self.state is None:
+            raise ValueError("state cannot be null; omit it to retain the current state")
+        return self
+
+
+class MigraineEpisodeDetailOut(BaseModel):
+    revision: conint(ge=0)
+    changed: bool = False
+    episode: MigraineEpisode
+
+
+class MigraineEpisodeDetailResponse(SymptomEnvelope):
+    data: Optional[MigraineEpisodeDetailOut] = None
 
 
 class CurrentSymptomDriverOut(BaseModel):
@@ -262,6 +315,7 @@ class SymptomFollowUpResponseIn(BaseModel):
     note_text: Optional[str] = None
     time_bucket: Optional[str] = None
     ts_utc: Optional[datetime] = None
+    migraine: Optional[MigraineFollowUpDetailsIn] = None
 
 
 class SymptomPromptActionIn(BaseModel):
@@ -272,6 +326,7 @@ class SymptomPromptActionIn(BaseModel):
 class SymptomFollowUpPromptResponse(BaseModel):
     prompt: CurrentSymptomPromptOut
     episode: CurrentSymptomItemOut
+    migraine_detail: Optional[MigraineEpisodeDetailOut] = None
 
 
 class SymptomFollowUpPromptEnvelope(SymptomEnvelope):
@@ -665,6 +720,40 @@ async def _commit_if_supported(conn) -> None:
         await commit()
 
 
+@asynccontextmanager
+async def _transaction_if_supported(conn):
+    transaction = getattr(conn, "transaction", None)
+    if callable(transaction):
+        async with transaction():
+            yield
+        return
+    try:
+        yield
+    except Exception:
+        rollback = getattr(conn, "rollback", None)
+        if callable(rollback):
+            await rollback()
+        raise
+    await _commit_if_supported(conn)
+
+
+def _migraine_changes(payload: MigraineStructuredFieldsIn, *, state: Optional[str] = None) -> tuple[dict[str, Any], set[str]]:
+    fields = set(payload.model_fields_set) & {"early_signs", "contexts", "medicines", "notes"}
+    changes = {field: getattr(payload, field) for field in fields}
+    if state is not None:
+        fields.add("state")
+        changes["state"] = state
+    return changes, fields
+
+
+def _migraine_detail_out(result: dict[str, Any]) -> MigraineEpisodeDetailOut:
+    return MigraineEpisodeDetailOut(
+        revision=int(result["revision"]),
+        changed=bool(result.get("changed", False)),
+        episode=result["episode"],
+    )
+
+
 async def _refresh_gauges_for_symptom(user_id: str, ts_utc: str) -> None:
     try:
         event_ts = datetime.fromisoformat(ts_utc.replace("Z", "+00:00"))
@@ -1046,6 +1135,90 @@ async def get_current_symptom_episode(
     return _success(CurrentSymptomItemResponse(data=_build_current_symptom_item_out(row)))
 
 
+@router.get("/current/{episode_id}/migraine-detail", response_model=MigraineEpisodeDetailResponse)
+async def get_migraine_episode_detail(
+    episode_id: str,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    try:
+        result = await migraine_db.load_migraine_follow_up_detail(conn, user_id, episode_id)
+    except migraine_db.MigraineDetailUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except migraine_db.MigraineEpisodeNotFound as exc:
+        raise HTTPException(status_code=404, detail="Migraine episode not found") from exc
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.exception("failed to load migraine detail", extra={"user_id": user_id, "episode_id": episode_id})
+        return _failure(
+            MigraineEpisodeDetailResponse(
+                ok=False,
+                data=None,
+                error=_error_text(exc),
+                friendly_error="Failed to load migraine details",
+            )
+        )
+    return _success(MigraineEpisodeDetailResponse(data=_migraine_detail_out(result)))
+
+
+@router.patch("/current/{episode_id}/migraine-detail", response_model=MigraineEpisodeDetailResponse)
+async def update_migraine_episode_detail(
+    episode_id: str,
+    payload: MigraineEpisodeDetailUpdateIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    changes, fields = _migraine_changes(payload, state=str(payload.state) if "state" in payload.model_fields_set else None)
+    try:
+        async with _transaction_if_supported(conn):
+            result = await migraine_db.save_migraine_follow_up_detail(
+                conn,
+                user_id,
+                episode_id,
+                expected_revision=int(payload.expected_revision),
+                changes=changes,
+                supplied_fields=fields,
+                canonical_fields=fields,
+                occurred_at=payload.occurred_at,
+                source="follow_up",
+            )
+            if result.get("changed"):
+                if result["episode"].state == "resolved":
+                    await feedback_db._expire_episode_prompts(conn, user_id, episode_id)
+                else:
+                    await feedback_db.maybe_schedule_symptom_follow_up(
+                        conn,
+                        user_id,
+                        episode_id=episode_id,
+                        trigger="manual_update",
+                        reference_ts=payload.occurred_at,
+                    )
+    except migraine_db.MigraineDetailUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except migraine_db.MigraineEpisodeNotFound as exc:
+        raise HTTPException(status_code=404, detail="Migraine episode not found") from exc
+    except migraine_db.StaleMigraineRevision as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.exception("failed to update migraine detail", extra={"user_id": user_id, "episode_id": episode_id})
+        return _failure(
+            MigraineEpisodeDetailResponse(
+                ok=False,
+                data=None,
+                error=_error_text(exc),
+                friendly_error="Failed to update migraine details",
+            )
+        )
+
+    if result.get("changed"):
+        await _refresh_gauges_for_symptom(
+            user_id,
+            result["episode"].lifecycle.updated_at.isoformat(),
+        )
+    return _success(MigraineEpisodeDetailResponse(data=_migraine_detail_out(result)))
+
+
 @router.post("/current/{episode_id}/updates", response_model=CurrentSymptomItemResponse)
 async def update_current_symptom(
     episode_id: str,
@@ -1107,18 +1280,58 @@ async def respond_symptom_follow_up(
     conn=Depends(get_db),
 ):
     user_id = _require_user_id(request)
+    migraine_detail = None
     try:
-        result = await feedback_db.respond_symptom_follow_up(
-            conn,
-            user_id,
-            prompt_id,
-            state=_normalize_current_state(payload.state),
-            detail_choice=_trimmed_text(payload.detail_choice),
-            detail_text=_trimmed_text(payload.detail_text),
-            note_text=_trimmed_text(payload.note_text),
-            time_bucket=_trimmed_text(payload.time_bucket),
-            responded_at=payload.ts_utc,
-        )
+        if payload.migraine is None:
+            result = await feedback_db.respond_symptom_follow_up(
+                conn,
+                user_id,
+                prompt_id,
+                state=_normalize_current_state(payload.state),
+                detail_choice=_trimmed_text(payload.detail_choice),
+                detail_text=_trimmed_text(payload.detail_text),
+                note_text=_trimmed_text(payload.note_text),
+                time_bucket=_trimmed_text(payload.time_bucket),
+                responded_at=payload.ts_utc,
+            )
+            await _commit_if_supported(conn)
+        else:
+            async with _transaction_if_supported(conn):
+                result = await feedback_db.respond_symptom_follow_up(
+                    conn,
+                    user_id,
+                    prompt_id,
+                    state=_normalize_current_state(payload.state),
+                    detail_choice=_trimmed_text(payload.detail_choice),
+                    detail_text=_trimmed_text(payload.detail_text),
+                    note_text=_trimmed_text(payload.note_text),
+                    time_bucket=_trimmed_text(payload.time_bucket),
+                    responded_at=payload.ts_utc,
+                )
+                episode = result.get("episode") or {}
+                changes, fields = _migraine_changes(
+                    payload.migraine,
+                    state=_normalize_current_state(payload.state),
+                )
+                canonical_fields = {"notes"} if "notes" in fields else set()
+                migraine_result = await migraine_db.save_migraine_follow_up_detail(
+                    conn,
+                    user_id,
+                    str(episode.get("id") or ""),
+                    expected_revision=int(payload.migraine.expected_revision),
+                    changes=changes,
+                    supplied_fields=fields,
+                    canonical_fields=canonical_fields,
+                    occurred_at=payload.ts_utc,
+                    source="follow_up",
+                )
+                migraine_detail = _migraine_detail_out(migraine_result)
+    except migraine_db.MigraineDetailUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except migraine_db.MigraineEpisodeNotFound as exc:
+        raise HTTPException(status_code=404, detail="Migraine episode not found") from exc
+    except migraine_db.StaleMigraineRevision as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to respond to symptom follow-up", extra={"user_id": user_id, "prompt_id": prompt_id})
         return _failure(
@@ -1130,7 +1343,6 @@ async def respond_symptom_follow_up(
             )
         )
 
-    await _commit_if_supported(conn)
     episode = result.get("episode") or {}
     refresh_ts = str(episode.get("last_interaction_at") or episode.get("state_updated_at") or episode.get("started_at") or "")
     if refresh_ts:
@@ -1140,6 +1352,7 @@ async def respond_symptom_follow_up(
             data=SymptomFollowUpPromptResponse(
                 prompt=_build_prompt_out(result.get("prompt") or {}),
                 episode=_build_current_symptom_item_out(episode),
+                migraine_detail=migraine_detail,
             )
         )
     )

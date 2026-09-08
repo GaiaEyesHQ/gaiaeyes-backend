@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -202,6 +203,7 @@ def build_report(
             event
             for event in account_events
             if event["_event_name"] in MEANINGFUL_EVENTS
+            and event["_platform"] == "ios"
             and created_at <= event["_event_ts"] < window_end
         ]
         complete_window = events_from <= created_at and effective_events_through >= window_end
@@ -228,6 +230,7 @@ def build_report(
         d7_denominator += 1
         returned = any(
             event["_event_name"] in MEANINGFUL_EVENTS
+            and event["_platform"] == "ios"
             and return_start <= event["_event_ts"] < return_end
             for event in events_by_user.get(user_id, [])
         )
@@ -272,6 +275,7 @@ def build_report(
             "future_accounts_ignored": future_accounts_ignored,
         },
         "first_meaningful_use_24h": {
+            "qualifying_platform": "ios",
             "meaningful_events": sorted(MEANINGFUL_EVENTS),
             "numerator": first_use_numerator,
             "matured_denominator": first_use_denominator,
@@ -280,6 +284,7 @@ def build_report(
             "observed_activated_while_censored": observed_activation_while_censored,
         },
         "d7_return": {
+            "qualifying_platform": "ios",
             "window": "[activation + 6 days, activation + 9 days)",
             "numerator": d7_numerator,
             "matured_denominator": d7_denominator,
@@ -323,6 +328,26 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _same_file(left: Path, right: Path) -> bool:
+    try:
+        return os.path.samefile(left, right)
+    except (FileNotFoundError, OSError):
+        return left.resolve(strict=False) == right.resolve(strict=False)
+
+
+def _write_new_output(path: Path, rendered: str, *, protected_paths: Sequence[Path]) -> None:
+    for protected in protected_paths:
+        if _same_file(path, protected):
+            raise ValueError(f"output must not overwrite input: {protected}")
+    try:
+        with path.open("x", encoding="utf-8") as output_file:
+            output_file.write(rendered)
+    except FileExistsError as exc:
+        raise ValueError(f"output already exists and was not replaced: {path}") from exc
+    except OSError as exc:
+        raise ValueError(f"could not create output: {path}") from exc
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -344,7 +369,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.output:
-        args.output.write_text(rendered, encoding="utf-8")
+        protected_paths = [args.accounts, args.events]
+        if args.exclude_user_ids_file is not None:
+            protected_paths.append(args.exclude_user_ids_file)
+        try:
+            _write_new_output(args.output, rendered, protected_paths=protected_paths)
+        except ValueError as exc:
+            parser.error(str(exc))
     else:
         print(rendered, end="")
     return 0

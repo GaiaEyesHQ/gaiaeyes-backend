@@ -34,26 +34,28 @@ class ProfileRepository(
                 apiClient.profilePreferences(token)
             }
         }
-        coroutineScope {
-            val location = async {
-                loadOptionalStage("location", null) { apiClient.profileLocation(token) }
+        profileBundleFor(preferences) {
+            coroutineScope {
+                val location = async {
+                    loadOptionalStage("location", null) { apiClient.profileLocation(token) }
+                }
+                val tagCatalog = async {
+                    loadOptionalStage("tag_catalog", emptyList()) {
+                        apiClient.profileTagCatalog(token)
+                    }.filter { it.isActive && it.section == "health_context" }
+                }
+                val selectedTags = async {
+                    loadOptionalStage("selected_tags", emptyList()) {
+                        apiClient.profileTags(token)
+                    }.toSet()
+                }
+                ProfileBundle(
+                    preferences = preferences,
+                    location = location.await(),
+                    tagCatalog = tagCatalog.await(),
+                    selectedTags = selectedTags.await(),
+                )
             }
-            val tagCatalog = async {
-                loadOptionalStage("tag_catalog", emptyList()) {
-                    apiClient.profileTagCatalog(token)
-                }.filter { it.isActive && it.section == "health_context" }
-            }
-            val selectedTags = async {
-                loadOptionalStage("selected_tags", emptyList()) {
-                    apiClient.profileTags(token)
-                }.toSet()
-            }
-            ProfileBundle(
-                preferences = preferences,
-                location = location.await(),
-                tagCatalog = tagCatalog.await(),
-                selectedTags = selectedTags.await(),
-            )
         }
     }
 
@@ -150,3 +152,17 @@ data class ProfileBundle(
     val tagCatalog: List<ProfileTagOption>,
     val selectedTags: Set<String>,
 )
+
+internal suspend fun profileBundleFor(
+    preferences: ProfilePreferences,
+    loadOnboardingDetails: suspend () -> ProfileBundle,
+): ProfileBundle = if (preferences.onboardingCompleted) {
+    ProfileBundle(
+        preferences = preferences,
+        location = null,
+        tagCatalog = emptyList(),
+        selectedTags = emptySet(),
+    )
+} else {
+    loadOnboardingDetails()
+}

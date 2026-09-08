@@ -154,6 +154,8 @@ enum HandsFreeMigraineResolutionResult: Equatable {
     case duplicate
     case notFound
     case signedOut
+    case offline
+    case connectionUnconfirmed
     case failed
 }
 
@@ -252,6 +254,12 @@ actor HandsFreeMigraineResolver {
             )
             return .resolved
         } catch {
+            if Self.isOffline(error) {
+                return .offline
+            }
+            if Self.isConnectionFailure(error) {
+                return .connectionUnconfirmed
+            }
             return .failed
         }
     }
@@ -280,6 +288,23 @@ actor HandsFreeMigraineResolver {
                 timeout: 20
             )
         )
+    }
+
+    private static func isOffline(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        return urlError.code == .notConnectedToInternet
+    }
+
+    private static func isConnectionFailure(_ error: Error) -> Bool {
+        let connectionCodes: Set<URLError.Code> = [
+            .timedOut,
+            .cannotFindHost,
+            .cannotConnectToHost,
+            .networkConnectionLost,
+            .dnsLookupFailed,
+        ]
+        guard let urlError = error as? URLError else { return false }
+        return connectionCodes.contains(urlError.code)
     }
 }
 
@@ -323,9 +348,9 @@ struct LogMigraineIntent: AppIntent {
 }
 
 struct EndMigraineIntent: AppIntent {
-    static let title: LocalizedStringResource = "End a Migraine"
+    static let title: LocalizedStringResource = "Stop a Migraine"
     static let description = IntentDescription(
-        "Marks the most recently logged active migraine as resolved in Gaia Eyes."
+        "Marks the most recently logged active migraine as stopped in Gaia Eyes."
     )
     static let authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
     static let openAppWhenRun = false
@@ -334,28 +359,38 @@ struct EndMigraineIntent: AppIntent {
         switch await HandsFreeMigraineResolver.shared.resolveLatestMigraine() {
         case .resolved:
             return .result(dialog: IntentDialog(
-                full: "Migraine ended in Gaia Eyes.",
-                supporting: "Migraine ended"
+                full: "Migraine marked as stopped in Gaia Eyes. You can add details later.",
+                supporting: "Migraine stopped"
             ))
         case .duplicate:
             return .result(dialog: IntentDialog(
-                full: "That migraine was already ended in Gaia Eyes.",
-                supporting: "Migraine already ended"
+                full: "That migraine was already marked as stopped in Gaia Eyes.",
+                supporting: "Migraine already stopped"
             ))
         case .notFound:
             return .result(dialog: IntentDialog(
-                full: "I couldn’t find an active migraine in Gaia Eyes.",
+                full: "Gaia Eyes couldn’t find an active migraine to stop.",
                 supporting: "No active migraine found"
             ))
         case .signedOut:
             return .result(dialog: IntentDialog(
-                full: "Open Gaia Eyes and sign in before ending a migraine with Siri.",
+                full: "Open Gaia Eyes and sign in before stopping a migraine with Siri.",
                 supporting: "Sign in to Gaia Eyes"
+            ))
+        case .offline:
+            return .result(dialog: IntentDialog(
+                full: "Gaia Eyes couldn’t connect, so it couldn’t confirm whether the migraine was stopped. Please check in the app when you’re connected.",
+                supporting: "Update not confirmed"
+            ))
+        case .connectionUnconfirmed:
+            return .result(dialog: IntentDialog(
+                full: "Gaia Eyes couldn’t confirm whether the migraine update was saved. Please check in the app before trying again.",
+                supporting: "Update not confirmed"
             ))
         case .failed:
             return .result(dialog: IntentDialog(
-                full: "Gaia Eyes couldn’t end the migraine. Please try again when you’re connected.",
-                supporting: "Migraine not ended"
+                full: "Gaia Eyes couldn’t complete the migraine update. Please open the app and check its current status.",
+                supporting: "Migraine update failed"
             ))
         }
     }
@@ -381,11 +416,17 @@ struct GaiaEyesAppShortcuts: AppShortcutsProvider {
             intent: EndMigraineIntent(),
             phrases: [
                 "My migraine stopped in \(.applicationName)",
+                "Stop my migraine in \(.applicationName)",
                 "End my migraine in \(.applicationName)",
                 "Resolve my migraine in \(.applicationName)",
+                "My migraine is over in \(.applicationName)",
+                "Log that my migraine stopped in \(.applicationName)",
+                "Mark my migraine as stopped in \(.applicationName)",
+                "Finish my migraine in \(.applicationName)",
+                "\(.applicationName), my migraine stopped",
                 "\(.applicationName), my migraine is over",
             ],
-            shortTitle: "End Migraine",
+            shortTitle: "Stop Migraine",
             systemImageName: "checkmark.circle"
         )
     }

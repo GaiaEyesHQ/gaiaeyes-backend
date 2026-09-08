@@ -2,11 +2,17 @@
 
 Prepared **2026-09-07** for review only. Nothing in this packet has been posted, messaged, scheduled, deployed, or used to change tracking or accounts.
 
-## Pilot decision
+## Optional pilot recommendation
 
-Run one founder-voice post in **one migraine or chronic-illness Facebook group Jennifer already participates in**, after checking that group's current rules. The narrow audience is people who want an easier way to compare migraine/symptom entries with sleep and environmental context. This is a single-cycle pilot, not a decision that other Gaia Eyes audiences are less important.
+**Owner sequencing update:** migraine-focused community outreach is deferred until the requested migraine update ships with voice-logging tweaks, structured follow-up, medicine logging, reports, and import from other migraine apps. This packet remains preserved as an inactive draft; it is not waiting on Jennifer to choose or verify a group, and it does not authorize a post.
 
-The exact group is **pending Jennifer's selection** because the recovered evidence does not preserve a group name, post, or rules. Do not infer diagnoses from membership, scrape members, or contact people privately.
+This packet proposes one founder-voice post in **one migraine or chronic-illness Facebook group Jennifer already participates in**, after checking that group's current rules. The narrow audience is people who want an easier way to compare migraine/symptom entries with sleep and environmental context. This is an unselected, single-cycle experiment proposed by the agents, not a committed campaign or a decision that other Gaia Eyes audiences are less important.
+
+No destination has been selected for this proposed migraine pilot, and no committed Gaia Eyes work is waiting on that choice. If Jennifer later reactivates the experiment after the update ships, select one existing relevant group and review its rules first. Do not infer diagnoses from membership, scrape members, or contact people privately.
+
+Separate owner-supplied channel evidence now names **`Space Weather News - Global`** and reports **8,800 views, 163 likes, 83 comments, and 15 shares**. These figures were supplied by Jennifer and were not independently verified here. They do not establish the post's time window, unique viewers, attributable installs, or whether the result will repeat. They are evidence that a community-specific post received response, not selection of that group for a migraine pilot and not authorization for another post.
+
+Gaia Eyes' confirmed owned-account identities are Facebook `gaiaeyes`, Instagram `eyes.gaia`, and TikTok `gaia.eyes`. These handles can be used for later owned-account preparation without asking Jennifer again, but they do not identify or authorize the separate third-party Facebook-group pilot. No current access, posting permission, profile URL, or account health was verified from the identity update.
 
 **Verified public destination:** [Gaia Eyes on the US App Store](https://apps.apple.com/us/app/gaia-eyes/id6761451455)
 
@@ -19,7 +25,7 @@ Available evidence supports the channel and the need for a more specific message
 - Jennifer reports that occasional personal participation in relevant Facebook groups produced some of the strongest download movement and useful feedback. Exact post-level lift and attribution were not preserved.
 - The September 4 Facebook Page capture shows five recent image posts with only 5–17 views and five reels with 220–331 views. The captured columns show 0 comments on those examples; they do not include attributable downloads or account creation.
 - Recent automated Page copy repeatedly leads with daily Kp, Bz, Schumann, and broad energy language. This pilot instead starts with a concrete migraine-tracking problem and explains the released product value in plain language.
-- No exact successful group post, group name, community rules, or member feedback transcript was found in the available project artifacts. Those gaps remain explicit rather than being reconstructed from memory.
+- The exact group name and owner-supplied response totals above are now preserved. The exact post text, time window, current community rules, attributable installs, unique-view count, and member feedback transcript remain unavailable; those gaps are not reconstructed.
 
 Evidence files:
 
@@ -82,13 +88,15 @@ These are drafts, not authorization to reply:
 | Can I delete my information? | `Yes. Account deletion is available in the app. The public privacy policy is linked from the App Store listing.` |
 | I wish logging were easier during a migraine. | `That is especially useful feedback. What is the smallest action that would feel manageable in that moment—one tap, voice, or a reminder to add details later? Please do not post any health details you would rather keep private.` |
 
-## Review and distribution queue
+## Conditional review and distribution queue
+
+This queue activates only if Jennifer later reopens the proposed experiment after the requested migraine update ships. Preparing the drafts completed G-002; it did not activate campaign execution.
 
 | Order | Owner | Review item | Status / gate |
 |---|---|---|---|
-| 1 | Jennifer | Select one existing migraine/chronic-illness group and read its current self-promotion, link, research, and feedback-question rules | Pending; no group invented |
-| 2 | Jennifer | Choose Draft A or B and adjust the opening sentence to match the group's normal tone | Pending approval |
-| 3 | Jennifer | Confirm whether the App Store link belongs in the post, a comment, or nowhere | Pending group rules |
+| 1 | Jennifer | Select one existing migraine/chronic-illness group and read its current self-promotion, link, research, and feedback-question rules | Deferred until the requested migraine update ships; `Space Weather News - Global` is evidence, not an inferred destination |
+| 2 | Jennifer | Choose Draft A or B and adjust the opening sentence to match the group's normal tone | Inactive unless Jennifer elects the pilot |
+| 3 | Jennifer | Confirm whether the App Store link belongs in the post, a comment, or nowhere | Inactive unless Jennifer elects the pilot |
 | 4 | Jennifer | Approve the exact final text and decide whether/when to post it personally | Required before publication |
 | 5 | Jennifer | If posted, record publication time plus available reach/views/clicks at 24h and 72h | Manual, no scraping |
 | 6 | Jennifer or approved helper | Review comments once daily for three days; use prepared replies only where accurate and personalize before sending | No automated replies |
@@ -105,8 +113,8 @@ Keep publication-platform, store, account, and in-app observations separate unle
 | Post response | Reactions, comments, shares, or link clicks shown for this post | Reach/views shown for this post | Facebook's post insights, captured manually at 24h and 72h | A reaction is not an install; unavailable fields are `unknown`, not zero |
 | Store arrival | First-time downloads during the 72h observation window | App Store product-page views in the same window | App Store Connect | Without a campaign link/source join, movement is time-adjacent, not attributable to the group post |
 | New-account arrival | Distinct non-test accounts first seen during the window | First-time downloads for the window, if available | Supabase Auth/account records plus App Store Connect | Cross-system identity is not joined; report both counts without calculating a false user-level funnel |
-| First meaningful use (24h) | Matured new external iOS accounts with `symptom_logged`, `exposure_logged`, `daily_checkin_completed`, or an explicit `guide_opened` during the first 24 hours | Known iOS cohort accounts whose full 24-hour window is covered | Local report from explicitly supplied account + `raw.app_analytics_events` exports | `first_insight_viewed` is automatic during onboarding and is excluded. `onboarding_completed` alone is not meaningful use. Exclude known internal/test accounts |
-| D7 return | Matured activated accounts with another meaningful event during `[activation + 6 days, activation + 9 days)` | Activated accounts whose full day-6-through-day-8 window is covered | Local cohort report | Immature accounts are censored, not counted as non-returners; this remains product return rather than proof the post caused it |
+| First meaningful use (24h) | Matured new external iOS accounts with an iOS `symptom_logged`, `exposure_logged`, `daily_checkin_completed`, or explicit `guide_opened` during the first 24 hours | Known iOS cohort accounts whose full 24-hour window is covered | Local report from explicitly supplied account + `raw.app_analytics_events` exports | Android and missing-platform events do not satisfy the released-iPhone metric. `first_insight_viewed` is automatic during onboarding and is excluded. `onboarding_completed` alone is not meaningful use. Exclude known internal/test accounts |
+| D7 return | Matured activated accounts with another qualifying iOS meaningful event during `[activation + 6 days, activation + 9 days)` | Activated accounts whose full day-6-through-day-8 window is covered | Local cohort report | Immature accounts are censored, not counted as non-returners; this remains product return rather than proof the post caused it |
 | Useful feedback | Distinct commenters offering a product need, barrier, question, or first-use observation | Distinct commenters/repliers on the pilot post | Manual anonymized tally | Do not copy health histories or infer diagnoses |
 | Founder time | Minutes spent on rule check, edit/review, publication, replies, and reporting | One completed pilot cycle | Manual timer/log | Baseline is unknown until this first cycle runs |
 

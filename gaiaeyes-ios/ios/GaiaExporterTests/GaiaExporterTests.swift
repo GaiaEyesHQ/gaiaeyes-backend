@@ -685,6 +685,44 @@ struct HandsFreeMigraineResolverTests {
     }
 
     @Test
+    func offlineResolutionDoesNotClaimSuccess() async {
+        let suiteName = "HandsFreeMigraineResolverTests.offline.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let resolver = HandsFreeMigraineResolver(
+            defaults: defaults,
+            tokenProvider: { "valid-token" },
+            snapshotFetcher: { _ in
+                currentSymptomsSnapshot(items: [
+                    currentSymptom(id: "migraine", code: "MIGRAINE", loggedAt: "2026-07-31T12:00:00Z")
+                ])
+            },
+            episodeResolver: { _, _, _ in throw URLError(.notConnectedToInternet) }
+        )
+
+        #expect(await resolver.resolveLatestMigraine() == .offline)
+    }
+
+    @Test
+    func timeoutResolutionIsUnconfirmedRatherThanOffline() async {
+        let suiteName = "HandsFreeMigraineResolverTests.timeout.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let resolver = HandsFreeMigraineResolver(
+            defaults: defaults,
+            tokenProvider: { "valid-token" },
+            snapshotFetcher: { _ in
+                currentSymptomsSnapshot(items: [
+                    currentSymptom(id: "migraine", code: "MIGRAINE", loggedAt: "2026-07-31T12:00:00Z")
+                ])
+            },
+            episodeResolver: { _, _, _ in throw URLError(.timedOut) }
+        )
+
+        #expect(await resolver.resolveLatestMigraine() == .connectionUnconfirmed)
+    }
+
+    @Test
     func failedResolutionDoesNotClaimSuccess() async {
         let suiteName = "HandsFreeMigraineResolverTests.failure.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
