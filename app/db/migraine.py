@@ -280,7 +280,7 @@ async def save_migraine_follow_up_detail(
         user_id,
         next_episode,
         expected_revision=current_revision,
-        change_kind="created" if current_revision == 0 else "user_edit",
+        change_kind="user_edit",
         source=source,
         user_edit=True,
     )

@@ -1,11 +1,13 @@
 # Migraine episode detail contract
 
-Status: **local model and additive persistence foundation, not deployed**.
+Status: **local model, additive persistence, and authenticated backend integration; not deployed**.
 Version `1.0` is implemented in `services/migraine/episode_contract.py`; the
 reviewable migration and repository are
 `supabase/migrations/20260908002922_add_migraine_episode_details.sql` and
-`app/db/migraine.py`. No production migration, API route, client UI, import
-parser, or provider adapter is included in this slice.
+`app/db/migraine.py`. The existing symptom follow-up route and two
+owner-filtered migraine-detail routes now use that repository. No production
+migration, client UI, import parser, or provider adapter is included in this
+slice.
 
 ## Purpose
 
@@ -47,7 +49,7 @@ user or a source actually supplies them.
 | `raw.user_symptom_episodes.resolution_ts` | `end.utc` when resolved |
 | `raw.user_symptom_episodes.latest_note_text` | latest plain-text projection of `notes`; it is not storage for structured medicine/context data |
 | `raw.user_symptom_episode_updates` | append-only audit entries for later edits/state changes; onset history must not be rewritten |
-| existing follow-up scheduler/routes | future collector/editor for contract details; no parallel reminder system |
+| existing follow-up scheduler/routes | collector/editor for contract details; no parallel reminder system |
 
 Structured early signs, contexts, medicines, full timezone provenance, import
 provenance, and contract revisions are stored as a validated contract snapshot
@@ -57,9 +59,34 @@ writes an append-only snapshot audit in the same transaction. It does not
 overload `follow_up_state`, `latest_note_text`, or generic exposure records to
 imply treatment.
 
-Authenticated clients have owner-filtered read access only. Mutations stay
-behind the backend repository so a direct table write cannot bypass revision,
-parent-ownership, and audit behavior. No Data API route is added by this slice.
+Direct table access remains owner-filtered and read-only for authenticated
+clients. Mutations stay behind the backend repository so a direct table write
+cannot bypass revision, parent-ownership, and audit behavior. The authenticated
+backend routes are described below; no direct Data API mutation is added.
+
+## Local backend API integration
+
+- `GET /v1/symptoms/current/{episode_id}/migraine-detail` projects the existing
+  canonical migraine episode plus any structured detail snapshot.
+- `PATCH /v1/symptoms/current/{episode_id}/migraine-detail` requires
+  `expected_revision` and applies only supplied structured fields.
+- `POST /v1/symptoms/follow-ups/{prompt_id}/respond` retains its legacy request
+  behavior. An optional nested `migraine` block stores the same structured
+  fields atomically with the existing prompt response.
+
+For list fields, omission keeps the stored value and `[]` explicitly clears it;
+JSON `null` is rejected. For notes, omission keeps the stored value and `null`
+explicitly clears it. Missing medicine or relief remains distinct from an
+explicit empty medicine list or `reported_relief: "none"`. Stale conflicting
+revisions return a conflict, while an exact retry of the immediately completed
+revision is idempotent and cannot duplicate medicine entries. A missing
+unapplied migration returns a capability error; legacy follow-up requests that
+omit the structured block continue to work without that migration.
+
+Canonical state/note projection, structured detail, revision audit, and prompt
+changes share one outer transaction. Gauge refresh happens only after commit
+and only for the affected user. The original symptom onset event and episode
+identity are never replaced by a follow-up edit.
 
 Import runs and episode links are separate from clinical episode identity. A
 durable identity registry maps a stable provider event ID or reviewed clinical
@@ -102,8 +129,10 @@ creates canonical rows using the same reviewed source rule.
    `commit_migraine_import_episode` on the same connection inside one outer
    transaction. A competing identity conflict must roll back the candidate
    onset rows with the failed commit rather than leave an orphan episode.
-4. Edits increment `lifecycle.revision`, update `updated_at`, and append an
-   episode-update audit record. They do not mutate the original onset event.
+4. Structured edits increment `lifecycle.revision`, update `updated_at`, and
+   append a detail snapshot audit. Canonical state/note projections also append
+   the existing symptom episode-update audit. Neither path mutates the original
+   onset event.
 5. Existing episode deletion remains user/account scoped and cascades through
    existing episode ownership. Imported-history deletion must additionally
    remove the selected import run and recalculate affected derivatives.
@@ -136,7 +165,13 @@ The scripted repository tests are supplemented by
 `tests/db/test_migraine_postgres_integration.py`, which applies the unchanged
 migration to a private disposable PostgreSQL 17 cluster and exercises real
 foreign keys, grants, RLS, rollback, competing connections, replay, reversal,
-and the adapter outer-transaction requirement. That fixture does not emulate
+the adapter outer-transaction requirement, authenticated follow-up persistence,
+explicit clearing, exact retry behavior, cross-account isolation, and forced
+audit-failure rollback. Run the focused suite with
+`./scripts/run_migraine_postgres_tests.sh`; it rejects non-private or remote
+database targets before connecting, verifies a disposable marker after
+connecting, preserves its exact log, and stops/removes the temporary cluster.
+The accepted G-010 run passed 59 tests. That fixture does not emulate
 GoTrue, PostgREST, the Supabase gateway/pooler, or other hosted integration
 surfaces. The pgTAP suite remains pending because pgTAP is not installed in the
 isolated runtime. No production database was used as a substitute.

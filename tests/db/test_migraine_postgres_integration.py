@@ -48,6 +48,25 @@ def _database_url() -> str:
     return value
 
 
+def test_database_url_rejects_remote_target_before_connect(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        TEST_DATABASE_URL_ENV,
+        "postgresql://postgres:postgres@example.invalid:5432/gaia_migraine_test",
+    )
+    with pytest.raises(RuntimeError, match="refusing non-private or remote"):
+        _database_url()
+
+
+def test_database_url_rejects_wrong_database_before_connect(monkeypatch: pytest.MonkeyPatch) -> None:
+    socket = os.path.expanduser("~/.codex/cache/gaia-migraine-postgres-17.11/socket")
+    monkeypatch.setenv(
+        TEST_DATABASE_URL_ENV,
+        f"postgresql://postgres:postgres@/postgres?host={socket}",
+    )
+    with pytest.raises(RuntimeError, match="refusing non-test database name"):
+        _database_url()
+
+
 async def _assert_disposable(conn: psycopg.AsyncConnection) -> None:
     async with conn.cursor() as cur:
         await cur.execute(
@@ -491,7 +510,7 @@ async def test_real_structured_follow_up_rolls_back_canonical_when_detail_audit_
 
         assert await _scalar(
             conn,
-            "select current_state = 'ongoing' and latest_note_text is null from raw.user_symptom_episodes where id = %s",
+            "select current_state = 'new' and latest_note_text is null from raw.user_symptom_episodes where id = %s",
             (episode_id,),
         ) is True
         assert await _scalar(
