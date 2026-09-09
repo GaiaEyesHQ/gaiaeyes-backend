@@ -1,7 +1,25 @@
 # G-011 Active Work — iOS migraine follow-up and medicine editing
 
-Status: handoff ready; review repairs are unfinished and nothing is deployed,
-activated, or released.
+Status: **running_review_repairs**, explicit September 9 retry authorized.
+Sole coordinator-assigned writer: **Audit Gaia Eyes project state**,
+task `01a074da-1e28-7772-92b7-2b0163664c13`.
+
+## Resume here — September 9
+
+- Current slice: G-R17 Decimal/timestamp interoperability, then G-R15 list and
+  metadata preservation with actual-source/backend-generated fixture checks.
+- Continue directly afterward with G-R16 truthful uncertain-save handling and
+  G-R18 injected responses through the actual editor/follow-up workflow.
+- All four findings remain open at this acceptance checkpoint. Reviewed source
+  hashes match the coordinator's original findings; originals are preserved in
+  `/Users/gennwu/Documents/Codex/2026-09-05/we/work/g011-review-repairs/20260909/`.
+- Feature remains disabled by default and unavailable in Release. Accepted
+  backend work is preserved. No production, deployment, phone, provider import,
+  new dependency, or historical audit/Samsung diversion is in scope.
+- Shared manager report is atomically marked `running_review_repairs`; preserve
+  its prior handoff. The coordinator owns portfolio/events/human registers.
+- If a platform action is denied again, record the exact error and stop that
+  action; do not reroute it or claim it ran.
 
 ## Ownership handoff — 2026-09-08 09:45 CDT
 

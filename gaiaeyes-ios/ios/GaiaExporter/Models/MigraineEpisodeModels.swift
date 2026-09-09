@@ -29,6 +29,26 @@ struct MigraineEpisodeTimestamp: Codable, Hashable {
     let utcOffsetMinutes: Int?
     let timezoneSource: String
 
+    // Compare the instant, but keep the original spelling and provenance for
+    // re-encoding. Pydantic normalizes .000Z / offsets without changing time.
+    func matches(_ other: Self) -> Bool {
+        guard let left = MigraineFollowUpDraft.parseDate(utc),
+              let right = MigraineFollowUpDraft.parseDate(other.utc) else { return false }
+        return abs(left.timeIntervalSince(right)) < 0.000001
+            && originalTime == other.originalTime
+            && timezoneName == other.timezoneName
+            && utcOffsetMinutes == other.utcOffsetMinutes
+            && timezoneSource == other.timezoneSource
+    }
+
+    static func matches(_ left: Self?, _ right: Self?) -> Bool {
+        switch (left, right) {
+        case (nil, nil): return true
+        case let (left?, right?): return left.matches(right)
+        default: return false
+        }
+    }
+
     private enum EncodingKeys: String, CodingKey {
         case utc
         case originalTime = "original_time"
@@ -53,6 +73,11 @@ struct MigraineEarlySign: Codable, Hashable {
     let reportedAt: MigraineEpisodeTimestamp?
     let notes: String?
 
+    func matches(_ other: Self) -> Bool {
+        label == other.label && code == other.code && notes == other.notes
+            && MigraineEpisodeTimestamp.matches(reportedAt, other.reportedAt)
+    }
+
     private enum EncodingKeys: String, CodingKey {
         case label
         case code
@@ -76,6 +101,12 @@ struct MigraineEpisodeContext: Codable, Hashable {
     let observedAt: MigraineEpisodeTimestamp?
     let source: String
     let notes: String?
+
+    func matches(_ other: Self) -> Bool {
+        kind == other.kind && label == other.label && code == other.code
+            && source == other.source && notes == other.notes
+            && MigraineEpisodeTimestamp.matches(observedAt, other.observedAt)
+    }
 
     private enum EncodingKeys: String, CodingKey {
         case kind
@@ -106,6 +137,13 @@ struct MigraineMedicineTaken: Codable, Hashable {
     let reliefReportedAt: MigraineEpisodeTimestamp?
     let notes: String?
 
+    func matches(_ other: Self) -> Bool {
+        name == other.name && takenAt.matches(other.takenAt)
+            && doseAmount == other.doseAmount && doseUnit == other.doseUnit
+            && reportedRelief == other.reportedRelief && notes == other.notes
+            && MigraineEpisodeTimestamp.matches(reliefReportedAt, other.reliefReportedAt)
+    }
+
     private enum EncodingKeys: String, CodingKey {
         case name
         case takenAt = "taken_at"
@@ -125,6 +163,31 @@ struct MigraineMedicineTaken: Codable, Hashable {
         try container.encodeIfPresent(reportedRelief, forKey: .reportedRelief)
         try container.encodeIfPresent(reliefReportedAt, forKey: .reliefReportedAt)
         try container.encodeIfPresent(notes, forKey: .notes)
+    }
+}
+
+extension MigraineMedicineTaken {
+    private enum DecodingKeys: String, CodingKey {
+        case name, takenAt, doseAmount, doseUnit, reportedRelief, reliefReportedAt, notes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DecodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        takenAt = try container.decode(MigraineEpisodeTimestamp.self, forKey: .takenAt)
+        if let text = try? container.decode(String.self, forKey: .doseAmount) {
+            guard text.range(of: #"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$"#, options: .regularExpression) != nil,
+                  let value = Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")) else {
+                throw DecodingError.dataCorruptedError(forKey: .doseAmount, in: container, debugDescription: "Invalid decimal dose")
+            }
+            doseAmount = value
+        } else {
+            doseAmount = try container.decodeIfPresent(Decimal.self, forKey: .doseAmount)
+        }
+        doseUnit = try container.decodeIfPresent(String.self, forKey: .doseUnit)
+        reportedRelief = try container.decodeIfPresent(String.self, forKey: .reportedRelief)
+        reliefReportedAt = try container.decodeIfPresent(MigraineEpisodeTimestamp.self, forKey: .reliefReportedAt)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
     }
 }
 
@@ -218,9 +281,15 @@ struct MigraineStructuredEdit: Encodable, Hashable {
 
     func matches(_ detail: MigraineEpisodeDetail) -> Bool {
         guard detail.revision >= expectedRevision else { return false }
-        if let earlySigns, detail.episode.earlySigns != earlySigns { return false }
-        if let contexts, detail.episode.contexts != contexts { return false }
-        if let medicines, detail.episode.medicines != medicines { return false }
+        if let earlySigns,
+           (earlySigns.count != detail.episode.earlySigns.count
+            || !zip(earlySigns, detail.episode.earlySigns).allSatisfy({ $0.matches($1) })) { return false }
+        if let contexts,
+           (contexts.count != detail.episode.contexts.count
+            || !zip(contexts, detail.episode.contexts).allSatisfy({ $0.matches($1) })) { return false }
+        if let medicines,
+           (medicines.count != detail.episode.medicines.count
+            || !zip(medicines, detail.episode.medicines).allSatisfy({ $0.matches($1) })) { return false }
         switch notes {
         case .retain:
             break
@@ -236,6 +305,8 @@ struct MigraineStructuredEdit: Encodable, Hashable {
 enum MigraineMedicineChoice: String, CaseIterable, Identifiable {
     case retain
     case taken
+    case add
+    case removeFirst
     case none
 
     var id: String { rawValue }
@@ -244,6 +315,8 @@ enum MigraineMedicineChoice: String, CaseIterable, Identifiable {
         switch self {
         case .retain: return "Not adding medicine"
         case .taken: return "I took medicine"
+        case .add: return "Add another medicine"
+        case .removeFirst: return "Remove first saved medicine"
         case .none: return "No medicine taken"
         }
     }
@@ -306,6 +379,7 @@ struct MigraineFollowUpDraft: Hashable {
     var doseAmountText: String = ""
     var doseUnit: String = ""
     var reliefChoice: MigraineReliefChoice = .unknown
+    var medicineNotesText: String = ""
     var noteText: String = ""
 
     init(accountScope: String, promptId: String, episodeId: String, responseTimestamp: Date = Date()) {
@@ -327,6 +401,8 @@ struct MigraineFollowUpDraft: Hashable {
         earlySignsText = detail.episode.earlySigns.map(\.label).joined(separator: ", ")
         noteText = detail.episode.notes ?? ""
 
+        resetMedicineFields()
+
         if let medicine = detail.episode.medicines.first {
             medicineChoice = .taken
             medicineName = medicine.name
@@ -336,7 +412,25 @@ struct MigraineFollowUpDraft: Hashable {
             }
             doseUnit = medicine.doseUnit ?? ""
             reliefChoice = MigraineReliefChoice(rawValue: medicine.reportedRelief ?? "") ?? .unknown
+            medicineNotesText = medicine.notes ?? ""
         }
+    }
+
+    mutating func chooseMedicine(_ choice: MigraineMedicineChoice) {
+        if choice == .add && medicineChoice != .add {
+            resetMedicineFields()
+        }
+        medicineChoice = choice
+    }
+
+    private mutating func resetMedicineFields() {
+        medicineChoice = .retain
+        medicineName = ""
+        medicineTakenAt = responseTimestamp
+        doseAmountText = ""
+        doseUnit = ""
+        reliefChoice = .unknown
+        medicineNotesText = ""
     }
 
     func makeStructuredEdit(currentAccountScope: String) throws -> MigraineStructuredEdit? {
@@ -347,13 +441,14 @@ struct MigraineFollowUpDraft: Hashable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         let originalLabels = originalEarlySigns.map(\.label)
-        let earlySigns: [MigraineEarlySign]? = labels == originalLabels ? nil : labels.map {
-            MigraineEarlySign(
-                label: $0,
-                code: nil,
-                reportedAt: Self.timestamp(responseTimestamp),
-                notes: nil
-            )
+        var remainingSigns = originalEarlySigns
+        let earlySigns: [MigraineEarlySign]? = labels == originalLabels ? nil : labels.map { label in
+            // Match each occurrence once: untouched entries retain every field,
+            // including duplicate-label entries with distinct provenance.
+            if let index = remainingSigns.firstIndex(where: { $0.label == label }) {
+                return remainingSigns.remove(at: index)
+            }
+            return MigraineEarlySign(label: label, code: nil, reportedAt: Self.timestamp(responseTimestamp), notes: nil)
         }
 
         let medicines: [MigraineMedicineTaken]?
@@ -362,35 +457,38 @@ struct MigraineFollowUpDraft: Hashable {
             medicines = nil
         case .none:
             medicines = []
-        case .taken:
+        case .removeFirst:
+            medicines = originalMedicines.isEmpty ? nil : Array(originalMedicines.dropFirst())
+        case .taken, .add:
             let name = medicineName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { throw MigraineDraftError.medicineNameRequired }
             let amountText = doseAmountText.trimmingCharacters(in: .whitespacesAndNewlines)
             let unit = doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
             guard amountText.isEmpty == unit.isEmpty else { throw MigraineDraftError.incompleteDose }
-            let amount = amountText.isEmpty ? nil : Decimal(string: amountText)
-            if !amountText.isEmpty && amount == nil { throw MigraineDraftError.incompleteDose }
-            let relief = reliefChoice == .unknown ? nil : reliefChoice.rawValue
-            let candidate = [
-                MigraineMedicineTaken(
-                    name: name,
-                    takenAt: Self.timestamp(medicineTakenAt),
-                    doseAmount: amount,
-                    doseUnit: unit.isEmpty ? nil : unit,
-                    reportedRelief: relief,
-                    reliefReportedAt: relief == nil ? nil : Self.timestamp(responseTimestamp),
-                    notes: nil
-                )
-            ]
-            let original = originalMedicines.count == 1 ? originalMedicines[0] : nil
+            let amount = amountText.isEmpty ? nil : Decimal(string: amountText, locale: Locale(identifier: "en_US_POSIX"))
+            if !amountText.isEmpty && (amount == nil || amount! <= 0) { throw MigraineDraftError.incompleteDose }
+            let original = medicineChoice == .taken ? originalMedicines.first : nil
             let originalDate = original.flatMap { Self.parseDate($0.takenAt.utc) }
-            let medicineIsUnchanged = original != nil
-                && original?.name == name
-                && originalDate.map { abs($0.timeIntervalSince(medicineTakenAt)) < 0.5 } == true
-                && original?.doseAmount == amount
-                && original?.doseUnit == (unit.isEmpty ? nil : unit)
-                && original?.reportedRelief == relief
-            medicines = medicineIsUnchanged ? nil : candidate
+            let originalReliefChoice = MigraineReliefChoice(rawValue: original?.reportedRelief ?? "") ?? .unknown
+            let reliefUnchanged = original != nil && reliefChoice == originalReliefChoice
+            let relief = reliefUnchanged ? original?.reportedRelief : reliefChoice.rawValue
+            let note = medicineNotesText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let candidate = MigraineMedicineTaken(
+                name: name,
+                takenAt: originalDate == medicineTakenAt ? original!.takenAt : Self.timestamp(medicineTakenAt),
+                doseAmount: amount,
+                doseUnit: unit.isEmpty ? nil : unit,
+                reportedRelief: relief,
+                reliefReportedAt: reliefUnchanged ? original?.reliefReportedAt : Self.timestamp(responseTimestamp),
+                notes: note == (original?.notes ?? "") ? original?.notes : (note.isEmpty ? nil : note)
+            )
+            if candidate == original {
+                medicines = nil
+            } else if medicineChoice == .add || originalMedicines.isEmpty {
+                medicines = originalMedicines + [candidate]
+            } else {
+                medicines = [candidate] + originalMedicines.dropFirst()
+            }
         }
 
         let trimmedNote = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
