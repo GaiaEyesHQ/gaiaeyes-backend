@@ -65,6 +65,10 @@ ILLNESS_EXPOSURE_OPTIONS = list(ILLNESS_EXPOSURE_KEYS)
 DEFAULT_EXPOSURE_OPTIONS = sorted(ALL_EXPOSURE_KEYS)
 
 
+class FollowUpResponseConflict(RuntimeError):
+    """The stored prompt answer does not match a replay-safe retry."""
+
+
 def _normalize_ts(value: Optional[datetime]) -> Optional[datetime]:
     if value is None:
         return None
@@ -641,6 +645,31 @@ async def _expire_episode_prompts(conn, user_id: str, episode_id: str) -> None:
         )
 
 
+async def fetch_symptom_follow_up_prompt(
+    conn,
+    user_id: str,
+    prompt_id: str,
+    *,
+    for_update: bool = False,
+) -> Optional[Dict[str, Any]]:
+    lock_clause = " for update" if for_update else ""
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            f"""
+            select *
+              from raw.user_feedback_prompts
+             where id = %s
+               and user_id = %s
+               and prompt_type = 'symptom_follow_up'
+             limit 1{lock_clause}
+            """,
+            (prompt_id, user_id),
+            prepare=False,
+        )
+        row = await cur.fetchone()
+    return dict(row) if row else None
+
+
 async def respond_symptom_follow_up(
     conn,
     user_id: str,
@@ -652,24 +681,18 @@ async def respond_symptom_follow_up(
     note_text: Optional[str] = None,
     time_bucket: Optional[str] = None,
     responded_at: Optional[datetime] = None,
+    prompt_row: Optional[Dict[str, Any]] = None,
+    replay_safe: bool = False,
 ) -> Dict[str, Any]:
     normalized_state = _normalize_follow_up_response_state(state)
     effective_ts = _normalize_ts(responded_at) or datetime.now(UTC)
 
-    async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(
-            """
-            select *
-              from raw.user_feedback_prompts
-             where id = %s
-               and user_id = %s
-               and prompt_type = 'symptom_follow_up'
-             limit 1
-            """,
-            (prompt_id, user_id),
-            prepare=False,
-        )
-        prompt = await cur.fetchone()
+    prompt = prompt_row or await fetch_symptom_follow_up_prompt(
+        conn,
+        user_id,
+        prompt_id,
+        for_update=False,
+    )
 
     if not prompt:
         raise RuntimeError("Follow-up prompt not found")
@@ -680,6 +703,29 @@ async def respond_symptom_follow_up(
     existing_state = str(prompt.get("response_state") or "").strip().lower()
     if current_status == "answered" and existing_state and existing_state != normalized_state:
         raise RuntimeError("Follow-up prompt was already answered")
+
+    if current_status == "answered" and replay_safe:
+        expected = {
+            "response_state": normalized_state,
+            "response_detail_choice": detail_choice,
+            "response_detail_text": detail_text,
+            "response_note_text": note_text,
+            "response_time_bucket": time_bucket,
+        }
+        for key, value in expected.items():
+            stored = prompt.get(key)
+            stored_text = str(stored).strip() if stored is not None else None
+            value_text = str(value).strip() if value is not None else None
+            if stored_text != value_text:
+                raise FollowUpResponseConflict("Follow-up retry does not match the stored answer")
+        if responded_at is not None and _normalize_ts(prompt.get("answered_at")) != effective_ts:
+            raise FollowUpResponseConflict("Follow-up retry timestamp does not match the stored answer")
+        episode_row = await _fetch_symptom_episode(conn, user_id, str(prompt.get("episode_id") or ""))
+        return {
+            "prompt": _serialize_prompt(prompt),
+            "episode": episode_row,
+            "changed": False,
+        }
 
     from app.db import symptoms as symptoms_db
 
@@ -784,6 +830,7 @@ async def respond_symptom_follow_up(
     return {
         "prompt": _serialize_prompt(updated_prompt),
         "episode": episode_row,
+        "changed": True,
     }
 
 

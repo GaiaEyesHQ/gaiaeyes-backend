@@ -963,6 +963,20 @@ def _draw_wrapped_multilines(draw: ImageDraw.ImageDraw, text: str, font: ImageFo
             y += line_gap
     return y
 
+def _stats_value_layout(
+    draw: ImageDraw.ImageDraw,
+    label: str,
+    value: object,
+    default_font: ImageFont.ImageFont,
+    max_w: int,
+) -> tuple[ImageFont.ImageFont, list[str], int]:
+    value_text = str(value)
+    if label.lower().startswith("aurora"):
+        font = _load_font(["Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf"], 30)
+        lines = _wrap(draw, value_text, font, max_w)
+        return font, lines or [value_text], 36
+    return default_font, [_ellipsize(draw, value_text, default_font, max_w)], 54
+
 # Helper: draw text with wrapping, but stop before bottom. If truncated, add ellipsis.
 def _draw_wrapped_to_bottom(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont,
                             x0: int, y: int, max_w: int, bottom: int, line_gap: int = 54) -> int:
@@ -1387,15 +1401,13 @@ def render_stats_card_from_features(
         draw.text((x_label+2, y+2), lab, fill=(0,0,0,160), font=font_body)
         draw.text((x_label,   y),   lab, fill=fg, font=font_body)
 
-        use_font = font_val
-        val_str = str(val)
-        if lab.lower().startswith("aurora"):
-            use_font = _load_font(["Oswald-VariableFont_wght.ttf","Poppins-Regular.ttf"], 40)
-        val_str = _ellipsize(draw, val_str, use_font, max_val_w)
-        draw.text((x_val+2, y+2), val_str, fill=(0,0,0,160), font=use_font)
-        draw.text((x_val,   y),   val_str, fill=fg, font=use_font)
+        use_font, val_lines, line_gap = _stats_value_layout(draw, lab, val, font_val, max_val_w)
+        for offset, val_str in enumerate(val_lines):
+            line_y = y + offset * line_gap
+            draw.text((x_val+2, line_y+2), val_str, fill=(0,0,0,160), font=use_font)
+            draw.text((x_val,   line_y),   val_str, fill=fg, font=use_font)
 
-        y += 54
+        y += max(54, len(val_lines) * line_gap)
         # Removed separator line between rows for cleaner look
 
     # “Did you know” footer

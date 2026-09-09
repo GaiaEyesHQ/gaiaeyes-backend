@@ -91,3 +91,38 @@ create table raw.user_symptom_episode_updates (
   source text not null default 'ios',
   created_at timestamptz not null default now()
 );
+
+create table raw.user_feedback_prompts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  prompt_type text not null
+    check (prompt_type in ('symptom_follow_up', 'daily_check_in')),
+  episode_id uuid null references raw.user_symptom_episodes(id) on delete cascade,
+  symptom_code text null references dim.symptom_codes(symptom_code),
+  prompt_day date null,
+  question_key text not null default 'status_check',
+  question_text text null,
+  prompt_payload jsonb not null default '{}'::jsonb,
+  status text not null default 'pending'
+    check (status in ('pending', 'answered', 'dismissed', 'snoozed', 'expired')),
+  scheduled_for timestamptz not null default now(),
+  delivered_at timestamptz null,
+  answered_at timestamptz null,
+  dismissed_at timestamptz null,
+  snoozed_until timestamptz null,
+  response_state text null
+    check (response_state in ('ongoing', 'improving', 'worse', 'resolved')),
+  response_detail_choice text null,
+  response_detail_text text null,
+  response_note_text text null,
+  response_time_bucket text null,
+  push_delivery_enabled boolean not null default false,
+  source text not null default 'system',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index user_feedback_prompts_episode_pending_uidx
+  on raw.user_feedback_prompts (episode_id, prompt_type, question_key)
+  where prompt_type = 'symptom_follow_up'
+    and status in ('pending', 'snoozed');

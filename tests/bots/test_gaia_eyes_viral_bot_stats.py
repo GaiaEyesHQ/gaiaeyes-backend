@@ -18,6 +18,7 @@ from bots.earthscope_post.gaia_eyes_viral_bot import (
     _public_card_title,
     _public_card_text,
     _safe_text,
+    _stats_value_layout,
     _trim_public_affects,
     build_stats_rows,
     StatRow,
@@ -118,6 +119,29 @@ def test_stats_card_labels_environmental_state_as_signal(monkeypatch):
 
     assert "Signal: Calm" in labels
     assert "Energy: Calm" not in labels
+
+
+def test_stats_card_wraps_aurora_value_without_ellipsis():
+    image = Image.new("RGB", (1080, 1080))
+    draw = gaia_eyes_viral_bot.ImageDraw.Draw(image)
+    font = gaia_eyes_viral_bot._load_font(
+        ["Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"],
+        44,
+    )
+
+    _, lines, _ = _stats_value_layout(
+        draw,
+        "Aurora",
+        "G1 aurora possible - Next 72h",
+        font,
+        350,
+    )
+
+    rendered = " ".join(lines)
+    assert "G1 aurora possible" in rendered
+    assert "Next 72h" in rendered
+    assert "..." not in rendered
+    assert "\u2026" not in rendered
 
 
 @pytest.mark.parametrize(

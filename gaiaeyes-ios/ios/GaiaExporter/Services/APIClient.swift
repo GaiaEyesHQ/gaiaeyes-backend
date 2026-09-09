@@ -533,6 +533,47 @@ final class APIClient {
     }
 
     @discardableResult
+    func patchJSON<Body: Encodable, Resp: Decodable>(_ path: String,
+                                                     body: Body,
+                                                     as responseType: Resp.Type) async throws -> Resp {
+        var req = makeRequest(path: path)
+        req.httpMethod = "PATCH"
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        req.httpBody = try encoder.encode(body)
+
+        await preflightHealth()
+
+        var didForceAuthRefresh = false
+        let data: Data
+        while true {
+            try await ensureAuthorizationHeaderIfNeeded(on: &req, pathHint: path)
+            logger?("PATCH \(req.url?.absoluteString ?? path)")
+            let (responseData, resp) = try await session.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            let bodyString = String(data: responseData, encoding: .utf8) ?? ""
+            guard (200...299).contains(code) else {
+                logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(bodyString)")
+                if (code == 401 || code == 403), !didForceAuthRefresh {
+                    didForceAuthRefresh = true
+                    await refreshAuthorizationHeader(on: &req, force: true)
+                    if req.value(forHTTPHeaderField: "Authorization") != nil {
+                        logger?("[AUTH] forced bearer refresh after \(code); retrying \(path)")
+                        continue
+                    }
+                }
+                throw APIError.server(code: code, body: bodyString)
+            }
+            logger?("↩︎ \(code) \(bodyString)")
+            data = responseData
+            break
+        }
+
+        let decoder = APIClient.tolerantJSONDecoder()
+        return try decoder.decode(Resp.self, from: data)
+    }
+
+    @discardableResult
     func deleteJSON<Resp: Decodable>(_ path: String,
                                      as responseType: Resp.Type) async throws -> Resp {
         var req = makeRequest(path: path)
@@ -588,13 +629,14 @@ final class APIClient {
         }
     }
 
-    private struct SymptomFollowUpResponsePayload: Encodable {
+    struct SymptomFollowUpResponsePayload: Encodable {
         let state: String
         let detailChoice: String?
         let detailText: String?
         let noteText: String?
         let timeBucket: String?
         let tsUtc: String?
+        let migraine: MigraineStructuredEdit?
 
         enum CodingKeys: String, CodingKey {
             case state
@@ -603,6 +645,7 @@ final class APIClient {
             case noteText = "note_text"
             case timeBucket = "time_bucket"
             case tsUtc = "ts_utc"
+            case migraine
         }
     }
 
@@ -757,6 +800,24 @@ final class APIClient {
         )
     }
 
+    func fetchMigraineEpisodeDetail(episodeId: String) async throws -> Envelope<MigraineEpisodeDetail> {
+        try await getJSON(
+            "v1/symptoms/current/\(episodeId)/migraine-detail",
+            as: Envelope<MigraineEpisodeDetail>.self
+        )
+    }
+
+    func updateMigraineEpisodeDetail(
+        episodeId: String,
+        edit: MigraineStructuredEdit
+    ) async throws -> Envelope<MigraineEpisodeDetail> {
+        try await patchJSON(
+            "v1/symptoms/current/\(episodeId)/migraine-detail",
+            body: edit,
+            as: Envelope<MigraineEpisodeDetail>.self
+        )
+    }
+
     func updateCurrentSymptom(
         episodeId: String,
         state: CurrentSymptomState? = nil,
@@ -826,7 +887,8 @@ final class APIClient {
         detailText: String? = nil,
         noteText: String? = nil,
         timeBucket: String? = nil,
-        tsUtc: Date? = nil
+        tsUtc: Date? = nil,
+        migraine: MigraineStructuredEdit? = nil
     ) async throws -> Envelope<SymptomFollowUpResult> {
         let payload = SymptomFollowUpResponsePayload(
             state: state.rawValue,
@@ -834,7 +896,8 @@ final class APIClient {
             detailText: detailText,
             noteText: noteText,
             timeBucket: timeBucket,
-            tsUtc: iso8601String(tsUtc)
+            tsUtc: iso8601String(tsUtc),
+            migraine: migraine
         )
         return try await postJSON(
             "v1/symptoms/follow-ups/\(promptId)/respond",

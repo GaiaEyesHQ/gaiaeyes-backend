@@ -9,6 +9,146 @@ import Foundation
 import Testing
 @testable import GaiaEyes
 
+struct MigraineFollowUpClientTests {
+
+    private func fixtureDetail() throws -> MigraineEpisodeDetail {
+        let sourceFile = URL(fileURLWithPath: #filePath)
+        let fixtureURL = sourceFile
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/migraine_episode_detail.json")
+        let data = try Data(contentsOf: fixtureURL)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(MigraineEpisodeDetail.self, from: data)
+    }
+
+    @Test
+    func decodesStructuredMigraineFixtureAndRetainsUnchangedFields() throws {
+        let detail = try fixtureDetail()
+        var draft = MigraineFollowUpDraft(
+            accountScope: "account-a",
+            promptId: "prompt-1",
+            episodeId: detail.episode.episodeId,
+            responseTimestamp: Date(timeIntervalSince1970: 1_788_839_400)
+        )
+
+        try draft.apply(detail, forAccountScope: "account-a")
+
+        #expect(draft.expectedRevision == 2)
+        #expect(draft.earlySignsText == "Light sensitivity")
+        #expect(draft.medicineName == "Test medicine")
+        #expect(draft.reliefChoice == .some)
+        #expect(try draft.makeStructuredEdit(currentAccountScope: "account-a") == nil)
+    }
+
+    @Test
+    func encodesExplicitNoMedicineAndNoteClearWithoutClearingOtherLists() throws {
+        let edit = MigraineStructuredEdit(
+            expectedRevision: 2,
+            earlySigns: nil,
+            contexts: nil,
+            medicines: [],
+            notes: .clear
+        )
+        let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(edit)) as? [String: Any])
+
+        #expect(object["expected_revision"] as? Int == 2)
+        #expect((object["medicines"] as? [Any])?.isEmpty == true)
+        #expect(object["notes"] is NSNull)
+        #expect(object["early_signs"] == nil)
+        #expect(object["contexts"] == nil)
+        #expect(edit.followUpNoteText == nil)
+    }
+
+    @Test
+    func onlyExplicitStructuredNoteSetUsesLegacyNoteProjection() {
+        let retained = MigraineStructuredEdit(
+            expectedRevision: 2,
+            earlySigns: nil,
+            contexts: nil,
+            medicines: nil,
+            notes: .retain
+        )
+        let set = MigraineStructuredEdit(
+            expectedRevision: 2,
+            earlySigns: nil,
+            contexts: nil,
+            medicines: nil,
+            notes: .set("Resting in a dark room helped.")
+        )
+
+        #expect(retained.followUpNoteText == nil)
+        #expect(set.followUpNoteText == "Resting in a dark room helped.")
+    }
+
+    @Test
+    func followUpRetryPayloadKeepsTimestampAndNestedStructuredEditStable() throws {
+        let timestamp = MigraineFollowUpDraft.timestamp(Date(timeIntervalSince1970: 1_788_839_400))
+        let edit = MigraineStructuredEdit(
+            expectedRevision: 0,
+            earlySigns: [],
+            contexts: nil,
+            medicines: [
+                MigraineMedicineTaken(
+                    name: "Test medicine",
+                    takenAt: timestamp,
+                    doseAmount: 10,
+                    doseUnit: "mg",
+                    reportedRelief: "none",
+                    reliefReportedAt: timestamp,
+                    notes: nil
+                )
+            ],
+            notes: .retain
+        )
+        let payload = APIClient.SymptomFollowUpResponsePayload(
+            state: "ongoing",
+            detailChoice: nil,
+            detailText: nil,
+            noteText: nil,
+            timeBucket: nil,
+            tsUtc: "2026-09-08T05:30:00.000Z",
+            migraine: edit
+        )
+        let encoder = JSONEncoder()
+
+        let firstObject = try #require(JSONSerialization.jsonObject(with: encoder.encode(payload)) as? NSDictionary)
+        let retryObject = try #require(JSONSerialization.jsonObject(with: encoder.encode(payload)) as? NSDictionary)
+        #expect(firstObject == retryObject)
+        let object = try #require(firstObject as? [String: Any])
+        #expect(object["ts_utc"] as? String == "2026-09-08T05:30:00.000Z")
+        let migraine = try #require(object["migraine"] as? [String: Any])
+        #expect(migraine["expected_revision"] as? Int == 0)
+        let medicine = try #require((migraine["medicines"] as? [[String: Any]])?.first)
+        #expect(medicine["taken_at"] != nil)
+        #expect(medicine["takenAt"] == nil)
+        #expect(medicine["reported_relief"] as? String == "none")
+    }
+
+    @Test
+    func draftCannotBeReusedAcrossAccounts() throws {
+        let detail = try fixtureDetail()
+        var draft = MigraineFollowUpDraft(
+            accountScope: "account-a",
+            promptId: "prompt-1",
+            episodeId: detail.episode.episodeId
+        )
+        try draft.apply(detail, forAccountScope: "account-a")
+
+        #expect(throws: MigraineDraftError.self) {
+            _ = try draft.makeStructuredEdit(currentAccountScope: "account-b")
+        }
+    }
+
+    @Test
+    func structuredFeatureRequiresDebugAndExplicitOptIn() {
+        #expect(MigraineStructuredFollowUpFeature.resolve(isDebugBuild: false, arguments: [MigraineStructuredFollowUpFeature.launchArgument], environment: [:]) == false)
+        #expect(MigraineStructuredFollowUpFeature.resolve(isDebugBuild: true, arguments: [], environment: [:]) == false)
+        #expect(MigraineStructuredFollowUpFeature.resolve(isDebugBuild: true, arguments: [MigraineStructuredFollowUpFeature.launchArgument], environment: [:]))
+        #expect(MigraineStructuredFollowUpFeature.resolve(isDebugBuild: true, arguments: [], environment: [MigraineStructuredFollowUpFeature.environmentKey: "1"]))
+    }
+}
+
 struct SymptomEnvelopeTests {
 
     @Test

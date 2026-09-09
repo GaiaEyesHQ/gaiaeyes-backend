@@ -16,6 +16,7 @@ from app.main import app
 from app.db import get_db
 from app.db import feedback as feedback_db
 from app.db import migraine as migraine_db
+from app.db import symptoms as symptoms_db
 from app.routers import symptoms as symptoms_router
 from services.migraine.episode_contract import MigraineEpisode
 
@@ -128,6 +129,22 @@ async def test_structured_migraine_follow_up_is_atomic_and_returns_detail(monkey
     headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": user_id}
     calls = []
 
+    prompt = {
+        "id": "prompt-1",
+        "episode_id": "10000000-0000-4000-8000-000000000001",
+        "symptom_code": "migraine",
+        "question_text": "How is your migraine now?",
+        "status": "pending",
+    }
+
+    async def _fetch_prompt(conn, user, prompt_id, *, for_update=False):  # noqa: ARG001
+        calls.append(("fetch_prompt_lock" if for_update else "fetch_prompt", user, prompt_id))
+        return prompt
+
+    async def _prepare(conn, user, episode_id, **kwargs):  # noqa: ARG001
+        calls.append(("prepare", user, episode_id, kwargs))
+        return {"revision": 0, "changed": True}
+
     async def _respond(conn, user, prompt_id, **kwargs):  # noqa: ARG001
         calls.append(("respond", user, prompt_id))
         return {
@@ -175,8 +192,27 @@ async def test_structured_migraine_follow_up_is_atomic_and_returns_detail(monkey
         calls.append(("save", user, episode_id, kwargs))
         return {"episode": episode, "revision": 1, "changed": True}
 
+    async def _fetch_episode(conn, user, episode_id):  # noqa: ARG001
+        calls.append(("fetch_episode", user, episode_id))
+        return {
+            "id": episode_id,
+            "symptom_code": "migraine",
+            "label": "Migraine",
+            "current_state": "improving",
+            "original_severity": 5,
+            "current_severity": 5,
+            "started_at": "2026-09-08T12:00:00Z",
+            "state_updated_at": "2026-09-08T13:00:00Z",
+            "last_interaction_at": "2026-09-08T13:00:00Z",
+            "latest_note_text": None,
+            "note_count": 0,
+        }
+
+    monkeypatch.setattr(feedback_db, "fetch_symptom_follow_up_prompt", _fetch_prompt)
     monkeypatch.setattr(feedback_db, "respond_symptom_follow_up", _respond)
+    monkeypatch.setattr(migraine_db, "prepare_migraine_follow_up_detail", _prepare)
     monkeypatch.setattr(migraine_db, "save_migraine_follow_up_detail", _save)
+    monkeypatch.setattr(symptoms_db, "fetch_symptom_episode", _fetch_episode)
     response = await client.post(
         "/v1/symptoms/follow-ups/prompt-1/respond",
         json={
@@ -196,8 +232,15 @@ async def test_structured_migraine_follow_up_is_atomic_and_returns_detail(monkey
 
     assert response.status_code == 200
     assert response.json()["data"]["migraine_detail"]["revision"] == 1
-    assert [call[0] for call in calls] == ["respond", "save"]
-    save_kwargs = calls[1][3]
+    assert [call[0] for call in calls] == [
+        "fetch_prompt",
+        "prepare",
+        "fetch_prompt_lock",
+        "respond",
+        "save",
+        "fetch_episode",
+    ]
+    save_kwargs = calls[4][3]
     assert save_kwargs["supplied_fields"] == {"state", "medicines"}
     assert save_kwargs["canonical_fields"] == set()
 

@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from fastapi import HTTPException
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
 from psycopg.errors import ForeignKeyViolation, InsufficientPrivilege
+from starlette.requests import Request
 
+from app.routers import symptoms as symptoms_router
+from app.routers.symptoms import SymptomFollowUpResponseIn
 from app.db.migraine import (
     MigraineEpisodeNotFound,
     MigraineImportConflict,
@@ -181,6 +186,75 @@ async def _insert_parent(
             """,
             (episode_id, user_id, event_id, start, source),
         )
+
+
+async def _insert_prompt(
+    conn: psycopg.AsyncConnection,
+    *,
+    prompt_id: UUID,
+    user_id: str,
+    episode_id: UUID,
+    scheduled_for: datetime,
+) -> None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            insert into raw.user_feedback_prompts
+              (id, user_id, prompt_type, episode_id, symptom_code,
+               question_key, question_text, scheduled_for, source)
+            values (%s, %s, 'symptom_follow_up', %s, 'migraine',
+                    'status_check', 'How is your migraine now?', %s, 'test')
+            """,
+            (prompt_id, user_id, episode_id, scheduled_for),
+        )
+
+
+def _request(user_id: str) -> Request:
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/symptoms/follow-ups/test/respond",
+            "headers": [],
+            "query_string": b"",
+        }
+    )
+    request.state.user_id = user_id
+    return request
+
+
+def _structured_prompt_payload(
+    *,
+    expected_revision: int,
+    responded_at: datetime,
+    medicine_name: str = "User-entered medicine",
+    note_text: str | None = "Resting in a dark room",
+    nested_notes: object = ...,
+) -> SymptomFollowUpResponseIn:
+    migraine: dict[str, object] = {
+        "expected_revision": expected_revision,
+        "medicines": [
+            {
+                "name": medicine_name,
+                "taken_at": {
+                    "utc": responded_at.isoformat(),
+                    "timezone_source": "user",
+                },
+            }
+        ],
+    }
+    if nested_notes is not ...:
+        migraine["notes"] = nested_notes
+    return SymptomFollowUpResponseIn.model_validate(
+        {
+            "state": "improving",
+            "detail_choice": "resting",
+            "note_text": note_text,
+            "time_bucket": "within_hours",
+            "ts_utc": responded_at.isoformat(),
+            "migraine": migraine,
+        }
+    )
 
 
 async def _create_run(
@@ -527,6 +601,497 @@ async def test_real_structured_follow_up_rolls_back_canonical_when_detail_audit_
         async with conn.cursor() as cur:
             await cur.execute("drop trigger if exists fail_g010_detail_audit on raw.user_migraine_episode_detail_revisions")
             await cur.execute("drop function if exists raw.fail_g010_detail_audit()")
+        await conn.commit()
+        await conn.close()
+
+
+@pytest.mark.anyio
+async def test_real_prompt_route_commits_before_refresh_and_exact_retry_is_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn = await _connect(autocommit=False)
+    await _reset(conn)
+    await conn.commit()
+    start = datetime(2026, 9, 8, 15, tzinfo=UTC)
+    responded_at = start.replace(hour=16)
+    episode_id, event_id, prompt_id = uuid4(), uuid4(), uuid4()
+    await _insert_parent(
+        conn,
+        user_id=USER_A,
+        episode_id=episode_id,
+        event_id=event_id,
+        start=start,
+        source="ios",
+    )
+    await _insert_prompt(
+        conn,
+        prompt_id=prompt_id,
+        user_id=USER_A,
+        episode_id=episode_id,
+        scheduled_for=responded_at,
+    )
+    await conn.commit()
+
+    refresh_observations: list[tuple[str, int, int]] = []
+
+    async def _observe_committed_refresh(user_id: str, ts_utc: str) -> None:
+        observer = await _connect()
+        try:
+            prompt_status = await _scalar(
+                observer,
+                "select status from raw.user_feedback_prompts where id = %s",
+                (prompt_id,),
+            )
+            detail_count = await _scalar(
+                observer,
+                "select count(*) from raw.user_migraine_episode_details where episode_id = %s",
+                (episode_id,),
+            )
+            update_count = await _scalar(
+                observer,
+                "select count(*) from raw.user_symptom_episode_updates where episode_id = %s",
+                (episode_id,),
+            )
+            assert user_id == USER_A
+            assert ts_utc
+            assert prompt_status == "answered"
+            refresh_observations.append((prompt_status, detail_count, update_count))
+        finally:
+            await observer.close()
+
+    monkeypatch.setattr(
+        symptoms_router,
+        "_refresh_gauges_for_symptom",
+        _observe_committed_refresh,
+    )
+    payload = _structured_prompt_payload(
+        expected_revision=0,
+        responded_at=responded_at,
+    )
+
+    try:
+        await conn.execute("set statement_timeout = 5000")
+        first = await symptoms_router.respond_symptom_follow_up(
+            str(prompt_id),
+            payload,
+            _request(USER_A),
+            conn,
+        )
+        assert first["ok"] is True
+        assert first["data"]["migraine_detail"]["revision"] == 1
+        assert first["data"]["migraine_detail"]["changed"] is True
+        assert refresh_observations == [("answered", 1, 1)]
+
+        prompt_updated_at = await _scalar(
+            conn,
+            "select updated_at from raw.user_feedback_prompts where id = %s",
+            (prompt_id,),
+        )
+        await conn.execute("set statement_timeout = 5000")
+        replay = await symptoms_router.respond_symptom_follow_up(
+            str(prompt_id),
+            payload,
+            _request(USER_A),
+            conn,
+        )
+        assert replay["ok"] is True
+        assert replay["data"]["migraine_detail"]["revision"] == 1
+        assert replay["data"]["migraine_detail"]["changed"] is False
+        assert refresh_observations == [("answered", 1, 1)]
+
+        assert await _scalar(
+            conn,
+            "select count(*) from raw.user_feedback_prompts where id = %s",
+            (prompt_id,),
+        ) == 1
+        assert await _scalar(
+            conn,
+            "select updated_at = %s from raw.user_feedback_prompts where id = %s",
+            (prompt_updated_at, prompt_id),
+        ) is True
+        assert await _scalar(
+            conn,
+            "select count(*) from raw.user_symptom_episode_updates where episode_id = %s",
+            (episode_id,),
+        ) == 1
+        assert await _scalar(
+            conn,
+            "select count(*) from raw.user_migraine_episode_detail_revisions where episode_id = %s",
+            (episode_id,),
+        ) == 1
+        medicines = await _scalar(
+            conn,
+            "select payload -> 'medicines' from raw.user_migraine_episode_details where episode_id = %s",
+            (episode_id,),
+        )
+        assert len(medicines) == 1
+        assert medicines[0]["name"] == "User-entered medicine"
+        prompt_answer = await _scalar(
+            conn,
+            """
+            select jsonb_build_object(
+                'status', status,
+                'state', response_state,
+                'detail_choice', response_detail_choice,
+                'note', response_note_text,
+                'time_bucket', response_time_bucket,
+                'answered', answered_at is not null
+            )
+              from raw.user_feedback_prompts
+             where id = %s
+            """,
+            (prompt_id,),
+        )
+        assert prompt_answer == {
+            "status": "answered",
+            "state": "improving",
+            "detail_choice": "resting",
+            "note": "Resting in a dark room",
+            "time_bucket": "within_hours",
+            "answered": True,
+        }
+        canonical = await _scalar(
+            conn,
+            """
+            select jsonb_build_object(
+                'state', current_state,
+                'note', latest_note_text
+            )
+              from raw.user_symptom_episodes
+             where id = %s
+            """,
+            (episode_id,),
+        )
+        assert canonical == {
+            "state": "improving",
+            "note": "Resting in a dark room",
+        }
+        canonical_update = await _scalar(
+            conn,
+            """
+            select jsonb_build_object(
+                'kind', update_kind,
+                'state', state,
+                'note', note_text,
+                'source', source,
+                'prompt_id', metadata ->> 'prompt_id'
+            )
+              from raw.user_symptom_episode_updates
+             where episode_id = %s
+            """,
+            (episode_id,),
+        )
+        assert canonical_update == {
+            "kind": "follow_up",
+            "state": "improving",
+            "note": "Resting in a dark room",
+            "source": "follow_up",
+            "prompt_id": str(prompt_id),
+        }
+        audit = await _scalar(
+            conn,
+            """
+            select jsonb_build_object(
+                'revision', revision,
+                'kind', change_kind,
+                'source', source,
+                'medicine_count', jsonb_array_length(payload -> 'medicines'),
+                'medicine_name', payload -> 'medicines' -> 0 ->> 'name'
+            )
+              from raw.user_migraine_episode_detail_revisions
+             where episode_id = %s
+            """,
+            (episode_id,),
+        )
+        assert audit == {
+            "revision": 1,
+            "kind": "user_edit",
+            "source": "follow_up",
+            "medicine_count": 1,
+            "medicine_name": "User-entered medicine",
+        }
+
+        conflicting = _structured_prompt_payload(
+            expected_revision=0,
+            responded_at=responded_at,
+            medicine_name="Conflicting medicine",
+            note_text="Conflicting retry",
+        )
+        await conn.execute("set statement_timeout = 5000")
+        with pytest.raises(HTTPException) as stale:
+            await symptoms_router.respond_symptom_follow_up(
+                str(prompt_id),
+                conflicting,
+                _request(USER_A),
+                conn,
+            )
+        assert stale.value.status_code == 409
+        assert await _scalar(
+            conn,
+            "select count(*) from raw.user_symptom_episode_updates where episode_id = %s",
+            (episode_id,),
+        ) == 1
+        assert await _scalar(
+            conn,
+            "select count(*) from raw.user_migraine_episode_detail_revisions where episode_id = %s",
+            (episode_id,),
+        ) == 1
+    finally:
+        await conn.close()
+
+
+@pytest.mark.anyio
+async def test_real_prompt_route_concurrent_identical_requests_do_not_duplicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup = await _connect(autocommit=False)
+    await _reset(setup)
+    await setup.commit()
+    start = datetime(2026, 9, 8, 17, tzinfo=UTC)
+    responded_at = start.replace(hour=18)
+    episode_id, event_id, prompt_id = uuid4(), uuid4(), uuid4()
+    await _insert_parent(
+        setup,
+        user_id=USER_A,
+        episode_id=episode_id,
+        event_id=event_id,
+        start=start,
+        source="android",
+    )
+    await _insert_prompt(
+        setup,
+        prompt_id=prompt_id,
+        user_id=USER_A,
+        episode_id=episode_id,
+        scheduled_for=responded_at,
+    )
+    await setup.commit()
+    await setup.close()
+
+    refreshes: list[str] = []
+
+    async def _refresh(user_id: str, ts_utc: str) -> None:
+        assert user_id == USER_A
+        refreshes.append(ts_utc)
+
+    monkeypatch.setattr(symptoms_router, "_refresh_gauges_for_symptom", _refresh)
+    payload = _structured_prompt_payload(
+        expected_revision=0,
+        responded_at=responded_at,
+    )
+    conn_a = await _connect(autocommit=False)
+    conn_b = await _connect(autocommit=False)
+
+    async def _respond(conn: psycopg.AsyncConnection) -> dict:
+        await conn.execute("set statement_timeout = 5000")
+        return await symptoms_router.respond_symptom_follow_up(
+            str(prompt_id),
+            payload,
+            _request(USER_A),
+            conn,
+        )
+
+    try:
+        results = await asyncio.wait_for(
+            asyncio.gather(_respond(conn_a), _respond(conn_b)),
+            timeout=5.0,
+        )
+        assert all(result["ok"] is True for result in results)
+        assert sorted(
+            result["data"]["migraine_detail"]["changed"] for result in results
+        ) == [False, True]
+        assert len(refreshes) == 1
+
+        observer = await _connect()
+        try:
+            assert await _scalar(
+                observer,
+                "select count(*) from raw.user_feedback_prompts where id = %s and status = 'answered'",
+                (prompt_id,),
+            ) == 1
+            assert await _scalar(
+                observer,
+                "select count(*) from raw.user_symptom_episode_updates where episode_id = %s",
+                (episode_id,),
+            ) == 1
+            assert await _scalar(
+                observer,
+                "select count(*) from raw.user_migraine_episode_detail_revisions where episode_id = %s",
+                (episode_id,),
+            ) == 1
+            medicines = await _scalar(
+                observer,
+                "select payload -> 'medicines' from raw.user_migraine_episode_details where episode_id = %s",
+                (episode_id,),
+            )
+            assert len(medicines) == 1
+        finally:
+            await observer.close()
+    finally:
+        await conn_a.close()
+        await conn_b.close()
+
+
+@pytest.mark.anyio
+async def test_real_prompt_route_returns_projected_note_and_explicit_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn = await _connect(autocommit=False)
+    await _reset(conn)
+    await conn.commit()
+    start = datetime(2026, 9, 8, 19, tzinfo=UTC)
+    responded_at = start.replace(hour=20)
+    episode_id, event_id, prompt_id = uuid4(), uuid4(), uuid4()
+    await _insert_parent(
+        conn,
+        user_id=USER_A,
+        episode_id=episode_id,
+        event_id=event_id,
+        start=start,
+        source="ios",
+    )
+    await _insert_prompt(
+        conn,
+        prompt_id=prompt_id,
+        user_id=USER_A,
+        episode_id=episode_id,
+        scheduled_for=responded_at,
+    )
+    await conn.commit()
+
+    async def _noop_refresh(user_id: str, ts_utc: str) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(symptoms_router, "_refresh_gauges_for_symptom", _noop_refresh)
+    try:
+        save_payload = _structured_prompt_payload(
+            expected_revision=0,
+            responded_at=responded_at,
+            note_text=None,
+            nested_notes="Light sensitivity eased after resting",
+        )
+        await conn.execute("set statement_timeout = 5000")
+        saved = await symptoms_router.respond_symptom_follow_up(
+            str(prompt_id), save_payload, _request(USER_A), conn
+        )
+        assert saved["ok"] is True
+        assert saved["data"]["episode"]["note_preview"] == "Light sensitivity eased after resting"
+        assert saved["data"]["episode"]["note_count"] == 1
+        assert saved["data"]["migraine_detail"]["episode"]["notes"] == "Light sensitivity eased after resting"
+
+        clear_payload = _structured_prompt_payload(
+            expected_revision=1,
+            responded_at=responded_at,
+            note_text=None,
+            nested_notes=None,
+        )
+        await conn.execute("set statement_timeout = 5000")
+        cleared = await symptoms_router.respond_symptom_follow_up(
+            str(prompt_id), clear_payload, _request(USER_A), conn
+        )
+        assert cleared["ok"] is True
+        assert cleared["data"]["episode"]["note_preview"] is None
+        assert cleared["data"]["episode"]["note_count"] == 1
+        assert cleared["data"]["migraine_detail"]["episode"]["notes"] is None
+        assert cleared["data"]["migraine_detail"]["revision"] == 2
+    finally:
+        await conn.close()
+
+
+@pytest.mark.anyio
+async def test_real_prompt_route_commit_failure_rolls_back_without_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn = await _connect(autocommit=False)
+    await _reset(conn)
+    await conn.commit()
+    start = datetime(2026, 9, 8, 21, tzinfo=UTC)
+    responded_at = start.replace(hour=22)
+    episode_id, event_id, prompt_id = uuid4(), uuid4(), uuid4()
+    await _insert_parent(
+        conn,
+        user_id=USER_A,
+        episode_id=episode_id,
+        event_id=event_id,
+        start=start,
+        source="android",
+    )
+    await _insert_prompt(
+        conn,
+        prompt_id=prompt_id,
+        user_id=USER_A,
+        episode_id=episode_id,
+        scheduled_for=responded_at,
+    )
+    await conn.commit()
+
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            create or replace function raw.fail_g010_deferred_commit()
+            returns trigger language plpgsql as $$
+            begin
+              raise exception 'synthetic G-010 deferred commit failure';
+            end
+            $$;
+            create constraint trigger fail_g010_deferred_commit
+            after insert on raw.user_migraine_episode_detail_revisions
+            deferrable initially deferred
+            for each row execute function raw.fail_g010_deferred_commit();
+            """
+        )
+    await conn.commit()
+    refreshes: list[str] = []
+
+    async def _refresh(user_id: str, ts_utc: str) -> None:  # noqa: ARG001
+        refreshes.append(ts_utc)
+
+    monkeypatch.setattr(symptoms_router, "_refresh_gauges_for_symptom", _refresh)
+    payload = _structured_prompt_payload(
+        expected_revision=0,
+        responded_at=responded_at,
+    )
+    try:
+        await conn.execute("set statement_timeout = 5000")
+        failed = await symptoms_router.respond_symptom_follow_up(
+            str(prompt_id), payload, _request(USER_A), conn
+        )
+        assert failed.status_code == 200
+        body = json.loads(failed.body)
+        assert body["ok"] is False
+        assert "synthetic G-010 deferred commit failure" in body["error"]
+        assert refreshes == []
+        assert await _scalar(
+            conn,
+            "select status from raw.user_feedback_prompts where id = %s",
+            (prompt_id,),
+        ) == "pending"
+        assert await _scalar(
+            conn,
+            "select current_state = 'new' and latest_note_text is null from raw.user_symptom_episodes where id = %s",
+            (episode_id,),
+        ) is True
+        assert await _scalar(
+            conn,
+            "select count(*) from raw.user_symptom_episode_updates where episode_id = %s",
+            (episode_id,),
+        ) == 0
+        assert await _scalar(
+            conn,
+            "select count(*) from raw.user_migraine_episode_details where episode_id = %s",
+            (episode_id,),
+        ) == 0
+        assert await _scalar(
+            conn,
+            "select count(*) from raw.user_migraine_episode_detail_revisions where episode_id = %s",
+            (episode_id,),
+        ) == 0
+    finally:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "drop trigger if exists fail_g010_deferred_commit on raw.user_migraine_episode_detail_revisions"
+            )
+            await cur.execute("drop function if exists raw.fail_g010_deferred_commit()")
         await conn.commit()
         await conn.close()
 

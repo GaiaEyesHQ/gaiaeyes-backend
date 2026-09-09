@@ -203,7 +203,7 @@ async def load_migraine_follow_up_detail(conn, user_id: str, episode_id: str) ->
     }
 
 
-async def save_migraine_follow_up_detail(
+async def prepare_migraine_follow_up_detail(
     conn,
     user_id: str,
     episode_id: str,
@@ -211,16 +211,8 @@ async def save_migraine_follow_up_detail(
     expected_revision: int,
     changes: dict[str, Any],
     supplied_fields: set[str],
-    canonical_fields: set[str],
-    occurred_at: Optional[datetime] = None,
-    source: str = "follow_up",
 ) -> dict[str, Any]:
-    """Save a structured edit while preserving canonical identity and onset.
-
-    Callers must provide an outer transaction when this write is combined with
-    prompt response/scheduling work.  ``persist_migraine_episode_detail`` uses
-    a nested transaction/savepoint for the detail + audit pair.
-    """
+    """Lock and validate a structured edit before adjacent prompt writes."""
 
     if expected_revision < 0:
         raise ValueError("expected_revision cannot be negative")
@@ -243,10 +235,53 @@ async def save_migraine_follow_up_detail(
             changes,
             supplied_fields,
         ):
-            return {"episode": base, "revision": current_revision, "changed": False}
+            return {
+                "episode": base,
+                "revision": current_revision,
+                "changed": False,
+            }
         raise StaleMigraineRevision(
             f"stale migraine detail revision: expected {expected_revision}, stored {current_revision}"
         )
+
+    return {
+        "episode": base,
+        "revision": current_revision,
+        "changed": True,
+    }
+
+
+async def save_migraine_follow_up_detail(
+    conn,
+    user_id: str,
+    episode_id: str,
+    *,
+    expected_revision: int,
+    changes: dict[str, Any],
+    supplied_fields: set[str],
+    canonical_fields: set[str],
+    occurred_at: Optional[datetime] = None,
+    source: str = "follow_up",
+) -> dict[str, Any]:
+    """Save a structured edit while preserving canonical identity and onset.
+
+    Callers must provide an outer transaction when this write is combined with
+    prompt response/scheduling work.  ``persist_migraine_episode_detail`` uses
+    a nested transaction/savepoint for the detail + audit pair.
+    """
+
+    prepared = await prepare_migraine_follow_up_detail(
+        conn,
+        user_id,
+        episode_id,
+        expected_revision=expected_revision,
+        changes=changes,
+        supplied_fields=supplied_fields,
+    )
+    current_revision = int(prepared["revision"])
+    base = prepared["episode"]
+    if not prepared["changed"]:
+        return prepared
 
     next_episode = apply_follow_up_patch(
         base,

@@ -32,6 +32,24 @@ final class GaiaExporterUITests: XCTestCase {
     }
 
     @MainActor
+    func testMigraineFollowUpFixtureIsReadable() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-gaia-preview-migraine-follow-up-fixture"]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["How is your migraine now?"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Migraine details"].exists)
+        XCTAssertTrue(app.textFields["Early signs, separated by commas"].exists)
+        XCTAssertTrue(app.textFields["Medicine name"].exists)
+        XCTAssertTrue(app.buttons["Save response"].exists)
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Migraine follow-up fixture"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

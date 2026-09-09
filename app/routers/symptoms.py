@@ -724,6 +724,13 @@ async def _commit_if_supported(conn) -> None:
 async def _transaction_if_supported(conn):
     transaction = getattr(conn, "transaction", None)
     if callable(transaction):
+        # get_db() applies SET statement_timeout on a non-autocommit pooled
+        # connection before yielding it, which starts an implicit transaction.
+        # Close that settings-only transaction so this context owns the outer
+        # write transaction and commits before any post-write refresh begins.
+        commit = getattr(conn, "commit", None)
+        if callable(commit):
+            await commit()
         async with transaction():
             yield
         return
@@ -1281,6 +1288,7 @@ async def respond_symptom_follow_up(
 ):
     user_id = _require_user_id(request)
     migraine_detail = None
+    should_refresh = True
     try:
         if payload.migraine is None:
             result = await feedback_db.respond_symptom_follow_up(
@@ -1296,7 +1304,36 @@ async def respond_symptom_follow_up(
             )
             await _commit_if_supported(conn)
         else:
+            changes, fields = _migraine_changes(
+                payload.migraine,
+                state=_normalize_current_state(payload.state),
+            )
             async with _transaction_if_supported(conn):
+                prompt = await feedback_db.fetch_symptom_follow_up_prompt(
+                    conn,
+                    user_id,
+                    prompt_id,
+                    for_update=False,
+                )
+                if not prompt:
+                    raise RuntimeError("Follow-up prompt not found")
+                episode_id = str(prompt.get("episode_id") or "")
+                await migraine_db.prepare_migraine_follow_up_detail(
+                    conn,
+                    user_id,
+                    episode_id,
+                    expected_revision=int(payload.migraine.expected_revision),
+                    changes=changes,
+                    supplied_fields=fields,
+                )
+                locked_prompt = await feedback_db.fetch_symptom_follow_up_prompt(
+                    conn,
+                    user_id,
+                    prompt_id,
+                    for_update=True,
+                )
+                if not locked_prompt or str(locked_prompt.get("episode_id") or "") != episode_id:
+                    raise feedback_db.FollowUpResponseConflict("Follow-up prompt changed while saving")
                 result = await feedback_db.respond_symptom_follow_up(
                     conn,
                     user_id,
@@ -1307,17 +1344,14 @@ async def respond_symptom_follow_up(
                     note_text=_trimmed_text(payload.note_text),
                     time_bucket=_trimmed_text(payload.time_bucket),
                     responded_at=payload.ts_utc,
-                )
-                episode = result.get("episode") or {}
-                changes, fields = _migraine_changes(
-                    payload.migraine,
-                    state=_normalize_current_state(payload.state),
+                    prompt_row=locked_prompt,
+                    replay_safe=True,
                 )
                 canonical_fields = {"notes"} if "notes" in fields else set()
                 migraine_result = await migraine_db.save_migraine_follow_up_detail(
                     conn,
                     user_id,
-                    str(episode.get("id") or ""),
+                    episode_id,
                     expected_revision=int(payload.migraine.expected_revision),
                     changes=changes,
                     supplied_fields=fields,
@@ -1326,11 +1360,19 @@ async def respond_symptom_follow_up(
                     source="follow_up",
                 )
                 migraine_detail = _migraine_detail_out(migraine_result)
+                result["episode"] = await symptoms_db.fetch_symptom_episode(
+                    conn,
+                    user_id,
+                    episode_id,
+                )
+                should_refresh = bool(result.get("changed", True) or migraine_result.get("changed"))
     except migraine_db.MigraineDetailUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except migraine_db.MigraineEpisodeNotFound as exc:
         raise HTTPException(status_code=404, detail="Migraine episode not found") from exc
     except migraine_db.StaleMigraineRevision as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except feedback_db.FollowUpResponseConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to respond to symptom follow-up", extra={"user_id": user_id, "prompt_id": prompt_id})
@@ -1345,7 +1387,7 @@ async def respond_symptom_follow_up(
 
     episode = result.get("episode") or {}
     refresh_ts = str(episode.get("last_interaction_at") or episode.get("state_updated_at") or episode.get("started_at") or "")
-    if refresh_ts:
+    if refresh_ts and should_refresh:
         await _refresh_gauges_for_symptom(user_id, refresh_ts)
     return _success(
         SymptomFollowUpPromptEnvelope(

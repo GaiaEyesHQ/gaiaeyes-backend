@@ -3,6 +3,7 @@ import Foundation
 struct SymptomFollowUpResult: Decodable, Hashable {
     let prompt: CurrentSymptomFollowUpPrompt
     let episode: CurrentSymptomItem
+    let migraineDetail: MigraineEpisodeDetail?
 }
 
 struct DailyCheckInPrompt: Decodable, Identifiable, Hashable {

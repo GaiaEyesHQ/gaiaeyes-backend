@@ -19,8 +19,8 @@ All five remain priorities. “Ships” requires reviewed source, relevant autom
 | Priority | Current status | Existing evidence | Missing before the requested update is complete |
 |---|---|---|---|
 | Voice logging tweaks | **Source delta reconciled; physical acceptance pending** | Main `HandsFreeSymptomLogger.swift` has background start/stop App Intents, default severity 5, authenticated canonical submission, offline queueing for starts, duplicate protection, refresh notifications, analytics, expanded natural stop phrases, truthful offline/unconfirmed/failure results, and latest-active-migraine selection. A clean isolated run passed 13 focused tests with exit 0, and a generic iOS Debug build succeeded on 2026-09-07. | Complete the physical Siri phrase matrix, including the known Gaia Eyes-versus-Health routing ambiguity, and verify the accepted release build separately from local source. |
-| Follow-up | **Structured backend integrated locally; client experience pending** | Backend scheduling/preferences, due-prompt fetch, respond/dismiss, episode follow-up state, and iOS follow-up UI/API calls exist. G-010 adds owner-filtered structured detail read/edit plus an optional structured block on the existing follow-up response. The disposable PostgreSQL suite verifies atomic persistence, retries, conflicts, clearing, and isolation. | Extend the existing iOS follow-up sheet/models/API payload for early signs, exposures/context, medicine/relief, and notes; keep it dismissible and editable after the event. Verify physical reminder preference, snooze/dismiss, account isolation, and offline/error behavior. |
-| Medicine logging | **Structured backend record local; client capture pending** | The canonical detail contract and G-010 backend now retain user-entered medicine, time, optional dose, and explicitly reported relief without treating missing data as “none.” | Add medicine capture/editing to the existing migraine follow-up UI. Do not reinterpret the generic `New supplement or medication` exposure as proof that a medicine was taken or effective. A reusable personal medicine list can follow the canonical episode record. |
+| Follow-up | **Local iOS client integrated; inactive pending review/deployment** | G-011 extends the existing iOS follow-up sheet/models/API payload for optional early signs, medicine/relief, and notes, plus later editing from symptom history. It preserves drafts on errors/conflicts, scopes drafts to the signed-in account, reuses stable retry timestamps, and requires structured readback for ambiguous save recovery. The path is Debug-only and explicitly gated. | Review the local interaction, deploy the accepted G-010 migration/backend through the normal release path, then run authenticated device tests for reminder preference, snooze/dismiss, account isolation, and network failure/retry behavior before activation. Context/exposure selection remains a later UI addition; the contract already supports it. |
+| Medicine logging | **Local iOS capture/edit integrated; inactive pending review/deployment** | G-011 captures medicine name/time, optional dose/unit, and explicit relief in the existing follow-up UI. It keeps missing medicine distinct from “No medicine taken,” and unknown relief distinct from “No relief.” Unchanged values retain stored state and explicit clears remain explicit. | Complete authenticated device testing against the deployed capability before enabling it. Do not reinterpret the generic `New supplement or medication` exposure as proof that a medicine was taken or effective. A reusable personal medicine list can follow the canonical episode record. |
 | Reports | **Partial; history exists, migraine report does not** | iOS has a symptom timeline and historical symptom editor; Gaia Eyes also has general pattern/history surfaces. | Build a user-readable migraine episode summary/history from the structured follow-up and medicine model, then add the explicitly chosen share/export form. Do not label a generic timeline a physician report or imply causal conclusions. |
 | Import from other migraine apps | **Provider-neutral design only; provider adapters blocked** | The roadmap defines a canonical episode/import contract, provenance, preview, validation, idempotency, de-duplication, reversible import runs, and import-specific deletion. HealthKit history import is separate. | Implement the generic Gaia CSV template/parser/preview with synthetic fixtures. Migraine Buddy, Bearable, and other provider adapters require representative redacted current exports and permitted-use/format review. No provider compatibility should be promised before that evidence exists. |
 
@@ -73,25 +73,33 @@ changes are atomic, and affected-user gauge refresh is deferred until commit.
 Omitted fields retain stored values, explicit empty lists clear list fields,
 and explicit null clears notes; missing medicine/relief remains distinct from
 an explicit negative report. Exact retries are idempotent and stale conflicting
-edits fail without duplicating medicine entries or erasing newer data.
+edits fail without duplicating medicine entries or erasing newer data. The
+request transaction now closes the dependency's settings-only transaction,
+owns the outer write transaction, and commits before refresh. Structured prompt
+responses serialize the episode/detail revision and prompt row, including
+concurrent identical retries. Returned canonical note preview/count is reloaded
+after structured note projection and explicit clear.
 
 The reusable `scripts/run_migraine_postgres_tests.sh` runner builds/uses a
 user-local PostgreSQL 17 runtime, creates a private disposable Unix-socket-only
 cluster, rejects non-test/remote DSNs, verifies a disposable marker after
 connection, preserves exact logs, and tears the cluster down. The accepted
-G-010 run passed 59 tests, including forced detail-audit failure rollback. No
+G-010 review-verification run passed 63 tests, including request-shaped
+sequential/concurrent retries, committed visibility from the refresh
+connection, projected note save/clear readback, forced detail-audit rollback,
+and deferred outer-commit failure rollback without refresh. No
 hosted migration, deployment, client activation, or real user data was used.
 
 ## Next-ready implementation slice
 
-The next bounded slice is iOS integration through the existing
-`APIClient.respondSymptomFollowUp`, `SymptomFollowUpResult` model, and
-`CurrentSymptomFollowUpSheet`. Extend those surfaces to send/decode the optional
-structured migraine block, then add direct detail read/edit for later changes.
-Do not create a second reminder, episode, or medicine subsystem. Client work
-must remain inactive until the additive migration and backend route are deployed
-through the normal reviewed release process. Reports and generic import parsing
-remain subsequent consumers of the same model.
+G-011 completed the bounded local iOS integration through the existing
+`APIClient.respondSymptomFollowUp`, `SymptomFollowUpResult` model,
+`CurrentSymptomFollowUpSheet`, and historical symptom editor. The next step is
+review and release sequencing: accept G-010/G-011 together, apply the additive
+migration and backend route through the normal controlled process, then test an
+authenticated Debug client against that capability before any activation.
+Android parity, website/member-hub presentation, reports, context/exposure UI,
+and generic import parsing remain later consumers of the same model.
 
 ## Explicit blockers and non-blockers
 

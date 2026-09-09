@@ -21,7 +21,7 @@ struct GaiaEyesApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            rootView
                 .environmentObject(appState)
                 .environmentObject(auth)
                 .onOpenURL { url in
@@ -44,5 +44,18 @@ struct GaiaEyesApp: App {
                     }
                 }
         }
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-gaia-preview-migraine-follow-up-fixture") {
+            MigraineFollowUpFixtureScreen()
+        } else {
+            ContentView()
+        }
+#else
+        ContentView()
+#endif
     }
 }

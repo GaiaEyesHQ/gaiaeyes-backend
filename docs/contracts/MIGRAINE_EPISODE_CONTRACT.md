@@ -84,9 +84,14 @@ unapplied migration returns a capability error; legacy follow-up requests that
 omit the structured block continue to work without that migration.
 
 Canonical state/note projection, structured detail, revision audit, and prompt
-changes share one outer transaction. Gauge refresh happens only after commit
-and only for the affected user. The original symptom onset event and episode
-identity are never replaced by a follow-up edit.
+changes share one outer transaction. The structured prompt path locks and
+validates the canonical episode/detail revision before locking and answering
+the prompt. Exact sequential or concurrent replays return the stored result
+without another prompt, canonical, detail, or audit write; conflicting stale
+requests fail before overwriting newer data. Gauge refresh happens only after
+the outer request transaction commits and only for the affected user. The
+original symptom onset event and episode identity are never replaced by a
+follow-up edit.
 
 Import runs and episode links are separate from clinical episode identity. A
 durable identity registry maps a stable provider event ID or reviewed clinical
@@ -165,13 +170,35 @@ The scripted repository tests are supplemented by
 `tests/db/test_migraine_postgres_integration.py`, which applies the unchanged
 migration to a private disposable PostgreSQL 17 cluster and exercises real
 foreign keys, grants, RLS, rollback, competing connections, replay, reversal,
-the adapter outer-transaction requirement, authenticated follow-up persistence,
-explicit clearing, exact retry behavior, cross-account isolation, and forced
-audit-failure rollback. Run the focused suite with
+the adapter outer-transaction requirement, authenticated request-shaped
+follow-up persistence, explicit clearing, exact sequential and concurrent
+retry behavior, cross-account isolation, separate-connection visibility before
+gauge refresh, and both immediate audit-failure and deferred outer-commit
+rollback. The request-path tests also verify the canonical note preview/count
+returned after structured note save and clear. Run the focused suite with
 `./scripts/run_migraine_postgres_tests.sh`; it rejects non-private or remote
 database targets before connecting, verifies a disposable marker after
 connecting, preserves its exact log, and stops/removes the temporary cluster.
-The accepted G-010 run passed 59 tests. That fixture does not emulate
+The current review-ready G-010 run passed 63 tests. That fixture does not emulate
 GoTrue, PostgREST, the Supabase gateway/pooler, or other hosted integration
 surfaces. The pgTAP suite remains pending because pgTAP is not installed in the
 isolated runtime. No production database was used as a substitute.
+
+## Local iOS integration status
+
+G-011 adds a local iOS client for this contract through the existing current
+symptom follow-up and historical symptom editor. The client distinguishes
+omitted fields from explicit clears, missing medicine from an explicit “No
+medicine taken,” and unknown relief from explicit “No relief.” It reuses a
+stable response timestamp across retries, sends an optimistic expected
+revision, preserves the draft on errors or conflicts, and requires structured
+detail readback before treating an ambiguous structured save as recovered.
+
+The integration is disabled by default and cannot activate in a Release build.
+It is available only in a local Debug build with the explicit
+`-gaia-enable-structured-migraine-follow-up` launch argument or
+`GAIA_ENABLE_STRUCTURED_MIGRAINE_FOLLOW_UP=1`. No hosted migration, backend
+deployment, TestFlight build, or production activation is part of G-011.
+Android and website/member-hub presentation are intentionally deferred; a
+repository search found no equivalent editable migraine-medicine surface to
+update without creating a new parallel UI.
