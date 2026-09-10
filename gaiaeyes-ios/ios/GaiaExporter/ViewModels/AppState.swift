@@ -187,6 +187,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
 
     // MARK: - Init
     init() {
+        guard !MigraineLocalVerification.isActive else { return }
         let defaults = UserDefaults.standard
         if let storedBase = defaults.string(forKey: "baseURL"), !storedBase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             baseURLString = storedBase

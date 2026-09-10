@@ -166,8 +166,6 @@ class MigraineEpisode(ContractModel):
     def validate_episode(self) -> "MigraineEpisode":
         if self.end is not None and self.end.utc < self.start.utc:
             raise ValueError("end cannot be earlier than start")
-        if self.state == "resolved" and self.end is None:
-            raise ValueError("resolved episodes require an end timestamp")
         if self.state != "resolved" and self.end is not None:
             raise ValueError("only resolved episodes may have an end timestamp")
         if self.provenance.source_type != "import" and self.symptom_event_id is None:

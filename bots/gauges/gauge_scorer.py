@@ -292,11 +292,15 @@ def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
         except Exception:
             episode_rows = []
 
+    # Check this additive capability live: table_columns caches absence for the
+    # process lifetime, which could keep old-day inputs after migration.
+    capability = pg.fetchrow("select to_regclass('raw.user_symptom_events_effective') is not null as available")
+    source = "raw.user_symptom_events_effective" if capability and capability.get("available") else "raw.user_symptom_events"
     try:
         rows = pg.fetch(
-            """
+            f"""
             select symptom_code, severity, ts_utc, free_text, tags
-              from raw.user_symptom_events
+              from {source}
              where user_id = %s
                and ts_utc >= %s
                and ts_utc < %s

@@ -93,6 +93,7 @@ private struct SymptomFollowUpComposerState: Identifiable {
     let prompt: CurrentSymptomFollowUpPrompt
     let responseState: CurrentSymptomState
     let migraineDraft: MigraineFollowUpDraft?
+    let accountScope: String
 
     var id: String {
         "\(prompt.id):\(responseState.rawValue)"
@@ -323,7 +324,7 @@ struct CurrentSymptomsView: View {
                 migraineDraft: composer.migraineDraft,
                 isBusy: isUpdating(composer.item.id),
                 onSubmit: { detailChoice, noteText, timeBucket, responseTimestamp, migraineEdit in
-                    await submitFollowUpResponse(
+                    try await submitFollowUpResponse(
                         prompt: composer.prompt,
                         item: composer.item,
                         state: composer.responseState,
@@ -332,7 +333,7 @@ struct CurrentSymptomsView: View {
                         timeBucket: timeBucket,
                         responseTimestamp: responseTimestamp,
                         migraineEdit: migraineEdit,
-                        draftAccountScope: composer.migraineDraft?.accountScope
+                        draftAccountScope: composer.accountScope
                     )
                 }
             )
@@ -669,7 +670,7 @@ struct CurrentSymptomsView: View {
         let isStructuredMigraine = structuredMigraineFollowUpEnabled && item.symptomCode.uppercased() == "MIGRAINE"
         if state == .improving && !isStructuredMigraine {
             Task {
-                _ = await submitFollowUpResponse(
+                _ = try? await submitFollowUpResponse(
                     prompt: prompt,
                     item: item,
                     state: state,
@@ -690,7 +691,8 @@ struct CurrentSymptomsView: View {
             item: item,
             prompt: prompt,
             responseState: state,
-            migraineDraft: draft
+            migraineDraft: draft,
+            accountScope: currentAccountScope
         )
     }
 
@@ -769,133 +771,40 @@ struct CurrentSymptomsView: View {
         prompt: CurrentSymptomFollowUpPrompt,
         item: CurrentSymptomItem,
         state: CurrentSymptomState,
-        detailChoice: String?,
-        noteText: String?,
-        timeBucket: String?,
-        responseTimestamp: Date,
-        migraineEdit: MigraineStructuredEdit?,
+        detailChoice: String?, noteText: String?, timeBucket: String?,
+        responseTimestamp: Date, migraineEdit: MigraineStructuredEdit?,
         draftAccountScope: String?
-    ) async -> Bool {
+    ) async throws -> Bool {
         guard !isUpdating(item.id) else { return false }
-        if let draftAccountScope, draftAccountScope != currentAccountScope {
-            await MainActor.run {
-                rowFeedback[item.id] = CurrentSymptomRowFeedback(
-                    message: MigraineDraftError.accountChanged.localizedDescription,
-                    isError: true
-                )
-            }
-            return false
-        }
-        await MainActor.run {
-            updatingEpisodeIds.insert(item.id)
-            rowFeedback[item.id] = nil
-            journalStatus = nil
-            optimisticStates[item.id] = state
-        }
-        defer {
-            Task { @MainActor in updatingEpisodeIds.remove(item.id) }
-        }
+        let accountScope = draftAccountScope ?? currentAccountScope
+        try MigraineFollowUpWorkflow.checkAccount(accountScope, current: { currentAccountScope })
+        updatingEpisodeIds.insert(item.id)
+        rowFeedback[item.id] = nil
+        journalStatus = nil
+        defer { updatingEpisodeIds.remove(item.id) }
         do {
-            let response = try await api.respondSymptomFollowUp(
-                promptId: prompt.id,
-                state: state,
-                detailChoice: detailChoice,
-                noteText: noteText,
-                timeBucket: timeBucket,
-                tsUtc: responseTimestamp,
-                migraine: migraineEdit
+            let saved = try await MigraineFollowUpWorkflow.submit(
+                api: api, promptId: prompt.id, episodeId: item.id, state: state,
+                detailChoice: detailChoice, noteText: noteText, timeBucket: timeBucket,
+                timestamp: responseTimestamp, edit: migraineEdit, accountScope: accountScope,
+                currentAccountScope: { currentAccountScope }
             )
-            if response.ok == false {
-                throw NSError(domain: "CurrentSymptoms", code: 8, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not save the follow-up"])
+            // Only an acknowledged response for this account, prompt and episode
+            // may dismiss the composer or change the visible canonical state.
+            followUpComposer = nil
+            if state == .resolved {
+                removeItem(item.id)
+                journalStatus = "\(item.label) marked resolved."
+            } else {
+                upsertItem(saved.episode)
+                rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "\(item.label) updated from follow-up.", isError: false)
             }
-            if let migraineEdit {
-                guard let savedDetail = response.payload?.migraineDetail,
-                      migraineEdit.matches(savedDetail) else {
-                    throw NSError(
-                        domain: "CurrentSymptoms",
-                        code: 9,
-                        userInfo: [NSLocalizedDescriptionKey: "The migraine details could not be confirmed after saving."]
-                    )
-                }
-            }
-            AppAnalytics.track(
-                "symptom_followup_answered",
-                properties: [
-                    "state": state.rawValue,
-                    "symptom_code": item.symptomCode,
-                    "detail_choice": detailChoice ?? "none",
-                ]
-            )
-            await MainActor.run {
-                followUpComposer = nil
-                optimisticStates.removeValue(forKey: item.id)
-                if state == .resolved {
-                    removeItem(item.id)
-                    journalStatus = "\(item.label) marked resolved."
-                } else {
-                    upsertItem(
-                        response.payload?.episode
-                        ?? locallyUpdatedItem(
-                            from: item,
-                            state: state,
-                            noteText: noteText,
-                            useProvidedNote: noteText != nil,
-                            pendingFollowUp: nil,
-                            useProvidedPrompt: true
-                        )
-                    )
-                    rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "\(item.label) updated from follow-up.", isError: false)
-                }
-            }
-            await loadSnapshot(showLoading: false, surfaceErrors: false)
+            AppAnalytics.track("symptom_followup_answered", properties: ["state": state.rawValue, "symptom_code": item.symptomCode])
             return true
         } catch {
-            let recovered: Bool
-            if let migraineEdit {
-                recovered = await confirmStructuredMigraineSave(episodeId: item.id, edit: migraineEdit)
-            } else {
-                recovered = isRecoverableCurrentSymptomsMutationError(error)
-                    ? await confirmRecoveredState(episodeId: item.id, expectedState: state, removeOnSuccess: state == .resolved)
-                    : false
-            }
-            await MainActor.run {
-                optimisticStates.removeValue(forKey: item.id)
-                if recovered {
-                    followUpComposer = nil
-                    if state == .resolved {
-                        removeItem(item.id)
-                        journalStatus = "\(item.label) marked resolved."
-                    } else {
-                        rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "\(item.label) updated from follow-up.", isError: false)
-                    }
-                } else {
-                    rowFeedback[item.id] = CurrentSymptomRowFeedback(message: error.localizedDescription, isError: true)
-                }
-            }
-            if recovered {
-                await loadSnapshot(showLoading: false, surfaceErrors: false)
-            }
-            return recovered
+            rowFeedback[item.id] = CurrentSymptomRowFeedback(message: error.localizedDescription, isError: true)
+            throw error
         }
-    }
-
-    private func confirmStructuredMigraineSave(episodeId: String, edit: MigraineStructuredEdit) async -> Bool {
-        for attempt in 0..<3 {
-            do {
-                let response = try await api.fetchMigraineEpisodeDetail(episodeId: episodeId)
-                if response.ok != false, let detail = response.payload, edit.matches(detail) {
-                    return true
-                }
-            } catch {
-                if !isCurrentSymptomsCancellation(error) {
-                    appLog("[CurrentSymptoms] migraine readback error: \(error.localizedDescription)")
-                }
-            }
-            if attempt < 2 {
-                try? await Task.sleep(nanoseconds: 450_000_000)
-            }
-        }
-        return false
     }
 
     private func openEditor(for item: CurrentSymptomItem) {
@@ -1691,7 +1600,7 @@ private struct CurrentSymptomFollowUpSheet: View {
     let prompt: CurrentSymptomFollowUpPrompt
     let responseState: CurrentSymptomState
     let isBusy: Bool
-    let onSubmit: (String?, String?, String?, Date, MigraineStructuredEdit?) async -> Bool
+    let onSubmit: (String?, String?, String?, Date, MigraineStructuredEdit?) async throws -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var detailChoice: String = ""
@@ -1701,7 +1610,12 @@ private struct CurrentSymptomFollowUpSheet: View {
     @State private var isLoadingMigraineDetail: Bool = false
     @State private var migraineDetailMessage: String?
     @State private var saveError: String?
+    @FocusState private var noteIsFocused: Bool
     private let responseTimestamp: Date
+    private let accountScope: String
+    private let accountScopeProvider: @MainActor () -> String
+    @State private var hasLoadFailure = false
+    @State private var isSubmitting = false
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -1712,7 +1626,8 @@ private struct CurrentSymptomFollowUpSheet: View {
         responseState: CurrentSymptomState,
         migraineDraft: MigraineFollowUpDraft?,
         isBusy: Bool,
-        onSubmit: @escaping (String?, String?, String?, Date, MigraineStructuredEdit?) async -> Bool
+        accountScopeProvider: @escaping @MainActor () -> String = { MigraineFollowUpWorkflow.accountScope() },
+        onSubmit: @escaping (String?, String?, String?, Date, MigraineStructuredEdit?) async throws -> Bool
     ) {
         self.api = api
         self.item = item
@@ -1720,14 +1635,14 @@ private struct CurrentSymptomFollowUpSheet: View {
         self.responseState = responseState
         self.isBusy = isBusy
         self.onSubmit = onSubmit
+        self.accountScopeProvider = accountScopeProvider
+        self.accountScope = migraineDraft?.accountScope ?? accountScopeProvider()
         _migraineDraft = State(initialValue: migraineDraft)
+        _isLoadingMigraineDetail = State(initialValue: migraineDraft != nil)
         responseTimestamp = migraineDraft?.responseTimestamp ?? Date()
     }
 
-    private var currentAccountScope: String {
-        let value = AuthManager.shared.currentSupabaseUserId()?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value?.isEmpty == false ? value! : "anonymous"
-    }
+    private var currentAccountScope: String { accountScopeProvider() }
 
     private var migraineDraftBinding: Binding<MigraineFollowUpDraft>? {
         guard migraineDraft != nil else { return nil }
@@ -1841,7 +1756,7 @@ private struct CurrentSymptomFollowUpSheet: View {
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.7))
                         }
-                    } else if let draft = migraineDraftBinding {
+                    } else if !hasLoadFailure, let draft = migraineDraftBinding {
                         MigraineMedicineFields(draft: draft)
                     }
 
@@ -1849,6 +1764,13 @@ private struct CurrentSymptomFollowUpSheet: View {
                         Text(migraineDetailMessage)
                             .font(.caption)
                             .foregroundColor(.orange.opacity(0.9))
+                    }
+
+                    if hasLoadFailure {
+                        Button("Retry loading migraine details") {
+                            Task { await loadMigraineDetailIfNeeded() }
+                        }
+                        .disabled(isLoadingMigraineDetail)
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
@@ -1866,6 +1788,8 @@ private struct CurrentSymptomFollowUpSheet: View {
                                     .padding(.vertical, 12)
                             }
                             TextEditor(text: $noteDraft)
+                                .accessibilityIdentifier("migraine-episode-note")
+                                .focused($noteIsFocused)
                                 .scrollContentBackground(.hidden)
                                 .foregroundColor(.white)
                                 .frame(minHeight: 100)
@@ -1879,24 +1803,32 @@ private struct CurrentSymptomFollowUpSheet: View {
 
                     Button {
                         Task {
+                            guard !isSubmitting else { return }
+                            noteIsFocused = false
+                            isSubmitting = true
+                            defer { isSubmitting = false }
                             saveError = nil
                             do {
+                                try MigraineFollowUpWorkflow.checkAccount(accountScope, current: accountScopeProvider)
                                 var edit: MigraineStructuredEdit?
                                 if var draft = migraineDraft {
                                     draft.noteText = noteDraft
                                     migraineDraft = draft
                                     edit = try draft.makeStructuredEdit(currentAccountScope: currentAccountScope)
+                                        ?? MigraineStructuredEdit(expectedRevision: draft.expectedRevision,
+                                            earlySigns: nil, contexts: nil, medicines: nil, notes: .retain)
                                 }
                                 let submittedNote = migraineDraft == nil
                                     ? noteDraft.nilIfBlank
                                     : edit?.followUpNoteText
-                                let saved = await onSubmit(
+                                let saved = try await onSubmit(
                                     detailChoice.nilIfBlank,
                                     submittedNote,
                                     timeBucket.nilIfBlank,
                                     responseTimestamp,
                                     edit
                                 )
+                                try MigraineFollowUpWorkflow.checkAccount(accountScope, current: accountScopeProvider)
                                 if saved {
                                     dismiss()
                                 } else {
@@ -1908,24 +1840,28 @@ private struct CurrentSymptomFollowUpSheet: View {
                         }
                     } label: {
                         HStack {
-                            if isBusy {
+                            if isBusy || isSubmitting {
                                 ProgressView().scaleEffect(0.8)
                             }
-                            Text("Save response")
+                            Text(isBusy || isSubmitting ? "Saving response…" : "Save response")
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isBusy || isLoadingMigraineDetail)
+                    .disabled(isBusy || isSubmitting || isLoadingMigraineDetail || hasLoadFailure)
+                    .accessibilityIdentifier("migraine-save-response")
 
                     if let saveError {
                         Text(saveError)
+                            .accessibilityIdentifier("migraine-save-error")
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
                 }
                 .padding(16)
+                .disabled(isBusy || isSubmitting)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(
                 LinearGradient(
                     colors: [Color.black, Color(red: 0.05, green: 0.07, blue: 0.12)],
@@ -1939,8 +1875,10 @@ private struct CurrentSymptomFollowUpSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
+                        .disabled(isBusy || isSubmitting)
                 }
             }
+            .interactiveDismissDisabled(isBusy || isSubmitting)
             .task {
                 await loadMigraineDetailIfNeeded()
             }
@@ -1952,8 +1890,10 @@ private struct CurrentSymptomFollowUpSheet: View {
         isLoadingMigraineDetail = true
         defer { isLoadingMigraineDetail = false }
         do {
+            try MigraineFollowUpWorkflow.checkAccount(accountScope, current: accountScopeProvider)
             let response = try await api.fetchMigraineEpisodeDetail(episodeId: item.id)
-            guard response.ok != false, let detail = response.payload else {
+            try MigraineFollowUpWorkflow.checkAccount(accountScope, current: accountScopeProvider)
+            guard response.ok != false, let detail = response.payload, detail.episode.episodeId == item.id else {
                 throw NSError(
                     domain: "CurrentSymptomFollowUpSheet",
                     code: 1,
@@ -1963,10 +1903,21 @@ private struct CurrentSymptomFollowUpSheet: View {
             try draft.apply(detail, forAccountScope: currentAccountScope)
             migraineDraft = draft
             noteDraft = draft.noteText
+            hasLoadFailure = false
+            migraineDetailMessage = nil
         } catch {
-            migraineDraft = nil
-            migraineDetailMessage = "Extra migraine details aren’t available right now. You can still save this check-in."
-            appLog("[CurrentSymptoms] migraine detail unavailable: \(error.localizedDescription)")
+            if accountScope == currentAccountScope,
+               !Task.isCancelled,
+               MigraineFollowUpWorkflow.isUnsupportedCapability(error) {
+                migraineDraft = nil
+                hasLoadFailure = false
+                migraineDetailMessage = "This server does not support extra migraine details yet. You can still save this check-in."
+            } else {
+                hasLoadFailure = true
+                migraineDetailMessage = accountScope == currentAccountScope
+                    ? "Couldn’t load your saved details. Retry loading before saving."
+                    : MigraineDraftError.accountChanged.localizedDescription
+            }
         }
     }
 
@@ -2040,15 +1991,31 @@ private struct MigraineMedicineFields: View {
                 .background(Color.white.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            Picker("Medicine", selection: $draft.medicineChoice) {
+            if !draft.originalMedicines.isEmpty {
+                Text("\(draft.originalMedicines.count) saved medicine entries. This form edits the first entry; the others are kept.")
+                    .font(.caption)
+                    .accessibilityIdentifier("migraine-saved-medicine-summary")
+            }
+            Picker("Medicine", selection: Binding(get: { draft.medicineChoice }, set: { draft.chooseMedicine($0) })) {
                 ForEach(MigraineMedicineChoice.allCases) { choice in
-                    Text(choice.label).tag(choice)
+                    if choice != .removeFirst || !draft.originalMedicines.isEmpty {
+                        Text(choice == .none && !draft.originalMedicines.isEmpty
+                             ? "Clear all saved medicines"
+                             : choice == .taken && !draft.originalMedicines.isEmpty
+                             ? "Edit first saved medicine" : choice.label).tag(choice)
+                    }
                 }
             }
             .pickerStyle(.menu)
             .tint(.white)
+            .accessibilityIdentifier("migraine-medicine-choice")
 
-            if draft.medicineChoice == .taken {
+            if draft.medicineChoice == .none && !draft.originalMedicines.isEmpty {
+                Text("Saving will remove all \(draft.originalMedicines.count) saved medicine entries.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+            if draft.medicineChoice == .taken || draft.medicineChoice == .add {
                 TextField("Medicine name", text: $draft.medicineName)
                     .textInputAutocapitalization(.words)
                     .padding(12)
@@ -2080,6 +2047,12 @@ private struct MigraineMedicineFields: View {
                 }
                 .pickerStyle(.menu)
                 .tint(.white)
+
+                TextField("Medicine note (optional)", text: $draft.medicineNotesText, axis: .vertical)
+                    .lineLimit(2...4)
+                    .padding(12)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
         .foregroundColor(.white)
@@ -2092,70 +2065,101 @@ private struct MigraineMedicineFields: View {
 
 #if DEBUG
 struct MigraineFollowUpFixtureScreen: View {
-    @State private var draft: MigraineFollowUpDraft
+    @StateObject private var fixtureSession: MigraineFixtureSession
+    private var api: APIClient { fixtureSession.api }
+    private var fixtureServer: MigraineFixtureServer { fixtureSession.server }
+    private let scenario: String
+    private let item: CurrentSymptomItem
+    private let prompt: CurrentSymptomFollowUpPrompt
+    private let draft: MigraineFollowUpDraft
+    @State private var accountScope = "fixture-account"
+    @State private var isSaving = false
+    @State private var saved = false
+    @State private var releasedResponse = false
 
     init() {
-        var fixture = MigraineFollowUpDraft(
-            accountScope: "fixture-account",
-            promptId: "fixture-prompt",
-            episodeId: "fixture-episode",
-            responseTimestamp: Date(timeIntervalSince1970: 1_788_839_400)
-        )
-        fixture.earlySignsText = "Light sensitivity, Neck tension"
-        fixture.medicineChoice = .taken
-        fixture.medicineName = "Test medicine"
-        fixture.doseAmountText = "10"
-        fixture.doseUnit = "mg"
-        fixture.reliefChoice = .some
-        _draft = State(initialValue: fixture)
+        let args = ProcessInfo.processInfo.arguments
+        let index = args.firstIndex(of: "-gaia-migraine-scenario")
+        let scenario = index.flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } ?? "success"
+        self.scenario = scenario
+        _fixtureSession = StateObject(wrappedValue: MigraineFixtureSession(scenario: scenario))
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let detail = try! decoder.decode(MigraineEpisodeDetail.self, from: MigraineFixtureServer.detailData)
+        let id = detail.episode.episodeId
+        prompt = CurrentSymptomFollowUpPrompt(id: "fixture-prompt", episodeId: id, symptomCode: "MIGRAINE",
+            symptomLabel: "Migraine", questionText: "How is your migraine now?", detailFocus: "pain",
+            trigger: nil, scheduledFor: nil, deliveredAt: nil, status: "pending", pushDeliveryEnabled: false)
+        item = CurrentSymptomItem(id: id, symptomCode: "MIGRAINE", label: "Migraine", severity: 5,
+            originalSeverity: 5, loggedAt: "2026-09-08T04:30:00Z", lastInteractionAt: nil, currentState: .ongoing,
+            notePreview: detail.episode.notes, noteCount: 1, likelyDrivers: [], patternHint: nil,
+            gaugeKeys: [], currentContextBadge: nil, pendingFollowUp: prompt)
+        draft = MigraineFollowUpDraft(accountScope: "fixture-account", promptId: prompt.id,
+            episodeId: id, responseTimestamp: Date(timeIntervalSince1970: 1_788_839_400))
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("How is your migraine now?")
-                        .font(.title3.weight(.bold))
-                        .foregroundColor(.white)
-                    Text("Optional details can be added now and edited later.")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.68))
-                    MigraineMedicineFields(draft: $draft)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Optional note")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        Text("Resting in a dark room helped.")
-                            .foregroundColor(.white.opacity(0.78))
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    Button("Save response") {}
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity)
+        VStack {
+            if scenario.hasPrefix("delayed-") || scenario.hasPrefix("calendar-pending") || scenario.contains("time-delayed") {
+                Button("Release local response") {
+                    fixtureServer.releaseReplies()
+                    releasedResponse = true
                 }
-                .padding(16)
+                .accessibilityIdentifier("migraine-release-response")
+                if (scenario.hasPrefix("delayed-") || scenario.contains("time-delayed")) && scenario.contains("history") {
+                    Text(isSaving ? "Save pending" : "Save idle")
+                        .font(.caption)
+                        .accessibilityIdentifier("migraine-fixture-save-state")
+                }
+                if releasedResponse {
+                    Text(fixtureServer.submittedNote)
+                        .font(.caption)
+                        .accessibilityIdentifier("migraine-submitted-note")
+                }
             }
-            .background(
-                LinearGradient(
-                    colors: [Color.black, Color(red: 0.05, green: 0.07, blue: 0.12)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-            )
-            .navigationTitle("Migraine")
-            .navigationBarTitleDisplayMode(.inline)
+            if scenario == "account-change" || scenario == "calendar-pending-account" || scenario.contains("time-delayed-account") {
+                Button("Switch synthetic account") {
+                    accountScope = "different-fixture-account"
+                    api.devUserId = accountScope
+                }
+            }
+            if scenario == "calendar-entry" {
+                NavigationStack { CurrentSymptomsTimelineView(api: api) }
+            } else if scenario.hasPrefix("calendar-") {
+                NavigationStack {
+                    MigraineHistoryView(api: api, accountScope: accountScope, accountScopeProvider: { accountScope },
+                        initialDate: ISO8601DateFormatter().date(from: "2026-09-09T17:00:00Z")!,
+                        timeZone: TimeZone(identifier: "America/Chicago")!)
+                }
+            } else if scenario.contains("history") {
+                NavigationStack {
+                    HistoricalSymptomEditor(api: api, episodeId: scenario.hasPrefix("time-") ? MigraineTimeFixture.episodeID : item.id, accountScopeProvider: { accountScope },
+                        onBusyChange: { isSaving = $0 })
+                }
+            } else if saved {
+                Text("Follow-up confirmed").accessibilityIdentifier("migraine-confirmed")
+            } else {
+                CurrentSymptomFollowUpSheet(api: api, item: item, prompt: prompt, responseState: .resolved,
+                    migraineDraft: scenario.contains("legacy-follow-up") ? nil : draft, isBusy: isSaving, accountScopeProvider: { accountScope }) {
+                    choice, note, bucket, timestamp, edit in
+                    isSaving = true
+                    defer { isSaving = false }
+                    _ = try await MigraineFollowUpWorkflow.submit(api: api, promptId: prompt.id,
+                        episodeId: item.id, state: .resolved, detailChoice: choice, noteText: note,
+                        timeBucket: bucket, timestamp: timestamp, edit: edit, accountScope: draft.accountScope,
+                        currentAccountScope: { accountScope })
+                    saved = true
+                    return true
+                }
+            }
         }
-        .accessibilityIdentifier("migraine-follow-up-fixture")
     }
 }
 #endif
 
 struct CurrentSymptomsTimelineView: View {
     let api: APIClient
+    @ObservedObject private var auth = AuthManager.shared
 
     @State private var entries: [CurrentSymptomTimelineEntry] = []
     @State private var isLoading: Bool = false
@@ -2164,6 +2168,17 @@ struct CurrentSymptomsTimelineView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                if MigraineCalendarFeature.isEnabled {
+                    NavigationLink {
+                        MigraineHistoryView(api: api, accountScope: MigraineFollowUpWorkflow.accountScope())
+                            .id(auth.supabaseUserId)
+                    } label: {
+                        Label("Migraine calendar", systemImage: "calendar")
+                            .font(.headline).padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .accessibilityIdentifier("migraine-calendar-open")
+                }
                 if let errorMessage, !errorMessage.isEmpty {
                     Text(errorMessage)
                         .font(.caption)
@@ -2294,28 +2309,53 @@ struct CurrentSymptomsTimelineView: View {
     }
 }
 
-private struct HistoricalSymptomEditor: View {
+struct HistoricalSymptomEditor: View {
     let api: APIClient
     let episodeId: String
+    var accountScopeProvider: @MainActor () -> String = { MigraineFollowUpWorkflow.accountScope() }
+    var onSaved: @MainActor () -> Void = {}
+    var onBusyChange: @MainActor (Bool) -> Void = { _ in }
+    @State private var loadedAccountScope: String?
 
     @State private var item: CurrentSymptomItem?
     @State private var severity = 5
     @State private var note = ""
+    @FocusState private var noteIsFocused: Bool
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var statusMessage: String?
     @State private var migraineDraft: MigraineFollowUpDraft?
     @State private var isSavingMigraine = false
+    @State private var isSavingTimeCorrection = false
     @State private var migraineStatusMessage: String?
 
-    private var currentAccountScope: String {
-        let value = AuthManager.shared.currentSupabaseUserId()?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value?.isEmpty == false ? value! : "anonymous"
+    @StateObject private var timeStore: MigraineTimeEditorStore
+
+    init(api: APIClient, episodeId: String,
+         accountScopeProvider: @escaping @MainActor () -> String = { MigraineFollowUpWorkflow.accountScope() },
+         onSaved: @escaping @MainActor () -> Void = {}, onBusyChange: @escaping @MainActor (Bool) -> Void = { _ in }) {
+        self.api = api; self.episodeId = episodeId; self.accountScopeProvider = accountScopeProvider
+        self.onSaved = onSaved; self.onBusyChange = onBusyChange
+        _timeStore = StateObject(wrappedValue: MigraineTimeEditorStore(api: api, episodeId: episodeId, accountScope: accountScopeProvider))
+    }
+    private var saving: Bool { isSaving || isSavingMigraine || isSavingTimeCorrection }
+    private var otherEditsLocked: Bool { saving || timeStore.isLoading || timeStore.pendingRequest != nil }
+    private var noteBinding: Binding<String> {
+        Binding(get: { note }, set: { if !otherEditsLocked { note = $0 } })
+    }
+    private var currentAccountScope: String { accountScopeProvider() }
+
+    private var severityBinding: Binding<Int> {
+        Binding(get: { severity }, set: { value in
+            // Form can recreate an offscreen Stepper with stale enabled state.
+            guard !isSaving, !isSavingMigraine, !isSavingTimeCorrection, timeStore.pendingRequest == nil, !timeStore.isLoading else { return }
+            severity = value
+        })
     }
 
     private var migraineDraftBinding: Binding<MigraineFollowUpDraft>? {
         guard migraineDraft != nil else { return nil }
-        return Binding(get: { migraineDraft! }, set: { migraineDraft = $0 })
+        return Binding(get: { migraineDraft! }, set: { if !otherEditsLocked { migraineDraft = $0 } })
     }
 
     var body: some View {
@@ -2325,26 +2365,37 @@ private struct HistoricalSymptomEditor: View {
             } else if let item {
                 Section("Symptom") {
                     LabeledContent("Name", value: item.label)
-                    LabeledContent("Status", value: item.currentState.rawValue.capitalized)
-                    Stepper("Severity: \(severity)/10", value: $severity, in: 0...10)
+                    LabeledContent("Status", value: (timeStore.context?.episode.state ?? item.currentState.rawValue).capitalized)
+                    Stepper("Severity: \(severity)/10", value: severityBinding, in: 0...10)
+                        .accessibilityIdentifier("migraine-history-severity")
+                        .disabled(otherEditsLocked)
                 }
                 Section("Notes") {
-                    TextField("Optional note", text: $note, axis: .vertical)
+                    TextField("Optional note", text: noteBinding, axis: .vertical)
+                        .accessibilityIdentifier("migraine-history-note")
+                        .focused($noteIsFocused)
+                        .disabled(otherEditsLocked)
                         .lineLimit(3...6)
+                }
+                if item.symptomCode.uppercased() == "MIGRAINE", MigraineTimeEditingFeature.isEnabled {
+                    MigraineTimeFields(store: timeStore) { await saveTimes() }
                 }
                 if item.symptomCode.uppercased() == "MIGRAINE",
                    MigraineStructuredFollowUpFeature.isEnabled,
                    let draft = migraineDraftBinding {
                     Section("Migraine details") {
                         MigraineMedicineFields(draft: draft)
+                            .disabled(otherEditsLocked)
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
                         Button(isSavingMigraine ? "Saving migraine details…" : "Save migraine details") {
                             Task { await saveMigraineDetails() }
                         }
-                        .disabled(isSavingMigraine)
+                        .disabled(otherEditsLocked)
+                        .accessibilityIdentifier("migraine-history-save")
                         if let migraineStatusMessage {
                             Text(migraineStatusMessage).font(.footnote)
+                                .accessibilityIdentifier("migraine-history-status")
                         }
                     }
                 }
@@ -2352,10 +2403,11 @@ private struct HistoricalSymptomEditor: View {
                     Button(isSaving ? "Saving…" : "Save changes") {
                         Task { await save() }
                     }
-                    .disabled(isSaving)
+                    .disabled(otherEditsLocked)
+                    .accessibilityIdentifier("migraine-history-legacy-save")
                 }
                 if let statusMessage {
-                    Section { Text(statusMessage).font(.footnote) }
+                    Section { Text(statusMessage).font(.footnote).accessibilityIdentifier("migraine-history-legacy-status") }
                 }
             } else {
                 Text(statusMessage ?? "Symptom unavailable.")
@@ -2363,13 +2415,22 @@ private struct HistoricalSymptomEditor: View {
         }
         .navigationTitle("Edit symptom")
         .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
+        .onChange(of: currentAccountScope) { _, _ in
+            item = nil; migraineDraft = nil; timeStore.invalidate()
+            statusMessage = "Your signed-in account changed. Close this editor and open it again."
+        }
         .task { await load() }
     }
 
     private func load() async {
+        let scope = loadedAccountScope ?? currentAccountScope
+        loadedAccountScope = scope
         do {
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
             let response = try await api.fetchCurrentSymptom(episodeId: episodeId)
-            guard response.ok != false, let loaded = response.payload else {
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
+            guard response.ok != false, let loaded = response.payload, loaded.id == episodeId else {
                 throw NSError(domain: "HistoricalSymptomEditor", code: 1, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Symptom unavailable"])
             }
             item = loaded
@@ -2378,12 +2439,13 @@ private struct HistoricalSymptomEditor: View {
             if loaded.symptomCode.uppercased() == "MIGRAINE",
                MigraineStructuredFollowUpFeature.isEnabled {
                 var draft = MigraineFollowUpDraft(
-                    accountScope: currentAccountScope,
+                    accountScope: scope,
                     promptId: "history:\(episodeId)",
                     episodeId: episodeId
                 )
                 let detailResponse = try await api.fetchMigraineEpisodeDetail(episodeId: episodeId)
-                guard detailResponse.ok != false, let detail = detailResponse.payload else {
+                try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
+                guard detailResponse.ok != false, let detail = detailResponse.payload, detail.episode.episodeId == episodeId else {
                     throw NSError(
                         domain: "HistoricalSymptomEditor",
                         code: 3,
@@ -2392,59 +2454,97 @@ private struct HistoricalSymptomEditor: View {
                 }
                 try draft.apply(detail, forAccountScope: currentAccountScope)
                 migraineDraft = draft
+                note = draft.noteText
             }
         } catch {
-            statusMessage = error.localizedDescription
+            if scope != currentAccountScope {
+                item = nil
+                migraineDraft = nil
+            }
+            statusMessage = MigraineFollowUpWorkflow.isUnsupportedCapability(error)
+                ? "This server does not support extra migraine details yet."
+                : error.localizedDescription
+        }
+        if item?.symptomCode.uppercased() == "MIGRAINE", MigraineTimeEditingFeature.isEnabled {
+            await timeStore.load()
         }
         isLoading = false
     }
 
     private func save() async {
-        guard item != nil else { return }
-        isSaving = true
-        defer { isSaving = false }
+        guard item != nil, let scope = loadedAccountScope, !otherEditsLocked else { return }
+        noteIsFocused = false
+        isSaving = true; timeStore.externalBusy = true; onBusyChange(true)
+        var acknowledged = false
+        defer {
+            isSaving = false; timeStore.externalBusy = false; onBusyChange(false)
+            if acknowledged, MigraineTimeEditingFeature.isEnabled { Task { await timeStore.otherDetailsSaved() } }
+        }
         do {
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
             let response = try await api.updateCurrentSymptom(
                 episodeId: episodeId,
                 severity: severity,
-                noteText: note.trimmingCharacters(in: .whitespacesAndNewlines)
+                noteText: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider) }
             )
-            guard response.ok != false else {
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
+            guard response.ok != false, let saved = response.payload, saved.id == episodeId else {
                 throw NSError(domain: "HistoricalSymptomEditor", code: 2, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Changes not saved"])
             }
-            item = response.payload ?? item
+            item = saved
+            acknowledged = true
             statusMessage = "Changes saved."
+            onSaved()
         } catch {
             statusMessage = error.localizedDescription
         }
     }
 
     private func saveMigraineDetails() async {
-        guard let draft = migraineDraft else { return }
-        isSavingMigraine = true
+        guard var draft = migraineDraft, !otherEditsLocked else { return }
+        noteIsFocused = false
+        draft.noteText = note
+        migraineDraft = draft
+        isSavingMigraine = true; timeStore.externalBusy = true; onBusyChange(true)
+        var acknowledged = false
         migraineStatusMessage = nil
-        defer { isSavingMigraine = false }
+        defer {
+            isSavingMigraine = false; timeStore.externalBusy = false; onBusyChange(false)
+            if acknowledged, MigraineTimeEditingFeature.isEnabled { Task { await timeStore.otherDetailsSaved() } }
+        }
         do {
             guard let edit = try draft.makeStructuredEdit(currentAccountScope: currentAccountScope) else {
                 migraineStatusMessage = "No migraine detail changes to save."
                 return
             }
-            let response = try await api.updateMigraineEpisodeDetail(episodeId: episodeId, edit: edit)
-            guard response.ok != false,
-                  let saved = response.payload,
-                  edit.matches(saved) else {
-                throw NSError(
-                    domain: "HistoricalSymptomEditor",
-                    code: 4,
-                    userInfo: [NSLocalizedDescriptionKey: response.error ?? "Migraine details could not be confirmed"]
-                )
-            }
+            let saved = try await MigraineFollowUpWorkflow.saveDetails(
+                api: api, episodeId: episodeId, edit: edit, accountScope: draft.accountScope,
+                currentAccountScope: accountScopeProvider
+            )
             var refreshedDraft = draft
             try refreshedDraft.apply(saved, forAccountScope: currentAccountScope)
             migraineDraft = refreshedDraft
+            acknowledged = true
             migraineStatusMessage = "Migraine details saved."
+            onSaved()
         } catch {
             migraineStatusMessage = "\(error.localizedDescription) Your changes are still here."
         }
     }
+    private func saveTimes() async {
+        guard !isSaving, !isSavingMigraine, !isSavingTimeCorrection, !timeStore.inputsLocked else { return }
+        noteIsFocused = false
+        isSavingTimeCorrection = true
+        onBusyChange(true)
+        defer { isSavingTimeCorrection = false; onBusyChange(false) }
+        if let saved = await timeStore.save() {
+            if var draft = migraineDraft {
+                draft.advanceAfterTimeCorrection(saved, currentAccountScope: currentAccountScope)
+                migraineDraft = draft
+            }
+            onSaved()
+        }
+    }
+
 }

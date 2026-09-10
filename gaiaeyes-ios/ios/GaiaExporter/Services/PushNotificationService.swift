@@ -662,6 +662,7 @@ final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate, UNUser
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
+        guard !MigraineLocalVerification.isActive else { return true }
         UNUserNotificationCenter.current().delegate = self
         Task {
             await PushNotificationService.refreshAuthorizationState()

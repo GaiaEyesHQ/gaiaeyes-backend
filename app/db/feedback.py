@@ -1479,3 +1479,33 @@ async def fetch_due_push_prompts(
         )
         rows = await cur.fetchall()
     return [_serialize_prompt(row) for row in rows or []]
+
+
+async def reconcile_migraine_time_correction(conn, user_id: str, *, before: dict, after: dict, now: datetime) -> None:
+    """Preserve reminder identity and user snooze/delivery decisions during correction."""
+    episode_id = str(after["id"])
+    if after["current_state"] == "resolved":
+        await _expire_episode_prompts(conn, user_id, episode_id)
+        cached = dict(after.get("follow_up_state") or {})
+        if cached.get("status") in {"pending", "snoozed"}:
+            cached["status"] = "expired"
+            await _set_episode_follow_up_state(conn, user_id, episode_id, cached)
+        return
+    if before["current_state"] == "resolved":
+        await maybe_schedule_symptom_follow_up(conn, user_id, episode_id=episode_id,
+                                               trigger="manual_update", reference_ts=now)
+        return
+    if before["last_interaction_at"] == before["started_at"] and before["started_at"] != after["started_at"]:
+        delta = after["started_at"] - before["started_at"]
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("""update raw.user_feedback_prompts
+                set scheduled_for = greatest(%s, scheduled_for + %s), updated_at = now()
+                where user_id = %s and episode_id = %s and prompt_type = 'symptom_follow_up'
+                  and status = 'pending' and delivered_at is null returning id, scheduled_for""",
+                (now, delta, user_id, episode_id), prepare=False)
+            moved = await cur.fetchall()
+        cached = dict(after.get("follow_up_state") or {})
+        latest = next((row for row in moved if str(row["id"]) == cached.get("latest_prompt_id")), None)
+        if latest:
+            cached["scheduled_for"] = _serialize_ts(latest["scheduled_for"])
+            await _set_episode_follow_up_state(conn, user_id, episode_id, cached)

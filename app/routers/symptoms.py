@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
+from uuid import UUID
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -32,6 +33,9 @@ from services.migraine.episode_contract import (
     MedicineTaken,
     MigraineEpisode,
 )
+from services.migraine.history import HistoryChanged, read_history
+from services.migraine.time_correction import TimeCorrectionIn
+from psycopg.errors import UndefinedColumn, UndefinedTable, UniqueViolation
 from ..db import get_db
 from ..db import feedback as feedback_db
 from ..db import migraine as migraine_db
@@ -1120,6 +1124,32 @@ async def get_current_symptom_timeline(
     return _success(CurrentSymptomTimelineResponse(data=data))
 
 
+@router.get("/migraine/history")
+async def get_migraine_history(
+    request: Request,
+    start: AwareDatetime,
+    end: AwareDatetime,
+    limit: int = Query(50, ge=1, le=100),
+    cursor: Optional[str] = Query(None, max_length=2048),
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    if os.getenv("GAIA_MIGRAINE_CALENDAR_ENABLED") != "1":
+        raise HTTPException(503, "migraine calendar history is not enabled")
+    try:
+        data = await read_history(conn, user_id, start=start, end=end, limit=limit, cursor=cursor)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except HistoryChanged as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except (UndefinedColumn, UndefinedTable) as exc:
+        raise HTTPException(503, "canonical migraine history storage is not installed") from exc
+    except Exception as exc:
+        logger.exception("failed to load migraine calendar history")
+        raise HTTPException(500, "Migraine history is temporarily unavailable") from exc
+    return {"ok": True, "data": data}
+
+
 @router.get("/current/{episode_id}", response_model=CurrentSymptomItemResponse)
 async def get_current_symptom_episode(
     episode_id: str,
@@ -1140,6 +1170,84 @@ async def get_current_symptom_episode(
             )
         )
     return _success(CurrentSymptomItemResponse(data=_build_current_symptom_item_out(row)))
+
+
+class MigraineTimeResponse(SymptomEnvelope):
+    data: Optional[Dict[str, Any]] = None
+
+
+def _require_migraine_time_editing() -> None:
+    if os.getenv("GAIA_MIGRAINE_TIME_EDITING_ENABLED", "0") != "1":
+        raise HTTPException(status_code=503, detail="Migraine time editing is not enabled")
+
+
+async def _refresh_migraine_time_correction(user_id: str, result: dict) -> dict:
+    """Called only after the canonical transaction commits; failures are separate."""
+    from datetime import date
+
+    def run():
+        from bots.gauges.gauge_scorer import score_user_day
+        from bots.patterns.pattern_engine_job import run_pattern_engine
+        pending = []
+        for day in result["refresh_days"]:
+            try:
+                score_user_day(user_id, date.fromisoformat(day), force=True)
+            except Exception:
+                pending.append("daily_gauges")
+        try:
+            today = datetime.now(timezone.utc).date()
+            since = date.fromisoformat(result["pattern_since_day"])
+            run_pattern_engine(as_of_day=today, days_back=(today - since).days + 1, user_id=user_id)
+        except Exception:
+            pending.append("personal_patterns")
+        return {"status": "pending" if pending else "complete", "pending_components": sorted(set(pending))}
+
+    return await asyncio.to_thread(run)
+
+
+@router.get("/current/{episode_id}/migraine-times", response_model=MigraineTimeResponse)
+async def get_migraine_time_context(episode_id: str, request: Request, conn=Depends(get_db)):
+    user_id = _require_user_id(request)
+    _require_migraine_time_editing()
+    try:
+        episode_id = str(UUID(episode_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid episode ID") from exc
+    try:
+        async with _transaction_if_supported(conn):
+            result = await migraine_db.load_migraine_time_context(conn, user_id, episode_id)
+    except migraine_db.MigraineDetailUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except migraine_db.MigraineEpisodeNotFound as exc:
+        raise HTTPException(status_code=404, detail="Migraine episode not found") from exc
+    return _success(MigraineTimeResponse(data=result))
+
+
+@router.post("/current/{episode_id}/migraine-times", response_model=MigraineTimeResponse)
+async def correct_migraine_episode_times(episode_id: str, payload: TimeCorrectionIn, request: Request, conn=Depends(get_db)):
+    user_id = _require_user_id(request)
+    _require_migraine_time_editing()
+    try:
+        episode_id = str(UUID(episode_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid episode ID") from exc
+    try:
+        async with _transaction_if_supported(conn):
+            result = await migraine_db.save_migraine_time_correction(conn, user_id, episode_id, payload)
+    except migraine_db.MigraineDetailUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except migraine_db.MigraineEpisodeNotFound as exc:
+        raise HTTPException(status_code=404, detail="Migraine episode not found") from exc
+    except (migraine_db.StaleMigraineRevision, UniqueViolation) as exc:
+        raise HTTPException(status_code=409, detail="Episode or correction request changed; reload the saved version") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # The receipt remains valid even if rebuilding a derivative fails.
+    try:
+        result["refresh"] = await _refresh_migraine_time_correction(user_id, result)
+    except Exception:
+        result["refresh"] = {"status": "pending", "pending_components": ["derived_summaries"]}
+    return _success(MigraineTimeResponse(data=result))
 
 
 @router.get("/current/{episode_id}/migraine-detail", response_model=MigraineEpisodeDetailResponse)

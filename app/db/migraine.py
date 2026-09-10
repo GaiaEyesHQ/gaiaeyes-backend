@@ -143,6 +143,8 @@ async def _fetch_canonical_migraine_episode(
                    original_severity,
                    current_severity,
                    resolution_ts,
+                   last_interaction_at,
+                   state_updated_at,
                    latest_note_text,
                    source,
                    created_at,
@@ -491,6 +493,138 @@ async def persist_migraine_episode_detail(
             )
 
     return dict(stored)
+
+
+async def _require_time_correction_capability(conn) -> None:
+    if not await migraine_detail_capability_available(conn):
+        raise MigraineDetailUnavailable("structured migraine detail storage is not installed")
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute("""select count(*) = 2
+              and to_regclass('raw.user_symptom_events_effective') is not null
+              and to_regclass('marts.symptom_daily_effective') is not null as available
+            from information_schema.columns
+            where table_schema = 'raw' and table_name = 'user_migraine_episode_detail_revisions'
+              and column_name in ('correction_request_id', 'time_correction')""", prepare=False)
+        row = await cur.fetchone()
+    if not row or not row["available"]:
+        raise MigraineDetailUnavailable("migraine time correction storage is not installed")
+
+
+def _time_context(canonical, episode, revision):
+    end = canonical.get("resolution_ts")
+    invalid = end is not None and (canonical["current_state"] != "resolved" or end < canonical["started_at"])
+    return {"episode": episode, "revision": revision,
+            "canonical_updated_at": _utc_iso(canonical["updated_at"]),
+            "raw_end_utc": _utc_iso(end) if end else None,
+            "inconsistent_end": invalid}
+
+
+async def load_migraine_time_context(conn, user_id: str, episode_id: str) -> dict:
+    await _require_time_correction_capability(conn)
+    canonical = await _fetch_canonical_migraine_episode(conn, user_id, episode_id, for_update=True)
+    stored = await fetch_migraine_episode_detail(conn, user_id, episode_id)
+    return _time_context(canonical, episode_from_canonical(canonical, _stored_payload(stored)),
+                         int(stored["revision"]) if stored else 0)
+
+
+async def save_migraine_time_correction(conn, user_id: str, episode_id: str, correction) -> dict:
+    """Caller owns the outer transaction, including reminder reconciliation."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    from services.migraine.episode_contract import EpisodeTimestamp
+    from app.db import feedback as feedback_db
+
+    await _require_time_correction_capability(conn)
+    canonical = await _fetch_canonical_migraine_episode(conn, user_id, episode_id, for_update=True)
+    stored = await _fetch_locked_migraine_detail(conn, user_id, episode_id)
+    current_revision = int(stored["revision"]) if stored else 0
+    request = correction.canonical_request()
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute("""select episode_id, revision, payload, time_correction
+            from raw.user_migraine_episode_detail_revisions
+            where user_id = %s and correction_request_id = %s""",
+            (user_id, correction.request_id), prepare=False)
+        receipt = await cur.fetchone()
+    if receipt:
+        metadata = receipt["time_correction"]
+        if str(receipt["episode_id"]) != episode_id or metadata["request"] != request:
+            raise StaleMigraineRevision("Correction request ID was already used with different content")
+        return {**metadata["acknowledgement"], "episode": MigraineEpisode.model_validate(receipt["payload"]),
+                "current_revision": current_revision, "current_canonical_updated_at": _utc_iso(canonical["updated_at"]), "replayed": True,
+                "refresh_days": metadata["refresh_days"], "pattern_since_day": metadata["pattern_since_day"]}
+    if current_revision != correction.expected_revision or canonical["updated_at"] != correction.expected_canonical_updated_at:
+        raise StaleMigraineRevision("The saved episode changed. Reload its saved version before applying your correction")
+
+    stored_payload = _stored_payload(stored)
+    base = episode_from_canonical(canonical, stored_payload)
+    payload = base.model_dump(mode="python")
+    fields = correction.model_fields_set
+    if "start" in fields:
+        payload["start"] = correction.start.model_dump(mode="python")
+    if "state" in fields:
+        payload["state"] = correction.state
+    if "end" in fields:
+        payload["end"] = correction.end.model_dump(mode="python") if correction.end else None
+    elif canonical.get("resolution_ts") is not None:
+        # Preserve the actual retained end even if the old detail had to display
+        # it as unknown. A corrected onset may repair its chronological order.
+        original_end = dict((stored_payload or {}).get("end") or {})
+        original_end.update(utc=canonical["resolution_ts"])
+        original_end.setdefault("timezone_source", "unknown")
+        payload["end"] = EpisodeTimestamp.model_validate(original_end).model_dump(mode="python")
+    now = datetime.now(UTC)
+    payload["lifecycle"].update(revision=current_revision + 1, updated_at=now)
+    episode = MigraineEpisode.model_validate(payload)
+    if episode.start.utc > now + timedelta(minutes=5) or (episode.end and episode.end.utc > now + timedelta(minutes=5)):
+        raise ValueError("Corrected start/end cannot be in the future")
+    old_timing = {"start": base.start.model_dump(mode="json"),
+                  "end": base.end.model_dump(mode="json") if base.end else None, "state": base.state}
+    new_timing = {"start": episode.start.model_dump(mode="json"),
+                  "end": episode.end.model_dump(mode="json") if episode.end else None, "state": episode.state}
+    if old_timing == new_timing and not _time_context(canonical, base, current_revision)["inconsistent_end"]:
+        raise ValueError("No time or state changes to save")
+
+    before = {key: _utc_iso(value) if isinstance(value, datetime) else value
+              for key, value in canonical.items() if key in
+              {"started_at", "resolution_ts", "current_state", "updated_at", "state_updated_at", "last_interaction_at"}}
+    before["stored_start_provenance"] = (stored_payload or {}).get("start")
+    before["stored_end_provenance"] = (stored_payload or {}).get("end")
+    state_changed = episode.state != canonical["current_state"]
+    interaction = now if state_changed else canonical["last_interaction_at"]
+    state_time = now if state_changed else canonical["state_updated_at"]
+    if not state_changed and interaction == canonical["started_at"]:
+        interaction = episode.start.utc
+    if not state_changed and state_time == canonical["started_at"]:
+        state_time = episode.start.utc
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute("""update raw.user_symptom_episodes
+            set started_at = %s, resolution_ts = %s, current_state = %s,
+                state_updated_at = %s, last_interaction_at = %s, updated_at = now()
+            where id = %s and user_id = %s returning *""",
+            (episode.start.utc, episode.end.utc if episode.end else None, episode.state,
+             state_time, interaction, episode_id, user_id), prepare=False)
+        after = dict(await cur.fetchone())
+    await persist_migraine_episode_detail(conn, user_id, episode, expected_revision=current_revision,
+                                          change_kind="user_edit", source="time_correction", user_edit=True)
+    await feedback_db.reconcile_migraine_time_correction(conn, user_id, before=canonical, after=after, now=now)
+    instants = [canonical["started_at"], canonical.get("resolution_ts"), canonical["last_interaction_at"],
+                episode.start.utc, episode.end.utc if episode.end else None, interaction]
+    # Future inconsistent source times have no computed current-day history.
+    instants = [value for value in instants if value is not None and value <= now]
+    days = sorted({value.astimezone(ZoneInfo("America/Chicago")).date().isoformat() for value in instants})
+    pattern_since = min([value.astimezone(UTC).date() for value in instants] + [(now - timedelta(days=89)).date()]).isoformat()
+    ack = {**_time_context(after, episode, current_revision + 1), "request_id": str(correction.request_id),
+           "applied_revision": current_revision + 1, "current_revision": current_revision + 1,
+           "current_canonical_updated_at": _utc_iso(after["updated_at"]), "replayed": False}
+    metadata = {"request": request, "before": before, "after": new_timing,
+                "acknowledgement": {k: v for k, v in ack.items() if k != "episode"},
+                "refresh_days": days, "pattern_since_day": pattern_since}
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute("""update raw.user_migraine_episode_detail_revisions
+            set correction_request_id = %s, time_correction = %s::jsonb
+            where episode_id = %s and user_id = %s and revision = %s""",
+            (correction.request_id, json.dumps(metadata), episode_id, user_id, current_revision + 1), prepare=False)
+    return {**ack, "refresh_days": days, "pattern_since_day": pattern_since}
 
 
 async def create_migraine_import_run(

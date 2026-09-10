@@ -1,0 +1,27 @@
+{
+  "path": "tmp/social_growth_audit/2026-09-09/media/latest.mp4",
+  "fps": 30.0,
+  "frame_count": 389,
+  "width": 1080,
+  "height": 1920,
+  "duration": 12.966666666666667,
+  "size": 930534,
+  "samples": [
+    {
+      "t": 0.5,
+      "path": "tmp/social_growth_audit/2026-09-09/frames/frame_0_5s.jpg"
+    },
+    {
+      "t": 4.0,
+      "path": "tmp/social_growth_audit/2026-09-09/frames/frame_4_0s.jpg"
+    },
+    {
+      "t": 8.0,
+      "path": "tmp/social_growth_audit/2026-09-09/frames/frame_8_0s.jpg"
+    },
+    {
+      "t": 12.0,
+      "path": "tmp/social_growth_audit/2026-09-09/frames/frame_12_0s.jpg"
+    }
+  ]
+}

@@ -710,8 +710,8 @@ HOOK_LANES: Dict[str, Dict[str, Any]] = {
     },
     "wired_tired": {
         "label": "wired/tired body stress",
-        "terms": ("wired", "jittery", "squirrely", "buzz", "shaky", "overdrive", "on edge", "body stress"),
-        "examples": ["Body buzzing for no clear reason?", "Feeling jittery today?", "Feeling squirrely today?"],
+        "terms": ("wired", "jittery", "buzz", "shaky", "overdrive", "on edge", "body stress"),
+        "examples": ["Body buzzing for no clear reason?", "Feeling jittery today?", "Restless for no clear reason?"],
     },
     "brain_fog": {
         "label": "brain fog or mental noise",
@@ -1088,6 +1088,9 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
     if generic_key in generic:
         _dbg(f"title: rejected generic='{cleaned}'")
         return None
+    if re.search(r"\b(squirrely|squirrel)\b", lowered):
+        _dbg(f"title: rejected forced metaphor='{cleaned}'")
+        return None
     if lowered in recent_lower:
         _dbg(f"title: rejected recent='{cleaned}'")
         return None
@@ -1136,7 +1139,6 @@ def _fallback_social_title(
             "Feeling Wired And Worn Out?",
             "Body Buzzing Today?",
             "Feeling Jittery Today?",
-            "Feeling Squirrely Today?",
             "Brain Fog On A Loop?",
             "Restless For No Clear Reason?",
             "Head Pressure Building?",

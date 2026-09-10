@@ -547,14 +547,22 @@ async def fetch_symptom_codes(conn, *, include_inactive: bool = True) -> List[di
     return result
 
 
+async def _symptom_event_read_source(conn) -> str:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute("select to_regclass('raw.user_symptom_events_effective') is not null as available", prepare=False)
+        row = await cur.fetchone()
+    return "raw.user_symptom_events_effective" if row and row.get("available") else "raw.user_symptom_events"
+
+
 async def fetch_symptoms_today(conn, user_id: str) -> List[dict]:
-    sql = """
+    source = await _symptom_event_read_source(conn)
+    sql = f"""
     select
         symptom_code,
         ts_utc,
         severity,
         free_text
-    from raw.user_symptom_events
+    from {source}
     where user_id = %s
       and (ts_utc at time zone 'utc')::date = (now() at time zone 'utc')::date
     order by ts_utc desc
@@ -578,14 +586,15 @@ async def fetch_symptoms_today(conn, user_id: str) -> List[dict]:
 
 
 async def fetch_daily_summary(conn, user_id: str, days: int) -> List[dict]:
-    sql = """
+    source = await _symptom_event_read_source(conn)
+    sql = f"""
     select
         (ts_utc at time zone 'utc')::date as day,
         symptom_code,
         count(*) as events,
         avg(severity) filter (where severity is not null) as mean_severity,
         max(ts_utc) as last_ts
-    from raw.user_symptom_events
+    from {source}
     where user_id = %s
       and ts_utc >= (now() at time zone 'utc') - (%s * interval '1 day')
     group by 1, 2
@@ -612,12 +621,13 @@ async def fetch_daily_summary(conn, user_id: str, days: int) -> List[dict]:
 
 
 async def fetch_diagnostics(conn, user_id: str, days: int) -> List[dict]:
-    sql = """
+    source = await _symptom_event_read_source(conn)
+    sql = f"""
     select
         symptom_code,
         count(*) as events,
         max(ts_utc) as last_ts
-    from raw.user_symptom_events
+    from {source}
     where user_id = %s
       and ts_utc >= (now() at time zone 'utc') - (%s * interval '1 day')
     group by 1
@@ -811,6 +821,56 @@ async def fetch_current_symptom_items_fallback(
             }
         )
     return result
+
+
+async def fetch_migraine_episode_range(
+    conn, user_id: str, *, start: datetime, end: datetime, as_of: datetime,
+    limit: int, after_start: datetime | None = None, after_id: str | None = None,
+) -> dict:
+    # One SQL statement gives the fingerprint and page the same MVCC snapshot.
+    # The existing (user_id, started_at DESC) index bounds the candidate scan.
+    # No episode-update join: repeated updates never multiply calendar entries.
+    query = """
+    with canonical as materialized (
+      select id, started_at, current_state as state,
+             case when current_state = 'resolved' and resolution_ts >= started_at
+                  then resolution_ts end as ended_at,
+             case when current_state <> 'resolved' then 'open'
+                  when resolution_ts >= started_at then 'recorded' else 'unknown' end as end_status,
+             current_severity as severity, latest_note_text as note_preview, updated_at
+        from raw.user_symptom_episodes
+       where user_id = %s and upper(symptom_code) = 'MIGRAINE' and started_at < %s
+    ), matching as materialized (
+      select * from canonical
+       where started_at >= %s or ended_at > %s or (end_status = 'open' and %s > %s)
+    ), stamp as (
+      select md5(coalesce(string_agg(md5(row(
+          id, extract(epoch from started_at), state, extract(epoch from ended_at),
+          end_status, severity, note_preview, extract(epoch from updated_at)
+        )::text), '' order by id), '')) as snapshot
+        from matching m
+    )
+    select stamp.snapshot, page.* from stamp
+      left join lateral (
+        select * from matching
+         where %s::timestamptz is null or (started_at, id) < (%s::timestamptz, %s::uuid)
+         order by started_at desc, id desc limit %s
+      ) page on true
+    order by page.started_at desc, page.id desc
+    """
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(query, (user_id, end, start, start, as_of, start,
+                                  after_start, after_start, after_id, limit + 1), prepare=False)
+        rows = await cur.fetchall()
+    items = []
+    for row in rows:
+        if row["id"] is None:
+            continue
+        items.append({"id": str(row["id"]), "started_at": _serialize_ts(row["started_at"]),
+                      "ended_at": _serialize_ts(row["ended_at"]), "state": row["state"],
+                      "end_status": row["end_status"], "severity": row["severity"],
+                      "note_preview": row["note_preview"]})
+    return {"snapshot": rows[0]["snapshot"], "items": items}
 
 
 async def fetch_current_symptom_timeline(

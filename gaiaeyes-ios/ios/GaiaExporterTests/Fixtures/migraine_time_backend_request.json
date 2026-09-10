@@ -1,0 +1,19 @@
+{
+  "end": {
+    "utc": "2026-09-01T07:30:00Z",
+    "original_time": "2026-09-01T02:30:00",
+    "timezone_name": "America/Chicago",
+    "utc_offset_minutes": -300,
+    "timezone_source": "user"
+  },
+  "expected_canonical_updated_at": "2026-09-10T03:45:18.614460Z",
+  "request_id": "a032d551-7466-43bf-9236-0fec3b57a34c",
+  "start": {
+    "utc": "2026-09-01T04:30:00Z",
+    "original_time": "2026-08-31T23:30:00",
+    "timezone_name": "America/Chicago",
+    "utc_offset_minutes": -300,
+    "timezone_source": "user"
+  },
+  "expected_revision": 1
+}

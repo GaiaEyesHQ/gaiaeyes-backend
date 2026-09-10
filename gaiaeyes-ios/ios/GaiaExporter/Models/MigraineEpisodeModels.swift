@@ -280,7 +280,9 @@ struct MigraineStructuredEdit: Encodable, Hashable {
     }
 
     func matches(_ detail: MigraineEpisodeDetail) -> Bool {
-        guard detail.revision >= expectedRevision else { return false }
+        // Only the immediately completed revision can be our save/replay.
+        // This content check alone never proves that a follow-up prompt answered.
+        guard detail.revision == expectedRevision + 1 else { return false }
         if let earlySigns,
            (earlySigns.count != detail.episode.earlySigns.count
             || !zip(earlySigns, detail.episode.earlySigns).allSatisfy({ $0.matches($1) })) { return false }
@@ -416,9 +418,29 @@ struct MigraineFollowUpDraft: Hashable {
         }
     }
 
+    // Move the concurrency baseline only when the time receipt proves that
+    // stored non-time values are unchanged. Preserve the person's unsaved fields.
+    mutating func advanceAfterTimeCorrection(_ saved: MigraineTimeContext, currentAccountScope: String) {
+        guard accountScope == currentAccountScope, episodeId == saved.episode.episodeId,
+              saved.currentRevision == saved.appliedRevision, saved.revision == expectedRevision + 1,
+              saved.currentCanonicalUpdatedAt == saved.canonicalUpdatedAt,
+              originalNotes == saved.episode.notes,
+              originalEarlySigns.elementsEqual(saved.episode.earlySigns, by: { $0.matches($1) }),
+              originalMedicines.elementsEqual(saved.episode.medicines, by: { $0.matches($1) }) else { return }
+        expectedRevision = saved.revision
+    }
+
     mutating func chooseMedicine(_ choice: MigraineMedicineChoice) {
         if choice == .add && medicineChoice != .add {
             resetMedicineFields()
+        }
+        if choice == .taken && medicineChoice != .taken, let first = originalMedicines.first {
+            medicineName = first.name
+            medicineTakenAt = Self.parseDate(first.takenAt.utc) ?? responseTimestamp
+            doseAmountText = first.doseAmount.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
+            doseUnit = first.doseUnit ?? ""
+            reliefChoice = MigraineReliefChoice(rawValue: first.reportedRelief ?? "") ?? .unknown
+            medicineNotesText = first.notes ?? ""
         }
         medicineChoice = choice
     }
@@ -442,7 +464,7 @@ struct MigraineFollowUpDraft: Hashable {
             .filter { !$0.isEmpty }
         let originalLabels = originalEarlySigns.map(\.label)
         var remainingSigns = originalEarlySigns
-        let earlySigns: [MigraineEarlySign]? = labels == originalLabels ? nil : labels.map { label in
+        let earlySigns: [MigraineEarlySign]? = earlySignsText == originalLabels.joined(separator: ", ") ? nil : labels.map { label in
             // Match each occurrence once: untouched entries retain every field,
             // including duplicate-label entries with distinct provenance.
             if let index = remainingSigns.firstIndex(where: { $0.label == label }) {
@@ -465,13 +487,17 @@ struct MigraineFollowUpDraft: Hashable {
             let amountText = doseAmountText.trimmingCharacters(in: .whitespacesAndNewlines)
             let unit = doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
             guard amountText.isEmpty == unit.isEmpty else { throw MigraineDraftError.incompleteDose }
+            if !amountText.isEmpty,
+               amountText.range(of: #"^[+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$"#, options: .regularExpression) == nil {
+                throw MigraineDraftError.incompleteDose
+            }
             let amount = amountText.isEmpty ? nil : Decimal(string: amountText, locale: Locale(identifier: "en_US_POSIX"))
             if !amountText.isEmpty && (amount == nil || amount! <= 0) { throw MigraineDraftError.incompleteDose }
             let original = medicineChoice == .taken ? originalMedicines.first : nil
             let originalDate = original.flatMap { Self.parseDate($0.takenAt.utc) }
             let originalReliefChoice = MigraineReliefChoice(rawValue: original?.reportedRelief ?? "") ?? .unknown
             let reliefUnchanged = original != nil && reliefChoice == originalReliefChoice
-            let relief = reliefUnchanged ? original?.reportedRelief : reliefChoice.rawValue
+            let relief = reliefUnchanged ? original?.reportedRelief : (reliefChoice == .unknown ? nil : reliefChoice.rawValue)
             let note = medicineNotesText.trimmingCharacters(in: .whitespacesAndNewlines)
             let candidate = MigraineMedicineTaken(
                 name: name,
@@ -479,7 +505,7 @@ struct MigraineFollowUpDraft: Hashable {
                 doseAmount: amount,
                 doseUnit: unit.isEmpty ? nil : unit,
                 reportedRelief: relief,
-                reliefReportedAt: reliefUnchanged ? original?.reliefReportedAt : Self.timestamp(responseTimestamp),
+                reliefReportedAt: reliefUnchanged ? original?.reliefReportedAt : (relief == nil ? nil : Self.timestamp(responseTimestamp)),
                 notes: note == (original?.notes ?? "") ? original?.notes : (note.isEmpty ? nil : note)
             )
             if candidate == original {

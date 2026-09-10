@@ -73,6 +73,9 @@ def episode_from_canonical(
     state = _canonical_state(canonical.get("current_state"))
     resolution = canonical.get("resolution_ts")
     end = _utc(resolution, fallback=current_time) if state == "resolved" and resolution else None
+    # Legacy missing/inconsistent ends remain unknown, never invented durations.
+    if end is not None and end < start:
+        end = None
     severity = canonical.get("current_severity")
     if severity is None:
         severity = canonical.get("original_severity")

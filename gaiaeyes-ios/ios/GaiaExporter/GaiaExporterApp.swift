@@ -9,6 +9,7 @@ struct GaiaEyesApp: App {
     @StateObject private var auth = AuthManager.shared
 
     init() {
+        guard !MigraineLocalVerification.isActive else { return }
         GaiaEyesAppShortcuts.updateAppShortcutParameters()
         // Register BG task and schedule the first refresh
         HealthKitBackgroundSync.shared.registerBGTask()
@@ -25,9 +26,11 @@ struct GaiaEyesApp: App {
                 .environmentObject(appState)
                 .environmentObject(auth)
                 .onOpenURL { url in
+                    guard !MigraineLocalVerification.isActive else { return }
                     Task { _ = await DeepLinkHandler.handle(url: url) }
                 }
                 .task {
+                    guard !MigraineLocalVerification.isActive else { return }
                     auth.loadFromKeychain()
                     await RevenueCatService.shared.syncIdentity(
                         appUserID: auth.currentSupabaseUserId(),
@@ -35,6 +38,7 @@ struct GaiaEyesApp: App {
                     )
                 }
                 .onChange(of: auth.supabaseAccessToken) { _, token in
+                    guard !MigraineLocalVerification.isActive else { return }
                     Task {
                         _ = token
                         await RevenueCatService.shared.syncIdentity(
@@ -51,6 +55,8 @@ struct GaiaEyesApp: App {
 #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-gaia-preview-migraine-follow-up-fixture") {
             MigraineFollowUpFixtureScreen()
+        } else if MigraineLocalVerification.isActive {
+            Color.clear
         } else {
             ContentView()
         }

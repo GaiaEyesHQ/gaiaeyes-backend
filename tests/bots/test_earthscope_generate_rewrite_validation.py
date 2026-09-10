@@ -236,7 +236,7 @@ def test_fallback_social_title_follows_caption_hook_lane():
     )
 
     lowered = title.lower()
-    assert any(term in lowered for term in ("buzz", "jittery", "squirrely", "wired"))
+    assert any(term in lowered for term in ("buzz", "jittery", "wired", "restless"))
     assert "head pressure" not in lowered
     assert "asking for space" not in lowered
 
@@ -704,13 +704,9 @@ def test_caption_uses_approved_hook_when_same_lane_drift_conflicts():
     assert caption == "Tiny aches getting louder? The sky feels calm, so there is room to recoup."
 
 
-def test_caption_uses_squirrely_approved_hook_for_jittery_lane():
-    caption = _caption_with_approved_hook(
-        "Feeling jittery today? Energy may buzz and focus can skid a bit.",
-        "Feeling squirrely today?",
-    )
-
-    assert caption == "Feeling squirrely today? Energy may buzz and focus can skid a bit."
+def test_clean_llm_title_rejects_forced_squirrel_metaphor():
+    assert _clean_llm_title("Feeling Squirrely Today?", set()) is None
+    assert _clean_llm_title("Over-Caffeinated Squirrel Energy", set()) is None
 
 
 def test_social_variants_align_default_caption_to_approved_title(monkeypatch):

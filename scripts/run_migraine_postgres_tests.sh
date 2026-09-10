@@ -89,6 +89,8 @@ SERVER_STARTED=1
   -f tests/db/fixtures/migraine_postgres_prerequisites.sql
 "$PREFIX/bin/psql" -X -v ON_ERROR_STOP=1 -h "$SOCKET" -p "$PORT" -U "$ADMIN" -d "$DATABASE" \
   -f supabase/migrations/20260908002922_add_migraine_episode_details.sql
+"$PREFIX/bin/psql" -X -v ON_ERROR_STOP=1 -h "$SOCKET" -p "$PORT" -U "$ADMIN" -d "$DATABASE" \
+  -f supabase/migrations/20260910033343_add_migraine_time_corrections.sql
 
 if "$PREFIX/bin/pg_isready" -h 127.0.0.1 -p "$PORT" -d "$DATABASE"; then
   echo "Refusing test runtime because TCP unexpectedly accepted connections" >&2
@@ -96,14 +98,15 @@ if "$PREFIX/bin/pg_isready" -h 127.0.0.1 -p "$PORT" -d "$DATABASE"; then
 fi
 
 DSN="postgresql://$ADMIN@/$DATABASE?host=$SOCKET&port=$PORT"
+# Optional focused test targets reuse the same guarded disposable runtime.
+if [[ "$#" -gt 0 ]]; then
+  TEST_TARGETS=("$@")
+else
+  TEST_TARGETS=(tests/db/test_migraine.py tests/db/test_migraine_postgres_integration.py
+    tests/services/test_migraine_episode_contract.py tests/services/test_migraine_follow_up.py
+    tests/api/test_symptoms.py tests/api/test_feedback.py tests/services/test_voice_symptoms.py)
+fi
 env -u DIRECT_URL -u SUPABASE_URL -u SUPABASE_DB_URL \
   DATABASE_URL="postgresql://localhost/test" \
   GAIA_MIGRAINE_TEST_DATABASE_URL="$DSN" \
-  venv/bin/python -m pytest -q \
-    tests/db/test_migraine.py \
-    tests/db/test_migraine_postgres_integration.py \
-    tests/services/test_migraine_episode_contract.py \
-    tests/services/test_migraine_follow_up.py \
-    tests/api/test_symptoms.py \
-    tests/api/test_feedback.py \
-    tests/services/test_voice_symptoms.py
+  venv/bin/python -m pytest -q "${TEST_TARGETS[@]}"

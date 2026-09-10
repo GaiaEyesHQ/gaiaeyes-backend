@@ -126,3 +126,10 @@ create unique index user_feedback_prompts_episode_pending_uidx
   on raw.user_feedback_prompts (episode_id, prompt_type, question_key)
   where prompt_type = 'symptom_follow_up'
     and status in ('pending', 'snoozed');
+
+-- Match the original symptom migrations for invoker-view ownership checks.
+alter table raw.user_symptom_events enable row level security;
+alter table raw.user_symptom_episodes enable row level security;
+create policy p_symptom_select on raw.user_symptom_events for select to authenticated using (auth.uid() = user_id);
+create policy p_symptom_episode_select on raw.user_symptom_episodes for select to authenticated using (auth.uid() = user_id);
+grant select on raw.user_symptom_events, raw.user_symptom_episodes to authenticated;

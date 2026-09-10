@@ -5,6 +5,27 @@ experience. The routes live under the `/v1/symptoms` prefix and require a valid
 Bearer token. During development you can supply the `DEV_BEARER` token together
 with an `X-Dev-UserId` header to impersonate a user.
 
+## Saved migraine time correction (G-013, local/default-off)
+
+- `GET /v1/symptoms/current/{episode_id}/migraine-times` returns the canonical start/end, validated detail, revision, canonical timestamp token and any inconsistent raw end.
+- `POST` to that path uses a UUID `request_id`, `expected_revision`, `expected_canonical_updated_at` and explicit `start` / `end` / `state` changes. Omission retains; end null clears without reopening; start/state null reject. Set timestamps require congruent original wall time, IANA timezone, UTC offset and aware UTC. Repeated local times require an explicit occurrence; invalid gaps/order/future times reject.
+- Owner-filtered canonical timing, detail revision/audit and reminder reconciliation commit atomically. Original source events and update rows remain intact. Identical request retries replay the receipt; changed reuse or stale tokens return 409. Invalid values/IDs return 422; not-owned/missing episodes return 404; missing capability returns 503.
+- After commit, existing gauge and personal-pattern refresh paths cover affected dates. A separate `refresh.status` reports complete/pending; failure does not undo or conceal a saved correction. Exact retry may repeat downstream refresh without repeating the correction.
+- Activation requires `GAIA_MIGRAINE_TIME_EDITING_ENABLED=1` plus the additive migration, both correction-aware read views and audit columns. iOS also requires the Debug-only `-gaia-enable-migraine-time-editing` launch flag within the existing calendar/editor workflow. These flags remain off by default.
+- See [MIGRAINE_TIME_CORRECTION_CONTRACT.md](contracts/MIGRAINE_TIME_CORRECTION_CONTRACT.md) for concurrency, provenance, unknown-end/state, reminders, affected readers, legacy report semantics and parity/release boundaries.
+
+## Migraine calendar history (G-012, local/default-off)
+
+`GET /v1/symptoms/migraine/history?start=<aware-ISO8601>&end=<aware-ISO8601>&limit=50&cursor=<opaque>` reads the authenticated user's canonical migraine episodes. It requires `GAIA_MIGRAINE_CALENDAR_ENABLED=1`; absent capability returns 503 (older servers may return route 404). The existing `/current/timeline` remains unchanged. No schema migration or parallel history store is introduced.
+
+- Range is `[start,end)`, at most 62 elapsed days, limit 1–100. iOS constructs calendar month/day boundaries in its explicit display timezone, then sends UTC instants; days may have 23 or 25 hours.
+- Include an onset within the range, or an earlier episode with a recorded end strictly after start. A non-resolved episode with no recorded end overlaps through the first page's fixed `as_of` instant. An end exactly at day start does not carry into that day. A zero-duration episode still appears on its onset day.
+- `end_status` is `recorded`, `open`, or `unknown`. Resolved episodes without a valid end are onset-only markers; their missing duration is not fabricated. Medicine times and update counts are never episode boundaries.
+- Each item has `id`, `started_at`, nullable `ended_at`, `end_status`, `state`, nullable `severity` and `note_preview`. Ordering is `(started_at DESC,id DESC)`. The cursor binds account, range, fixed as-of instant, complete matching-set fingerprint and last ordering tuple. It grants no access: every page applies authenticated owner filtering independently.
+- The response data contains `items`, `start`, `end`, `as_of`, `snapshot`, nullable `next_cursor` and `complete`. More than 80 episodes are supported through pagination; stable datasets have no gaps/duplicates. A single PostgreSQL statement computes both fingerprint and page. Fingerprinting uses the existing owner/start index and all matching canonical fields, including update time; it detects insert/delete/edit changes to the matching set between requests. Changed sets return 409 and require a first-page refresh. No durable snapshot or transaction is held across HTTP requests. Completion is as of the last successful page; later changes require refresh, including after acknowledged editing/return from the editor.
+- Invalid inputs/cursors return 422; missing capability/storage returns 503; read failures return 500. These are explicit failures, never an empty successful calendar. Clients retain partial entries with an incomplete indication on retryable page failures and discard them on a changed-set conflict. No generic GET retry should join pages from different accounts/ranges.
+- iOS shows the display timezone and a visible history-as-of time after complete loading. Activation also defaults off and is Debug-only. Android and member-hub parity are deferred for this local increment. G-013 adds separately gated explicit onset/end correction, described below; calendar navigation alone does not imply that capability is enabled.
+
 ## Authentication headers
 
 ```

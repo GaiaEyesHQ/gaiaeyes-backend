@@ -1,25 +1,27 @@
 # G-011 Active Work — iOS migraine follow-up and medicine editing
 
-Status: **running_review_repairs**, explicit September 9 retry authorized.
-Sole coordinator-assigned writer: **Audit Gaia Eyes project state**,
-task `01a074da-1e28-7772-92b7-2b0163664c13`.
+Status: **accepted_complete** as bounded local implementation, including G-R19, by the coordinator's September 10 UTC G-012 dispatch. Physical/release acceptance remains separate. Current continuation: [G012_ACTIVE_WORK.md](G012_ACTIVE_WORK.md).
+Sole coordinator-assigned writer: **Audit Gaia Eyes project state**, task `01a074da-1e28-7772-92b7-2b0163664c13`.
 
-## Resume here — September 9
+## September 9 closeout — G-R19
 
-- Current slice: G-R17 Decimal/timestamp interoperability, then G-R15 list and
-  metadata preservation with actual-source/backend-generated fixture checks.
-- Continue directly afterward with G-R16 truthful uncertain-save handling and
-  G-R18 injected responses through the actual editor/follow-up workflow.
-- All four findings remain open at this acceptance checkpoint. Reviewed source
-  hashes match the coordinator's original findings; originals are preserved in
-  `/Users/gennwu/Documents/Codex/2026-09-05/we/work/g011-review-repairs/20260909/`.
-- Feature remains disabled by default and unavailable in Release. Accepted
-  backend work is preserved. No production, deployment, phone, provider import,
-  new dependency, or historical audit/Samsung diversion is in scope.
-- Shared manager report is atomically marked `running_review_repairs`; preserve
-  its prior handoff. The coordinator owns portfolio/events/human registers.
-- If a platform action is denied again, record the exact error and stop that
-  action; do not reroute it or claim it ran.
+- Actual follow-up and historical-editor request inputs now stay disabled during both structured and legacy saves, with visible saving feedback. Drafts remain intact and editable after errors, conflicts or cancellation.
+- Deterministic delayed local responses exercise the actual forms: **24 tests / 39 executed cases passed**, including twelve new G-R19 UI cases and six existing UI regressions. Final arm64 Release simulator build, fixture-exclusion checks, source hashes and static checks passed.
+- Current [handoff and evidence](/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g011-gr19/HANDOFF.md) preserve the prior accepted packet unchanged. Exactly three source/test files changed for G-R19; eleven accepted hashes remain unchanged.
+- The [next historical-event/calendar proposal](/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g011-gr19/NEXT_HISTORY_CALENDAR_INCREMENT.md) records missing complete date-range history/pagination and explicit onset/end editing, with acceptance checks. It is ready for separate scoping, not implemented or a new owner-imposed order.
+- D010–D012 Google organization verification/app-record creation facts are reconciled in recovery docs; no fresh console inspection is implied. D028 imports remain deferred. No deployment, personal-export handling or backend work occurred.
+- Next action: coordinator review of G-R19/full G-011, then choose the next bounded core task. Physical-device acceptance and Android/website parity remain separate.
+
+## Prior September 9 closeout — G-R15 through G-R18
+
+- G-R15, G-R16, G-R17 and G-R18 are repaired and locally verified. No unresolved finding remains in this repair slice; the coordinator owns acceptance.
+- Handoff: [G-011 review repairs](/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g011-review-repairs/HANDOFF.md). That packet includes exact commands, current source hashes, the full delta from frozen reviewed originals, final logs, backend-generated fixtures, simulator results and actual UI screenshots.
+- Verification: 21 tests / 36 executed cases (30 client/workflow cases plus six actual UI tests), zero failures; current Swift/backend serializer round trip passed; final arm64 Release simulator build and fixture-exclusion check passed; diff/shell checks passed.
+- Saved records and metadata are preserved. Actual save acknowledgement must match account, episode, prompt, state, next revision and edited content. Existing detail GETs cannot prove the exact follow-up response; uncertain results retain the draft for an identical explicit retry. Definite errors, cancellation and account changes do not claim success.
+- Actual follow-up and history screens use injected local responses during tests. General startup auth/billing/background/push work is skipped in synthetic verification. Feature remains disabled by default and unavailable in Release; synthetic transport is Debug-only.
+- Accepted G-008–G-010 backend work remains intact. No production, phone, deployment, release, account enrollment, provider ingestion or dependency changes occurred. Other dirty work is preserved.
+- **D028:** provider samples received privately; H09 availability resolved. Imports follow logging, follow-up, medication, editable events and calendar, with no new order within that core group. Reports and existing outreach commitments remain. See [MIGRAINE_IMPORT_REFERENCES.md](MIGRAINE_IMPORT_REFERENCES.md). No importer work began.
+- Next action: coordinator review of the packet, then reconcile the next authorized core task. Do not resume old audit, Samsung, enrollment or production checks from historical notes below.
 
 ## Ownership handoff — 2026-09-08 09:45 CDT
 
@@ -52,8 +54,7 @@ task `01a074da-1e28-7772-92b7-2b0163664c13`.
   retention, recovery, conflicts, clears, account changes, and capability
   fallback.
 
-Next command: inspect the coordinator evidence bundle and current follow-up
-model/view seams before making targeted changes.
+The findings above are preserved as the original review requirements; see the September 9 closeout for their disposition.
 
 ## Objective
 
@@ -67,11 +68,11 @@ Add a bounded iOS integration for the canonical structured migraine episode deta
 - A retry must reuse the same response timestamp and structured payload.
 - Save failures and revision conflicts must keep the user's draft visible.
 - Draft state must not be reused after the authenticated account scope changes.
-- Readback after a recoverable failure is the proof of a structured save; unchanged canonical symptom state alone is not proof.
+- A detail GET cannot prove the specific prompt response. Require the matching successful POST acknowledgement; retain uncertain failures for an identical explicit retry. Neither unchanged canonical state nor matching detail alone proves success.
 
 ## Existing work to preserve
 
-G-010 backend, contract, and PostgreSQL verification changes are present in the working tree and have been accepted locally. They must not be reverted or rewritten as part of this client slice.
+G-010 backend, contract and PostgreSQL verification have been accepted locally and remain preserved in the checkout. This client repair did not rewrite them. Some previously dirty work was committed by intervening work; use the frozen original-source delta when reviewing G-011.
 
 ## Planned files
 
@@ -85,7 +86,7 @@ G-010 backend, contract, and PostgreSQL verification changes are present in the 
 
 This feature is iOS-only in G-011. Android client parity and website/member-hub presentation are intentionally deferred until this local contract and interaction pass review. The canonical backend contract is shared so those clients do not need a parallel data model.
 
-## Local verification completed
+## Historical September 8 verification — superseded by September 9 closeout
 
 - Six focused client contract tests pass for decoding, retain/clear semantics,
   explicit negative medicine/relief values, stable retry payloads, account

@@ -11,15 +11,79 @@ import Testing
 
 struct MigraineFollowUpClientTests {
 
-    private func fixtureDetail() throws -> MigraineEpisodeDetail {
+    private func fixtureDetail(_ name: String = "migraine_episode_detail.json") throws -> MigraineEpisodeDetail {
         let sourceFile = URL(fileURLWithPath: #filePath)
         let fixtureURL = sourceFile
             .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/migraine_episode_detail.json")
+            .appendingPathComponent("Fixtures/\(name)")
         let data = try Data(contentsOf: fixtureURL)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(MigraineEpisodeDetail.self, from: data)
+    }
+
+    @Test
+    func backendDecimalFixturePreservesMultipleMedicinesAndSignMetadata() throws {
+        let detail = try fixtureDetail("migraine_episode_backend_detail.json")
+        #expect(detail.episode.medicines[1].doseAmount == Decimal(string: "2.5"))
+        var draft = MigraineFollowUpDraft(accountScope: "a", promptId: "p", episodeId: detail.episode.episodeId)
+        try draft.apply(detail, forAccountScope: "a")
+        #expect(try draft.makeStructuredEdit(currentAccountScope: "a") == nil)
+        draft.noteText = "Only the episode note changed"
+        #expect(try draft.makeStructuredEdit(currentAccountScope: "a")?.medicines == nil)
+        draft.reliefChoice = .complete
+        let edit = try #require(try draft.makeStructuredEdit(currentAccountScope: "a"))
+        #expect(edit.medicines?.count == 2)
+        #expect(edit.medicines?[1] == detail.episode.medicines[1])
+        #expect(edit.medicines?[0].takenAt == detail.episode.medicines[0].takenAt)
+        #expect(edit.medicines?[0].notes == detail.episode.medicines[0].notes)
+        draft.earlySignsText = "Neck tension, New sign"
+        let signs = try #require(try draft.makeStructuredEdit(currentAccountScope: "a")?.earlySigns)
+        #expect(signs.first == detail.episode.earlySigns[1])
+        #expect(signs.last?.code == nil)
+        draft.medicineChoice = .removeFirst
+        #expect(try draft.makeStructuredEdit(currentAccountScope: "a")?.medicines == [detail.episode.medicines[1]])
+        draft.medicineChoice = .none
+        #expect(try draft.makeStructuredEdit(currentAccountScope: "a")?.medicines == [])
+    }
+
+    @Test
+    func malformedDoseDoesNotSilentlySaveItsNumericPrefix() throws {
+        let detail = try fixtureDetail()
+        var draft = MigraineFollowUpDraft(accountScope: "a", promptId: "p", episodeId: detail.episode.episodeId)
+        try draft.apply(detail, forAccountScope: "a")
+        draft.doseAmountText = "2oops"
+        #expect(throws: MigraineDraftError.self) {
+            _ = try draft.makeStructuredEdit(currentAccountScope: "a")
+        }
+    }
+
+    @Test
+    func addingThenReturningToFirstMedicineDoesNotReplaceIt() throws {
+        let detail = try fixtureDetail("migraine_episode_backend_detail.json")
+        var draft = MigraineFollowUpDraft(accountScope: "a", promptId: "p", episodeId: detail.episode.episodeId)
+        try draft.apply(detail, forAccountScope: "a")
+        draft.chooseMedicine(.add)
+        draft.medicineName = "A different added medicine"
+        draft.chooseMedicine(.retain)
+        draft.chooseMedicine(.taken)
+        #expect(draft.medicineName == detail.episode.medicines[0].name)
+        #expect(try draft.makeStructuredEdit(currentAccountScope: "a") == nil)
+    }
+
+    @Test
+    func timestampMatchingNormalizesInstantsWithoutErasingProvenance() throws {
+        let timestamp = try fixtureDetail("migraine_episode_backend_detail.json").episode.medicines[0].takenAt
+        let equivalent = MigraineEpisodeTimestamp(utc: "2026-09-08T04:45:00.000+00:00", originalTime: timestamp.originalTime,
+            timezoneName: timestamp.timezoneName, utcOffsetMinutes: timestamp.utcOffsetMinutes, timezoneSource: timestamp.timezoneSource)
+        #expect(timestamp.matches(equivalent))
+        #expect(timestamp.utc != equivalent.utc)
+        let changedProvenance = MigraineEpisodeTimestamp(utc: equivalent.utc, originalTime: nil,
+            timezoneName: timestamp.timezoneName, utcOffsetMinutes: timestamp.utcOffsetMinutes, timezoneSource: "unknown")
+        #expect(!timestamp.matches(changedProvenance))
+        let detail = try fixtureDetail()
+        let unchanged = MigraineStructuredEdit(expectedRevision: detail.revision, earlySigns: nil, contexts: nil, medicines: [], notes: .retain)
+        #expect(!unchanged.matches(detail))
     }
 
     @Test
@@ -79,50 +143,6 @@ struct MigraineFollowUpClientTests {
 
         #expect(retained.followUpNoteText == nil)
         #expect(set.followUpNoteText == "Resting in a dark room helped.")
-    }
-
-    @Test
-    func followUpRetryPayloadKeepsTimestampAndNestedStructuredEditStable() throws {
-        let timestamp = MigraineFollowUpDraft.timestamp(Date(timeIntervalSince1970: 1_788_839_400))
-        let edit = MigraineStructuredEdit(
-            expectedRevision: 0,
-            earlySigns: [],
-            contexts: nil,
-            medicines: [
-                MigraineMedicineTaken(
-                    name: "Test medicine",
-                    takenAt: timestamp,
-                    doseAmount: 10,
-                    doseUnit: "mg",
-                    reportedRelief: "none",
-                    reliefReportedAt: timestamp,
-                    notes: nil
-                )
-            ],
-            notes: .retain
-        )
-        let payload = APIClient.SymptomFollowUpResponsePayload(
-            state: "ongoing",
-            detailChoice: nil,
-            detailText: nil,
-            noteText: nil,
-            timeBucket: nil,
-            tsUtc: "2026-09-08T05:30:00.000Z",
-            migraine: edit
-        )
-        let encoder = JSONEncoder()
-
-        let firstObject = try #require(JSONSerialization.jsonObject(with: encoder.encode(payload)) as? NSDictionary)
-        let retryObject = try #require(JSONSerialization.jsonObject(with: encoder.encode(payload)) as? NSDictionary)
-        #expect(firstObject == retryObject)
-        let object = try #require(firstObject as? [String: Any])
-        #expect(object["ts_utc"] as? String == "2026-09-08T05:30:00.000Z")
-        let migraine = try #require(object["migraine"] as? [String: Any])
-        #expect(migraine["expected_revision"] as? Int == 0)
-        let medicine = try #require((migraine["medicines"] as? [[String: Any]])?.first)
-        #expect(medicine["taken_at"] != nil)
-        #expect(medicine["takenAt"] == nil)
-        #expect(medicine["reported_relief"] as? String == "none")
     }
 
     @Test

@@ -23,7 +23,7 @@ does not replace either one.
 | `episode_id` | Identity of the existing `raw.user_symptom_episodes` row, or a staging UUID during import preview. |
 | `symptom_event_id` | Link to the onset event in `raw.user_symptom_events`. Required for live manual, Siri, follow-up, and HealthKit-normalized records. It may be absent only in an import preview before commit. |
 | `symptom_code` | Fixed to `MIGRAINE` for this contract. Other symptom families need their own reviewed contract or an explicit later generalization. |
-| `state`, `start`, `end`, `severity` | Current episode state and timing. A resolved episode requires an end; an active episode cannot have one. End cannot precede start. Severity is optional and remains 0–10 when supplied. |
+| `state`, `start`, `end`, `severity` | Current episode state and timing. A resolved episode may have a recorded or unknown end; an active episode cannot have an end. Clearing an end does not reopen the episode. End cannot precede start. Severity is optional and remains 0–10 when supplied. |
 | timestamp provenance | Every episode start/end and medicine time contains normalized aware UTC plus explicit timezone provenance. Original local text, IANA timezone, and offset are retained when known; `unknown` is an honest allowed provenance value. |
 | `early_signs` | Optional user-reported signs. Absence means not supplied, not “none occurred.” |
 | `contexts` | Optional exposure or context entries. `kind` and `source` keep a user-reported exposure distinct from device, health-record, imported, or environmental context. Context does not assert causation. |
@@ -41,7 +41,7 @@ user or a source actually supplies them.
 | Existing Gaia Eyes field/path | Contract mapping |
 |---|---|
 | `raw.user_symptom_events.id` | `symptom_event_id` |
-| `raw.user_symptom_events.ts_utc` | `start.utc` |
+| `raw.user_symptom_events.ts_utc` | Original source onset; preserved when a canonical onset is corrected |
 | `raw.user_symptom_events.severity` | initial `severity` |
 | `raw.user_symptom_episodes.id` | `episode_id` |
 | `raw.user_symptom_episodes.current_state` | `state` |
@@ -63,6 +63,10 @@ Direct table access remains owner-filtered and read-only for authenticated
 clients. Mutations stay behind the backend repository so a direct table write
 cannot bypass revision, parent-ownership, and audit behavior. The authenticated
 backend routes are described below; no direct Data API mutation is added.
+
+## Saved time corrections (G-013)
+
+The [time-correction contract](MIGRAINE_TIME_CORRECTION_CONTRACT.md) adds a default-off owner/revision/token-protected operation for canonical `started_at` and `resolution_ts`. It preserves raw events and original update occurrence timestamps, and appends the correction to the existing detail revision audit. Current summary readers use a live correction-aware projection. This operation is distinct from ordinary update `ts_utc` / structured `occurred_at`.
 
 ## Local backend API integration
 

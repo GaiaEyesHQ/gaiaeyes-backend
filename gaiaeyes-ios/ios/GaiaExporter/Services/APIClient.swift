@@ -126,7 +126,7 @@ struct AnalyticsUploadResponse: Decodable {
     let error: String?
 }
 
-private enum APIError: Error {
+enum APIError: Error {
     case server(code: Int, body: String)
 }
 
@@ -249,14 +249,14 @@ final class APIClient {
     /// Optional logger to surface network activity
     public var logger: ((String) -> Void)?
 
-    init(config: APIConfig) {
+    init(config: APIConfig, session: URLSession? = nil) {
         self.bearer = config.bearer
         self.timeout = config.timeout
         // Ensure base URL is valid
         self.baseURL = URL(string: config.baseURLString) ?? URL(string: "http://127.0.0.1:8000")!
 
         // Tuned session: short timeouts, limited concurrency to avoid UI stalls
-        self.session = APIClient.makeTunedSession()
+        self.session = session ?? APIClient.makeTunedSession()
 
         // Start path monitor
         let q = DispatchQueue(label: "api.path.monitor")
@@ -370,7 +370,8 @@ final class APIClient {
     public func getJSON<T: Decodable>(_ path: String,
                                       as type: T.Type,
                                       retries: Int = 3,
-                                      perRequestTimeout: TimeInterval = 45) async throws -> T {
+                                      perRequestTimeout: TimeInterval = 45,
+                                      validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> T {
         let clean = path.trimmingCharacters(in: .whitespacesAndNewlines)
         // Split into path and query (e.g., "v1/space/series?days=30")
         let parts = clean.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
@@ -402,7 +403,9 @@ final class APIClient {
         var lastError: Error?
         while true {
             do {
+                if let validateRequest { try await validateRequest() }
                 try await ensureAuthorizationHeaderIfNeeded(on: &req, pathHint: clean)
+                if let validateRequest { try await validateRequest() }
                 logger?("GET \(finalURL.absoluteString)")
                 let (data, resp) = try await session.data(for: req)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
@@ -495,7 +498,8 @@ final class APIClient {
     @discardableResult
     func postJSON<Body: Encodable, Resp: Decodable>(_ path: String,
                                                     body: Body,
-                                                    as responseType: Resp.Type) async throws -> Resp {
+                                                    as responseType: Resp.Type,
+                                                    validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> Resp {
         var req = makeRequest(path: path)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -508,6 +512,8 @@ final class APIClient {
         while true {
             try await ensureAuthorizationHeaderIfNeeded(on: &req, pathHint: path)
             logger?("POST \(req.url?.absoluteString ?? path)")
+            try Task.checkCancellation()
+            try await validateRequest?()
             let (responseData, resp) = try await session.data(for: req)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
             let bodyString = String(data: responseData, encoding: .utf8) ?? ""
@@ -535,7 +541,8 @@ final class APIClient {
     @discardableResult
     func patchJSON<Body: Encodable, Resp: Decodable>(_ path: String,
                                                      body: Body,
-                                                     as responseType: Resp.Type) async throws -> Resp {
+                                                     as responseType: Resp.Type,
+                                                    validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> Resp {
         var req = makeRequest(path: path)
         req.httpMethod = "PATCH"
         let encoder = JSONEncoder()
@@ -549,6 +556,8 @@ final class APIClient {
         while true {
             try await ensureAuthorizationHeaderIfNeeded(on: &req, pathHint: path)
             logger?("PATCH \(req.url?.absoluteString ?? path)")
+            try Task.checkCancellation()
+            try await validateRequest?()
             let (responseData, resp) = try await session.data(for: req)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
             let bodyString = String(data: responseData, encoding: .utf8) ?? ""
@@ -793,6 +802,18 @@ final class APIClient {
         try await getJSON("v1/symptoms/current/timeline?days=\(days)", as: Envelope<[CurrentSymptomTimelineEntry]>.self)
     }
 
+    func fetchMigraineHistory(range: DateInterval, cursor: String?,
+                              validateRequest: @escaping @MainActor () throws -> Void) async throws -> Envelope<MigraineHistoryPage> {
+        var components = URLComponents()
+        let formatter = ISO8601DateFormatter()
+        components.queryItems = [URLQueryItem(name: "start", value: formatter.string(from: range.start)),
+                                 URLQueryItem(name: "end", value: formatter.string(from: range.end)),
+                                 URLQueryItem(name: "limit", value: "50")]
+        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await getJSON("v1/symptoms/migraine/history?\(components.percentEncodedQuery!)",
+            as: Envelope<MigraineHistoryPage>.self, retries: 0, validateRequest: validateRequest)
+    }
+
     func fetchCurrentSymptom(episodeId: String) async throws -> Envelope<CurrentSymptomItem> {
         try await getJSON(
             "v1/symptoms/current/\(episodeId)",
@@ -807,14 +828,28 @@ final class APIClient {
         )
     }
 
+    func fetchMigraineTimeContext(episodeId: String,
+        validateRequest: @escaping @MainActor () throws -> Void) async throws -> Envelope<MigraineTimeContext> {
+        try await getJSON("v1/symptoms/current/\(episodeId)/migraine-times",
+            as: Envelope<MigraineTimeContext>.self, retries: 0, validateRequest: validateRequest)
+    }
+
+    func correctMigraineTimes(episodeId: String, correction: MigraineTimeRequest,
+        validateRequest: @escaping @MainActor () throws -> Void) async throws -> Envelope<MigraineTimeContext> {
+        try await postJSON("v1/symptoms/current/\(episodeId)/migraine-times", body: correction,
+            as: Envelope<MigraineTimeContext>.self, validateRequest: validateRequest)
+    }
+
     func updateMigraineEpisodeDetail(
         episodeId: String,
-        edit: MigraineStructuredEdit
+        edit: MigraineStructuredEdit,
+        validateRequest: (@MainActor () throws -> Void)? = nil
     ) async throws -> Envelope<MigraineEpisodeDetail> {
         try await patchJSON(
             "v1/symptoms/current/\(episodeId)/migraine-detail",
             body: edit,
-            as: Envelope<MigraineEpisodeDetail>.self
+            as: Envelope<MigraineEpisodeDetail>.self,
+            validateRequest: validateRequest
         )
     }
 
@@ -823,7 +858,8 @@ final class APIClient {
         state: CurrentSymptomState? = nil,
         severity: Int? = nil,
         noteText: String? = nil,
-        tsUtc: Date? = nil
+        tsUtc: Date? = nil,
+        validateRequest: (@MainActor () throws -> Void)? = nil
     ) async throws -> Envelope<CurrentSymptomItem> {
         let payload = CurrentSymptomUpdatePayload(
             state: state?.rawValue,
@@ -834,7 +870,8 @@ final class APIClient {
         return try await postJSON(
             "v1/symptoms/current/\(episodeId)/updates",
             body: payload,
-            as: Envelope<CurrentSymptomItem>.self
+            as: Envelope<CurrentSymptomItem>.self,
+            validateRequest: validateRequest
         )
     }
 
@@ -888,7 +925,8 @@ final class APIClient {
         noteText: String? = nil,
         timeBucket: String? = nil,
         tsUtc: Date? = nil,
-        migraine: MigraineStructuredEdit? = nil
+        migraine: MigraineStructuredEdit? = nil,
+        validateRequest: (@MainActor () throws -> Void)? = nil
     ) async throws -> Envelope<SymptomFollowUpResult> {
         let payload = SymptomFollowUpResponsePayload(
             state: state.rawValue,
@@ -902,7 +940,8 @@ final class APIClient {
         return try await postJSON(
             "v1/symptoms/follow-ups/\(promptId)/respond",
             body: payload,
-            as: Envelope<SymptomFollowUpResult>.self
+            as: Envelope<SymptomFollowUpResult>.self,
+            validateRequest: validateRequest
         )
     }
 

@@ -1,0 +1,109 @@
+{
+  "revision": 2,
+  "changed": false,
+  "episode": {
+    "schema_version": "1.0",
+    "episode_id": "11111111-1111-4111-8111-111111111111",
+    "symptom_event_id": "22222222-2222-4222-8222-222222222222",
+    "symptom_code": "MIGRAINE",
+    "state": "ongoing",
+    "start": {
+      "utc": "2026-09-08T04:30:00Z",
+      "original_time": "2026-09-07 23:30",
+      "timezone_name": "America/Chicago",
+      "utc_offset_minutes": -300,
+      "timezone_source": "device"
+    },
+    "end": null,
+    "severity": 5,
+    "early_signs": [
+      {
+        "label": "Light sensitivity",
+        "code": "LIGHT_SENSITIVITY",
+        "reported_at": {
+          "utc": "2026-09-08T04:45:00Z",
+          "original_time": "2026-09-07 23:45",
+          "timezone_name": "America/Chicago",
+          "utc_offset_minutes": -300,
+          "timezone_source": "provider"
+        },
+        "notes": "Keep sign metadata"
+      },
+      {
+        "label": "Neck tension",
+        "code": "NECK_TENSION",
+        "reported_at": {
+          "utc": "2026-09-08T04:45:00Z",
+          "original_time": "2026-09-07 23:45",
+          "timezone_name": "America/Chicago",
+          "utc_offset_minutes": -300,
+          "timezone_source": "provider"
+        },
+        "notes": "Second sign note"
+      }
+    ],
+    "contexts": [],
+    "medicines": [
+      {
+        "name": "Test medicine",
+        "taken_at": {
+          "utc": "2026-09-08T04:45:00Z",
+          "original_time": "2026-09-07 23:45",
+          "timezone_name": "America/Chicago",
+          "utc_offset_minutes": -300,
+          "timezone_source": "provider"
+        },
+        "dose_amount": "10",
+        "dose_unit": "mg",
+        "reported_relief": "some",
+        "relief_reported_at": {
+          "utc": "2026-09-08T05:30:00Z",
+          "original_time": null,
+          "timezone_name": "America/Chicago",
+          "utc_offset_minutes": -300,
+          "timezone_source": "device"
+        },
+        "notes": "Existing medicine-specific note"
+      },
+      {
+        "name": "Second synthetic medicine",
+        "taken_at": {
+          "utc": "2026-09-08T05:00:00.125000Z",
+          "original_time": "2026-09-08 00:00:00.125",
+          "timezone_name": "America/Chicago",
+          "utc_offset_minutes": -300,
+          "timezone_source": "provider"
+        },
+        "dose_amount": "2.5",
+        "dose_unit": "mg",
+        "reported_relief": "some",
+        "relief_reported_at": {
+          "utc": "2026-09-08T05:30:00Z",
+          "original_time": null,
+          "timezone_name": "America/Chicago",
+          "utc_offset_minutes": -300,
+          "timezone_source": "device"
+        },
+        "notes": "Keep this second entry"
+      }
+    ],
+    "notes": "Resting in a dark room.",
+    "provenance": {
+      "source_type": "follow_up",
+      "source_platform": "ios",
+      "source_provider": null,
+      "external_event_id": null,
+      "source_file_hash": null,
+      "import_run_id": null,
+      "raw_row_ref": null,
+      "mapping_version": null
+    },
+    "lifecycle": {
+      "revision": 2,
+      "created_at": "2026-09-08T04:30:00Z",
+      "updated_at": "2026-09-08T05:30:00Z",
+      "deleted_at": null,
+      "deletion_scope": null
+    }
+  }
+}

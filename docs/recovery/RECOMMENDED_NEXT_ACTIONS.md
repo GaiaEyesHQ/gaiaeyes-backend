@@ -2,6 +2,8 @@
 
 Strategy corrected by Jennifer on **2026-09-06**. The governing objective is **build a scalable user-acquisition and engagement system while continuing to improve the product**. Grow the user base, understand user value, support repeated use and advance research/medical capabilities. Revenue/cost are monitored context; immediate profitability and payer counts are not development gates. This replaces the initial audit's revenue-led sequence and blanket pauses.
 
+**September 10 execution checkpoint:** review the bounded [G-013 saved-time correction handoff](G013_ACTIVE_WORK.md) after locally accepted G-011/G-012. Continue core device/release reconciliation and the committed reporting path; imports remain behind the D028 core group and a later explicit assignment. This execution checkpoint preserves the acquisition/product/research priorities below and does not enable production.
+
 ## Three coordinated priorities
 
 1. **Build a repeatable acquisition and engagement workflow from an encouraging existing channel.** Jennifer reports strong download responses to occasional personal posts in relevant Facebook groups and useful feedback from multiple audiences. Turn preparation, review, authorized distribution, attribution and follow-up into a system that saves her time while preserving relevance and voice. Page/reel automation is only one component.
@@ -31,7 +33,7 @@ The three experiments in [PMF_STATE.md](PMF_STATE.md) test acquisition repeatabi
 
 - Reconcile the dirty Siri resolver/phrase delta against current main and verify it physically. Continue the planned episode review/edit, structured follow-up, medication/relief history or import work in deliverable increments based on recovered user needs and dependencies. Existing general symptom follow-ups already work; extend the missing behavior.
 - Improve onboarding/first-result explanations and contextual personal insights from observed friction and feedback. Support people who do not connect a wearable or buy Plus. Do not weaken free functionality to manufacture conversion.
-- Continue Android product/parity work as an acquisition and accessibility path. Existing release requirements—account enrollment, privacy/permissions, reliable sync/push, and purchase/restore if included in the chosen v1 scope—are functional release gates, not proof-of-profitability gates. Do not silently change the agreed v1 scope.
+- Continue Android product/parity work as an acquisition and accessibility path. Google organization verification and app-record creation are already owner-confirmed (D010–D011); D012 prioritizes Android quality/iOS parity before further store preparation. Remaining release requirements—privacy/permissions, signing/store configuration, reliable sync/push, and purchase/restore if included in the chosen v1 scope—are functional release gates, not proof-of-profitability gates. Do not silently change the agreed v1 scope.
 - Preserve iOS/web parity for shared surfaces. Prepare the Apple update and organization-account checklists; physical acceptance and final submission remain separate from source build success.
 
 **Success:** useful first actions are easier, the selected workflows pass technical/device acceptance, users report relevance and repeat use, and known friction is resolved. Use counts/cohort context and qualitative feedback rather than requiring three paying users before proceeding. Continuing development does not imply shipping every feature at once.

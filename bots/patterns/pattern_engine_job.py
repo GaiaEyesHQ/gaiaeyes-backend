@@ -1053,10 +1053,11 @@ def _fetch_symptom_rows(
         where.append("user_id = %s")
         params.append(user_id)
 
-    if _table_exists(conn, "marts", "symptom_daily"):
+    daily_source = "symptom_daily_effective" if _table_exists(conn, "marts", "symptom_daily_effective") else "symptom_daily"
+    if _table_exists(conn, "marts", daily_source):
         sql = f"""
             select user_id, day, symptom_code, events
-              from marts.symptom_daily
+              from marts.{daily_source}
              where {" and ".join(where)}
         """
         rows = _fetch_rows(conn, sql, params)

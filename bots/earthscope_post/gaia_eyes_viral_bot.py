@@ -1468,7 +1468,6 @@ def _earthscope_hook_title(text: str, *, tone: str = "", energy: Optional[str] =
             ["Ready for a calmer day?", "Body feeling steadier?", "Less static today?"] if calm_context else [
                 "Body buzzing today?",
                 "Feeling jittery?",
-                "Feeling squirrely?",
                 "Feeling wired for no reason?",
                 "Restless and tired?",
             ],
@@ -1505,7 +1504,7 @@ def _public_card_title(title: Any, *, fallback: str, preferred_hook: Any = None)
     preferred = strip_hashtags_and_emojis(_safe_text(preferred_hook) or "")
     preferred = preferred.strip().strip("\"'“”‘’").strip()
     preferred = re.sub(r"\s+", " ", preferred)
-    if preferred and len(preferred) <= 46:
+    if preferred and len(preferred) <= 46 and not re.search(r"\b(squirrely|squirrel)\b", preferred, flags=re.I):
         return preferred
 
     cleaned = strip_hashtags_and_emojis(_safe_text(title))
@@ -1531,6 +1530,8 @@ def _public_card_title(title: Any, *, fallback: str, preferred_hook: Any = None)
         "todays earthscope",
     }
     if generic_key in generic_titles or lowered.startswith("daily earthscope"):
+        return fallback
+    if re.search(r"\b(squirrely|squirrel)\b", lowered):
         return fallback
     if re.search(r"\b(jan|feb|mar|apr|may|jun|june|jul|aug|sep|oct|nov|dec)\b|\d{4}|#", lowered):
         return fallback
