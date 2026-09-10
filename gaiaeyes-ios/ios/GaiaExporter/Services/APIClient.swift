@@ -821,10 +821,11 @@ final class APIClient {
         )
     }
 
-    func fetchMigraineEpisodeDetail(episodeId: String) async throws -> Envelope<MigraineEpisodeDetail> {
+    func fetchMigraineEpisodeDetail(episodeId: String,
+        validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> Envelope<MigraineEpisodeDetail> {
         try await getJSON(
             "v1/symptoms/current/\(episodeId)/migraine-detail",
-            as: Envelope<MigraineEpisodeDetail>.self
+            as: Envelope<MigraineEpisodeDetail>.self, validateRequest: validateRequest
         )
     }
 

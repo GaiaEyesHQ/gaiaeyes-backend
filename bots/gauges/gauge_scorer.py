@@ -265,11 +265,11 @@ def fetch_user_tags(user_id: str) -> List[Dict[str, Any]]:
         return []
 
 
-def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
+def fetch_symptom_summary(user_id: str, day: date, *, require_corrected_symptoms: bool = False) -> Dict[str, Any]:
     start, end = _local_day_bounds(day)
     episode_rows: List[Dict[str, Any]] = []
     episode_cols = table_columns("raw", "user_symptom_episodes")
-    if episode_cols:
+    if episode_cols or require_corrected_symptoms:
         try:
             episode_rows = pg.fetch(
                 """
@@ -290,12 +290,19 @@ def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
                 end,
             ) or []
         except Exception:
+            if require_corrected_symptoms:
+                raise
             episode_rows = []
 
     # Check this additive capability live: table_columns caches absence for the
     # process lifetime, which could keep old-day inputs after migration.
-    capability = pg.fetchrow("select to_regclass('raw.user_symptom_events_effective') is not null as available")
-    source = "raw.user_symptom_events_effective" if capability and capability.get("available") else "raw.user_symptom_events"
+    if require_corrected_symptoms:
+        # A committed correction requires this view. Read it directly so missing
+        # capability or permission failures cannot fall back to original events.
+        source = "raw.user_symptom_events_effective"
+    else:
+        capability = pg.fetchrow("select to_regclass('raw.user_symptom_events_effective') is not null as available")
+        source = "raw.user_symptom_events_effective" if capability and capability.get("available") else "raw.user_symptom_events"
     try:
         rows = pg.fetch(
             f"""
@@ -311,6 +318,8 @@ def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
             end,
         )
     except Exception:
+        if require_corrected_symptoms:
+            raise
         rows = []
 
     return _build_symptom_signal_summary([*(rows or []), *episode_rows])
@@ -1875,6 +1884,7 @@ def score_user_day(
     *,
     local_payload: Optional[Dict[str, Any]] = None,
     force: bool = False,
+    require_corrected_symptoms: bool = False,
 ) -> Dict[str, Any]:
     definition, version = load_definition_base()
     day = _coerce_day(day)
@@ -1883,7 +1893,7 @@ def score_user_day(
     active_states = resolve_signals(user_id, day, local_payload=local_payload, definition=definition)
     tags = fetch_user_tags(user_id)
     profile = build_personalization_profile(tags)
-    symptoms = fetch_symptom_summary(user_id, day)
+    symptoms = fetch_symptom_summary(user_id, day, require_corrected_symptoms=True) if require_corrected_symptoms else fetch_symptom_summary(user_id, day)
     exposures = fetch_exposure_summary(user_id, day, profile=profile)
     daily_checkins = fetch_recent_daily_checkins(user_id, day)
     wearable = fetch_local_health_summary(user_id)

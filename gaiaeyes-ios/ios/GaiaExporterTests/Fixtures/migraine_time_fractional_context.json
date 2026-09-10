@@ -1,0 +1,64 @@
+{
+  "ok": true,
+  "error": null,
+  "friendly_error": null,
+  "data": {
+    "episode": {
+      "schema_version": "1.0",
+      "episode_id": "33333333-3333-4333-8333-333333333333",
+      "symptom_event_id": "652f41ca-0d1b-41b2-858f-0115adb60b05",
+      "symptom_code": "MIGRAINE",
+      "state": "ongoing",
+      "start": {
+        "utc": "2026-09-01T04:30:00Z",
+        "original_time": null,
+        "timezone_name": "America/Chicago",
+        "utc_offset_minutes": null,
+        "timezone_source": "device"
+      },
+      "end": null,
+      "severity": 5,
+      "early_signs": [],
+      "contexts": [],
+      "medicines": [
+        {
+          "name": "Synthetic medicine",
+          "taken_at": {
+            "utc": "2026-09-01T05:30:00Z",
+            "original_time": "2026-09-01T00:30:00",
+            "timezone_name": "America/Chicago",
+            "utc_offset_minutes": -300,
+            "timezone_source": "user"
+          },
+          "dose_amount": "2.5",
+          "dose_unit": "mg",
+          "reported_relief": null,
+          "relief_reported_at": null,
+          "notes": null
+        }
+      ],
+      "notes": "Keep notes",
+      "provenance": {
+        "source_type": "manual",
+        "source_platform": "g009_postgres",
+        "source_provider": null,
+        "external_event_id": null,
+        "source_file_hash": null,
+        "import_run_id": null,
+        "raw_row_ref": null,
+        "mapping_version": null
+      },
+      "lifecycle": {
+        "revision": 1,
+        "created_at": "2026-09-01T04:30:00Z",
+        "updated_at": "2026-09-01T04:30:00Z",
+        "deleted_at": null,
+        "deletion_scope": null
+      }
+    },
+    "revision": 1,
+    "canonical_updated_at": "2026-09-10T05:20:34.095414+00:00",
+    "raw_end_utc": null,
+    "inconsistent_end": false
+  }
+}

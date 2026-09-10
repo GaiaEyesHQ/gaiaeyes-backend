@@ -2,7 +2,7 @@
 
 Strategy corrected by Jennifer on **2026-09-06**. The governing objective is **build a scalable user-acquisition and engagement system while continuing to improve the product**. Grow the user base, understand user value, support repeated use and advance research/medical capabilities. Revenue/cost are monitored context; immediate profitability and payer counts are not development gates. This replaces the initial audit's revenue-led sequence and blanket pauses.
 
-**September 10 execution checkpoint:** review the bounded [G-013 saved-time correction handoff](G013_ACTIVE_WORK.md) after locally accepted G-011/G-012. Continue core device/release reconciliation and the committed reporting path; imports remain behind the D028 core group and a later explicit assignment. This execution checkpoint preserves the acquisition/product/research priorities below and does not enable production.
+**September 10 execution checkpoint:** review the bounded [G-013 G-R23 uncertain medicine-save repair handoff](G013_ACTIVE_WORK.md) after locally accepted G-011/G-012 and independently passed G-R20/G-R21/original G-R22. G-013 acceptance remains withheld pending review of the exact-retry and deliberate saved-version recovery. G-014 remains an inactive medicine-entry candidate until acceptance. Continue the existing core device/release reconciliation and reporting path; imports remain behind the D028 core group and a later explicit assignment. This checkpoint preserves the acquisition/product/research priorities below and does not enable production.
 
 ## Three coordinated priorities
 

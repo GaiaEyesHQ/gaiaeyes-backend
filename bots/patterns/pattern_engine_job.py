@@ -1046,6 +1046,7 @@ def _fetch_symptom_rows(
     since_day: date,
     as_of_day: date,
     user_id: str | None,
+    require_corrected_symptoms: bool = False,
 ) -> dict[tuple[str, date], dict[str, Any]]:
     params: list[Any] = [since_day, as_of_day]
     where = ["day >= %s", "day <= %s"]
@@ -1053,8 +1054,8 @@ def _fetch_symptom_rows(
         where.append("user_id = %s")
         params.append(user_id)
 
-    daily_source = "symptom_daily_effective" if _table_exists(conn, "marts", "symptom_daily_effective") else "symptom_daily"
-    if _table_exists(conn, "marts", daily_source):
+    daily_source = "symptom_daily_effective" if require_corrected_symptoms or _table_exists(conn, "marts", "symptom_daily_effective") else "symptom_daily"
+    if require_corrected_symptoms or _table_exists(conn, "marts", daily_source):
         sql = f"""
             select user_id, day, symptom_code, events
               from marts.{daily_source}
@@ -2108,6 +2109,7 @@ def _run_pattern_engine_once(
     days_back: int,
     user_id: str | None,
     dsn: str | None = None,
+    require_corrected_symptoms: bool = False,
 ) -> dict[str, int]:
     since_day = as_of_day - timedelta(days=max(days_back - 1, 0))
     updated_at = datetime.now(timezone.utc)
@@ -2136,7 +2138,8 @@ def _run_pattern_engine_once(
 
         gauges = _fetch_gauges(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         gauge_deltas = _fetch_gauge_deltas(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
-        symptom_rows = _fetch_symptom_rows(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
+        symptom_rows = _fetch_symptom_rows(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id,
+                                          require_corrected_symptoms=require_corrected_symptoms)
         camera_rows = _fetch_camera_rows(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         exposure_context = _fetch_daily_exposure_context(
             conn,
@@ -2228,6 +2231,7 @@ def run_pattern_engine(
     days_back: int,
     user_id: str | None,
     dsn: str | None = None,
+    require_corrected_symptoms: bool = False,
 ) -> dict[str, int]:
     _require_psycopg()
 
@@ -2238,6 +2242,7 @@ def run_pattern_engine(
                 days_back=days_back,
                 user_id=user_id,
                 dsn=dsn,
+                require_corrected_symptoms=require_corrected_symptoms,
             )
         except Exception as exc:
             if not _is_transient_db_error(exc) or attempt >= DB_RETRY_ATTEMPTS:

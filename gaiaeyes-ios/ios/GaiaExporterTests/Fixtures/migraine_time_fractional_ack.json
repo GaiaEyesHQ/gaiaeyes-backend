@@ -1,0 +1,86 @@
+{
+  "ok": true,
+  "error": null,
+  "friendly_error": null,
+  "data": {
+    "episode": {
+      "schema_version": "1.0",
+      "episode_id": "33333333-3333-4333-8333-333333333333",
+      "symptom_event_id": "652f41ca-0d1b-41b2-858f-0115adb60b05",
+      "symptom_code": "MIGRAINE",
+      "state": "resolved",
+      "start": {
+        "utc": "2026-08-31T04:30:00.123456Z",
+        "original_time": "2026-08-30T23:30:00.123456",
+        "timezone_name": "America/Chicago",
+        "utc_offset_minutes": -300,
+        "timezone_source": "user"
+      },
+      "end": {
+        "utc": "2026-09-01T07:30:00.000001Z",
+        "original_time": "2026-09-01T02:30:00.000001",
+        "timezone_name": "America/Chicago",
+        "utc_offset_minutes": -300,
+        "timezone_source": "user"
+      },
+      "severity": 5,
+      "early_signs": [],
+      "contexts": [],
+      "medicines": [
+        {
+          "name": "Synthetic medicine",
+          "taken_at": {
+            "utc": "2026-09-01T05:30:00Z",
+            "original_time": "2026-09-01T00:30:00",
+            "timezone_name": "America/Chicago",
+            "utc_offset_minutes": -300,
+            "timezone_source": "user"
+          },
+          "dose_amount": "2.5",
+          "dose_unit": "mg",
+          "reported_relief": null,
+          "relief_reported_at": null,
+          "notes": null
+        }
+      ],
+      "notes": "Keep notes",
+      "provenance": {
+        "source_type": "manual",
+        "source_platform": "g009_postgres",
+        "source_provider": null,
+        "external_event_id": null,
+        "source_file_hash": null,
+        "import_run_id": null,
+        "raw_row_ref": null,
+        "mapping_version": null
+      },
+      "lifecycle": {
+        "revision": 2,
+        "created_at": "2026-09-01T04:30:00Z",
+        "updated_at": "2026-09-10T05:20:34.119101Z",
+        "deleted_at": null,
+        "deletion_scope": null
+      }
+    },
+    "revision": 2,
+    "canonical_updated_at": "2026-09-10T05:20:34.117799+00:00",
+    "raw_end_utc": "2026-09-01T07:30:00.000001+00:00",
+    "inconsistent_end": false,
+    "request_id": "72a9bfb8-9d46-4b70-ab00-2305f4b43a10",
+    "applied_revision": 2,
+    "current_revision": 2,
+    "current_canonical_updated_at": "2026-09-10T05:20:34.117799+00:00",
+    "replayed": false,
+    "refresh_days": [
+      "2026-08-30",
+      "2026-08-31",
+      "2026-09-01",
+      "2026-09-10"
+    ],
+    "pattern_since_day": "2026-06-13",
+    "refresh": {
+      "status": "complete",
+      "pending_components": []
+    }
+  }
+}

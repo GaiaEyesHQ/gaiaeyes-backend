@@ -420,14 +420,55 @@ struct MigraineFollowUpDraft: Hashable {
 
     // Move the concurrency baseline only when the time receipt proves that
     // stored non-time values are unchanged. Preserve the person's unsaved fields.
-    mutating func advanceAfterTimeCorrection(_ saved: MigraineTimeContext, currentAccountScope: String) {
+    @discardableResult
+    mutating func advanceAfterTimeCorrection(_ saved: MigraineTimeContext, currentAccountScope: String) -> Bool {
         guard accountScope == currentAccountScope, episodeId == saved.episode.episodeId,
               saved.currentRevision == saved.appliedRevision, saved.revision == expectedRevision + 1,
               saved.currentCanonicalUpdatedAt == saved.canonicalUpdatedAt,
               originalNotes == saved.episode.notes,
               originalEarlySigns.elementsEqual(saved.episode.earlySigns, by: { $0.matches($1) }),
-              originalMedicines.elementsEqual(saved.episode.medicines, by: { $0.matches($1) }) else { return }
+              originalMedicines.elementsEqual(saved.episode.medicines, by: { $0.matches($1) }) else { return false }
         expectedRevision = saved.revision
+        return true
+    }
+
+    // The legacy response acknowledges only its submitted note, not a structured
+    // revision or any medicine/sign changes. Never advance those from this route.
+    mutating func acknowledgeLegacyNoteSave(episodeId savedEpisodeId: String, submittedNote: String,
+                                            savedNote: String?, currentAccountScope: String) {
+        let submitted = submittedNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard accountScope == currentAccountScope, episodeId == savedEpisodeId,
+              !submitted.isEmpty, savedNote == submitted else { return }
+        originalNotes = savedNote
+    }
+
+    // Called only by the person's explicit reload/review action after a conflict.
+    // Rebase changed controls onto the latest full detail; untouched controls and
+    // all retained entries/provenance come from that freshly loaded baseline.
+    mutating func rebasePreservingChanges(_ detail: MigraineEpisodeDetail, currentAccountScope: String) throws {
+        guard accountScope == currentAccountScope, episodeId == detail.episode.episodeId else {
+            throw MigraineDraftError.accountChanged
+        }
+        guard detail.revision >= expectedRevision else { throw MigraineSaveError.invalidResponse }
+        var baseline = self
+        baseline.earlySignsText = originalEarlySigns.map(\.label).joined(separator: ", ")
+        baseline.noteText = originalNotes ?? ""
+        baseline.resetMedicineFields()
+        if !originalMedicines.isEmpty { baseline.chooseMedicine(.taken) }
+        var rebased = self
+        try rebased.apply(detail, forAccountScope: currentAccountScope)
+        for key in [\Self.earlySignsText, \Self.noteText] where self[keyPath: key] != baseline[keyPath: key] {
+            rebased[keyPath: key] = self[keyPath: key]
+        }
+        let wholeMedicineIntent = medicineChoice != baseline.medicineChoice || medicineChoice == .add
+        if wholeMedicineIntent { rebased.medicineChoice = medicineChoice }
+        for key in [\Self.medicineName, \Self.doseAmountText, \Self.doseUnit, \Self.medicineNotesText]
+            where wholeMedicineIntent || self[keyPath: key] != baseline[keyPath: key] {
+            rebased[keyPath: key] = self[keyPath: key]
+        }
+        if wholeMedicineIntent || medicineTakenAt != baseline.medicineTakenAt { rebased.medicineTakenAt = medicineTakenAt }
+        if wholeMedicineIntent || reliefChoice != baseline.reliefChoice { rebased.reliefChoice = reliefChoice }
+        self = rebased
     }
 
     mutating func chooseMedicine(_ choice: MigraineMedicineChoice) {

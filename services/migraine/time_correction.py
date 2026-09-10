@@ -25,7 +25,9 @@ class CorrectionTimestamp(EpisodeTimestamp):
         local = self.utc.astimezone(ZoneInfo(self.timezone_name))
         if local.replace(tzinfo=None) != wall or local.utcoffset() != timedelta(minutes=self.utc_offset_minutes):
             raise ValueError("Local time, timezone, offset and UTC must identify the same valid instant; choose the DST occurrence explicitly")
-        self.original_time = wall.isoformat(timespec="seconds")
+        # Keep the same microsecond precision as the normalized UTC datetime.
+        # Truncating just the wall time makes our accepted request fail on replay.
+        self.original_time = wall.isoformat()
         return self
 
 

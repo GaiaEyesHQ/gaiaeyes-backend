@@ -2100,6 +2100,10 @@ struct MigraineFollowUpFixtureScreen: View {
 
     var body: some View {
         VStack {
+            if scenario.contains("detail-") {
+                Text(isSaving ? "Save pending" : "Save idle")
+                    .font(.caption).accessibilityIdentifier("migraine-fixture-save-state")
+            }
             if scenario.hasPrefix("delayed-") || scenario.hasPrefix("calendar-pending") || scenario.contains("time-delayed") {
                 Button("Release local response") {
                     fixtureServer.releaseReplies()
@@ -2117,7 +2121,7 @@ struct MigraineFollowUpFixtureScreen: View {
                         .accessibilityIdentifier("migraine-submitted-note")
                 }
             }
-            if scenario == "account-change" || scenario == "calendar-pending-account" || scenario.contains("time-delayed-account") {
+            if scenario == "account-change" || scenario == "calendar-pending-account" || scenario.contains("time-delayed-account") || scenario.contains("detail-account") {
                 Button("Switch synthetic account") {
                     accountScope = "different-fixture-account"
                     api.devUserId = accountScope
@@ -2327,6 +2331,8 @@ struct HistoricalSymptomEditor: View {
     @State private var migraineDraft: MigraineFollowUpDraft?
     @State private var isSavingMigraine = false
     @State private var isSavingTimeCorrection = false
+    @State private var isReloadingMigraine = false
+    @State private var migraineRecovery = MigraineDetailSaveRecovery()
     @State private var migraineStatusMessage: String?
 
     @StateObject private var timeStore: MigraineTimeEditorStore
@@ -2338,8 +2344,9 @@ struct HistoricalSymptomEditor: View {
         self.onSaved = onSaved; self.onBusyChange = onBusyChange
         _timeStore = StateObject(wrappedValue: MigraineTimeEditorStore(api: api, episodeId: episodeId, accountScope: accountScopeProvider))
     }
-    private var saving: Bool { isSaving || isSavingMigraine || isSavingTimeCorrection }
-    private var otherEditsLocked: Bool { saving || timeStore.isLoading || timeStore.pendingRequest != nil }
+    private var saving: Bool { isSaving || isSavingMigraine || isSavingTimeCorrection || isReloadingMigraine }
+    private var otherEditsLocked: Bool { saving || timeStore.isLoading || timeStore.pendingRequest != nil || migraineRecovery.pending != nil }
+    private var detailSaveLocked: Bool { saving || timeStore.isLoading || timeStore.pendingRequest != nil || migraineRecovery.needsConflictReload }
     private var noteBinding: Binding<String> {
         Binding(get: { note }, set: { if !otherEditsLocked { note = $0 } })
     }
@@ -2348,7 +2355,7 @@ struct HistoricalSymptomEditor: View {
     private var severityBinding: Binding<Int> {
         Binding(get: { severity }, set: { value in
             // Form can recreate an offscreen Stepper with stale enabled state.
-            guard !isSaving, !isSavingMigraine, !isSavingTimeCorrection, timeStore.pendingRequest == nil, !timeStore.isLoading else { return }
+            guard !isSaving, !isSavingMigraine, !isSavingTimeCorrection, !isReloadingMigraine, timeStore.pendingRequest == nil, migraineRecovery.pending == nil, !timeStore.isLoading else { return }
             severity = value
         })
     }
@@ -2388,14 +2395,46 @@ struct HistoricalSymptomEditor: View {
                             .disabled(otherEditsLocked)
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
-                        Button(isSavingMigraine ? "Saving migraine details…" : "Save migraine details") {
+                        Button(isSavingMigraine ? "Saving migraine details…" : migraineRecovery.pending != nil ? "Retry same migraine save" : "Save migraine details") {
                             Task { await saveMigraineDetails() }
                         }
-                        .disabled(otherEditsLocked)
+                        .disabled(detailSaveLocked)
                         .accessibilityIdentifier("migraine-history-save")
                         if let migraineStatusMessage {
                             Text(migraineStatusMessage).font(.footnote)
                                 .accessibilityIdentifier("migraine-history-status")
+                        }
+                        if migraineRecovery.needsConflictReload {
+                            Text("Load the latest saved details and keep your edits. Review the note and medicine entries before saving again.")
+                                .font(.footnote)
+                            Button("Reload and keep my edits") {
+                                Task { await reloadMigraineDetails() }
+                            }
+                            .disabled(otherEditsLocked)
+                            .accessibilityIdentifier("migraine-history-reload")
+                        }
+                        if migraineRecovery.needsUncertainReview {
+                            Text("The earlier save may have completed, and newer changes now exist. Review the saved details before deciding what to keep. Retrying sends the same request; it never adds another entry.")
+                                .font(.footnote)
+                            Button("Review saved details") { Task { await reviewUncertainMigraineSave() } }
+                                .disabled(saving).accessibilityIdentifier("migraine-history-review-uncertain")
+                            if let reviewed = migraineRecovery.reviewed, let pending = migraineRecovery.pending {
+                                Section("Unconfirmed request") {
+                                    if let medicines = pending.edit.medicines { medicineReview(medicines) }
+                                    if case .set(let text) = pending.edit.notes { Text("Note: " + text) }
+                                    if case .clear = pending.edit.notes { Text("Clear the episode note") }
+                                    if let signs = pending.edit.earlySigns { Text("Early signs: " + signs.map(\.label).joined(separator: ", ")) }
+                                }
+                                Section("Latest saved details") {
+                                    medicineReview(reviewed.episode.medicines)
+                                    Text("Note: " + (reviewed.episode.notes ?? "None"))
+                                    Text("Early signs: " + reviewed.episode.earlySigns.map(\.label).joined(separator: ", "))
+                                }
+                                Text("Use saved version keeps these reviewed details and sets aside the unconfirmed edits. It sends no new save. You can then make a deliberate new edit if needed.")
+                                    .font(.footnote)
+                                Button("Use saved version; set aside my edits") { useReviewedMigraineVersion() }
+                                    .disabled(saving).accessibilityIdentifier("migraine-history-use-reviewed")
+                            }
                         }
                     }
                 }
@@ -2418,6 +2457,7 @@ struct HistoricalSymptomEditor: View {
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: currentAccountScope) { _, _ in
             item = nil; migraineDraft = nil; timeStore.invalidate()
+            migraineRecovery = MigraineDetailSaveRecovery(); onBusyChange(false)
             statusMessage = "Your signed-in account changed. Close this editor and open it again."
         }
         .task { await load() }
@@ -2475,6 +2515,7 @@ struct HistoricalSymptomEditor: View {
         guard item != nil, let scope = loadedAccountScope, !otherEditsLocked else { return }
         noteIsFocused = false
         isSaving = true; timeStore.externalBusy = true; onBusyChange(true)
+        let submittedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         var acknowledged = false
         defer {
             isSaving = false; timeStore.externalBusy = false; onBusyChange(false)
@@ -2485,7 +2526,7 @@ struct HistoricalSymptomEditor: View {
             let response = try await api.updateCurrentSymptom(
                 episodeId: episodeId,
                 severity: severity,
-                noteText: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                noteText: submittedNote,
                 validateRequest: { try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider) }
             )
             try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
@@ -2493,6 +2534,12 @@ struct HistoricalSymptomEditor: View {
                 throw NSError(domain: "HistoricalSymptomEditor", code: 2, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Changes not saved"])
             }
             item = saved
+            if var draft = migraineDraft {
+                draft.noteText = note
+                draft.acknowledgeLegacyNoteSave(episodeId: saved.id, submittedNote: submittedNote,
+                    savedNote: saved.notePreview, currentAccountScope: currentAccountScope)
+                migraineDraft = draft
+            }
             acknowledged = true
             statusMessage = "Changes saved."
             onSaved()
@@ -2502,7 +2549,7 @@ struct HistoricalSymptomEditor: View {
     }
 
     private func saveMigraineDetails() async {
-        guard var draft = migraineDraft, !otherEditsLocked else { return }
+        guard var draft = migraineDraft, !detailSaveLocked else { return }
         noteIsFocused = false
         draft.noteText = note
         migraineDraft = draft
@@ -2510,37 +2557,126 @@ struct HistoricalSymptomEditor: View {
         var acknowledged = false
         migraineStatusMessage = nil
         defer {
-            isSavingMigraine = false; timeStore.externalBusy = false; onBusyChange(false)
+            isSavingMigraine = false
+            timeStore.externalBusy = migraineRecovery.pending != nil
+            onBusyChange(migraineRecovery.pending != nil)
             if acknowledged, MigraineTimeEditingFeature.isEnabled { Task { await timeStore.otherDetailsSaved() } }
         }
         do {
-            guard let edit = try draft.makeStructuredEdit(currentAccountScope: currentAccountScope) else {
+            guard let edit = try migraineRecovery.pending?.edit ?? draft.makeStructuredEdit(currentAccountScope: currentAccountScope) else {
                 migraineStatusMessage = "No migraine detail changes to save."
                 return
             }
+            let pending = try migraineRecovery.request(edit, episodeId: episodeId, accountScope: currentAccountScope)
             let saved = try await MigraineFollowUpWorkflow.saveDetails(
-                api: api, episodeId: episodeId, edit: edit, accountScope: draft.accountScope,
+                api: api, episodeId: pending.episodeId, edit: pending.edit, accountScope: pending.accountScope,
                 currentAccountScope: accountScopeProvider
             )
             var refreshedDraft = draft
             try refreshedDraft.apply(saved, forAccountScope: currentAccountScope)
             migraineDraft = refreshedDraft
+            note = refreshedDraft.noteText
+            try migraineRecovery.acknowledge(saved, accountScope: currentAccountScope)
             acknowledged = true
             migraineStatusMessage = "Migraine details saved."
             onSaved()
+        } catch {
+            if draft.accountScope != currentAccountScope {
+                migraineRecovery = MigraineDetailSaveRecovery()
+                item = nil; migraineDraft = nil
+            } else {
+                migraineRecovery.failed(error)
+            }
+            migraineStatusMessage = migraineRecovery.pending != nil
+                ? "This save could not be confirmed. Your exact request is kept. Retry the same save before making other edits."
+                : migraineRecovery.needsConflictReload
+                ? "The saved details changed. Your edits are still here; reload and review before saving."
+                : "\(error.localizedDescription) Your changes are still here."
+        }
+    }
+
+    @ViewBuilder private func medicineReview(_ medicines: [MigraineMedicineTaken]) -> some View {
+        Text("\(medicines.count) medicine entries")
+        ForEach(Array(medicines.enumerated()), id: \.offset) { index, medicine in
+            VStack(alignment: .leading) {
+                Text("\(index + 1). \(medicine.name)")
+                if let amount = medicine.doseAmount { Text(NSDecimalNumber(decimal: amount).stringValue + " " + (medicine.doseUnit ?? "")) }
+                if let date = MigraineFollowUpDraft.parseDate(medicine.takenAt.utc) { Text(date.formatted(date: .abbreviated, time: .standard)) }
+                if let note = medicine.notes { Text(note) }
+                if let relief = medicine.reportedRelief { Text("Relief: " + relief) }
+            }.font(.footnote)
+        }
+    }
+
+    private func reviewUncertainMigraineSave() async {
+        guard !saving, let pending = migraineRecovery.pending, migraineRecovery.needsUncertainReview else { return }
+        isReloadingMigraine = true; timeStore.externalBusy = true; onBusyChange(true)
+        defer {
+            isReloadingMigraine = false; timeStore.externalBusy = migraineRecovery.pending != nil
+            onBusyChange(migraineRecovery.pending != nil)
+        }
+        do {
+            try MigraineFollowUpWorkflow.checkAccount(pending.accountScope, current: accountScopeProvider)
+            let response = try await api.fetchMigraineEpisodeDetail(episodeId: pending.episodeId,
+                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(pending.accountScope, current: accountScopeProvider) })
+            try MigraineFollowUpWorkflow.checkAccount(pending.accountScope, current: accountScopeProvider)
+            guard response.ok != false, let detail = response.payload else { throw MigraineSaveError.invalidResponse }
+            try migraineRecovery.review(detail, accountScope: currentAccountScope)
+            migraineStatusMessage = "Review the unconfirmed request and the latest saved details below. Your request is still kept."
+        } catch {
+            migraineStatusMessage = "Saved details could not be loaded. Your unconfirmed request is still kept."
+        }
+    }
+
+    private func useReviewedMigraineVersion() {
+        guard !saving, var draft = migraineDraft else { return }
+        do {
+            try MigraineFollowUpWorkflow.checkAccount(draft.accountScope, current: accountScopeProvider)
+            let detail = try migraineRecovery.useReviewedVersion(accountScope: currentAccountScope)
+            try draft.apply(detail, forAccountScope: currentAccountScope)
+            migraineDraft = draft; note = draft.noteText
+            timeStore.externalBusy = false; onBusyChange(false)
+            migraineStatusMessage = "Using the reviewed saved version. The unconfirmed edits were set aside; no new save was sent."
+            if MigraineTimeEditingFeature.isEnabled { Task { await timeStore.load(preservingDraft: true) } }
+        } catch { migraineStatusMessage = error.localizedDescription }
+    }
+
+    private func reloadMigraineDetails() async {
+        guard var draft = migraineDraft, !otherEditsLocked else { return }
+        draft.noteText = note
+        noteIsFocused = false
+        isReloadingMigraine = true; timeStore.externalBusy = true; onBusyChange(true)
+        defer { isReloadingMigraine = false; timeStore.externalBusy = false; onBusyChange(false) }
+        do {
+            try MigraineFollowUpWorkflow.checkAccount(draft.accountScope, current: accountScopeProvider)
+            let response = try await api.fetchMigraineEpisodeDetail(episodeId: episodeId,
+                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(draft.accountScope, current: accountScopeProvider) })
+            try MigraineFollowUpWorkflow.checkAccount(draft.accountScope, current: accountScopeProvider)
+            guard response.ok != false, let detail = response.payload else { throw MigraineSaveError.invalidResponse }
+            try draft.rebasePreservingChanges(detail, currentAccountScope: currentAccountScope)
+            migraineDraft = draft; note = draft.noteText; migraineRecovery.conflictReloaded()
+            migraineStatusMessage = "Saved details reloaded. Your edits are still here; review them before saving."
+            if MigraineTimeEditingFeature.isEnabled {
+                timeStore.externalBusy = false
+                await timeStore.load(preservingDraft: true)
+            }
         } catch {
             migraineStatusMessage = "\(error.localizedDescription) Your changes are still here."
         }
     }
     private func saveTimes() async {
-        guard !isSaving, !isSavingMigraine, !isSavingTimeCorrection, !timeStore.inputsLocked else { return }
+        guard !saving, migraineRecovery.pending == nil, !timeStore.inputsLocked else { return }
         noteIsFocused = false
         isSavingTimeCorrection = true
         onBusyChange(true)
         defer { isSavingTimeCorrection = false; onBusyChange(false) }
         if let saved = await timeStore.save() {
             if var draft = migraineDraft {
-                draft.advanceAfterTimeCorrection(saved, currentAccountScope: currentAccountScope)
+                if !draft.advanceAfterTimeCorrection(saved, currentAccountScope: currentAccountScope) {
+                    // No uncertain structured request can coexist with this save.
+                    migraineRecovery.requireConflictReload()
+                    migraineStatusMessage = "Other saved details changed. Reload and review them before saving your remaining edits."
+                }
                 migraineDraft = draft
             }
             onSaved()

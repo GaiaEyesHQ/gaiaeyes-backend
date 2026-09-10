@@ -1191,13 +1191,14 @@ async def _refresh_migraine_time_correction(user_id: str, result: dict) -> dict:
         pending = []
         for day in result["refresh_days"]:
             try:
-                score_user_day(user_id, date.fromisoformat(day), force=True)
+                score_user_day(user_id, date.fromisoformat(day), force=True, require_corrected_symptoms=True)
             except Exception:
                 pending.append("daily_gauges")
         try:
             today = datetime.now(timezone.utc).date()
             since = date.fromisoformat(result["pattern_since_day"])
-            run_pattern_engine(as_of_day=today, days_back=(today - since).days + 1, user_id=user_id)
+            run_pattern_engine(as_of_day=today, days_back=(today - since).days + 1, user_id=user_id,
+                               require_corrected_symptoms=True)
         except Exception:
             pending.append("personal_patterns")
         return {"status": "pending" if pending else "complete", "pending_components": sorted(set(pending))}

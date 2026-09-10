@@ -75,6 +75,10 @@ final class MigraineTimeFixture {
     private var context: [String: Any]
     private var receipts: [String: [String: Any]] = [:]
     private var failed = false
+    private var externalDetailsChanged = false
+    private var detailFailed = false
+    private var lastDetailRequest: NSDictionary?
+    private var laterDetailChanged = false
     var stored: [String: Any] { context }
     init(scenario: String) {
         self.scenario = scenario
@@ -145,17 +149,53 @@ final class MigraineTimeFixture {
         if path.hasSuffix("/migraine-detail") {
             if request.httpMethod == "PATCH" {
                 let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+                if scenario.contains("detail-before") && !detailFailed {
+                    detailFailed = true; throw URLError(.networkConnectionLost)
+                }
+                if scenario.contains("detail-rejected") && !detailFailed { detailFailed = true; return error(422) }
+                if scenario.contains("detail-lost-later") && detailFailed && !laterDetailChanged {
+                    laterDetailChanged = true
+                    episode["notes"] = "A later saved note"
+                    let revision = (context["revision"] as! Int) + 1
+                    var lifecycle = episode["lifecycle"] as! [String: Any]; lifecycle["revision"] = revision
+                    episode["lifecycle"] = lifecycle; context["revision"] = revision; context["episode"] = episode
+                    context["canonical_updated_at"] = "2026-09-10T04:03:00Z"
+                }
+                if scenario.contains("external-details") && !externalDetailsChanged {
+                    externalDetailsChanged = true
+                    let revision = (context["revision"] as! Int) + 1
+                    episode["notes"] = "External saved note"
+                    var medicines = episode["medicines"] as! [[String: Any]]
+                    medicines[0]["notes"] = "External medicine metadata"
+                    var additional = medicines[0]; additional["name"] = "External second medicine"
+                    medicines.append(additional); episode["medicines"] = medicines
+                    var lifecycle = episode["lifecycle"] as! [String: Any]; lifecycle["revision"] = revision
+                    episode["lifecycle"] = lifecycle; context["revision"] = revision; context["episode"] = episode
+                    context["canonical_updated_at"] = "2026-09-10T04:02:00Z"
+                    return error(409)
+                }
+                if (body["expected_revision"] as? Int).map({ $0 + 1 }) == context["revision"] as? Int,
+                   lastDetailRequest == body as NSDictionary {
+                    return try json(["episode": episode, "revision": context["revision"]!, "changed": false])
+                }
                 guard body["expected_revision"] as? Int == context["revision"] as? Int else { return error(409) }
                 for key in ["notes", "medicines", "early_signs"] { if let value = body[key] { episode[key] = value } }
                 let revision = (context["revision"] as! Int) + 1
                 var lifecycle = episode["lifecycle"] as! [String: Any]; lifecycle["revision"] = revision
                 episode["lifecycle"] = lifecycle; context["revision"] = revision; context["episode"] = episode
+                lastDetailRequest = body as NSDictionary
+                if (scenario.contains("detail-lost") || scenario.contains("detail-cancelled")) && !detailFailed {
+                    detailFailed = true; throw URLError(scenario.contains("detail-cancelled") ? .cancelled : .networkConnectionLost)
+                }
             }
             return try json(["episode": episode, "revision": context["revision"]!, "changed": request.httpMethod == "PATCH"])
         }
         if request.httpMethod == "POST" {
             let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
-            episode["notes"] = body["note_text"] ?? NSNull(); episode["severity"] = body["severity"] ?? episode["severity"]
+            if let note = body["note_text"] as? String, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                episode["notes"] = note.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            episode["severity"] = body["severity"] ?? episode["severity"]
             context["episode"] = episode; context["canonical_updated_at"] = "2026-09-10T04:01:00Z"
         }
         return try json(["id": Self.episodeID, "symptom_code": "MIGRAINE", "label": "Migraine",

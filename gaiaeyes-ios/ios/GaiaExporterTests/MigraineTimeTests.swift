@@ -80,6 +80,96 @@ struct MigraineTimeTests {
         draft.endMode = "set"; draft.end = try wall("2026-08-01T00:00:00")
         #expect(throws: MigraineTimeError.self) { try draft.request(base: base) }
     }
+
+    @Test func fractionalBackendAckAndSwiftEncoderPreserveSupportedPrecision() async throws {
+        func fractional(_ name: String) throws -> Data {
+            try Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .appendingPathComponent("Fixtures/migraine_time_fractional_\(name).json"))
+        }
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let base = try decoder.decode(Envelope<MigraineTimeContext>.self, from: fractional("context")).payload!
+        let body = try JSONSerialization.jsonObject(with: fractional("request")) as! [String: Any]
+        func timestamp(_ name: String) throws -> MigraineEpisodeTimestamp {
+            try decoder.decode(MigraineEpisodeTimestamp.self, from: JSONSerialization.data(withJSONObject: body[name]!))
+        }
+        let request = try MigraineTimeRequest(requestId: body["request_id"] as! String, expectedRevision: base.revision,
+            expectedCanonicalUpdatedAt: base.canonicalUpdatedAt, start: timestamp("start"), end: .set(timestamp("end")), state: "resolved")
+        let server = MigraineFixtureServer(scenario: "time-backend-json")
+        server.timeResponseData = try fractional("ack")
+        let ack = try #require(try await MigraineFixtureURLProtocol.makeAPI(server: server)
+            .correctMigraineTimes(episodeId: base.episode.episodeId, correction: request, validateRequest: {}).payload)
+        #expect(request.confirms(ack, base: base))
+        #expect(ack.episode.start.originalTime == "2026-08-30T23:30:00.123456")
+        #expect(ack.episode.end?.originalTime == "2026-09-01T02:30:00.000001")
+        let encoded = try JSONEncoder().encode(request)
+        var encodedBody = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        var normalizedBody = body
+        let sentToken = encodedBody.removeValue(forKey: "expected_canonical_updated_at") as! String
+        let normalizedToken = normalizedBody.removeValue(forKey: "expected_canonical_updated_at") as! String
+        #expect(MigraineFollowUpDraft.parseDate(sentToken) == MigraineFollowUpDraft.parseDate(normalizedToken))
+        #expect(encodedBody as NSDictionary == normalizedBody as NSDictionary)
+        try encoded.write(to: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("g013-swift-fractional-request.json"))
+    }
+
+    @Test(arguments: [false, true])
+    func changedLegacyNoteThenTimeThenMedicineUsesAcknowledgedRevision(externalConflict: Bool) async throws {
+        let server = MigraineFixtureServer(scenario: externalConflict ? "time-history-external-details" : "time-history-success")
+        let api = MigraineFixtureURLProtocol.makeAPI(server: server)
+        let id = MigraineTimeFixture.episodeID
+        let detail = try #require(try await api.fetchMigraineEpisodeDetail(episodeId: id).payload)
+        var draft = MigraineFollowUpDraft(accountScope: "a", promptId: "history", episodeId: id)
+        try draft.apply(detail, forAccountScope: "a")
+        draft.noteText = "Changed legacy note"; draft.medicineName = "Intended medicine"
+        let legacy = try #require(try await api.updateCurrentSymptom(episodeId: id, severity: 5, noteText: draft.noteText).payload)
+        draft.acknowledgeLegacyNoteSave(episodeId: legacy.id, submittedNote: draft.noteText,
+            savedNote: legacy.notePreview, currentAccountScope: "a")
+        #expect(draft.expectedRevision == 1 && draft.originalNotes == "Changed legacy note")
+        let store = MigraineTimeEditorStore(api: api, episodeId: id, accountScope: { "a" })
+        await store.load(); edit(store)
+        let ack = try #require(await store.save())
+        let advanced = draft.advanceAfterTimeCorrection(ack, currentAccountScope: "a")
+        #expect(advanced)
+        #expect(draft.expectedRevision == 2 && draft.medicineName == "Intended medicine")
+        if externalConflict {
+            draft.noteText = "Still intended note"
+            let edit = try #require(try draft.makeStructuredEdit(currentAccountScope: "a"))
+            await #expect(throws: Error.self) {
+                try await MigraineFollowUpWorkflow.saveDetails(api: api, episodeId: id, edit: edit, accountScope: "a", currentAccountScope: { "a" })
+            }
+            #expect(draft.expectedRevision == 2 && draft.noteText == "Still intended note")
+            let latest = try #require(try await api.fetchMigraineEpisodeDetail(episodeId: id).payload)
+            // This operation represents the explicit reload/review action.
+            try draft.rebasePreservingChanges(latest, currentAccountScope: "a")
+            #expect(draft.expectedRevision == 3 && draft.noteText == "Still intended note")
+            #expect(draft.medicineName == "Intended medicine" && draft.medicineNotesText == "External medicine metadata")
+        }
+        let outgoing = try #require(try draft.makeStructuredEdit(currentAccountScope: "a"))
+        #expect(outgoing.expectedRevision == (externalConflict ? 3 : 2))
+        let saved = try await MigraineFollowUpWorkflow.saveDetails(api: api, episodeId: id, edit: outgoing,
+            accountScope: "a", currentAccountScope: { "a" })
+        #expect(saved.episode.episodeId == id && saved.episode.symptomEventId == detail.episode.symptomEventId)
+        #expect(saved.episode.provenance == detail.episode.provenance)
+        #expect(saved.episode.notes == (externalConflict ? "Still intended note" : "Changed legacy note"))
+        #expect(saved.episode.medicines[0].name == "Intended medicine")
+        #expect(saved.episode.medicines[0].takenAt == detail.episode.medicines[0].takenAt)
+        if externalConflict { #expect(saved.episode.medicines[1].name == "External second medicine") }
+        #expect(saved.revision == (externalConflict ? 4 : 3))
+    }
+
+    @Test func legacyAcknowledgementCannotRebaseUnprovenNoteOrOtherAccount() throws {
+        let base = try context()
+        var draft = MigraineFollowUpDraft(accountScope: "a", promptId: "history", episodeId: base.episode.episodeId)
+        let detail = MigraineEpisodeDetail(revision: base.revision, changed: false, episode: base.episode)
+        try draft.apply(detail, forAccountScope: "a")
+        draft.noteText = "Intended note"; draft.medicineName = "Intended medicine"
+        for (id, scope, returned) in [("other", "a", "Intended note"), (base.episode.episodeId, "b", "Intended note"),
+                                      (base.episode.episodeId, "a", "Different note")] {
+            draft.acknowledgeLegacyNoteSave(episodeId: id, submittedNote: draft.noteText, savedNote: returned, currentAccountScope: scope)
+            #expect(draft.originalNotes == base.episode.notes && draft.expectedRevision == base.revision)
+        }
+        #expect(throws: MigraineDraftError.self) { try draft.rebasePreservingChanges(detail, currentAccountScope: "b") }
+        #expect(draft.noteText == "Intended note" && draft.medicineName == "Intended medicine")
+    }
     @Test(arguments: ["time-history-success", "time-history-lost", "time-history-conflict", "time-history-invalid", "time-history-wrong-ack", "time-history-refresh-pending"])
     func actualStoreTransportRecovery(scenario: String) async throws {
         let server = MigraineFixtureServer(scenario: scenario), scope = "a"

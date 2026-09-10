@@ -1,7 +1,7 @@
 from uuid import uuid4
 import pytest
 from pydantic import ValidationError
-from services.migraine.time_correction import TimeCorrectionIn
+from services.migraine.time_correction import CorrectionTimestamp, TimeCorrectionIn
 
 
 def request(**fields):
@@ -25,3 +25,17 @@ def test_retain_clear_and_invalid_shapes(fields):
     with pytest.raises(ValidationError): TimeCorrectionIn.model_validate(request(**fields))
     assert 'start' not in TimeCorrectionIn.model_validate(request(end=None)).canonical_request()
     assert TimeCorrectionIn.model_validate(request(end=None)).canonical_request()['end'] is None
+
+
+@pytest.mark.parametrize('fraction', ['123', '123456', '000001'])
+def test_fractional_timestamp_and_normalized_request_roundtrip(fraction):
+    stamp = CorrectionTimestamp.model_validate({
+        'utc': f'2026-09-01T04:30:00.{fraction}Z',
+        'original_time': f'2026-08-31T23:30:00.{fraction}',
+        'timezone_name': 'America/Chicago', 'utc_offset_minutes': -300,
+    })
+    assert CorrectionTimestamp.model_validate(stamp.model_dump(mode='json')) == stamp
+    body = TimeCorrectionIn.model_validate(request(start=stamp, end=stamp))
+    normalized = body.canonical_request()
+    assert TimeCorrectionIn.model_validate(normalized).canonical_request() == normalized
+    assert stamp.utc.microsecond == int(fraction.ljust(6, '0'))

@@ -43,7 +43,8 @@ async def test_refresh_orchestration_is_user_scoped_and_covers_every_affected_da
     from bots.gauges import gauge_scorer
     from bots.patterns import pattern_engine_job
     gauges=[];patterns=[]
-    def score(uid,day,force):
+    def score(uid,day,force,require_corrected_symptoms):
+        assert require_corrected_symptoms
         gauges.append((uid,day,force))
         if day==date(2026,8,31): raise RuntimeError('synthetic gauge failure')
     def pattern(**kwargs): patterns.append(kwargs)
@@ -53,5 +54,5 @@ async def test_refresh_orchestration_is_user_scoped_and_covers_every_affected_da
         'refresh_days':['2026-08-31','2026-09-01','2026-09-08','2026-09-09'],'pattern_since_day':'2026-06-13'})
     assert gauges==[(HEADERS['X-Dev-UserId'],date.fromisoformat(d),True) for d in ['2026-08-31','2026-09-01','2026-09-08','2026-09-09']]
     today=datetime.now(timezone.utc).date()
-    assert patterns==[{'as_of_day':today,'days_back':(today-date(2026,6,13)).days+1,'user_id':HEADERS['X-Dev-UserId']}]
+    assert patterns==[{'as_of_day':today,'days_back':(today-date(2026,6,13)).days+1,'user_id':HEADERS['X-Dev-UserId'],'require_corrected_symptoms':True}]
     assert result=={'status':'pending','pending_components':['daily_gauges']}
