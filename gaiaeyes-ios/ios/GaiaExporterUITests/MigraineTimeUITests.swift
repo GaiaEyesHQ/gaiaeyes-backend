@@ -231,7 +231,6 @@ final class MigraineTimeUITests: XCTestCase {
     @MainActor private func prepareAddedMedicine(_ app: XCUIApplication, validateEmpty: Bool = false) {
         XCTAssertTrue(app.textFields["migraine-history-note"].waitForExistence(timeout: 8))
         let choice = app.buttons["migraine-medicine-choice"]; reveal(choice, app); choice.tap()
-        app.buttons["Add another medicine"].tap()
         if validateEmpty {
             let save = app.buttons["migraine-history-save"]; reveal(save, app); save.tap()
             let status = app.staticTexts["migraine-history-status"]; reveal(status, app)

@@ -83,6 +83,12 @@ final class MigraineTimeFixture {
     init(scenario: String) {
         self.scenario = scenario
         context = try! JSONSerialization.jsonObject(with: Self.contextData) as! [String: Any]
+        if scenario.contains("entries") {
+            let detail = try! JSONSerialization.jsonObject(with: MigraineFixtureServer.detailDataForScenario(scenario)) as! [String: Any]
+            var episode = context["episode"] as! [String: Any]
+            episode["medicines"] = (detail["episode"] as! [String: Any])["medicines"]
+            context["episode"] = episode
+        }
     }
     func response(_ request: URLRequest) throws -> (Int, Data) {
         let path = request.url!.path
@@ -167,6 +173,7 @@ final class MigraineTimeFixture {
                     episode["notes"] = "External saved note"
                     var medicines = episode["medicines"] as! [[String: Any]]
                     medicines[0]["notes"] = "External medicine metadata"
+                    if scenario.contains("ambiguous-entry") { medicines[1]["name"] = "Externally renamed middle" }
                     var additional = medicines[0]; additional["name"] = "External second medicine"
                     medicines.append(additional); episode["medicines"] = medicines
                     var lifecycle = episode["lifecycle"] as! [String: Any]; lifecycle["revision"] = revision

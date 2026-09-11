@@ -41,7 +41,7 @@ struct MigraineFollowUpClientTests {
         let signs = try #require(try draft.makeStructuredEdit(currentAccountScope: "a")?.earlySigns)
         #expect(signs.first == detail.episode.earlySigns[1])
         #expect(signs.last?.code == nil)
-        draft.medicineChoice = .removeFirst
+        draft.medicineChoice = .removeSelected
         #expect(try draft.makeStructuredEdit(currentAccountScope: "a")?.medicines == [detail.episode.medicines[1]])
         draft.medicineChoice = .none
         #expect(try draft.makeStructuredEdit(currentAccountScope: "a")?.medicines == [])
@@ -59,7 +59,7 @@ struct MigraineFollowUpClientTests {
     }
 
     @Test
-    func addingThenReturningToFirstMedicineDoesNotReplaceIt() throws {
+    func addingThenReturningToFirstMedicineRetainsBothDrafts() throws {
         let detail = try fixtureDetail("migraine_episode_backend_detail.json")
         var draft = MigraineFollowUpDraft(accountScope: "a", promptId: "p", episodeId: detail.episode.episodeId)
         try draft.apply(detail, forAccountScope: "a")
@@ -68,7 +68,8 @@ struct MigraineFollowUpClientTests {
         draft.chooseMedicine(.retain)
         draft.chooseMedicine(.taken)
         #expect(draft.medicineName == detail.episode.medicines[0].name)
-        #expect(try draft.makeStructuredEdit(currentAccountScope: "a") == nil)
+        #expect(try draft.makeStructuredEdit(currentAccountScope: "a")?.medicines?.count == 3)
+        #expect(try draft.makeStructuredEdit(currentAccountScope: "a")?.medicines?.last?.name == "A different added medicine")
     }
 
     @Test

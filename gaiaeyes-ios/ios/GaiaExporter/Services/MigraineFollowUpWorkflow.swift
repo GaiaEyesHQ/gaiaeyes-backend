@@ -1,5 +1,42 @@
 import Foundation
 
+// The follow-up receipt covers the whole response, not just its medicine array.
+struct MigraineFollowUpSaveRecovery {
+    struct Pending: Hashable {
+        let detailChoice: String?
+        let note: String?
+        let timeBucket: String?
+        let timestamp: Date
+        let edit: MigraineStructuredEdit?
+        let accountScope: String
+    }
+    private(set) var pending: Pending?
+    private(set) var uncertain = false
+    private(set) var needsConflictReload = false
+
+    mutating func request(_ value: Pending) throws -> Pending {
+        if let pending {
+            guard pending.accountScope == value.accountScope else { throw MigraineDraftError.accountChanged }
+            return pending
+        }
+        pending = value; uncertain = false; needsConflictReload = false
+        return value
+    }
+    mutating func failed(_ error: Error) {
+        guard pending != nil else { return }
+        if !uncertain, let error = error as? MigraineSaveError {
+            switch error {
+            case .conflict: pending = nil; needsConflictReload = true; return
+            case .rejected: pending = nil; return
+            default: break
+            }
+        }
+        uncertain = true
+    }
+    mutating func acknowledge() { pending = nil; uncertain = false; needsConflictReload = false }
+    mutating func conflictReloaded() { needsConflictReload = false }
+}
+
 // A retained request is a complete replacement patch, never a fresh add intent.
 // Only a matching response or an explicit reviewed-version decision resolves it.
 struct MigraineDetailSaveRecovery {

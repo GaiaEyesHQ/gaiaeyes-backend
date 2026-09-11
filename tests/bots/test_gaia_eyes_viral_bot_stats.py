@@ -151,6 +151,10 @@ def test_stats_card_wraps_aurora_value_without_ellipsis():
         ("", "active", "Elevated"),
         ("stormy", "active", "High"),
         ("", "severe", "High"),
+        ("neutral", "unsettled", "Calm"),
+        ("", "unsettled", "Calm"),
+        ("neutral", "mild", "Calm"),
+        ("", "mild", "Calm"),
         ("neutral", "quiet", "Calm"),
     ],
 )

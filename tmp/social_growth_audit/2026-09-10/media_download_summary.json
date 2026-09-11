@@ -1,0 +1,37 @@
+[
+  {
+    "bytes": 135688,
+    "content_type": "image/jpeg",
+    "last_modified": "Thu, 10 Sep 2026 14:58:36 GMT",
+    "name": "daily_caption.jpg",
+    "status": 200
+  },
+  {
+    "bytes": 140172,
+    "content_type": "image/jpeg",
+    "last_modified": "Thu, 10 Sep 2026 14:58:37 GMT",
+    "name": "daily_stats.jpg",
+    "status": 200
+  },
+  {
+    "bytes": 190046,
+    "content_type": "image/jpeg",
+    "last_modified": "Thu, 10 Sep 2026 14:58:35 GMT",
+    "name": "daily_affects.jpg",
+    "status": 200
+  },
+  {
+    "bytes": 214816,
+    "content_type": "image/jpeg",
+    "last_modified": "Thu, 10 Sep 2026 14:58:36 GMT",
+    "name": "daily_playbook.jpg",
+    "status": 200
+  },
+  {
+    "bytes": 994339,
+    "content_type": "video/mp4",
+    "last_modified": "Thu, 10 Sep 2026 15:00:00 GMT",
+    "name": "latest.mp4",
+    "status": 200
+  }
+]

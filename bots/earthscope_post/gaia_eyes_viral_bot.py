@@ -1435,7 +1435,7 @@ def _energy_from_tone_and_bands(tone: str = "", kp_band: str = "") -> str:
     kb = (kp_band or "").lower()
     if t in ("stormy", "high") or kb in ("storm", "severe"):
         return "High"
-    if t == "unsettled" or kb in ("active", "unsettled", "mild"):
+    if t == "unsettled" or kb == "active":
         return "Elevated"
     return "Calm"
 

@@ -308,7 +308,7 @@ enum MigraineMedicineChoice: String, CaseIterable, Identifiable {
     case retain
     case taken
     case add
-    case removeFirst
+    case removeSelected
     case none
 
     var id: String { rawValue }
@@ -318,13 +318,14 @@ enum MigraineMedicineChoice: String, CaseIterable, Identifiable {
         case .retain: return "Not adding medicine"
         case .taken: return "I took medicine"
         case .add: return "Add another medicine"
-        case .removeFirst: return "Remove first saved medicine"
+        case .removeSelected: return "Remove selected medicine"
         case .none: return "No medicine taken"
         }
     }
 }
 
 enum MigraineReliefChoice: String, CaseIterable, Identifiable {
+    case notReported = ""
     case unknown
     case none
     case aLittle = "a_little"
@@ -336,6 +337,7 @@ enum MigraineReliefChoice: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
+        case .notReported: return "Not recorded"
         case .unknown: return "Not sure yet"
         case .none: return "No relief"
         case .aLittle: return "A little"
@@ -350,16 +352,103 @@ enum MigraineDraftError: Error, LocalizedError {
     case accountChanged
     case medicineNameRequired
     case incompleteDose
+    case medicineListConflict
 
     var errorDescription: String? {
         switch self {
         case .accountChanged:
             return "Your signed-in account changed. Close this form and open it again before saving."
         case .medicineNameRequired:
-            return "Add the medicine name or choose No medicine taken."
+            return "Add a name for each medicine entry, or remove the unfinished entry."
         case .incompleteDose:
             return "Enter both a dose amount and unit, or leave both blank."
+        case .medicineListConflict:
+            return "A medicine you edited or removed also changed elsewhere. Your draft is kept; review the saved version before deciding which entries to keep."
         }
+    }
+}
+
+// Identity exists only in this draft. The API still stores the ordered array.
+struct MigraineMedicineDraftRow: Identifiable, Hashable {
+    let id: UUID
+    var originalIndex: Int?
+    let original: MigraineMedicineTaken?
+    var name: String
+    var takenAt: Date
+    var doseAmountText: String
+    var doseUnit: String
+    var relief: MigraineReliefChoice
+    var notes: String
+    private let initialDate: Date
+
+    init(id: UUID = UUID(), originalIndex: Int? = nil, original: MigraineMedicineTaken? = nil, date: Date) {
+        self.id = id; self.originalIndex = originalIndex; self.original = original
+        name = original?.name ?? ""
+        initialDate = original.flatMap { MigraineFollowUpDraft.parseDate($0.takenAt.utc) } ?? date
+        takenAt = initialDate
+        doseAmountText = original?.doseAmount.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
+        doseUnit = original?.doseUnit ?? ""
+        relief = original?.reportedRelief.flatMap(MigraineReliefChoice.init(rawValue:)) ?? .notReported
+        notes = original?.notes ?? ""
+    }
+
+    var hasFieldChanges: Bool {
+        guard let original else { return true }
+        return name != original.name || takenAt != initialDate
+            || doseAmountText != (original.doseAmount.map({ NSDecimalNumber(decimal: $0).stringValue }) ?? "")
+            || doseUnit != (original.doseUnit ?? "")
+            || relief != (original.reportedRelief.flatMap(MigraineReliefChoice.init(rawValue:)) ?? .notReported)
+            || notes != (original.notes ?? "")
+    }
+
+    func value(responseTimestamp: Date) throws -> MigraineMedicineTaken {
+        if let original, !hasFieldChanges { return original }
+        let cleanedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedName.isEmpty else { throw MigraineDraftError.medicineNameRequired }
+        let text = doseAmountText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unit = doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.isEmpty == unit.isEmpty else { throw MigraineDraftError.incompleteDose }
+        guard text.isEmpty || text.range(of: #"^[+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$"#, options: .regularExpression) != nil else {
+            throw MigraineDraftError.incompleteDose
+        }
+        let amount = text.isEmpty ? nil : Decimal(string: text, locale: Locale(identifier: "en_US_POSIX"))
+        if !text.isEmpty && (amount == nil || amount! <= 0 || !Self.exactDecimal(text, amount!)) { throw MigraineDraftError.incompleteDose }
+        let originalRelief = original?.reportedRelief.flatMap(MigraineReliefChoice.init(rawValue:)) ?? .notReported
+        let reliefUnchanged = original != nil && relief == originalRelief
+        let reliefValue = relief == .notReported ? nil : relief.rawValue
+        let note = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MigraineMedicineTaken(name: name == original?.name ? original!.name : cleanedName,
+            takenAt: original != nil && takenAt == initialDate ? original!.takenAt : MigraineFollowUpDraft.timestamp(takenAt),
+            doseAmount: amount, doseUnit: doseUnit == (original?.doseUnit ?? "") ? original?.doseUnit : (unit.isEmpty ? nil : unit),
+            reportedRelief: reliefUnchanged ? original?.reportedRelief : reliefValue,
+            reliefReportedAt: reliefUnchanged ? original?.reliefReportedAt : (reliefValue == nil ? nil : MigraineFollowUpDraft.timestamp(responseTimestamp)),
+            notes: notes == (original?.notes ?? "") ? original?.notes : (note.isEmpty ? nil : note))
+    }
+
+    // Decimal(string:) can silently round beyond its precision. Accept only an
+    // exactly represented decimal, comparing normalized digits and exponent.
+    private static func exactDecimal(_ text: String, _ value: Decimal) -> Bool {
+        func normalized(_ input: String) -> String? {
+            let parts = input.lowercased().replacingOccurrences(of: "+", with: "").split(separator: "e", omittingEmptySubsequences: false)
+            guard parts.count <= 2, let exponent = parts.count == 2 ? Int(parts[1]) : 0 else { return nil }
+            let decimal = parts[0].split(separator: ".", omittingEmptySubsequences: false)
+            var digits = decimal.joined(); var power = exponent - (decimal.count == 2 ? decimal[1].count : 0)
+            while digits.first == "0" { digits.removeFirst() }
+            while digits.last == "0" { digits.removeLast(); power += 1 }
+            return digits + "e" + String(power)
+        }
+        return normalized(text) == normalized(NSDecimalNumber(decimal: value).stringValue)
+    }
+
+    func rebased(on saved: MigraineMedicineTaken, index: Int, responseTimestamp: Date) -> Self {
+        let baseline = Self(original: original, date: initialDate)
+        var row = Self(id: id, originalIndex: index, original: saved, date: responseTimestamp)
+        for key in [\Self.name, \Self.doseAmountText, \Self.doseUnit, \Self.notes] where self[keyPath: key] != baseline[keyPath: key] {
+            row[keyPath: key] = self[keyPath: key]
+        }
+        if takenAt != baseline.takenAt { row.takenAt = takenAt }
+        if relief != baseline.relief { row.relief = relief }
+        return row
     }
 }
 
@@ -375,13 +464,39 @@ struct MigraineFollowUpDraft: Hashable {
     private(set) var originalNotes: String?
 
     var earlySignsText: String = ""
-    var medicineChoice: MigraineMedicineChoice = .retain
-    var medicineName: String = ""
-    var medicineTakenAt: Date
-    var doseAmountText: String = ""
-    var doseUnit: String = ""
-    var reliefChoice: MigraineReliefChoice = .unknown
-    var medicineNotesText: String = ""
+    private var medicineMode: MigraineMedicineChoice = .retain
+    private(set) var medicineRows: [MigraineMedicineDraftRow] = []
+    private(set) var selectedMedicineID: UUID?
+    private var removedMedicineIndices: Set<Int> = []
+    var selectedMedicine: MigraineMedicineDraftRow? { medicineRows.first { $0.id == selectedMedicineID } }
+    var medicineChoice: MigraineMedicineChoice {
+        get { medicineMode }
+        set { chooseMedicine(newValue) }
+    }
+    var medicineName: String {
+        get { selectedMedicine?.name ?? "" }
+        set { editSelected { $0.name = newValue } }
+    }
+    var medicineTakenAt: Date {
+        get { selectedMedicine?.takenAt ?? responseTimestamp }
+        set { editSelected { $0.takenAt = newValue } }
+    }
+    var doseAmountText: String {
+        get { selectedMedicine?.doseAmountText ?? "" }
+        set { editSelected { $0.doseAmountText = newValue } }
+    }
+    var doseUnit: String {
+        get { selectedMedicine?.doseUnit ?? "" }
+        set { editSelected { $0.doseUnit = newValue } }
+    }
+    var reliefChoice: MigraineReliefChoice {
+        get { selectedMedicine?.relief ?? .notReported }
+        set { editSelected { $0.relief = newValue } }
+    }
+    var medicineNotesText: String {
+        get { selectedMedicine?.notes ?? "" }
+        set { editSelected { $0.notes = newValue } }
+    }
     var noteText: String = ""
 
     init(accountScope: String, promptId: String, episodeId: String, responseTimestamp: Date = Date()) {
@@ -389,7 +504,6 @@ struct MigraineFollowUpDraft: Hashable {
         self.promptId = promptId
         self.episodeId = episodeId
         self.responseTimestamp = responseTimestamp
-        self.medicineTakenAt = responseTimestamp
     }
 
     mutating func apply(_ detail: MigraineEpisodeDetail, forAccountScope currentScope: String) throws {
@@ -403,19 +517,12 @@ struct MigraineFollowUpDraft: Hashable {
         earlySignsText = detail.episode.earlySigns.map(\.label).joined(separator: ", ")
         noteText = detail.episode.notes ?? ""
 
-        resetMedicineFields()
-
-        if let medicine = detail.episode.medicines.first {
-            medicineChoice = .taken
-            medicineName = medicine.name
-            medicineTakenAt = Self.parseDate(medicine.takenAt.utc) ?? responseTimestamp
-            if let amount = medicine.doseAmount {
-                doseAmountText = NSDecimalNumber(decimal: amount).stringValue
-            }
-            doseUnit = medicine.doseUnit ?? ""
-            reliefChoice = MigraineReliefChoice(rawValue: medicine.reportedRelief ?? "") ?? .unknown
-            medicineNotesText = medicine.notes ?? ""
+        medicineRows = originalMedicines.enumerated().map {
+            MigraineMedicineDraftRow(originalIndex: $0.offset, original: $0.element, date: responseTimestamp)
         }
+        selectedMedicineID = medicineRows.first?.id
+        removedMedicineIndices = []
+        medicineMode = medicineRows.isEmpty ? .retain : .taken
     }
 
     // Move the concurrency baseline only when the time receipt proves that
@@ -450,50 +557,89 @@ struct MigraineFollowUpDraft: Hashable {
             throw MigraineDraftError.accountChanged
         }
         guard detail.revision >= expectedRevision else { throw MigraineSaveError.invalidResponse }
-        var baseline = self
-        baseline.earlySignsText = originalEarlySigns.map(\.label).joined(separator: ", ")
-        baseline.noteText = originalNotes ?? ""
-        baseline.resetMedicineFields()
-        if !originalMedicines.isEmpty { baseline.chooseMedicine(.taken) }
+        let latest = detail.episode.medicines
+        // No persistent IDs exist. A unique recorded name/time may anchor a row;
+        // repeated anchors require the complete group to be unchanged and in order.
+        func sameAnchor(_ a: MigraineMedicineTaken, _ b: MigraineMedicineTaken) -> Bool {
+            a.name == b.name && a.takenAt.matches(b.takenAt)
+        }
+        func mappedIndex(_ index: Int) -> Int? {
+            let before = originalMedicines.indices.filter { sameAnchor(originalMedicines[$0], originalMedicines[index]) }
+            let after = latest.indices.filter { sameAnchor(latest[$0], originalMedicines[index]) }
+            guard before.count == after.count, let ordinal = before.firstIndex(of: index) else { return nil }
+            if before.count > 1 && !zip(before, after).allSatisfy({ originalMedicines[$0].matches(latest[$1]) }) { return nil }
+            return after[ordinal]
+        }
+        var replacements: [Int: MigraineMedicineDraftRow] = [:]
+        var removals: Set<Int> = []
+        if medicineMode != .none && medicineMode != .retain {
+            for row in medicineRows {
+                guard let oldIndex = row.originalIndex else { continue }
+                guard let newIndex = mappedIndex(oldIndex) else {
+                    if row.hasFieldChanges { throw MigraineDraftError.medicineListConflict }
+                    continue
+                }
+                replacements[newIndex] = row.rebased(on: latest[newIndex], index: newIndex, responseTimestamp: responseTimestamp)
+            }
+            for oldIndex in removedMedicineIndices {
+                guard let index = mappedIndex(oldIndex) else { throw MigraineDraftError.medicineListConflict }
+                removals.insert(index)
+            }
+        }
         var rebased = self
         try rebased.apply(detail, forAccountScope: currentAccountScope)
-        for key in [\Self.earlySignsText, \Self.noteText] where self[keyPath: key] != baseline[keyPath: key] {
-            rebased[keyPath: key] = self[keyPath: key]
+        if earlySignsText != originalEarlySigns.map(\.label).joined(separator: ", ") { rebased.earlySignsText = earlySignsText }
+        if noteText != (originalNotes ?? "") { rebased.noteText = noteText }
+        if medicineMode == .none {
+            rebased.chooseMedicine(.none)
+        } else if medicineMode != .retain {
+            rebased.medicineRows = rebased.medicineRows.enumerated().compactMap { index, row in
+                removals.contains(index) ? nil : replacements[index] ?? row
+            } + medicineRows.filter { $0.originalIndex == nil }
+            rebased.removedMedicineIndices = removals
+            rebased.selectedMedicineID = rebased.medicineRows.contains(where: { $0.id == selectedMedicineID })
+                ? selectedMedicineID : rebased.medicineRows.first?.id
+            rebased.medicineMode = medicineMode
         }
-        let wholeMedicineIntent = medicineChoice != baseline.medicineChoice || medicineChoice == .add
-        if wholeMedicineIntent { rebased.medicineChoice = medicineChoice }
-        for key in [\Self.medicineName, \Self.doseAmountText, \Self.doseUnit, \Self.medicineNotesText]
-            where wholeMedicineIntent || self[keyPath: key] != baseline[keyPath: key] {
-            rebased[keyPath: key] = self[keyPath: key]
-        }
-        if wholeMedicineIntent || medicineTakenAt != baseline.medicineTakenAt { rebased.medicineTakenAt = medicineTakenAt }
-        if wholeMedicineIntent || reliefChoice != baseline.reliefChoice { rebased.reliefChoice = reliefChoice }
         self = rebased
     }
 
-    mutating func chooseMedicine(_ choice: MigraineMedicineChoice) {
-        if choice == .add && medicineChoice != .add {
-            resetMedicineFields()
-        }
-        if choice == .taken && medicineChoice != .taken, let first = originalMedicines.first {
-            medicineName = first.name
-            medicineTakenAt = Self.parseDate(first.takenAt.utc) ?? responseTimestamp
-            doseAmountText = first.doseAmount.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
-            doseUnit = first.doseUnit ?? ""
-            reliefChoice = MigraineReliefChoice(rawValue: first.reportedRelief ?? "") ?? .unknown
-            medicineNotesText = first.notes ?? ""
-        }
-        medicineChoice = choice
+    mutating func selectMedicine(_ id: UUID) {
+        guard let row = medicineRows.first(where: { $0.id == id }) else { return }
+        selectedMedicineID = id
+        medicineMode = row.originalIndex == nil ? .add : .taken
     }
 
-    private mutating func resetMedicineFields() {
-        medicineChoice = .retain
-        medicineName = ""
-        medicineTakenAt = responseTimestamp
-        doseAmountText = ""
-        doseUnit = ""
-        reliefChoice = .unknown
-        medicineNotesText = ""
+    mutating func addMedicine() {
+        let row = MigraineMedicineDraftRow(date: responseTimestamp)
+        medicineRows.append(row); selectedMedicineID = row.id; medicineMode = .add
+    }
+
+    mutating func removeSelectedMedicine() {
+        guard let index = medicineRows.firstIndex(where: { $0.id == selectedMedicineID }) else { return }
+        if let original = medicineRows[index].originalIndex { removedMedicineIndices.insert(original) }
+        medicineRows.remove(at: index)
+        selectedMedicineID = medicineRows.isEmpty ? nil : medicineRows[min(index, medicineRows.count - 1)].id
+        medicineMode = medicineRows.isEmpty ? .removeSelected : .taken
+    }
+
+    mutating func chooseMedicine(_ choice: MigraineMedicineChoice) {
+        switch choice {
+        case .add: if medicineMode != .add { addMedicine() }
+        case .taken:
+            if let row = medicineRows.first { selectMedicine(row.id) } else { addMedicine() }
+        case .removeSelected: removeSelectedMedicine()
+        case .none:
+            medicineRows = []; selectedMedicineID = nil
+            removedMedicineIndices = Set(originalMedicines.indices); medicineMode = .none
+        case .retain: medicineMode = .retain
+        }
+    }
+
+    private mutating func editSelected(_ edit: (inout MigraineMedicineDraftRow) -> Void) {
+        if selectedMedicine == nil { addMedicine() }
+        guard let index = medicineRows.firstIndex(where: { $0.id == selectedMedicineID }) else { return }
+        edit(&medicineRows[index])
     }
 
     func makeStructuredEdit(currentAccountScope: String) throws -> MigraineStructuredEdit? {
@@ -520,42 +666,9 @@ struct MigraineFollowUpDraft: Hashable {
             medicines = nil
         case .none:
             medicines = []
-        case .removeFirst:
-            medicines = originalMedicines.isEmpty ? nil : Array(originalMedicines.dropFirst())
-        case .taken, .add:
-            let name = medicineName.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { throw MigraineDraftError.medicineNameRequired }
-            let amountText = doseAmountText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let unit = doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard amountText.isEmpty == unit.isEmpty else { throw MigraineDraftError.incompleteDose }
-            if !amountText.isEmpty,
-               amountText.range(of: #"^[+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$"#, options: .regularExpression) == nil {
-                throw MigraineDraftError.incompleteDose
-            }
-            let amount = amountText.isEmpty ? nil : Decimal(string: amountText, locale: Locale(identifier: "en_US_POSIX"))
-            if !amountText.isEmpty && (amount == nil || amount! <= 0) { throw MigraineDraftError.incompleteDose }
-            let original = medicineChoice == .taken ? originalMedicines.first : nil
-            let originalDate = original.flatMap { Self.parseDate($0.takenAt.utc) }
-            let originalReliefChoice = MigraineReliefChoice(rawValue: original?.reportedRelief ?? "") ?? .unknown
-            let reliefUnchanged = original != nil && reliefChoice == originalReliefChoice
-            let relief = reliefUnchanged ? original?.reportedRelief : (reliefChoice == .unknown ? nil : reliefChoice.rawValue)
-            let note = medicineNotesText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let candidate = MigraineMedicineTaken(
-                name: name,
-                takenAt: originalDate == medicineTakenAt ? original!.takenAt : Self.timestamp(medicineTakenAt),
-                doseAmount: amount,
-                doseUnit: unit.isEmpty ? nil : unit,
-                reportedRelief: relief,
-                reliefReportedAt: reliefUnchanged ? original?.reliefReportedAt : (relief == nil ? nil : Self.timestamp(responseTimestamp)),
-                notes: note == (original?.notes ?? "") ? original?.notes : (note.isEmpty ? nil : note)
-            )
-            if candidate == original {
-                medicines = nil
-            } else if medicineChoice == .add || originalMedicines.isEmpty {
-                medicines = originalMedicines + [candidate]
-            } else {
-                medicines = [candidate] + originalMedicines.dropFirst()
-            }
+        case .taken, .add, .removeSelected:
+            let values = try medicineRows.map { try $0.value(responseTimestamp: responseTimestamp) }
+            medicines = values == originalMedicines ? nil : values
         }
 
         let trimmedNote = noteText.trimmingCharacters(in: .whitespacesAndNewlines)

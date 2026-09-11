@@ -27,6 +27,7 @@ final class MigraineFixtureServer: @unchecked Sendable {
     private var captured: [URLRequest] = []
     private var savedBody: NSDictionary?
     private var savedResult: [String: Any]?
+    private var latestDetail: [String: Any]?
     private var writeCount = 0
     var requests: [URLRequest] { lock.withLock { captured } }
     private var heldReplies: [@Sendable () -> Void] = []
@@ -189,6 +190,38 @@ final class MigraineFixtureServer: @unchecked Sendable {
 
     init(scenario: String = "success") { self.scenario = scenario }
 
+    static func detailDataForScenario(_ scenario: String) -> Data {
+        guard scenario.contains("entries") else { return detailData }
+        var detail = try! JSONSerialization.jsonObject(with: detailData) as! [String: Any]
+        var episode = detail["episode"] as! [String: Any]
+        var medicines = episode["medicines"] as! [[String: Any]]
+        medicines[1]["name"] = medicines[0]["name"]
+        medicines[1]["dose_amount"] = "2.500000000000000001"
+        medicines[1]["reported_relief"] = "unknown"
+        var third = medicines[1]
+        third["name"] = "Third synthetic medicine"
+        third["dose_amount"] = NSNull(); third["dose_unit"] = NSNull()
+        third["reported_relief"] = NSNull(); third["relief_reported_at"] = NSNull()
+        third["taken_at"] = ["utc": "2026-09-08T06:15:00.123456Z", "timezone_source": "unknown"]
+        third["notes"] = "Keep third metadata"
+        medicines.append(third); episode["medicines"] = medicines; detail["episode"] = episode
+        return try! JSONSerialization.data(withJSONObject: detail, options: .sortedKeys)
+    }
+
+    // Actual UI request/response evidence, synthetic-only and excluded in Release.
+    private func captureEntryEvidence() {
+        guard scenario.contains("entries") else { return }
+        let requests: [[String: Any]] = captured.map {
+            ["method": $0.httpMethod ?? "GET", "path": $0.url?.path ?? "",
+             "body": $0.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? NSNull()]
+        }
+        let value: [String: Any] = ["scenario": scenario, "requests": requests,
+            "saved_result": savedResult ?? [:], "time_context": scenario.hasPrefix("time-") ? timeFixture.stored : [:]]
+        if let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .prettyPrinted]) {
+            try? data.write(to: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("g014-\(scenario)-capture.json"))
+        }
+    }
+
     static func body(_ request: URLRequest) -> Data {
         if let data = request.httpBody { return data }
         guard let stream = request.httpBodyStream else { return Data() }
@@ -209,6 +242,7 @@ final class MigraineFixtureServer: @unchecked Sendable {
             var request = original
             request.httpBody = Self.body(original)
             captured.append(request)
+            defer { captureEntryEvidence() }
             guard request.url?.host == "gaia-fixture.invalid" else { throw URLError(.unsupportedURL) }
             if scenario.hasPrefix("time-") || scenario.hasPrefix("calendar-time-") {
                 if request.url?.path.hasSuffix("/migraine-times") == true, let timeResponseData { return (200, timeResponseData) }
@@ -219,9 +253,9 @@ final class MigraineFixtureServer: @unchecked Sendable {
                 return try calendarFixture.response(request)
             }
             let path = request.url!.path
-            let outcome = scenario.hasPrefix("delayed-") ? String(scenario.split(separator: "-").last!) : scenario
+            let outcome = scenario.hasPrefix("delayed-") ? String(scenario.split(separator: "-").last!) : scenario.replacingOccurrences(of: "entries-", with: "")
             if path == "/health" { return (200, Data("{}".utf8)) }
-            let detail = try JSONSerialization.jsonObject(with: Self.detailData) as! [String: Any]
+            let detail = try latestDetail ?? JSONSerialization.jsonObject(with: Self.detailDataForScenario(scenario)) as! [String: Any]
             let episode = detail["episode"] as! [String: Any]
             let id = episode["episode_id"] as! String
             let prompt: [String: Any] = ["id": "fixture-prompt", "episode_id": id,
@@ -252,9 +286,20 @@ final class MigraineFixtureServer: @unchecked Sendable {
                 throw URLError(.unsupportedURL)
             }
             writeCount += 1
+            if outcome == "conflict-once", writeCount == 1 {
+                var changed = detail; var next = episode
+                next["notes"] = "External saved note"
+                var medicines = next["medicines"] as! [[String: Any]]
+                medicines[0]["notes"] = "External first-entry note"
+                next["medicines"] = medicines
+                var lifecycle = next["lifecycle"] as! [String: Any]; lifecycle["revision"] = 3
+                next["lifecycle"] = lifecycle; changed["episode"] = next; changed["revision"] = 3
+                latestDetail = changed
+                return (409, Data(#"{"detail":"Migraine episode revision conflict"}"#.utf8))
+            }
             if outcome == "conflict" { return (409, Data(#"{"detail":"Migraine episode revision conflict"}"#.utf8)) }
             if outcome == "rejected" { return (422, Data(#"{"detail":"Invalid response"}"#.utf8)) }
-            if outcome == "cancelled" { throw URLError(.cancelled) }
+            if outcome == "cancelled", !scenario.contains("entries") || writeCount == 1 { throw URLError(.cancelled) }
             if outcome == "timeout", writeCount == 1 { throw URLError(.timedOut) }
             let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
             if path.hasSuffix("/updates") {
@@ -275,7 +320,7 @@ final class MigraineFixtureServer: @unchecked Sendable {
             let state = body["state"] as? String ?? "ongoing"
             savedEpisode["state"] = scenario == "wrong-detail-state" ? "ongoing" : state
             savedEpisode["episode_id"] = scenario == "wrong-detail-episode" ? "wrong" : id
-            savedDetail["revision"] = scenario == "unchanged" ? 2 : 3
+            savedDetail["revision"] = scenario == "unchanged" ? detail["revision"] : (detail["revision"] as! Int) + 1
             var lifecycle = savedEpisode["lifecycle"] as! [String: Any]
             lifecycle["revision"] = savedDetail["revision"]
             savedEpisode["lifecycle"] = lifecycle
@@ -293,7 +338,7 @@ final class MigraineFixtureServer: @unchecked Sendable {
             if request.httpMethod == "POST", body["migraine"] == nil { result.removeValue(forKey: "migraine_detail") }
             savedResult = result
             savedBody = body as NSDictionary
-            if scenario == "committed-timeout", writeCount == 1 { throw URLError(.networkConnectionLost) }
+            if outcome == "committed-timeout", writeCount == 1 { throw URLError(.networkConnectionLost) }
             return try json(result)
         }
     }

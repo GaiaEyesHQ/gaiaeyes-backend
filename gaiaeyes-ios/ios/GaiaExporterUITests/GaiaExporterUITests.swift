@@ -53,10 +53,10 @@ final class GaiaExporterUITests: XCTestCase {
 
     @MainActor
     private func clearMedicines(in app: XCUIApplication) {
-        let picker = app.buttons["migraine-medicine-choice"]
+        let picker = app.buttons["migraine-medicine-clear"]
         reveal(picker, in: app)
         picker.tap()
-        app.buttons["Clear all saved medicines"].tap()
+        app.buttons.matching(identifier: "Clear all entries").allElementsBoundByIndex.last!.tap()
     }
 
     @MainActor
