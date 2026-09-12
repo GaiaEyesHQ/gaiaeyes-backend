@@ -1,0 +1,37 @@
+{
+  "daily_affects.jpg": {
+    "Content-Length": "220119",
+    "Content-Type": "image/jpeg",
+    "Date": "Fri, 11 Sep 2026 19:03:55 GMT",
+    "ETag": "\"dc8f02711df6494a5de32c5dcef198fa\"",
+    "Last-Modified": "Fri, 11 Sep 2026 14:58:32 GMT"
+  },
+  "daily_caption.jpg": {
+    "Content-Length": "126514",
+    "Content-Type": "image/jpeg",
+    "Date": "Fri, 11 Sep 2026 19:03:53 GMT",
+    "ETag": "\"e00f16a6a5d2541dbcea790b670e2561\"",
+    "Last-Modified": "Fri, 11 Sep 2026 14:58:33 GMT"
+  },
+  "daily_playbook.jpg": {
+    "Content-Length": "182685",
+    "Content-Type": "image/jpeg",
+    "Date": "Fri, 11 Sep 2026 19:03:55 GMT",
+    "ETag": "\"82a5a18b2d52977feb7e603970452ec3\"",
+    "Last-Modified": "Fri, 11 Sep 2026 14:58:34 GMT"
+  },
+  "daily_stats.jpg": {
+    "Content-Length": "145362",
+    "Content-Type": "image/jpeg",
+    "Date": "Fri, 11 Sep 2026 19:03:54 GMT",
+    "ETag": "\"52f9765f242aa70ed0587ee88203e30c\"",
+    "Last-Modified": "Fri, 11 Sep 2026 14:58:34 GMT"
+  },
+  "latest.mp4": {
+    "Content-Length": "1050705",
+    "Content-Type": "video/mp4",
+    "Date": "Fri, 11 Sep 2026 19:03:55 GMT",
+    "ETag": "\"303f6c90a6727a3a51e8c92f0ee9e4ed\"",
+    "Last-Modified": "Fri, 11 Sep 2026 15:00:34 GMT"
+  }
+}

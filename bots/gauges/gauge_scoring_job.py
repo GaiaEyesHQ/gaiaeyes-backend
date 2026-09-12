@@ -6,11 +6,10 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, Iterable, Set, Tuple
-from zoneinfo import ZoneInfo
+from typing import Iterable, Set, Tuple
 
 from services.db import pg
-from bots.gauges.gauge_scorer import score_user_day
+from bots.gauges.gauge_scorer import DEFAULT_TIMEZONE, LOCAL_TZ, score_user_day
 
 
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
@@ -18,7 +17,6 @@ logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
 RECENT_ACTIVITY_DAYS = max(1, int(os.getenv("GAIA_GAUGE_RECENT_ACTIVITY_DAYS", "7")))
 DEFAULT_WORKERS = min(8, max(1, int(os.getenv("GAIA_GAUGE_WORKERS", "4"))))
 
@@ -77,39 +75,6 @@ def _fetch_user_ids() -> Set[str]:
         logger.warning("[gauges] recent analytics users fetch failed: %s", exc)
 
     return user_ids
-
-
-def _fetch_user_timezones(user_ids: Set[str]) -> Dict[str, str]:
-    if not user_ids:
-        return {}
-    try:
-        rows = pg.fetch(
-            """
-            select user_id, time_zone
-              from app.user_notification_preferences
-             where user_id = any(%s::uuid[])
-            """,
-            sorted(user_ids),
-        )
-    except Exception as exc:
-        logger.warning("[gauges] user timezones fetch failed: %s", exc)
-        return {}
-    return {
-        str(row["user_id"]): str(row.get("time_zone") or DEFAULT_TIMEZONE)
-        for row in rows
-        if row.get("user_id")
-    }
-
-
-def _local_day(time_zone_name: str | None, *, now_utc: datetime | None = None) -> date:
-    now_utc = now_utc or datetime.now(timezone.utc)
-    candidate = str(time_zone_name or DEFAULT_TIMEZONE).strip() or DEFAULT_TIMEZONE
-    try:
-        zone = ZoneInfo(candidate)
-    except Exception:
-        logger.warning("[gauges] invalid timezone=%s; using %s", candidate, DEFAULT_TIMEZONE)
-        zone = ZoneInfo(DEFAULT_TIMEZONE)
-    return now_utc.astimezone(zone).date()
 
 
 def _verify_outputs(
@@ -193,7 +158,7 @@ def main() -> None:
     parser.add_argument(
         "--day",
         default=None,
-        help="Optional day override in YYYY-MM-DD. Defaults to each user's local day.",
+        help="Optional day override in YYYY-MM-DD. Defaults once per batch to the scorer's resolved GAIA_TIMEZONE day (America/Chicago fallback).",
     )
     parser.add_argument("--user-id", default=None, help="Optional single user_id override.")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of users processed.")
@@ -205,26 +170,29 @@ def main() -> None:
     else:
         user_ids = _fetch_user_ids()
 
-    timezones = _fetch_user_timezones(user_ids)
     started_at = datetime.now(timezone.utc)
     expected: Set[Tuple[str, date]] = set()
     refreshed: Set[Tuple[str, date]] = set()
     failures: list[str] = []
 
-    day_override = date.fromisoformat(args.day) if args.day else None
+    # Use the same resolved zone as the scorer's raw-input intervals. Capture
+    # once so notification preferences or a midnight-crossing batch cannot
+    # select a different persisted day for another user.
+    target_day = date.fromisoformat(args.day) if args.day else started_at.astimezone(LOCAL_TZ).date()
     items = [
         (
             str(uid),
-            day_override or _local_day(timezones.get(str(uid))),
+            target_day,
         )
         for uid in _iter_users(sorted(user_ids), args.limit)
     ]
     expected.update(items)
     worker_count = min(DEFAULT_WORKERS, len(items)) if items else 0
     logger.info(
-        "[gauges] scoring users=%d day=%s workers=%d",
+        "[gauges] scoring users=%d day=%s scoring_timezone=%s workers=%d",
         len(items),
-        args.day or "per-user-local",
+        target_day.isoformat(),
+        DEFAULT_TIMEZONE,
         worker_count,
     )
 

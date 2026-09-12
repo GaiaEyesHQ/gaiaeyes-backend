@@ -47,7 +47,8 @@ final class MigraineFixtureServer: @unchecked Sendable {
             let pendingTime = scenario.contains("time-delayed")
                 && (scenario.contains("load") ? request.url?.path.hasSuffix("/migraine-times") == true && request.httpMethod == "GET" : request.httpMethod != "GET")
             let pendingCalendarSave = scenario == "calendar-save-pending" && request.httpMethod == "POST"
-            if !repliesReleased && (pendingTime || pendingCalendar || pendingCalendarSave || (scenario.hasPrefix("delayed-") && request.httpMethod != "GET")) {
+            let pendingSummary = scenario == "calendar-summary-account" && request.url?.path.hasSuffix("/migraine-detail") == true
+            if !repliesReleased && (pendingTime || pendingCalendar || pendingCalendarSave || pendingSummary || (scenario.hasPrefix("delayed-") && request.httpMethod != "GET")) {
                 heldReplies.append(reply)
                 return true
             }
@@ -222,6 +223,18 @@ final class MigraineFixtureServer: @unchecked Sendable {
         }
     }
 
+    private func captureSummaryEvidence() {
+        guard scenario.hasPrefix("calendar-summary-") else { return }
+        let requests: [[String: Any]] = captured.map {
+            ["method": $0.httpMethod ?? "GET", "path": $0.url?.path ?? "",
+             "body": $0.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? NSNull()]
+        }
+        let value: [String: Any] = ["scenario": scenario, "requests": requests, "saved_details": calendarFixture.summarySnapshots]
+        if let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .prettyPrinted]) {
+            try? data.write(to: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("g016-\(scenario)-capture.json"))
+        }
+    }
+
     static func body(_ request: URLRequest) -> Data {
         if let data = request.httpBody { return data }
         guard let stream = request.httpBodyStream else { return Data() }
@@ -242,7 +255,7 @@ final class MigraineFixtureServer: @unchecked Sendable {
             var request = original
             request.httpBody = Self.body(original)
             captured.append(request)
-            defer { captureEntryEvidence() }
+            defer { captureEntryEvidence(); captureSummaryEvidence() }
             guard request.url?.host == "gaia-fixture.invalid" else { throw URLError(.unsupportedURL) }
             if scenario.hasPrefix("time-") || scenario.hasPrefix("calendar-time-") {
                 if request.url?.path.hasSuffix("/migraine-times") == true, let timeResponseData { return (200, timeResponseData) }

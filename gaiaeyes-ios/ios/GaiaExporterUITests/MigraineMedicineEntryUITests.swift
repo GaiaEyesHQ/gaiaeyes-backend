@@ -42,8 +42,8 @@ final class MigraineMedicineEntryUITests: XCTestCase {
         } else { field.typeText(text) }
         XCTAssertEqual(field.value as? String, text)
     }
-    @MainActor private func add(_ name: String, _ app: XCUIApplication) {
-        let add = app.buttons["migraine-medicine-choice"]; reveal(add, app, up: true); add.tap()
+    @MainActor private func add(_ name: String, _ app: XCUIApplication, up: Bool = true) {
+        let add = app.buttons["migraine-medicine-choice"]; reveal(add, app, up: up); add.tap()
         fill(app.textFields["Medicine name"], name, app)
     }
     @MainActor private func save(_ app: XCUIApplication, history: Bool) {
@@ -111,7 +111,7 @@ final class MigraineMedicineEntryUITests: XCTestCase {
 
     @MainActor func testHistoryLostResponseLocksEveryListActionUntilExactRetry() {
         let app = launch("time-history-entries-detail-lost")
-        add("Uncertain new entry", app)
+        add("Uncertain new entry", app, up: false)
         save(app, history: true)
         XCTAssertTrue(status(app, history: true).label.contains("could not be confirmed"))
         assertListLocked(app, expectedName: "Uncertain new entry", count: 4)
@@ -123,7 +123,7 @@ final class MigraineMedicineEntryUITests: XCTestCase {
 
     @MainActor func testFollowUpLostResponseLocksWholeResponseUntilIdenticalRetry() {
         let app = launch("entries-committed-timeout")
-        add("Uncertain follow-up entry", app)
+        add("Uncertain follow-up entry", app, up: false)
         save(app, history: false)
         XCTAssertTrue(status(app, history: false).label.contains("could not be confirmed"))
         assertListLocked(app, expectedName: "Uncertain follow-up entry", count: 4)
@@ -135,7 +135,7 @@ final class MigraineMedicineEntryUITests: XCTestCase {
 
     @MainActor func testHistoryCancellationAfterHeldCommitRetriesWithoutDuplicate() {
         let app = launch("time-history-entries-time-delayed-detail-cancelled")
-        add("Cancelled history entry", app); save(app, history: true)
+        add("Cancelled history entry", app, up: false); save(app, history: true)
         assertListLocked(app, expectedName: "Cancelled history entry", count: 4)
         app.buttons["migraine-release-response"].tap()
         XCTAssertTrue(status(app, history: true).label.contains("could not be confirmed"))
@@ -145,7 +145,7 @@ final class MigraineMedicineEntryUITests: XCTestCase {
 
     @MainActor func testFollowUpHeldCancellationKeepsPendingEntriesForRetry() {
         let app = launch("delayed-entries-follow-up-cancelled")
-        add("Cancelled follow-up entry", app); save(app, history: false)
+        add("Cancelled follow-up entry", app, up: false); save(app, history: false)
         assertListLocked(app, expectedName: "Cancelled follow-up entry", count: 4)
         app.buttons["migraine-release-response"].tap()
         XCTAssertTrue(status(app, history: false).label.contains("could not be confirmed"))
@@ -186,7 +186,7 @@ final class MigraineMedicineEntryUITests: XCTestCase {
 
     @MainActor private func accountDuringHeldSave(history: Bool) {
         let app = launch(history ? "time-history-entries-time-delayed-account-detail-lost" : "delayed-entries-account-success")
-        add("Old account draft", app); save(app, history: history)
+        add("Old account draft", app, up: false); save(app, history: history)
         app.buttons["Switch synthetic account"].tap()
         app.buttons["migraine-release-response"].tap()
         let error = app.staticTexts[history ? "Your signed-in account changed. Close this editor and open it again." : "migraine-save-error"]

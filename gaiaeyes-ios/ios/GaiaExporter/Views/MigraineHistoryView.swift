@@ -8,6 +8,7 @@ struct MigraineHistoryView: View {
     @StateObject private var store: MigraineHistoryStore
     @State private var selectedDay: Date
     @State private var selectedEpisode: MigraineHistoryEpisode?
+    @State private var summaryEpisode: MigraineHistoryEpisode?
     @State private var editorIsSaving = false
 
     init(api: APIClient, accountScope: String,
@@ -87,6 +88,13 @@ struct MigraineHistoryView: View {
                         .padding(14).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("migraine-calendar-episode-\(episode.id)")
+                    .accessibilityHint("Edit this saved episode")
+                    if MigraineCalendarFeature.isEnabled {
+                        Button { summaryEpisode = episode } label: { Label("View summary", systemImage: "doc.text") }
+                            .accessibilityLabel("View summary for migraine started \(formatted(episode.startedAt, "MMM d 'at' h:mm a"))")
+                            .accessibilityIdentifier("migraine-calendar-summary-\(episode.id)")
+                            .disabled(editorIsSaving || selectedEpisode != nil)
+                    }
                 }
             }.padding(16)
         }
@@ -95,7 +103,7 @@ struct MigraineHistoryView: View {
         .navigationTitle("Migraine calendar").navigationBarTitleDisplayMode(.inline)
         .toolbar { Button("Refresh") { Task { await load() } }.accessibilityIdentifier("migraine-calendar-refresh") }
         .task(id: loadKey) { await load() }
-        .onChange(of: accountScope) { _, _ in selectedEpisode = nil }
+        .onChange(of: accountScope) { _, _ in selectedEpisode = nil; summaryEpisode = nil }
         .refreshable { await load() }
         .sheet(item: $selectedEpisode, onDismiss: { editorIsSaving = false; Task { await load() } }) { episode in
             NavigationStack {
@@ -113,6 +121,11 @@ struct MigraineHistoryView: View {
                     }
             }
             .interactiveDismissDisabled(editorIsSaving)
+        }
+        .sheet(item: $summaryEpisode) { episode in
+            MigraineEpisodeSummaryView(api: api, episodeID: episode.id, accountScope: accountScope,
+                                       timeZone: calendar.timeZone, accountScopeProvider: accountScopeProvider)
+                .id(episode.id)
         }
     }
 

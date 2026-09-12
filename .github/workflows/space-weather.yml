@@ -80,9 +80,6 @@ jobs:
           DAYS_BACK: "3"
         run: python scripts/rollup_space_weather_daily.py
 
-      - name: Run ULF ingester
-        run: python bots/geomag_ulf/ingest_ulf.py
-
       - name: Commit & push updated JSON
         run: |
           set -euo pipefail
@@ -142,6 +139,10 @@ jobs:
 
           echo "ERROR: Could not push after 3 attempts."
           exit 1
+
+      # ULF uses an independent provider; its outage must not block fresh JSON.
+      - name: Run ULF ingester
+        run: python bots/geomag_ulf/ingest_ulf.py
 
       - name: Create issue on failure
         if: failure()

@@ -56,7 +56,9 @@ final class GaiaExporterUITests: XCTestCase {
         let picker = app.buttons["migraine-medicine-clear"]
         reveal(picker, in: app)
         picker.tap()
-        app.buttons.matching(identifier: "Clear all entries").allElementsBoundByIndex.last!.tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Clear all entries", "migraine-medicine-clear")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        confirm.tap()
     }
 
     @MainActor

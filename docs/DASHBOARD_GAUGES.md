@@ -44,6 +44,9 @@ Notes:
 - If local payloads do not expose 12h deltas, the resolver uses 24h pressure deltas as a fallback.
 
 ## Gauge Scorer
+- Normal batch date: `gauge_scoring_job.py` captures one UTC instant and selects one date in the scorer's resolved `GAIA_TIMEZONE` for all eligible users. The scorer supplies the timezone object and its `America/Chicago` fallback; notification preferences do not change the persisted day key. Logs include the selected date and scoring timezone.
+- Explicit `--day YYYY-MM-DD` and explicit scorer dates retain their supplied labels. Raw symptom queries use the scorer's local-midnight half-open interval; exposure queries keep the 72-hour lookback before that start and cap historical as-of at the interval end. Chicago DST days can contain 23 or 25 hours.
+- This batch compatibility correction does not establish personal-local-day scoring. Direct scorer/CLI, dashboard and member no-date defaults still use UTC; ingest/request-timezone aggregation and nightly global health rollups retain their existing date-only-key inconsistencies. Persisted migraine correction refresh dates keep their existing Chicago contract. No stored records or refresh receipts are rewritten. See [G-015 scope and verification](recovery/G015_ACTIVE_WORK.md).
 - Module: `bots/gauges/gauge_scorer.py`
 - Job runner: `bots/gauges/gauge_scoring_job.py`
 - Target: `marts.user_gauges_day`

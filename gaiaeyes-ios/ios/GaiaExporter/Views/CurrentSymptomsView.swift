@@ -2256,6 +2256,11 @@ struct MigraineFollowUpFixtureScreen: View {
                     MigraineHistoryView(api: api, accountScope: accountScope, accountScopeProvider: { accountScope },
                         initialDate: ISO8601DateFormatter().date(from: "2026-09-09T17:00:00Z")!,
                         timeZone: TimeZone(identifier: "America/Chicago")!)
+                        .environment(\.dynamicTypeSize, scenario == "calendar-summary-large" ? .accessibility3 : .large)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MigraineSummarySyntheticAccountChange"))) { _ in
+                    guard scenario == "calendar-summary-account" else { return }
+                    accountScope = "different-fixture-account"; api.devUserId = accountScope
                 }
             } else if scenario.contains("history") {
                 NavigationStack {
