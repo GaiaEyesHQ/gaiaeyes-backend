@@ -1,0 +1,47 @@
+{
+  "daily_affects.jpg": {
+    "bytes": 188558,
+    "content_length": "188558",
+    "content_type": "image/jpeg",
+    "get_status": 200,
+    "last_modified": "Sat, 12 Sep 2026 16:57:12 GMT",
+    "status": 200,
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_affects.jpg"
+  },
+  "daily_caption.jpg": {
+    "bytes": 123741,
+    "content_length": "123741",
+    "content_type": "image/jpeg",
+    "get_status": 200,
+    "last_modified": "Sat, 12 Sep 2026 16:57:12 GMT",
+    "status": 200,
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_caption.jpg"
+  },
+  "daily_playbook.jpg": {
+    "bytes": 205458,
+    "content_length": "205458",
+    "content_type": "image/jpeg",
+    "get_status": 200,
+    "last_modified": "Sat, 12 Sep 2026 16:57:12 GMT",
+    "status": 200,
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_playbook.jpg"
+  },
+  "daily_stats.jpg": {
+    "bytes": 152728,
+    "content_length": "152728",
+    "content_type": "image/jpeg",
+    "get_status": 200,
+    "last_modified": "Sat, 12 Sep 2026 16:57:12 GMT",
+    "status": 200,
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_stats.jpg"
+  },
+  "latest.mp4": {
+    "bytes": 1041182,
+    "content_length": "1041182",
+    "content_type": "video/mp4",
+    "get_status": 200,
+    "last_modified": "Sat, 12 Sep 2026 16:59:00 GMT",
+    "status": 200,
+    "url": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4"
+  }
+}
