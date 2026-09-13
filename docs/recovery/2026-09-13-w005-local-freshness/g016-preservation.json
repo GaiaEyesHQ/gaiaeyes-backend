@@ -1,0 +1,17 @@
+{
+  "captured_at": "2026-09-13T10:17:38.792380+00:00",
+  "files": [
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/preserved-g016/G016_D04_E1_ACCEPTANCE_CLOSEOUT.md",
+      "sha256": "568041e3566de04c82edd2b7b2fb98ab31d5d43fbfdd72c0de333d6c6a0243b4"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/preserved-g016/HANDOFF.md",
+      "sha256": "0505521aee33818d9ffb11a3df09a76b765175f424d9da496add51d3f2438932"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/preserved-g016/gaia-report.json",
+      "sha256": "4370b3a9194f483f616d80f937f2d33c4f13d4a248279bd95c2a9021f9588836"
+    }
+  ]
+}

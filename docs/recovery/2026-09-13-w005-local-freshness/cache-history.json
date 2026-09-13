@@ -1,0 +1,722 @@
+[
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 04:31:22.040153+00",
+    "expires_at": "2026-09-13 05:31:22.040153+00",
+    "payload_asof": "2026-09-13T04:10:00+00:00",
+    "weather_obs_time": "2026-09-13T04:10:00+00:00",
+    "weather": {
+      "temp_c": 29,
+      "obs_time": "2026-09-13T04:10:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 70.108741837117,
+      "pressure_hpa": 1014.562,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 2,
+      "temp_delta_24h_c": 2,
+      "baro_delta_24h_hpa": 3
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.367335883333332
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 04:46:10.842186+00",
+    "expires_at": "2026-09-13 05:46:10.842186+00",
+    "payload_asof": "2026-09-13T04:25:00+00:00",
+    "weather_obs_time": "2026-09-13T04:25:00+00:00",
+    "weather": {
+      "temp_c": 29,
+      "obs_time": "2026-09-13T04:25:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 70.108741837117,
+      "pressure_hpa": 1014.562,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 2,
+      "temp_delta_24h_c": 3.7,
+      "baro_delta_24h_hpa": 2.7
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.180703100000002
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 05:01:35.958152+00",
+    "expires_at": "2026-09-13 06:01:35.958152+00",
+    "payload_asof": "2026-09-13T04:40:00+00:00",
+    "weather_obs_time": "2026-09-13T04:40:00+00:00",
+    "weather": {
+      "temp_c": 29,
+      "obs_time": "2026-09-13T04:40:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 70.108741837117,
+      "pressure_hpa": 1014.562,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 2,
+      "temp_delta_24h_c": 3,
+      "baro_delta_24h_hpa": 3.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.599302533333333
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 05:16:16.936487+00",
+    "expires_at": "2026-09-13 06:16:16.936487+00",
+    "payload_asof": "2026-09-13T04:55:00+00:00",
+    "weather_obs_time": "2026-09-13T04:55:00+00:00",
+    "weather": {
+      "temp_c": 28.5,
+      "obs_time": "2026-09-13T04:55:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 73.04947389755,
+      "pressure_hpa": 1015.2,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 2,
+      "temp_delta_24h_c": 2.5,
+      "baro_delta_24h_hpa": 4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.28227478333333
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 05:31:02.713428+00",
+    "expires_at": "2026-09-13 06:31:02.713428+00",
+    "payload_asof": "2026-09-13T05:15:00+00:00",
+    "weather_obs_time": "2026-09-13T05:15:00+00:00",
+    "weather": {
+      "temp_c": 28,
+      "obs_time": "2026-09-13T05:15:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 75.662214873455,
+      "pressure_hpa": 1015.2,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 15,
+      "temp_delta_24h_c": 2,
+      "baro_delta_24h_hpa": 4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 16.0452238
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 05:46:21.006819+00",
+    "expires_at": "2026-09-13 06:46:21.006819+00",
+    "payload_asof": "2026-09-13T05:25:00+00:00",
+    "weather_obs_time": "2026-09-13T05:25:00+00:00",
+    "weather": {
+      "temp_c": 28,
+      "obs_time": "2026-09-13T05:25:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 74.302363036119,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 15,
+      "temp_delta_24h_c": 2,
+      "baro_delta_24h_hpa": 3.7
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.35011365
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 06:01:03.958202+00",
+    "expires_at": "2026-09-13 07:01:03.958202+00",
+    "payload_asof": "2026-09-13T05:40:00+00:00",
+    "weather_obs_time": "2026-09-13T05:40:00+00:00",
+    "weather": {
+      "temp_c": 28,
+      "obs_time": "2026-09-13T05:40:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 78.920268070164,
+      "pressure_hpa": 1015.2393,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 15,
+      "temp_delta_24h_c": 2,
+      "baro_delta_24h_hpa": 4.1
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.065970033333333
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 06:16:00.654684+00",
+    "expires_at": "2026-09-13 07:16:00.654684+00",
+    "payload_asof": "2026-09-13T06:05:00+00:00",
+    "weather_obs_time": "2026-09-13T06:05:00+00:00",
+    "weather": {
+      "temp_c": 28,
+      "obs_time": "2026-09-13T06:05:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 78.920268070164,
+      "pressure_hpa": 1015.2393,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 15,
+      "temp_delta_24h_c": 3,
+      "baro_delta_24h_hpa": 3.3
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 11.0109114
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 06:31:05.857332+00",
+    "expires_at": "2026-09-13 07:31:05.857332+00",
+    "payload_asof": "2026-09-13T06:15:00+00:00",
+    "weather_obs_time": "2026-09-13T06:15:00+00:00",
+    "weather": {
+      "temp_c": 27,
+      "obs_time": "2026-09-13T06:15:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 78.780719493487,
+      "pressure_hpa": 1016.9325,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 15,
+      "temp_delta_24h_c": 1,
+      "baro_delta_24h_hpa": 5.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 16.0976222
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 06:46:03.005327+00",
+    "expires_at": "2026-09-13 07:46:03.005327+00",
+    "payload_asof": "2026-09-13T06:25:00+00:00",
+    "weather_obs_time": "2026-09-13T06:25:00+00:00",
+    "weather": {
+      "temp_c": 27,
+      "obs_time": "2026-09-13T06:25:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 83.676955175221,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 15,
+      "temp_delta_24h_c": 1,
+      "baro_delta_24h_hpa": 3.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.050088783333333
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 07:01:13.324582+00",
+    "expires_at": "2026-09-13 08:01:13.324582+00",
+    "payload_asof": "2026-09-13T06:35:00+00:00",
+    "weather_obs_time": "2026-09-13T06:35:00+00:00",
+    "weather": {
+      "temp_c": 27,
+      "obs_time": "2026-09-13T06:35:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 83.676955175221,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 15,
+      "temp_delta_24h_c": 3,
+      "baro_delta_24h_hpa": 3.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 26.222076366666666
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 07:16:18.485908+00",
+    "expires_at": "2026-09-13 08:16:18.485908+00",
+    "payload_asof": "2026-09-13T07:00:00+00:00",
+    "weather_obs_time": "2026-09-13T07:00:00+00:00",
+    "weather": {
+      "temp_c": 27,
+      "obs_time": "2026-09-13T07:00:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 83.676955175221,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 2.5,
+      "baro_delta_24h_hpa": 3
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 16.308098466666667
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 07:31:33.847076+00",
+    "expires_at": "2026-09-13 08:31:33.847076+00",
+    "payload_asof": "2026-09-13T07:15:00+00:00",
+    "weather_obs_time": "2026-09-13T07:15:00+00:00",
+    "weather": {
+      "temp_c": 27,
+      "obs_time": "2026-09-13T07:15:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 83.676955175221,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 2,
+      "baro_delta_24h_hpa": 3.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 16.564117933333332
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 07:46:16.74817+00",
+    "expires_at": "2026-09-13 08:46:16.74817+00",
+    "payload_asof": "2026-09-13T07:25:00+00:00",
+    "weather_obs_time": "2026-09-13T07:25:00+00:00",
+    "weather": {
+      "temp_c": 27,
+      "obs_time": "2026-09-13T07:25:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 83.676955175221,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 3,
+      "baro_delta_24h_hpa": 3.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.279136166666667
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 08:01:43.550616+00",
+    "expires_at": "2026-09-13 09:01:43.550616+00",
+    "payload_asof": "2026-09-13T07:35:00+00:00",
+    "weather_obs_time": "2026-09-13T07:35:00+00:00",
+    "weather": {
+      "temp_c": 27.2,
+      "obs_time": "2026-09-13T07:35:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 84.708481304408,
+      "pressure_hpa": 1015.2,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 3.2,
+      "baro_delta_24h_hpa": 3.7
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 26.7258436
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 08:16:41.878807+00",
+    "expires_at": "2026-09-13 09:16:41.878807+00",
+    "payload_asof": "2026-09-13T08:05:00+00:00",
+    "weather_obs_time": "2026-09-13T08:05:00+00:00",
+    "weather": {
+      "temp_c": 27,
+      "obs_time": "2026-09-13T08:05:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 83.676955175221,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 3,
+      "baro_delta_24h_hpa": 3.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 11.697980116666667
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 08:31:22.875392+00",
+    "expires_at": "2026-09-13 09:31:22.875392+00",
+    "payload_asof": "2026-09-13T08:15:00+00:00",
+    "weather_obs_time": "2026-09-13T08:15:00+00:00",
+    "weather": {
+      "temp_c": 26,
+      "obs_time": "2026-09-13T08:15:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 88.758945510938,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 1.3,
+      "baro_delta_24h_hpa": 3
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 16.381256533333335
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 08:46:21.215232+00",
+    "expires_at": "2026-09-13 09:46:21.215232+00",
+    "payload_asof": "2026-09-13T08:25:00+00:00",
+    "weather_obs_time": "2026-09-13T08:25:00+00:00",
+    "weather": {
+      "temp_c": 26,
+      "obs_time": "2026-09-13T08:25:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 88.758945510938,
+      "pressure_hpa": 1014.9005999999999,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 1.2,
+      "baro_delta_24h_hpa": 3
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.3535872
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 09:01:43.684738+00",
+    "expires_at": "2026-09-13 10:01:43.684738+00",
+    "payload_asof": "2026-09-13T08:40:00+00:00",
+    "weather_obs_time": "2026-09-13T08:40:00+00:00",
+    "weather": {
+      "temp_c": 26,
+      "obs_time": "2026-09-13T08:40:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 88.758945510938,
+      "pressure_hpa": 1014.562,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 0,
+      "baro_delta_24h_hpa": 3
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 21.728078966666665
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 09:16:06.404267+00",
+    "expires_at": "2026-09-13 10:16:06.404267+00",
+    "payload_asof": "2026-09-13T09:00:00+00:00",
+    "weather_obs_time": "2026-09-13T09:00:00+00:00",
+    "weather": {
+      "temp_c": 26,
+      "obs_time": "2026-09-13T09:00:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 88.758945510938,
+      "pressure_hpa": 1014.562,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 0,
+      "baro_delta_24h_hpa": 3.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 16.106737783333333
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 09:31:27.028688+00",
+    "expires_at": "2026-09-13 10:31:27.028688+00",
+    "payload_asof": "2026-09-13T09:15:00+00:00",
+    "weather_obs_time": "2026-09-13T09:15:00+00:00",
+    "weather": {
+      "temp_c": 25.4,
+      "obs_time": "2026-09-13T09:15:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 93.085306946121,
+      "pressure_hpa": 1014.9,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": -0.6,
+      "baro_delta_24h_hpa": 3.7
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 16.450478133333334
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 09:46:07.411976+00",
+    "expires_at": "2026-09-13 10:46:07.411976+00",
+    "payload_asof": "2026-09-13T09:22:00+00:00",
+    "weather_obs_time": "2026-09-13T09:22:00+00:00",
+    "weather": {
+      "temp_c": 26.7,
+      "obs_time": "2026-09-13T09:22:00+00:00",
+      "baro_trend": "falling",
+      "humidity_pct": 87.234314384917,
+      "pressure_hpa": 1015.2,
+      "pressure_trend": "falling",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": 0.7,
+      "baro_delta_24h_hpa": 4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 24.123532933333333
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 10:01:02.422443+00",
+    "expires_at": "2026-09-13 11:01:02.422443+00",
+    "payload_asof": "2026-09-13T09:35:00+00:00",
+    "weather_obs_time": "2026-09-13T09:35:00+00:00",
+    "weather": {
+      "temp_c": 25.1,
+      "obs_time": "2026-09-13T09:35:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 94.195223456911,
+      "pressure_hpa": 1014.9,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": -0.9,
+      "baro_delta_24h_hpa": 3.7
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 26.04037405
+  },
+  {
+    "sampled_at": "2026-09-13 10:19:30.000837+00",
+    "cache_asof": "2026-09-13 10:16:14.73814+00",
+    "expires_at": "2026-09-13 11:16:14.73814+00",
+    "payload_asof": "2026-09-13T10:05:00+00:00",
+    "weather_obs_time": "2026-09-13T10:05:00+00:00",
+    "weather": {
+      "temp_c": 24,
+      "obs_time": "2026-09-13T10:05:00+00:00",
+      "baro_trend": "steady",
+      "humidity_pct": 100,
+      "pressure_hpa": 1014.562,
+      "pressure_trend": "steady",
+      "precip_prob_pct": 3,
+      "temp_delta_24h_c": -2,
+      "baro_delta_24h_hpa": 3.4
+    },
+    "location": null,
+    "payload_keys": [
+      "ok",
+      "air",
+      "asof",
+      "moon",
+      "where",
+      "health",
+      "weather",
+      "allergens"
+    ],
+    "observation_age_when_cached_minutes": 11.245635666666667
+  }
+]

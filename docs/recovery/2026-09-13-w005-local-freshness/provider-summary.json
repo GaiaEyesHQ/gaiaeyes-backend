@@ -1,0 +1,167 @@
+[
+  {
+    "url": "https://api.weather.gov/stations/KATT/observations/latest",
+    "started_at": "2026-09-13T15:37:21.743193+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "64974b456ba623e4bee06cded534e259832987a6d39fbb4162df6e3112aed0af",
+    "headers": {
+      "Last-Modified": "Sun, 13 Sep 2026 14:50:58 GMT",
+      "Cache-Control": "public, max-age=300, s-maxage=300",
+      "Expires": "Sun, 13 Sep 2026 15:42:22 GMT",
+      "Date": "Sun, 13 Sep 2026 15:37:22 GMT"
+    },
+    "completed_at": "2026-09-13T15:37:22.035336+00:00",
+    "seconds": 0.292,
+    "station": "KATT",
+    "observation": "2026-09-13T14:51:00+00:00",
+    "temperature": {
+      "unitCode": "wmoUnit:degC",
+      "value": 28.3,
+      "qualityControl": "V"
+    },
+    "humidity": {
+      "unitCode": "wmoUnit:percent",
+      "value": 79.436376983473,
+      "qualityControl": "V"
+    },
+    "pressure": {
+      "unitCode": "wmoUnit:Pa",
+      "value": 101800,
+      "qualityControl": "V"
+    },
+    "age_minutes": 46.3672556
+  },
+  {
+    "url": "https://api.weather.gov/stations/KEDC/observations/latest",
+    "started_at": "2026-09-13T15:37:21.745365+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "000288de63479692ec6a9cf15a880f3bcfe0cec2efd418c500267112cb5411fa",
+    "headers": {
+      "Last-Modified": "Sun, 13 Sep 2026 15:14:58 GMT",
+      "Cache-Control": "public, max-age=300, s-maxage=300",
+      "Expires": "Sun, 13 Sep 2026 15:42:22 GMT",
+      "Date": "Sun, 13 Sep 2026 15:37:22 GMT"
+    },
+    "completed_at": "2026-09-13T15:37:22.019884+00:00",
+    "seconds": 0.275,
+    "station": "KEDC",
+    "observation": "2026-09-13T15:15:00+00:00",
+    "temperature": {
+      "unitCode": "wmoUnit:degC",
+      "value": 30.6,
+      "qualityControl": "V"
+    },
+    "humidity": {
+      "unitCode": "wmoUnit:percent",
+      "value": 66.701834456934,
+      "qualityControl": "V"
+    },
+    "pressure": {
+      "unitCode": "wmoUnit:Pa",
+      "value": 101800,
+      "qualityControl": "V"
+    },
+    "age_minutes": 22.366998066666667
+  },
+  {
+    "url": "https://api.weather.gov/stations/KAUS/observations/latest",
+    "started_at": "2026-09-13T15:37:21.747654+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "824f66f4383879104e98edeafa16aa25828d43df31f8cfd1265555ffff2982f1",
+    "headers": {
+      "Last-Modified": "Sun, 13 Sep 2026 15:14:58 GMT",
+      "Cache-Control": "public, max-age=149, s-maxage=300",
+      "Expires": "Sun, 13 Sep 2026 15:39:51 GMT",
+      "Date": "Sun, 13 Sep 2026 15:37:22 GMT"
+    },
+    "completed_at": "2026-09-13T15:37:22.148572+00:00",
+    "seconds": 0.401,
+    "station": "KAUS",
+    "observation": "2026-09-13T15:15:00+00:00",
+    "temperature": {
+      "unitCode": "wmoUnit:degC",
+      "value": 31,
+      "qualityControl": "V"
+    },
+    "humidity": {
+      "unitCode": "wmoUnit:percent",
+      "value": 62.497648839725,
+      "qualityControl": "V"
+    },
+    "pressure": {
+      "unitCode": "wmoUnit:Pa",
+      "value": 101727.12,
+      "qualityControl": "V"
+    },
+    "age_minutes": 22.369142866666667
+  },
+  {
+    "url": "https://api.weather.gov/stations/KT74/observations/latest",
+    "started_at": "2026-09-13T15:37:21.749768+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "c3c7f108c6cb9984e8c68280c9fcffa42e2cc52a7a8130a0d7b3f90f41221356",
+    "headers": {
+      "Last-Modified": "Sun, 13 Sep 2026 15:14:58 GMT",
+      "Cache-Control": "public, max-age=300, s-maxage=300",
+      "Expires": "Sun, 13 Sep 2026 15:42:22 GMT",
+      "Date": "Sun, 13 Sep 2026 15:37:22 GMT"
+    },
+    "completed_at": "2026-09-13T15:37:22.008337+00:00",
+    "seconds": 0.259,
+    "station": "KT74",
+    "observation": "2026-09-13T15:15:00+00:00",
+    "temperature": {
+      "unitCode": "wmoUnit:degC",
+      "value": 30,
+      "qualityControl": "V"
+    },
+    "humidity": {
+      "unitCode": "wmoUnit:percent",
+      "value": 70.293061425925,
+      "qualityControl": "V"
+    },
+    "pressure": {
+      "unitCode": "wmoUnit:Pa",
+      "value": 101930.3,
+      "qualityControl": "V"
+    },
+    "age_minutes": 22.366805616666667
+  },
+  {
+    "url": "https://api.weather.gov/stations/KRYW/observations/latest",
+    "started_at": "2026-09-13T15:37:21.751996+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "175ecf5c35893aa8a997a5f168fa7861122987990b9a3886d47a27a3eed785e9",
+    "headers": {
+      "Last-Modified": "Sun, 13 Sep 2026 05:54:58 GMT",
+      "Cache-Control": "public, max-age=300, s-maxage=300",
+      "Expires": "Sun, 13 Sep 2026 15:42:22 GMT",
+      "Date": "Sun, 13 Sep 2026 15:37:22 GMT"
+    },
+    "completed_at": "2026-09-13T15:37:22.022883+00:00",
+    "seconds": 0.271,
+    "station": "KRYW",
+    "observation": "2026-09-13T05:55:00+00:00",
+    "temperature": {
+      "unitCode": "wmoUnit:degC",
+      "value": 26.8,
+      "qualityControl": "V"
+    },
+    "humidity": {
+      "unitCode": "wmoUnit:percent",
+      "value": 79.712423428125,
+      "qualityControl": "V"
+    },
+    "pressure": {
+      "unitCode": "wmoUnit:Pa",
+      "value": 101730,
+      "qualityControl": "V"
+    },
+    "age_minutes": 582.36704805
+  }
+]

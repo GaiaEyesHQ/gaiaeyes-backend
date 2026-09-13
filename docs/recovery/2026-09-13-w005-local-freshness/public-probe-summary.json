@@ -1,0 +1,82 @@
+[
+  {
+    "name": "health-live",
+    "url": "https://gaiaeyes-backend.onrender.com/health/live",
+    "started_at": "2026-09-13T15:35:49.142856+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "4c2f01fcf27f4f6af251d07da56078484849f5c9755022bc1074f78f5423f1ce",
+    "headers": {
+      "Date": "Sun, 13 Sep 2026 15:35:51 GMT"
+    },
+    "completed_at": "2026-09-13T15:35:50.879025+00:00",
+    "seconds": 1.736,
+    "ok": true,
+    "live": true,
+    "db": null
+  },
+  {
+    "name": "health-ready",
+    "url": "https://gaiaeyes-backend.onrender.com/health",
+    "started_at": "2026-09-13T15:35:49.143228+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "45692ccfe14d1ab8cb8eca474ba72e2bce9d0aab149d05ab79a16c852893856f",
+    "headers": {
+      "Date": "Sun, 13 Sep 2026 15:35:51 GMT"
+    },
+    "completed_at": "2026-09-13T15:35:50.880032+00:00",
+    "seconds": 1.737,
+    "ok": true,
+    "live": null,
+    "db": true
+  },
+  {
+    "name": "local-check",
+    "url": "https://gaiaeyes-backend.onrender.com/v1/local/check?zip=78754",
+    "started_at": "2026-09-13T15:35:49.143348+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "f98bc6c78ddf5a4c40ea78b114990f922352e2e95c0eb1561b9a1e58ad207c21",
+    "headers": {
+      "Date": "Sun, 13 Sep 2026 15:35:52 GMT"
+    },
+    "completed_at": "2026-09-13T15:35:51.944465+00:00",
+    "seconds": 2.801,
+    "asof": "2026-09-13T15:15:00+00:00",
+    "weather": {
+      "temp_c": 30.6,
+      "obs_time": "2026-09-13T15:15:00+00:00",
+      "baro_trend": "rising",
+      "humidity_pct": 66.701834456934,
+      "pressure_hpa": 1018.0,
+      "pressure_trend": "rising",
+      "precip_prob_pct": 2.0,
+      "temp_delta_24h_c": 1.6,
+      "baro_delta_24h_hpa": 4.5
+    },
+    "where": {
+      "lat": 30.3423,
+      "lon": -97.6673,
+      "zip": "78754"
+    },
+    "forecast_days": 7,
+    "weather_age_minutes": 20.865741083333333
+  },
+  {
+    "name": "nws-points",
+    "url": "https://api.weather.gov/points/30.3423,-97.6673",
+    "started_at": "2026-09-13T15:35:49.143445+00:00",
+    "attempts": 1,
+    "status": 200,
+    "body_sha256": "42189e31d2c7b962c55247ae273a71efc1148dd3f773f2745fa85fdcfb78e414",
+    "headers": {
+      "Cache-Control": "public, max-age=86400, s-maxage=120",
+      "Expires": "Mon, 14 Sep 2026 15:35:49 GMT",
+      "Date": "Sun, 13 Sep 2026 15:35:49 GMT"
+    },
+    "completed_at": "2026-09-13T15:35:49.388341+00:00",
+    "seconds": 0.245,
+    "observation_stations_url": "https://api.weather.gov/gridpoints/EWX/159,94/stations"
+  }
+]

@@ -1,0 +1,127 @@
+{
+  "name": "nws-points",
+  "url": "https://api.weather.gov/points/30.3423,-97.6673",
+  "started_at": "2026-09-13T15:35:49.143445+00:00",
+  "attempts": 1,
+  "status": 200,
+  "body_sha256": "42189e31d2c7b962c55247ae273a71efc1148dd3f773f2745fa85fdcfb78e414",
+  "headers": {
+    "Cache-Control": "public, max-age=86400, s-maxage=120",
+    "Expires": "Mon, 14 Sep 2026 15:35:49 GMT",
+    "Date": "Sun, 13 Sep 2026 15:35:49 GMT"
+  },
+  "payload": {
+    "@context": [
+      "https://geojson.org/geojson-ld/geojson-context.jsonld",
+      {
+        "@version": "1.1",
+        "wx": "https://api.weather.gov/ontology#",
+        "s": "https://schema.org/",
+        "geo": "http://www.opengis.net/ont/geosparql#",
+        "unit": "http://codes.wmo.int/common/unit/",
+        "@vocab": "https://api.weather.gov/ontology#",
+        "geometry": {
+          "@id": "s:GeoCoordinates",
+          "@type": "geo:wktLiteral"
+        },
+        "city": "s:addressLocality",
+        "state": "s:addressRegion",
+        "distance": {
+          "@id": "s:Distance",
+          "@type": "s:QuantitativeValue"
+        },
+        "bearing": {
+          "@type": "s:QuantitativeValue"
+        },
+        "value": {
+          "@id": "s:value"
+        },
+        "unitCode": {
+          "@id": "s:unitCode",
+          "@type": "@id"
+        },
+        "forecastOffice": {
+          "@type": "@id"
+        },
+        "forecastGridData": {
+          "@type": "@id"
+        },
+        "publicZone": {
+          "@type": "@id"
+        },
+        "county": {
+          "@type": "@id"
+        }
+      }
+    ],
+    "id": "https://api.weather.gov/points/30.3423,-97.6673",
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [
+        -97.6673,
+        30.3423
+      ]
+    },
+    "properties": {
+      "@id": "https://api.weather.gov/points/30.3423,-97.6673",
+      "@type": "wx:Point",
+      "cwa": "EWX",
+      "type": "land",
+      "forecastOffice": "https://api.weather.gov/offices/EWX",
+      "gridId": "EWX",
+      "gridX": 159,
+      "gridY": 94,
+      "forecast": "https://api.weather.gov/gridpoints/EWX/159,94/forecast",
+      "forecastHourly": "https://api.weather.gov/gridpoints/EWX/159,94/forecast/hourly",
+      "forecastGridData": "https://api.weather.gov/gridpoints/EWX/159,94",
+      "observationStations": "https://api.weather.gov/gridpoints/EWX/159,94/stations",
+      "relativeLocation": {
+        "type": "Feature",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            -97.7541339,
+            30.2986219
+          ]
+        },
+        "properties": {
+          "city": "Austin",
+          "state": "TX",
+          "distance": {
+            "unitCode": "wmoUnit:m",
+            "value": 0
+          },
+          "bearing": {
+            "unitCode": "wmoUnit:degree_(angle)",
+            "value": 0
+          }
+        }
+      },
+      "forecastZone": "https://api.weather.gov/zones/forecast/TXZ192",
+      "county": "https://api.weather.gov/zones/county/TXC453",
+      "fireWeatherZone": "https://api.weather.gov/zones/fire/TXZ192",
+      "timeZone": "America/Chicago",
+      "radarStation": "KGRK",
+      "astronomicalData": {
+        "sunrise": "2026-09-12T07:13:37-05:00",
+        "sunset": "2026-09-12T19:40:03-05:00",
+        "transit": "2026-09-12T13:26:50-05:00",
+        "civilTwilightBegin": "2026-09-12T06:49:35-05:00",
+        "civilTwilightEnd": "2026-09-12T20:04:06-05:00",
+        "nauticalTwilightBegin": "2026-09-12T06:21:20-05:00",
+        "nauticalTwilightEnd": "2026-09-12T20:32:21-05:00",
+        "astronomicalTwilightBegin": "2026-09-12T05:52:41-05:00",
+        "astronomicalTwilightEnd": "2026-09-12T21:01:00-05:00"
+      },
+      "nwr": {
+        "transmitter": "WXK27",
+        "sameCode": "048453",
+        "areaBroadcast": "https://api.weather.gov/radio/WXK27/broadcast",
+        "pointBroadcast": "https://api.weather.gov/points/30.3423,-97.6673/radio"
+      }
+    }
+  },
+  "completed_at": "2026-09-13T15:35:49.388341+00:00",
+  "seconds": 0.245
+}

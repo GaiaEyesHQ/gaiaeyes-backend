@@ -1,0 +1,19 @@
+{
+  "name": "health-live",
+  "url": "https://gaiaeyes-backend.onrender.com/health/live",
+  "started_at": "2026-09-13T15:35:49.142856+00:00",
+  "attempts": 1,
+  "status": 200,
+  "body_sha256": "4c2f01fcf27f4f6af251d07da56078484849f5c9755022bc1074f78f5423f1ce",
+  "headers": {
+    "Date": "Sun, 13 Sep 2026 15:35:51 GMT"
+  },
+  "payload": {
+    "ok": true,
+    "service": "gaiaeyes-backend",
+    "time": "2026-09-13T15:35:51.029687+00:00",
+    "live": true
+  },
+  "completed_at": "2026-09-13T15:35:50.879025+00:00",
+  "seconds": 1.736
+}

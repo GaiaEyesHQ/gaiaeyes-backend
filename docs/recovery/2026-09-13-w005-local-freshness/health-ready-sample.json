@@ -1,0 +1,52 @@
+{
+  "name": "health-ready",
+  "url": "https://gaiaeyes-backend.onrender.com/health",
+  "started_at": "2026-09-13T15:35:49.143228+00:00",
+  "attempts": 1,
+  "status": 200,
+  "body_sha256": "45692ccfe14d1ab8cb8eca474ba72e2bce9d0aab149d05ab79a16c852893856f",
+  "headers": {
+    "Date": "Sun, 13 Sep 2026 15:35:51 GMT"
+  },
+  "payload": {
+    "ok": true,
+    "service": "gaiaeyes-backend",
+    "time": "2026-09-13T15:35:51.030377+00:00",
+    "db": true,
+    "db_sticky_age": 65805886,
+    "monitor": {
+      "db_ok": true,
+      "since": "2026-09-12T21:19:05.144114+00:00",
+      "last_change": "2026-09-12T21:19:05.144114+00:00",
+      "consec_ok": 1273,
+      "consec_fail": 0,
+      "last_probe": "2026-09-13T15:35:47.738265+00:00",
+      "sticky_age_ms": 65805886,
+      "pool_backend": "direct",
+      "pool": {
+        "backend": "direct",
+        "ok": true,
+        "open": 8,
+        "free": 7,
+        "used": 1,
+        "waiting": 0,
+        "last_refresh": "2026-09-13T15:35:06.603247+00:00",
+        "fallback_available": true
+      }
+    },
+    "ingest_queue": {
+      "enabled": true,
+      "redis_enabled": true,
+      "redis_key": "gaia:ingest:samples",
+      "redis_depth": 0,
+      "redis_error": null,
+      "active_writes": 0,
+      "max_active_writes": 2,
+      "backlog_batches": 0,
+      "backlog_max_batches": 500,
+      "draining": false
+    }
+  },
+  "completed_at": "2026-09-13T15:35:50.880032+00:00",
+  "seconds": 1.737
+}

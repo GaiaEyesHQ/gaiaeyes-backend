@@ -1,0 +1,54 @@
+{
+  "recorded_at": "2026-09-13T15:44:20.725576+00:00",
+  "database_queries": [
+    {
+      "name": "schema",
+      "project_id": "qadwzkwubfbfuslfxkzl",
+      "sql": "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'ext' AND table_name = 'local_signals_cache' ORDER BY ordinal_position;",
+      "rows": 4
+    },
+    {
+      "name": "cache_history",
+      "project_id": "qadwzkwubfbfuslfxkzl",
+      "sql": "SELECT now() AS sampled_at, asof AS cache_asof, expires_at, payload->>'asof' AS payload_asof, payload#>>'{weather,obs_time}' AS weather_obs_time, payload->'weather' AS weather, payload->'location' AS location, ARRAY(SELECT jsonb_object_keys(payload)) AS payload_keys FROM ext.local_signals_cache WHERE zip = '78754' AND asof > now() - interval '6 hours' ORDER BY asof DESC LIMIT 24;",
+      "rows": 24,
+      "result": "cache-history-mcp-result.json"
+    },
+    {
+      "name": "latest_cache",
+      "project_id": "qadwzkwubfbfuslfxkzl",
+      "sql": "SELECT now() AS sampled_at, asof AS cache_asof, expires_at, payload->'where' AS zip_location, payload->>'asof' AS payload_asof, payload->'weather' AS weather FROM ext.local_signals_cache WHERE zip = '78754' ORDER BY asof DESC LIMIT 1;",
+      "rows": 1,
+      "result": "cache-latest-mcp-result.json"
+    }
+  ],
+  "http_probes": {
+    "backend_get_requests": 3,
+    "nws_get_requests": 7,
+    "attempts_per_url": 1,
+    "retries": 0,
+    "provider_requests": "One points document, one station list, five latest observations.",
+    "scope": "Public weather for ZIP centroid only; no raw health samples or personal-user rows."
+  },
+  "offline_validation": {
+    "command": [
+      "venv/bin/python",
+      "-B",
+      "docs/recovery/2026-09-13-w005-local-freshness/replay_captured_selection.py"
+    ],
+    "cwd": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend",
+    "exit": 0,
+    "replays": 1,
+    "live_requests": 0,
+    "result": "selection-replay-result.json"
+  },
+  "git_checks": {
+    "initial_head": "9d7fcd2a6ec256d711f0931d0d5b22630ddada5a",
+    "initial_status": "clean",
+    "diff_check": "passed",
+    "backend_source_changes": false,
+    "concurrent_change": "docs/OPEN_QUESTIONS.md appeared during work and was preserved."
+  },
+  "local_analysis_correction": "First offline timestamp parser rejected variable-fraction/+00 PostgreSQL timestamp formatting; normalization fixed before computation. Existing saved rows were reused; no database query was repeated for this correction.",
+  "supabase_skill_check": "Changelog markdown was read after web tool rejected content type; no relevant breaking change to this SELECT-only diagnostic. No Supabase implementation or schema change."
+}

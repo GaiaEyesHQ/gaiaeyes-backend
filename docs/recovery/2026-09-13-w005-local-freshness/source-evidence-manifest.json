@@ -1,0 +1,51 @@
+{
+  "recorded_at": "2026-09-13T15:41:31.058955+00:00",
+  "repo_head": "9d7fcd2a6ec256d711f0931d0d5b22630ddada5a",
+  "scope": "Read-only implicated source paths; no backend patch.",
+  "files": [
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/AGENTS.md",
+      "sha256": "ad3c6de6d35cb658cb493960747f32108e50284913b021060d9862430853bb8d"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/POST_LAUNCH_RUNBOOK.md",
+      "sha256": "96e1da0415871fb99dccc4cd4c18904aaaef4abe8210df6b8894841718cec947"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/render-crons.yaml",
+      "sha256": "36bffb22ec4489f0bb1dcdc08a629a6e29abcb8929541429771b010a4a78a221"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/scripts/run_render_cron.py",
+      "sha256": "4200a1a101d13319e1eca603ab28bbb1b5efa2af0d3b9aa29f14b28d374ba3e9"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/scripts/post_launch_monitor.py",
+      "sha256": "e61625397754de088b560a73aeafabcfcb97db18c3a46eda8d91b8ae50239f89"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/bots/local_health_poll.py",
+      "sha256": "6530e6c48c6876c7f70516d51af282b41b899ebbbdb0e5d7dbe49b303b16d320"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/services/external/nws.py",
+      "sha256": "af336e8d8ec296279b3823771d48cfd6eea58f10c1852cc378591527583718d3"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/services/local_signals/cache.py",
+      "sha256": "6a33139ff38b5ba71cf77507490b69d817076a53c932aadeea0762cfe26404f9"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/services/local_signals/aggregator.py",
+      "sha256": "8f5bd4776c1231e1a11a2cae348763fa0e9eb965012bad8c97d32a07e049541b"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/app/routers/local.py",
+      "sha256": "fb1e6488da6e600d6b90998b3f7db757a467d568d2826376422eccce96c5d5c8"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tests/services/test_nws.py",
+      "sha256": "e9d9d9301eaab59040986bc5b94f2fb1066f28ff538835aa468f25966382586d"
+    }
+  ]
+}

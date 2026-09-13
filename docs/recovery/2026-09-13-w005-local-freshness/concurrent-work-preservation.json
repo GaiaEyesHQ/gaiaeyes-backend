@@ -1,0 +1,8 @@
+{
+  "observed_at": "2026-09-13T15:42:01.131768+00:00",
+  "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/OPEN_QUESTIONS.md",
+  "sha256": "4383c7ddae0deb84b0a7b7acee4fecda81a50f0ab9d5b7bdc9b373c0759a34d1",
+  "initial_git_state": "clean before W005 packet creation",
+  "later_git_state": "Concurrent docs/OPEN_QUESTIONS.md modification appeared during W005; not edited by this task.",
+  "handling": "Preserved; root owns portfolio questions."
+}

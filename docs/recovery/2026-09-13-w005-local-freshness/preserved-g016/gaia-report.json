@@ -1,0 +1,499 @@
+{
+  "assignment_id": "G-016",
+  "project": "gaia",
+  "updated_at": "2026-09-12T06:20:14.029478+00:00",
+  "status": "needs_human",
+  "task_id": "01a074da-1e28-7772-92b7-2b0163664c13",
+  "task_title": "Audit Gaia Eyes project state",
+  "summary": "D04-E1 independently accepted for source/fake preflight scope:32 changed cases and the original drift probe passed. G016 now awaits the portfolio H13 owner receipt through the root coordinator. Reviewed files remain frozen; no native result or Gaia model/UI/Release/deployment acceptance exists.",
+  "prior_accepted_assignment": "G015 accepted locally",
+  "prior_handoff": "/Users/gennwu/Documents/Codex/2026-09-06/turn-my-astra-strategy-planning-conversation/outputs/jennifer-os-starter-kit/operations/checkpoints/G-015-accepted/HANDOFF.md",
+  "prior_report": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/accepted-g015-report.json",
+  "current_slice": "D04-E1 independent acceptance recorded; source repair closed. Awaiting H13 owner receipt with reviewed files frozen.",
+  "next_slice": "Wait for the root-coordinated H13 owner receipt. Root owns the exact reviewed one-time handoff and human queue. This manager will not issue another command, run the adapter, control Terminal, bypass the denial, repeat tests or retry Xcode.",
+  "boundaries": [
+    "No deployment, production SQL, personal exports/imports, live activation, social/account changes or new dependencies.",
+    "Existing symptom timeline remains available. Android/member-hub parity intentionally deferred.",
+    "D028 core tasks precede imports; reports and release-dependent outreach remain committed."
+  ],
+  "d028": {
+    "samples": "received privately; project-local H09 availability resolved",
+    "compatibility": "unverified",
+    "sequence": "logging, follow-up, medication, editable events and calendar before imports; no new order among core tasks",
+    "reference": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/MIGRAINE_IMPORT_REFERENCES.md",
+    "raw_exports_opened_or_copied_by_this_task": false
+  },
+  "verification": {
+    "checked_at": "2026-09-12T05:46:18.877530+00:00",
+    "status": "blocked_external",
+    "blocker": "G016-B01",
+    "production_typecheck": {
+      "passed": true,
+      "files": 99,
+      "seconds": 53.346708333,
+      "source": "after R01/R02"
+    },
+    "testable_module_emission": {
+      "passed": true,
+      "seconds": 62.891739584,
+      "source": "after R01/R02"
+    },
+    "test_source_typechecks": {
+      "model_store_and_existing_gate": true,
+      "new_ui_tests": true,
+      "tests_executed": 0,
+      "source": "after R01/R02"
+    },
+    "syntax_parse_files": 9,
+    "xcode_attempts": 3,
+    "xcode_source_compilation": false,
+    "model_tests_executed": 0,
+    "ui_tests_executed": 0,
+    "current_release_build": false,
+    "current_release_marker_check": false,
+    "screenshots_inspected": 0,
+    "actual_g016_app_requests_captured": false,
+    "diff_check": true,
+    "g015_doc_bullets_preserved": 3,
+    "scoped_files": 28,
+    "changed_files": 14,
+    "remaining": [
+      "Restore local Xcode build planning",
+      "Execute model/store+gate checks",
+      "Execute actual UI+pending-editor compatibility",
+      "Inspect smaller-phone and large-text screenshots",
+      "Validate actual request methods/selected episode IDs and saved edit revision",
+      "Build unsigned Release and check15 fixture exclusions",
+      "Publish review-ready packet and obtain independent local acceptance"
+    ],
+    "physical_signed_release_android_web_acceptance": "Separate, not performed",
+    "source_repairs": {
+      "G016-R01": "accepted_source_contract_only",
+      "G016-R02": "accepted_source_contract_only"
+    },
+    "current_source_repair_verification": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/source-repairs-r01-r02/verification-summary.json",
+    "intended_pending_cases": {
+      "summary_model_store": 45,
+      "existing_gate": 1,
+      "summary_ui": 9,
+      "pending_editor_ui_compatibility": 1
+    },
+    "release_markers_pending": 15,
+    "source_acceptance_receipt": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/source-repairs-r01-r02/repair-source-acceptance.json",
+    "environment_diagnosis": {
+      "diagnostic_id": "G016-D04",
+      "checked_at": "2026-09-12T03:30:47.570022+00:00",
+      "status": "blocked_external",
+      "result": "not_launched_native_terminal_access_denied",
+      "root_cause": "G016-B01 unresolved; D04 cannot test alternate ancestry because authorized native Terminal tool denies access",
+      "terminal_access_result": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04/terminal-access-result.json",
+      "prepared_runner": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04/run-synthetic-probe.py",
+      "runner_syntax_parse": "passed; runner not executed",
+      "native_sessions_created": 0,
+      "synthetic_probe_attempts": 0,
+      "gaia_attempts_in_D04": 0,
+      "model_tests_executed": 0,
+      "ui_tests_executed": 0,
+      "source_unchanged": true,
+      "source_files": 28,
+      "prior_diagnostic_evidence_unchanged": true,
+      "source_repairs": {
+        "G016-R01": "accepted_source_contract_only",
+        "G016-R02": "accepted_source_contract_only"
+      },
+      "candidate_command_local_recovery": false,
+      "conditional_gaia_continuation_reached": false,
+      "diagnosis": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04/DIAGNOSIS.md",
+      "human_input_required": []
+    },
+    "environment_diagnosis_history": [
+      {
+        "diagnostic_id": "G016-D02",
+        "checked_at": "2026-09-11T17:32:12.008341+00:00",
+        "status": "blocked_external",
+        "result": "matching_stall_in_independent_project",
+        "root_cause": "unresolved_between_shared_launch_environment_and_installed_planner_toolchain_OS",
+        "single_synthetic_probe": {
+          "probe": "G016-D02 single independent C project",
+          "pid": 21664,
+          "exit": 75,
+          "seconds": 66.11760833299999,
+          "bounded_stop": "work_timeout_65s",
+          "finished_at": "2026-09-11T17:29:44.820826+00:00",
+          "signals": [
+            {
+              "target": "owned_process_group",
+              "pgid": 21664,
+              "signal": "SIGINT",
+              "at_seconds": 65.585
+            }
+          ],
+          "owned_processes_remaining": [],
+          "diagnostic_errors": [],
+          "log_bytes": 32231,
+          "gaia_build_attempts_in_D02": 0
+        },
+        "source_unchanged": true,
+        "source_files": 28,
+        "gaia_attempts": 0,
+        "model_tests_executed": 0,
+        "ui_tests_executed": 0,
+        "source_repairs": {
+          "G016-R01": "accepted_source_contract_only",
+          "G016-R02": "accepted_source_contract_only"
+        },
+        "proven_command_local_recovery": false,
+        "diagnosis": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d02/DIAGNOSIS.md",
+        "next_step": "Coordinator-selected alternate-parent launch of the preserved minimal project with bounded capture; not executed.",
+        "human_input_required": []
+      },
+      {
+        "diagnostic_id": "G016-D03",
+        "checked_at": "2026-09-11T18:13:27.699027+00:00",
+        "status": "blocked_external",
+        "result": "same_compiler_write_stall_with_child_nofile_soft256",
+        "root_cause": "unresolved; lowering inherited child soft limit did not restore the matched synthetic build",
+        "single_synthetic_probe": {
+          "probe": "G016-D03 single child-NOFILE256 comparison",
+          "pid": 29582,
+          "exit": 75,
+          "seconds": 66.30108616700001,
+          "bounded_stop": "work_timeout_65s",
+          "finished_at": "2026-09-11T18:11:15.069578+00:00",
+          "signals": [
+            {
+              "target": "owned_process_group",
+              "pgid": 29582,
+              "signal": "SIGINT",
+              "at_seconds": 65.789
+            }
+          ],
+          "owned_processes_remaining": [],
+          "diagnostic_errors": [],
+          "log_bytes": 32231,
+          "gaia_build_attempts_in_D03": 0,
+          "effective_child_limits": {
+            "pid": 29582,
+            "ppid": 29579,
+            "observed_at": "immediately before exec of xcodebuild",
+            "nofile": [
+              256,
+              9223372036854775807
+            ],
+            "nproc": [
+              8000,
+              12000
+            ]
+          },
+          "runner_nofile_after_restore": [
+            1048575,
+            9223372036854775807
+          ],
+          "limit_observation_verified": true
+        },
+        "source_unchanged": true,
+        "source_files": 28,
+        "gaia_attempts_in_D03": 0,
+        "model_tests_executed": 0,
+        "ui_tests_executed": 0,
+        "source_repairs": {
+          "G016-R01": "accepted_source_contract_only",
+          "G016-R02": "accepted_source_contract_only"
+        },
+        "proven_command_local_recovery": false,
+        "candidate_command_local_recovery": false,
+        "diagnosis": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d03/DIAGNOSIS.md",
+        "next_step": "Coordinator may select a new discriminating factor; no further experiment or Gaia run is authorized by this result.",
+        "human_input_required": []
+      }
+    ],
+    "diagnostic_runner_hardening": {
+      "repair_id": "D04-H2/H4-F1",
+      "candidate_id": "G016-D04-candidate-2-F1",
+      "status": "accepted_source_synthetic_candidate_only",
+      "checked_at": "2026-09-12T04:43:33.200562+00:00",
+      "focused_tests": 28,
+      "full_suite_tests": 99,
+      "full_suite_runs_after_change": 1,
+      "failures": 0,
+      "errors": 0,
+      "native_call_violations": [],
+      "max_fake_elapsed_seconds": 89.25,
+      "candidate_manifest": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-finalization-repair/CANDIDATE_MANIFEST.json",
+      "handoff": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-finalization-repair/HANDOFF.md",
+      "native_adapter_identical_to_candidate1": true,
+      "native_or_manual_execution_authorized": false,
+      "new_gaia_test_or_build_attempts": 0,
+      "independent_acceptance": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-manual-entrypoint/candidate2-acceptance.json",
+      "prior_closures_retained": [
+        "H1 deadlines",
+        "H3 inventory",
+        "H2 ownership/cleanup except F1",
+        "H4 compile/archive/cleanup except F1"
+      ]
+    },
+    "diagnostic_runner_hardening_history": [
+      {
+        "repair_ids": [
+          "D04-H1",
+          "D04-H2",
+          "D04-H3",
+          "D04-H4"
+        ],
+        "candidate_id": "G016-D04-H1-H4-candidate-1",
+        "status": "review_ready_synthetic_only",
+        "checked_at": "2026-09-12T04:08:03.180012+00:00",
+        "tests": 71,
+        "failures": 0,
+        "errors": 0,
+        "max_fake_elapsed_seconds": 89.25,
+        "native_call_violations": [],
+        "candidate_manifest": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-runner-repairs/CANDIDATE_MANIFEST.json",
+        "test_results": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-runner-repairs/synthetic-final-result.json",
+        "handoff": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-runner-repairs/HANDOFF.md",
+        "native_or_manual_execution_authorized": false,
+        "native_runner_executed": false,
+        "new_gaia_test_or_build_attempts": 0,
+        "independent_acceptance": "pending"
+      }
+    ],
+    "manual_entrypoint_preparation": {
+      "id": "G016-D04-E1",
+      "status": "accepted_source_fake_preflight_scope",
+      "checked_at": "2026-09-12T05:46:18.877530+00:00",
+      "wrapper": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/minimal_probe.py",
+      "manifest": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/ENTRYPOINT_MANIFEST.json",
+      "operator_packet": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/OPERATOR_HANDOFF.md",
+      "operator_spec": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/OPERATOR_SPEC.json",
+      "handoff": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/HANDOFF.md",
+      "tests": 75,
+      "test_runs": 1,
+      "failures": 0,
+      "errors": 0,
+      "native_call_violations": [],
+      "accepted_pair_unchanged": true,
+      "entrypoint1_preserved": true,
+      "baseline_files_pinned": 2,
+      "exact_probe_argv_and_cwd_checked": true,
+      "launch_guard_scope": "Point-in-time preflight before receipt and immediately before adapter invocation; unchanged later adapter reads are not locked or immutable.",
+      "reviewer_drift_result": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/reviewer-drift-result.json",
+      "preserved_evidence_files": 129,
+      "scoped_repository_files": 28,
+      "native_or_gaia_execution": false,
+      "owner_command_issued": false,
+      "independent_review": "accepted",
+      "acceptance_receipt": "/Users/gennwu/Documents/Codex/2026-09-06/turn-my-astra-strategy-planning-conversation/outputs/jennifer-os-starter-kit/operations/checkpoints/20260912-0610/G016-D04-E1-acceptance.json",
+      "accepted_at": "2026-09-12T06:16:07.098691+00:00",
+      "independent_changed_tests": 32,
+      "independent_original_drift_probe": "passed: refused before adapter dispatch",
+      "reviewed_files_frozen": true,
+      "owner_run_performed": false,
+      "portfolio_human_dependency": "H13",
+      "owner_command_issued_by_this_manager": false,
+      "owner_command_issued_scope": "This manager; root owns and will coordinate the owner handoff."
+    },
+    "manual_entrypoint_history": [
+      {
+        "id": "G016-D04-entrypoint-1",
+        "status": "repair_required_before_owner_handoff",
+        "checked_at": "2026-09-12T05:06:53.283388+00:00",
+        "wrapper": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-manual-entrypoint/minimal_probe.py",
+        "manifest": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-manual-entrypoint/ENTRYPOINT_MANIFEST.json",
+        "operator_packet": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-manual-entrypoint/OPERATOR_HANDOFF.md",
+        "operator_spec": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-manual-entrypoint/OPERATOR_SPEC.json",
+        "handoff": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-manual-entrypoint/HANDOFF.md",
+        "tests": 42,
+        "failures": 0,
+        "errors": 0,
+        "native_call_violations": [],
+        "accepted_pair_unchanged": true,
+        "native_or_gaia_execution": false,
+        "owner_command_issued": false,
+        "independent_review": "D04-E1 unpinned launch data reproduced using a fake adapter; all42 focused tests passed.",
+        "review": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/review-before/REVIEW.md"
+      }
+    ]
+  },
+  "handoff": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/HANDOFF.md",
+  "source_manifest": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/source-manifest.json",
+  "completed": [
+    "Preserved13 preparation and29 accepted G015 hashes plus originals and accepted packets.",
+    "Implemented saved-only projection/store/view, distinct calendar action and focused Debug synthetic fixtures/tests.",
+    "Direct99-source typecheck and testable module emission passed; new model/store/UI test sources typecheck.",
+    "Final9-source syntax, whitespace and exact3-bullet G015 placement passed.",
+    "Prepared source manifest/diff and exact remaining device/release/verification checklists.",
+    "G016-R01 explicitly accepts saved canonical episodes without structured rows; actual backend-shaped ordinary fixture/regressions added.",
+    "G016-R02 removes misleading Updated presentation; legacy note fixture and regressions retain structured revision/lifecycle.",
+    "Fresh repaired99-source typecheck, testable module and model/UI test-source checks passed; no executable tests counted.",
+    "Coordinator independently accepted G016-R01/R02 at source/contract level, all18 reviewed source hashes verified. Overall executable acceptance remains pending.",
+    "G016-D02 isolated single-file project reproduces planner/compiler-write stall without Gaia source/packages/reused build data; exact setup, samples and cleanup preserved. No source edits or Gaia retry.",
+    "G016-D03 verified child NOFILE256 with hard limit retained and runner restored; same stalled compiler-write path, exact launch/samples/cleanup preserved. No candidate recovery.",
+    "G016-D04 runner and hypothesis prepared; native Terminal access explicitly denied by Computer Use before any session/build. Exact limitation and unchanged D02/D03/source evidence preserved.",
+    "D04-H1-H4 distinct runner candidate frozen with71 passing fake-adapter tests and no native operations. Original runner/denial and all28 source hashes preserved; independent review pending.",
+    "Candidate2 finalization-only correction frozen:28 focused cases and one99-case full suite pass; received INT/TERM/HUP reconciled before final receipts. Candidate1 and all accepted source/evidence retained; independent F1 recheck pending.",
+    "D04-entrypoint1 fixed wrapper/operator packet prepared and frozen:42 fake/temp-file tests pass, exact paired hashes/output paths verified. Candidate2 remains accepted source/synthetic only; independent wrapper review pending, no owner/native action.",
+    "D04-E1 distinct wrapper repair pins D02 launch/input bytes and exact Probe argv/cwd.75 focused tests passed once, including precise reviewer drift refusal; all129 prior evidence and28 repo hashes preserved. Independent repair review pending; no native/owner action.",
+    "D04-E1 independently accepted at 2026-09-12T06:16:07.098691+00:00 for source/fake point-in-time preflight scope:32 changed tests plus the original reviewer drift probe passed. No native execution. G016 marked needs_human for existing portfolio H13; reviewed evidence left frozen."
+  ],
+  "remaining": [
+    "Resolve G016-B01 through separately evidenced environment recovery",
+    "Execute45 model/store cases +1 existing gate",
+    "Execute9 summary UI +1 pending-editor compatibility; inspect screenshots/request captures",
+    "Fresh unsigned Release build and15 fixture exclusions",
+    "Publish runtime-verified handoff for overall acceptance"
+  ],
+  "human_input_required_for_this_checkpoint": [
+    {
+      "id": "H13",
+      "status": "awaiting_owner_receipt",
+      "coordinator": "root",
+      "handoff_document": "/Users/gennwu/Documents/Codex/2026-09-06/turn-my-astra-strategy-planning-conversation/outputs/jennifer-os-starter-kit/GAIA_MANUAL_DIAGNOSTIC.md",
+      "dependency": "Receipt from the single reviewed minimal Probe command coordinated by root.",
+      "question": null,
+      "manager_action": "Keep reviewed files frozen; do not issue another owner question or command."
+    }
+  ],
+  "repair_artifacts": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1",
+  "repair_progress": {
+    "id": "G016-D04-E1",
+    "status": "accepted_source_fake_preflight_scope",
+    "checked_at": "2026-09-12T05:46:18.877530+00:00",
+    "wrapper": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/minimal_probe.py",
+    "manifest": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/ENTRYPOINT_MANIFEST.json",
+    "operator_packet": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/OPERATOR_HANDOFF.md",
+    "operator_spec": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/OPERATOR_SPEC.json",
+    "handoff": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/HANDOFF.md",
+    "tests": 75,
+    "test_runs": 1,
+    "failures": 0,
+    "errors": 0,
+    "native_call_violations": [],
+    "accepted_pair_unchanged": true,
+    "entrypoint1_preserved": true,
+    "baseline_files_pinned": 2,
+    "exact_probe_argv_and_cwd_checked": true,
+    "launch_guard_scope": "Point-in-time preflight before receipt and immediately before adapter invocation; unchanged later adapter reads are not locked or immutable.",
+    "reviewer_drift_result": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/reviewer-drift-result.json",
+    "preserved_evidence_files": 129,
+    "scoped_repository_files": 28,
+    "native_or_gaia_execution": false,
+    "owner_command_issued": false,
+    "independent_review": "accepted",
+    "artifacts": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1",
+    "native_execution": false,
+    "actual_output_and_receipt_absent": true,
+    "active_source_or_test_process": false,
+    "executable_verification": "awaiting_H13_owner_receipt",
+    "acceptance_receipt": "/Users/gennwu/Documents/Codex/2026-09-06/turn-my-astra-strategy-planning-conversation/outputs/jennifer-os-starter-kit/operations/checkpoints/20260912-0610/G016-D04-E1-acceptance.json",
+    "accepted_at": "2026-09-12T06:16:07.098691+00:00",
+    "independent_changed_tests": 32,
+    "independent_original_drift_probe": "passed: refused before adapter dispatch",
+    "reviewed_files_frozen": true,
+    "owner_run_performed": false,
+    "portfolio_human_dependency": "H13",
+    "owner_command_issued_by_this_manager": false,
+    "owner_command_issued_scope": "This manager; root owns and will coordinate the owner handoff."
+  },
+  "prior_checkpoint_count_correction": {
+    "total": 102,
+    "executes_postgresql": 37,
+    "preconnect_database_guards": 2,
+    "other_contract_mock_unit": 63,
+    "postgresql_module_cases": 39
+  },
+  "review_repair_ids": [
+    "D04-E1"
+  ],
+  "review_evidence": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-entrypoint-repair-e1/HANDOFF.md",
+  "commands_and_results": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/commands-and-results.json",
+  "preceding_review_passed_ids": [
+    "G014 accepted locally"
+  ],
+  "blockers": [
+    {
+      "id": "G016-B01",
+      "action_blocked": "Execute G016 model/UI tests and build fresh Release through local Xcode.",
+      "needed_from": "A specifically evidenced working Xcode planner/launch recovery; coordinator selection of a new discriminating factor.",
+      "question": null,
+      "recommendation": "Preserve existing failed diagnostics and await the selected H13 minimal-project receipt. No working recovery or Gaia executable acceptance is established; no automatic Gaia retry follows.",
+      "why_agent_cannot_resolve": "The single authorized D03 limit comparison completed with the same pre-compilation stall and no candidate working recovery. No additional limit variants, Gaia build, app action or automatic loop follows from this result.",
+      "evidence": [
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/BUILD_BLOCKER.md",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/model-after-service-recovery-result.json",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/xcode-service-recovery.json",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/direct-typecheck-result.json",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d02/DIAGNOSIS.md",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d02/diagnosis-receipt.json",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d02/synthetic-result.json",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d03/DIAGNOSIS.md",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d03/diagnosis-receipt.json",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d03/child-effective-limits.json",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04/DIAGNOSIS.md"
+      ],
+      "independent_work_continuing": []
+    },
+    {
+      "id": "G016-D04-ACCESS",
+      "action_blocked": "Launch the selected minimal C project from an isolated native Terminal app session.",
+      "needed_from": "Portfolio H13 owner receipt through the root-coordinated reviewed handoff.",
+      "question": null,
+      "recommendation": "Keep accepted D04-E1 files frozen and await H13. Root owns the one-time owner command. No agent adapter execution, Terminal control or bypass is authorized.",
+      "why_agent_cannot_resolve": "The required cua.getApp(\"com.apple.Terminal\") call was rejected for safety reasons before returning UI state. No user confirmation or Mac unlock requirement was reported by the tool.",
+      "evidence": [
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04/terminal-access-result.json",
+        "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04/runner-preparation.json",
+        "/Users/gennwu/Documents/Codex/2026-09-06/turn-my-astra-strategy-planning-conversation/outputs/jennifer-os-starter-kit/operations/checkpoints/20260912-0610/G016-D04-E1-acceptance.json"
+      ],
+      "independent_work_continuing": [],
+      "portfolio_human_dependency": "H13"
+    }
+  ],
+  "next_ready": [
+    "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/NEXT_VERIFICATION.md",
+    "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/DEVICE_RELEASE_ACCEPTANCE.md"
+  ],
+  "ownership": {
+    "paths_in_use": [
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/DASHBOARD_GAUGES.md",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/G015_ACTIVE_WORK.md",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/G016_ACTIVE_WORK.md",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/PROJECT_STATE.md",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/RECOMMENDED_NEXT_ACTIONS.md",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporter/Models/MigraineEpisodeSummary.swift",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporter/Services/MigraineCalendarFixture.swift",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporter/Services/MigraineFixtureSupport.swift",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporter/ViewModels/MigraineEpisodeSummaryStore.swift",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporter/Views/CurrentSymptomsView.swift",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporter/Views/MigraineEpisodeSummaryView.swift",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporter/Views/MigraineHistoryView.swift",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporterTests/MigraineEpisodeSummaryTests.swift",
+      "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/gaiaeyes-ios/ios/GaiaExporterUITests/MigraineEpisodeSummaryUITests.swift"
+    ],
+    "other_active_work_checked": true,
+    "note": "Acceptance/report closeout only. Frozen D04-E1 evidence and accepted core/adapter were read-only; no repository, portfolio or human-queue files changed. No test, native adapter, process survey/control, Terminal, Xcode or owner action occurred."
+  },
+  "deployment_or_physical_acceptance": "Not performed or implied; Android/member-hub parity deferred.",
+  "source_repairs": {
+    "G016-R01": "accepted_source_contract_only",
+    "G016-R02": "accepted_source_contract_only"
+  },
+  "source_acceptance_receipt": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/source-repairs-r01-r02/repair-source-acceptance.json",
+  "diagnostic_id": "D04-E1",
+  "environment_diagnosis": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04/DIAGNOSIS.md",
+  "review_scope": "D04-E1 accepted source/fake point-in-time preflight scope only; native and overall G016 executable acceptance pending.",
+  "runner_candidate_acceptance": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/environment-d04-manual-entrypoint/candidate2-acceptance.json",
+  "portfolio_human_dependency": "H13",
+  "acceptance_closeout": "/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g016-saved-episode-summary/G016_D04_E1_ACCEPTANCE_CLOSEOUT.md",
+  "entrypoint_acceptance": {
+    "status": "accepted_source_fake_preflight_scope",
+    "accepted_at": "2026-09-12T06:16:07.098691+00:00",
+    "receipt": "/Users/gennwu/Documents/Codex/2026-09-06/turn-my-astra-strategy-planning-conversation/outputs/jennifer-os-starter-kit/operations/checkpoints/20260912-0610/G016-D04-E1-acceptance.json",
+    "independent_review": "/Users/gennwu/Documents/Codex/2026-09-06/turn-my-astra-strategy-planning-conversation/work/gaia-d04-entrypoint-review/repair-review/review-result.json",
+    "independent_changed_tests": 32,
+    "independent_original_drift_probe": "Refused before dispatch; zero adapter invocations.",
+    "point_in_time_limit_retained": true,
+    "accepted_core_adapter_unchanged": true,
+    "native_execution": false,
+    "owner_run_performed": false
+  }
+}

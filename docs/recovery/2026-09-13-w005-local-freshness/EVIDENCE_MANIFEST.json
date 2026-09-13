@@ -1,0 +1,180 @@
+{
+  "created_at": "2026-09-13T15:44:20.725576+00:00",
+  "files": [
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/DIAGNOSIS.md",
+      "bytes": 8297,
+      "sha256": "56d468c417fd67a3215bfb9357e4ec201c30616a319e057e920d6e7833fb92d8"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/W005-ASSIGNMENT.md",
+      "bytes": 2813,
+      "sha256": "e41d9ff78002b4c36afca377aa9a141eb5d85db8d86c109fb55f5dc95d72d903"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/cache-analysis.json",
+      "bytes": 2296,
+      "sha256": "3e45c5dee385be62b2a0dd9468c0fd79c664d627d6c27d320b3cd73c62615409"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/cache-history-mcp-result.json",
+      "bytes": 18863,
+      "sha256": "c5de9fe43ce7420670e58b994bea7b97ced369821be54e238395e7a9e03b3e6a"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/cache-history.json",
+      "bytes": 19500,
+      "sha256": "6268620e3c4f3e7c6694016ab3d242a4dbaba8a32a129e84ba5f1e2e259011a7"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/cache-latest-mcp-result.json",
+      "bytes": 1251,
+      "sha256": "4b25bd49fe8bf62e5803ba9c902fa8f837fae039e5e3c1bd88201ca02dbe6e3d"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/concurrent-work-preservation.json",
+      "bytes": 457,
+      "sha256": "53037cf53bad13580a02cd93f626df0d91398e0f8b6d58de0e9d564d9ad98018"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/diagnosis-summary.json",
+      "bytes": 2420,
+      "sha256": "d8600ff19c43938b02eb40c38d26b4e956fc3f2134e92d4fcea96bded4ccf2ee"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/existing-watch-excerpts.md",
+      "bytes": 6452,
+      "sha256": "1df7870b767299c71c93bfc1281bcbb262942fe3248c7dda6ea8417505a04829"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/g016-preservation.json",
+      "bytes": 802,
+      "sha256": "12bc20fb431223dca54f7d70a832c51c701fc016dc7b4d4c659c362279b58e41"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/gaia-freshness-followup.json",
+      "bytes": 1194,
+      "sha256": "c2d9b610871e608db20a548f188f5b60973baaabf35bf55ea9c665485ad92968"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/health-live-sample.json",
+      "bytes": 535,
+      "sha256": "f43171096f7405cd2274fc88de760cd23cd946a2e36b9ea182c22c0bcc21ca83"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/health-ready-sample.json",
+      "bytes": 1446,
+      "sha256": "c4725fe4b4630ce944c7502c86bb39c401256dfa0f42a94aebfd2391dd97e86d"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/local-check-sample.json",
+      "bytes": 10362,
+      "sha256": "9ff8aee5a18328d40b9e1cd9b667e1dcc9b958f8bd3691d478d1dd8fef4e6358"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/manager-report.json",
+      "bytes": 6933,
+      "sha256": "55fb631440e25dc4670c4b1e36a8b7a820beaa07ccb1395cc5bbaa59cee6e7f6"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/nws-KATT-latest.json",
+      "bytes": 4445,
+      "sha256": "212586e6cf9d48c59aa3f19adec7df1696f3c8b8f3684680136c8fab668594d4"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/nws-KAUS-latest.json",
+      "bytes": 4699,
+      "sha256": "1bcb87f341560b794f6ed0aba8390e02e413ed1452856a7ecfcc539cd0a1b687"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/nws-KEDC-latest.json",
+      "bytes": 4436,
+      "sha256": "81ad51bdbad8cbe675a969d34b2958b122b4d3fa55989d2043a6229b9cca9c77"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/nws-KRYW-latest.json",
+      "bytes": 4746,
+      "sha256": "31a9083e47a0c1548b354b69112f979eb7ff7a77ae7e08f55780dba8947419af"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/nws-KT74-latest.json",
+      "bytes": 4439,
+      "sha256": "fb9d2c9c28bb8add46cd14e21d6262e3dddaecdfabb9fee43ff4f811c39a9f03"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/nws-points-sample.json",
+      "bytes": 4024,
+      "sha256": "5d5a4232c1a413944e07a9d88e9205bd9d5011cbeea851c541a5f1ce2e547c06"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/nws-stations-sample.json",
+      "bytes": 77269,
+      "sha256": "cc1ca1d1392b90b7a5765904e148368364a0130f18d0511bcb4581bfa86e9ec1"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/phase-checkpoint.json",
+      "bytes": 1642,
+      "sha256": "5301a001d15739f0a7998da4c482422c6868c104766d41a8e1344d81d04efd6c"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/preserved-g016/G016_D04_E1_ACCEPTANCE_CLOSEOUT.md",
+      "bytes": 3177,
+      "sha256": "568041e3566de04c82edd2b7b2fb98ab31d5d43fbfdd72c0de333d6c6a0243b4"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/preserved-g016/HANDOFF.md",
+      "bytes": 14054,
+      "sha256": "0505521aee33818d9ffb11a3df09a76b765175f424d9da496add51d3f2438932"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/preserved-g016/gaia-report.json",
+      "bytes": 31001,
+      "sha256": "4370b3a9194f483f616d80f937f2d33c4f13d4a248279bd95c2a9021f9588836"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/provider-summary.json",
+      "bytes": 5110,
+      "sha256": "3fcd4a1f3dae59025eda68e5f4b0079fbafcca599ab02181b1f30c1ae794da00"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/public-probe-summary.json",
+      "bytes": 2534,
+      "sha256": "c76a4238acbe71226ae22a0588d5af38a0d402857345a07d05c86e85e5b7975c"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/queries-and-checks.json",
+      "bytes": 2691,
+      "sha256": "1e6474b9a75e8a2c47d7a54f67fc594fb1bcf6d8d779f56eef1b62e565d74f4a"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/render-evidence.json",
+      "bytes": 2446,
+      "sha256": "479c9aabc17f14e3d3e0184c784aed4914f842d987b4166180ef3aab4e8b71ab"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/replay_captured_selection.py",
+      "bytes": 2947,
+      "sha256": "c7271263630111f7555295f31a6e0bb030490588d77f4b0b95626d6cca7ac04d"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/selection-replay-result.json",
+      "bytes": 1179,
+      "sha256": "482f3a3f6e7800ccb876ad3b89360d7c335f10fd6f17db0adb21e37686150c1c"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/selection-replay.log",
+      "bytes": 1179,
+      "sha256": "482f3a3f6e7800ccb876ad3b89360d7c335f10fd6f17db0adb21e37686150c1c"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/source-evidence-manifest.json",
+      "bytes": 2252,
+      "sha256": "9d8cddbb05a0c7a2a3e7ff2ebe0df2a852899531541d752a54f6017109a39626"
+    },
+    {
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/supabase-changelog.md",
+      "bytes": 95260,
+      "sha256": "49b064520ad70f592ea4ffc25f456fcc981404dc925f0c499e21438719a07163"
+    }
+  ]
+}

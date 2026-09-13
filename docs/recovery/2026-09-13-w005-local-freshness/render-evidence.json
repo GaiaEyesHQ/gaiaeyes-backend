@@ -1,0 +1,60 @@
+{
+  "recorded_at": "2026-09-13T15:41:31.058955+00:00",
+  "inspection_window_utc": [
+    "2026-09-13T15:34:24Z",
+    "2026-09-13T15:41:31.058955+00:00"
+  ],
+  "surface": "Existing signed-in Chrome Render tab; read-only Runs and filtered Logs. Native apps were locked, but browser access worked. No Terminal/native app requested.",
+  "critical_service_url": "https://dashboard.render.com/cron/crn-d99r7pecjfls738o61mg/runs",
+  "deployed_commit": "9d7fcd2a6ec256d711f0931d0d5b22630ddada5a",
+  "schedule": "Every15 minutes; matches render-crons.yaml.",
+  "completed_runs": [
+    {
+      "scheduled_at": "2026-09-13T15:30:00Z",
+      "status": "Last successful run",
+      "duration": "5m12s",
+      "logs_url": "https://dashboard.render.com/cron/crn-d99r7pecjfls738o61mg/logs?r=2026-09-13%4015%3A29%3A15%7E2026-09-13%4015%3A36%3A27"
+    },
+    {
+      "scheduled_at": "2026-09-13T15:15:00Z",
+      "status": "Run succeeded",
+      "duration": "4m16s",
+      "logs_url": "https://dashboard.render.com/cron/crn-d99r7pecjfls738o61mg/logs?r=2026-09-13%4015%3A14%3A01%7E2026-09-13%4015%3A20%3A17"
+    },
+    {
+      "scheduled_at": "2026-09-13T15:00:00Z",
+      "status": "Run succeeded",
+      "duration": "4m43s"
+    }
+  ],
+  "selected_1515_log_evidence": [
+    {
+      "at_utc": "2026-09-13T15:15:53Z",
+      "message": "INFO:__main__:[poll] cached local snapshot zip=78754",
+      "display_time": "10:15:53 AM CDT",
+      "filter": "78754"
+    },
+    {
+      "at_utc": "2026-09-13T15:17:49Z",
+      "message": "[poll] done mode=current stats={'locations': 37, 'current_updated': 37, 'forecast_updated': 0, 'failures': 0, 'cached_fallbacks': 0}"
+    },
+    {
+      "at_utc": "2026-09-13T15:17:49.488Z",
+      "message": "[cron] done lane=critical step=local_current seconds=145.3"
+    },
+    {
+      "at_utc": "2026-09-13T15:19:14.448Z",
+      "message": "[cron] lane=critical ok steps=8 seconds=248.3"
+    },
+    {
+      "at_utc": "2026-09-13T15:19:17Z",
+      "message": "Cron job run finished successfully"
+    }
+  ],
+  "limitations": [
+    "The initial15:30 row was still in progress; it was only classified completed after the later Runs view showed Last successful run.",
+    "Log extraction was restricted to weather/ZIP and lane completion; unrelated user-specific gauge log lines were not retained.",
+    "These completed runs do not establish continuous reliability or resolve historical endpoint timeouts."
+  ],
+  "production_actions": []
+}

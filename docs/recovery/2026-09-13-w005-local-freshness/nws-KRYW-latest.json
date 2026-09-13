@@ -1,0 +1,172 @@
+{
+  "url": "https://api.weather.gov/stations/KRYW/observations/latest",
+  "started_at": "2026-09-13T15:37:21.751996+00:00",
+  "attempts": 1,
+  "status": 200,
+  "body_sha256": "175ecf5c35893aa8a997a5f168fa7861122987990b9a3886d47a27a3eed785e9",
+  "headers": {
+    "Last-Modified": "Sun, 13 Sep 2026 05:54:58 GMT",
+    "Cache-Control": "public, max-age=300, s-maxage=300",
+    "Expires": "Sun, 13 Sep 2026 15:42:22 GMT",
+    "Date": "Sun, 13 Sep 2026 15:37:22 GMT"
+  },
+  "payload": {
+    "@context": [
+      "https://geojson.org/geojson-ld/geojson-context.jsonld",
+      {
+        "@version": "1.1",
+        "wx": "https://api.weather.gov/ontology#",
+        "s": "https://schema.org/",
+        "geo": "http://www.opengis.net/ont/geosparql#",
+        "unit": "http://codes.wmo.int/common/unit/",
+        "@vocab": "https://api.weather.gov/ontology#",
+        "geometry": {
+          "@id": "s:GeoCoordinates",
+          "@type": "geo:wktLiteral"
+        },
+        "city": "s:addressLocality",
+        "state": "s:addressRegion",
+        "distance": {
+          "@id": "s:Distance",
+          "@type": "s:QuantitativeValue"
+        },
+        "bearing": {
+          "@type": "s:QuantitativeValue"
+        },
+        "value": {
+          "@id": "s:value"
+        },
+        "unitCode": {
+          "@id": "s:unitCode",
+          "@type": "@id"
+        },
+        "forecastOffice": {
+          "@type": "@id"
+        },
+        "forecastGridData": {
+          "@type": "@id"
+        },
+        "publicZone": {
+          "@type": "@id"
+        },
+        "county": {
+          "@type": "@id"
+        }
+      }
+    ],
+    "id": "https://api.weather.gov/stations/KRYW/observations/2026-09-13T05:55:00+00:00",
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [
+        -97.97,
+        30.5
+      ]
+    },
+    "properties": {
+      "@id": "https://api.weather.gov/stations/KRYW/observations/2026-09-13T05:55:00+00:00",
+      "@type": "wx:ObservationStation",
+      "elevation": {
+        "unitCode": "wmoUnit:m",
+        "value": 375
+      },
+      "station": "https://api.weather.gov/stations/KRYW",
+      "stationId": "KRYW",
+      "stationName": "Lago Vista TX, Rusty Allen Airport",
+      "timestamp": "2026-09-13T05:55:00+00:00",
+      "rawMessage": "KRYW 130555Z AUTO 18007KT 160V230 10SM CLR 27/23 A3004 RMK AO2 T02680230 10335 20268 403660243",
+      "textDescription": "Clear",
+      "icon": "https://api.weather.gov/icons/land/night/skc?size=medium",
+      "presentWeather": [],
+      "temperature": {
+        "unitCode": "wmoUnit:degC",
+        "value": 26.8,
+        "qualityControl": "V"
+      },
+      "dewpoint": {
+        "unitCode": "wmoUnit:degC",
+        "value": 23,
+        "qualityControl": "V"
+      },
+      "windDirection": {
+        "unitCode": "wmoUnit:degree_(angle)",
+        "value": 180,
+        "qualityControl": "V"
+      },
+      "windSpeed": {
+        "unitCode": "wmoUnit:km_h-1",
+        "value": 12.96,
+        "qualityControl": "V"
+      },
+      "windGust": {
+        "unitCode": "wmoUnit:km_h-1",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "barometricPressure": {
+        "unitCode": "wmoUnit:Pa",
+        "value": 101730,
+        "qualityControl": "V"
+      },
+      "seaLevelPressure": {
+        "unitCode": "wmoUnit:Pa",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "visibility": {
+        "unitCode": "wmoUnit:m",
+        "value": 16090,
+        "qualityControl": "C"
+      },
+      "maxTemperatureLast24Hours": {
+        "unitCode": "wmoUnit:degC",
+        "value": null
+      },
+      "minTemperatureLast24Hours": {
+        "unitCode": "wmoUnit:degC",
+        "value": null
+      },
+      "precipitationLastHour": {
+        "unitCode": "wmoUnit:mm",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "precipitationLast3Hours": {
+        "unitCode": "wmoUnit:mm",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "precipitationLast6Hours": {
+        "unitCode": "wmoUnit:mm",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "relativeHumidity": {
+        "unitCode": "wmoUnit:percent",
+        "value": 79.712423428125,
+        "qualityControl": "V"
+      },
+      "windChill": {
+        "unitCode": "wmoUnit:degC",
+        "value": null,
+        "qualityControl": "V"
+      },
+      "heatIndex": {
+        "unitCode": "wmoUnit:degC",
+        "value": 29.27879556718278,
+        "qualityControl": "V"
+      },
+      "cloudLayers": [
+        {
+          "base": {
+            "unitCode": "wmoUnit:m",
+            "value": null
+          },
+          "amount": "CLR"
+        }
+      ]
+    }
+  },
+  "completed_at": "2026-09-13T15:37:22.022883+00:00",
+  "seconds": 0.271
+}

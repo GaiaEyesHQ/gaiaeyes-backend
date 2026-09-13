@@ -1,0 +1,115 @@
+{
+  "assignment_id": "W-005",
+  "project": "gaia",
+  "task_id": "01a074da-1e28-7772-92b7-2b0163664c13",
+  "task_title": "Audit Gaia Eyes project state",
+  "updated_at": "2026-09-13T15:44:20.725576+00:00",
+  "status": "review_ready",
+  "summary": "W005 diagnosis complete: intermittent weather-age breaches align with roughly15-minute cache refreshes carrying older NWS observations. Latest public sample15:35:52UTC recovered at20.87min. Captured-source replay matches KEDC; no source defect or patch. G016/H13 unchanged.",
+  "current_slice": "Bounded public/cache/provider diagnosis complete; timestamped evidence and one offline selection replay ready for review.",
+  "next_slice": "Accept this bounded diagnosis and continue the existing watch at the unchanged30-minute threshold. Use a future naturally observed breach to pair exact provider timestamps and cache age if stronger attribution is needed; no cron retry or deployment is justified by this evidence.",
+  "artifacts": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness",
+  "preserved_g016_report": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/preserved-g016/gaia-report.json",
+  "preserved_g016_handoff": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/preserved-g016/HANDOFF.md",
+  "g016_h13": {
+    "status": "needs_human",
+    "dependency": "H13",
+    "unchanged": true,
+    "native_execution_authorized": false
+  },
+  "boundaries": [
+    "No production retry/deploy, threshold relaxation, new monitor or notification send.",
+    "No native/iOS/G016 diagnostic execution or Terminal denial bypass.",
+    "Root owns portfolio state and human questions."
+  ],
+  "human_input_required_for_this_checkpoint": [],
+  "phase_checkpoint": {
+    "reported_at": "2026-09-13T15:44:20.725576+00:00",
+    "phase": "Complete diagnosis, frozen for independent review.",
+    "completed_evidence": [
+      {
+        "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/cache-history-mcp-result.json",
+        "sampled_at": "2026-09-13T10:19:30.000837Z",
+        "scope": "24 ZIP78754 weather cache rows only; newest cache10:16:14, embedded observation10:05; regular roughly15-minute writes."
+      },
+      {
+        "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/gaia-freshness-followup.json",
+        "sampled_at": "2026-09-13T09:15:34.960088Z",
+        "scope": "Root sampled observation08:40 at age35.58 minutes."
+      }
+    ],
+    "watch_context": "Existing watch sampled green at08:03:16 with07:35 observation age28.27 minutes, between the05:59 and09:15 sampled breaches. No continuous-outage claim.",
+    "tool_state": "No pending execution; all bounded probes and offline replay completed.",
+    "execution_limitations": [
+      "Tool-return gaps occurred; active status does not establish continuous work.",
+      "No native/iOS/G016 work; Terminal denial remains unchanged."
+    ],
+    "next_bounded_action": "Independent review of the diagnosis; no further live probes in W005."
+  },
+  "review_scope": "Read-only local-weather freshness diagnosis; no backend patch or production action.",
+  "review_evidence": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/DIAGNOSIS.md",
+  "diagnosis": {
+    "assignment_id": "W-005",
+    "recorded_at": "2026-09-13T15:44:20.725576+00:00",
+    "status": "review_ready",
+    "diagnosis_complete": true,
+    "severity": "MEDIUM intermittent sampled local-weather freshness breaches; recovered latest observed sample",
+    "first_observed_in_assigned_samples": "2026-09-13T05:59:27Z",
+    "continuous_outage_established": false,
+    "latest_public_sample": {
+      "at": "2026-09-13T15:35:51.944465+00:00",
+      "status": 200,
+      "observation": "2026-09-13T15:15:00+00:00",
+      "weather_age_minutes": 20.865741083333333,
+      "forecast_days": 7,
+      "endpoint_seconds": 2.801,
+      "health_live": true,
+      "health_ready_db": true
+    },
+    "confirmed_findings": [
+      "24 cache writes at14.38\u201315.45-minute spacing; no missing write in the captured04:31\u201310:16 interval.",
+      "The two assigned breaches match observations already21.35/21.73 minutes old at cache write, then13.10/13.85 minutes of cache age.",
+      "At15:37 UTC the freshest of five NWS latest endpoints was15:15; offline current-source selection chooses KEDC and matches public core weather fields.",
+      "Render shows naturally completed15:15 and15:30 critical cycles; selected15:15 local_current updated37/37 with0 failures."
+    ],
+    "likely_cause": "Provider observation age plus the existing15-minute acquisition cadence, rather than a stopped cache writer or demonstrated stale-selection bug.",
+    "unverified": [
+      "Exact provider availability/station selection at05:59 and09:15 breach times was not captured.",
+      "Earlier20-second endpoint timeout cause and sustained latency are not established by the2.801-second successful sample.",
+      "Current recovery does not establish sustained reliability or guarantee weather stays within30 minutes between cycles."
+    ],
+    "backend_patch_prepared": false,
+    "threshold_changed": false,
+    "production_mutations_triggered": false,
+    "new_monitor_created": false,
+    "offline_replays": 1,
+    "replay_passed": true,
+    "g016_h13_unchanged": true,
+    "safest_next_action": "Accept this bounded diagnosis and continue the existing watch at the unchanged30-minute threshold. Use a future naturally observed breach to pair exact provider timestamps and cache age if stronger attribution is needed; no cron retry or deployment is justified by this evidence.",
+    "handoff": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/docs/recovery/2026-09-13-w005-local-freshness/DIAGNOSIS.md"
+  },
+  "verification": {
+    "bounded_select_queries": 3,
+    "cache_history_rows": 24,
+    "latest_cache_rows": 1,
+    "backend_gets": 3,
+    "nws_gets": 7,
+    "offline_replays": 1,
+    "replay_passed": true,
+    "diff_check": true,
+    "source_files_changed": false,
+    "tests_or_monitors_repeated": false,
+    "native_execution": false
+  },
+  "completed": [
+    "Preserved G016 report/handoff and atomically published W005/running.",
+    "Recovered latest watch and root samples without treating gaps as continuous outage.",
+    "Compared cache write and embedded observation timestamps, natural Render cycle and five NWS sources.",
+    "Replayed current selector offline with captured provider data; public weather match passed.",
+    "Prepared complete diagnosis with no patch; preserved concurrent stability edits."
+  ],
+  "remaining": [
+    "Independent review of diagnosis.",
+    "Ongoing operational limitation remains with the existing watch; no new monitor or automatic retry."
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "replayed_at": "2026-09-13T15:40:07.492705+00:00",
+  "source_path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/services/external/nws.py",
+  "source_sha256": "af336e8d8ec296279b3823771d48cfd6eea58f10c1852cc378591527583718d3",
+  "captured_provider_time": "2026-09-13T15:37:22.148572+00:00",
+  "offline_replays": 1,
+  "selected": {
+    "temp_c": 30.6,
+    "humidity_pct": 66.701834456934,
+    "pressure_hpa": 1018.0,
+    "obs_time": "2026-09-13T15:15:00+00:00"
+  },
+  "matching_station_candidates": [
+    "KEDC"
+  ],
+  "public_core_weather_fields_match": true,
+  "fixture_requests": [
+    "https://api.weather.gov/gridpoints/EWX/159,94/stations",
+    "https://api.weather.gov/stations/KATT/observations/latest",
+    "https://api.weather.gov/stations/KEDC/observations/latest",
+    "https://api.weather.gov/stations/KAUS/observations/latest",
+    "https://api.weather.gov/stations/KT74/observations/latest",
+    "https://api.weather.gov/stations/KRYW/observations/latest"
+  ],
+  "live_requests": 0,
+  "database_access": false,
+  "passed": true,
+  "limitation": "Replays the captured provider set only; does not prove which station was available at earlier breach times."
+}

@@ -1,0 +1,164 @@
+{
+  "url": "https://api.weather.gov/stations/KT74/observations/latest",
+  "started_at": "2026-09-13T15:37:21.749768+00:00",
+  "attempts": 1,
+  "status": 200,
+  "body_sha256": "c3c7f108c6cb9984e8c68280c9fcffa42e2cc52a7a8130a0d7b3f90f41221356",
+  "headers": {
+    "Last-Modified": "Sun, 13 Sep 2026 15:14:58 GMT",
+    "Cache-Control": "public, max-age=300, s-maxage=300",
+    "Expires": "Sun, 13 Sep 2026 15:42:22 GMT",
+    "Date": "Sun, 13 Sep 2026 15:37:22 GMT"
+  },
+  "payload": {
+    "@context": [
+      "https://geojson.org/geojson-ld/geojson-context.jsonld",
+      {
+        "@version": "1.1",
+        "wx": "https://api.weather.gov/ontology#",
+        "s": "https://schema.org/",
+        "geo": "http://www.opengis.net/ont/geosparql#",
+        "unit": "http://codes.wmo.int/common/unit/",
+        "@vocab": "https://api.weather.gov/ontology#",
+        "geometry": {
+          "@id": "s:GeoCoordinates",
+          "@type": "geo:wktLiteral"
+        },
+        "city": "s:addressLocality",
+        "state": "s:addressRegion",
+        "distance": {
+          "@id": "s:Distance",
+          "@type": "s:QuantitativeValue"
+        },
+        "bearing": {
+          "@type": "s:QuantitativeValue"
+        },
+        "value": {
+          "@id": "s:value"
+        },
+        "unitCode": {
+          "@id": "s:unitCode",
+          "@type": "@id"
+        },
+        "forecastOffice": {
+          "@type": "@id"
+        },
+        "forecastGridData": {
+          "@type": "@id"
+        },
+        "publicZone": {
+          "@type": "@id"
+        },
+        "county": {
+          "@type": "@id"
+        }
+      }
+    ],
+    "id": "https://api.weather.gov/stations/KT74/observations/2026-09-13T15:15:00+00:00",
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [
+        -97.45,
+        30.57
+      ]
+    },
+    "properties": {
+      "@id": "https://api.weather.gov/stations/KT74/observations/2026-09-13T15:15:00+00:00",
+      "@type": "wx:ObservationStation",
+      "elevation": {
+        "unitCode": "wmoUnit:m",
+        "value": 169
+      },
+      "station": "https://api.weather.gov/stations/KT74",
+      "stationId": "KT74",
+      "stationName": "Taylor Municipal Airport",
+      "timestamp": "2026-09-13T15:15:00+00:00",
+      "rawMessage": "",
+      "textDescription": "",
+      "icon": null,
+      "presentWeather": [],
+      "temperature": {
+        "unitCode": "wmoUnit:degC",
+        "value": 30,
+        "qualityControl": "V"
+      },
+      "dewpoint": {
+        "unitCode": "wmoUnit:degC",
+        "value": 24,
+        "qualityControl": "V"
+      },
+      "windDirection": {
+        "unitCode": "wmoUnit:degree_(angle)",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "windSpeed": {
+        "unitCode": "wmoUnit:km_h-1",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "windGust": {
+        "unitCode": "wmoUnit:km_h-1",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "barometricPressure": {
+        "unitCode": "wmoUnit:Pa",
+        "value": 101930.3,
+        "qualityControl": "V"
+      },
+      "seaLevelPressure": {
+        "unitCode": "wmoUnit:Pa",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "visibility": {
+        "unitCode": "wmoUnit:m",
+        "value": 16093.44,
+        "qualityControl": "C"
+      },
+      "maxTemperatureLast24Hours": {
+        "unitCode": "wmoUnit:degC",
+        "value": null
+      },
+      "minTemperatureLast24Hours": {
+        "unitCode": "wmoUnit:degC",
+        "value": null
+      },
+      "precipitationLastHour": {
+        "unitCode": "wmoUnit:mm",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "precipitationLast3Hours": {
+        "unitCode": "wmoUnit:mm",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "precipitationLast6Hours": {
+        "unitCode": "wmoUnit:mm",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "relativeHumidity": {
+        "unitCode": "wmoUnit:percent",
+        "value": 70.293061425925,
+        "qualityControl": "V"
+      },
+      "windChill": {
+        "unitCode": "wmoUnit:degC",
+        "value": null,
+        "qualityControl": "V"
+      },
+      "heatIndex": {
+        "unitCode": "wmoUnit:degC",
+        "value": 35.109046890103336,
+        "qualityControl": "V"
+      },
+      "cloudLayers": []
+    }
+  },
+  "completed_at": "2026-09-13T15:37:22.008337+00:00",
+  "seconds": 0.259
+}

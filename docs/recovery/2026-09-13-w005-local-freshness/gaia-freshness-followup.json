@@ -1,0 +1,35 @@
+{
+  "reason": "Follow-up to production watch September13 05:59:27 UTC local-current freshness breach after subsequent natural cycles; one read per endpoint, no retry or production action.",
+  "samples": [
+    {
+      "path": "/health/live",
+      "status": 200,
+      "sampled_at": "2026-09-13T09:15:32.324231+00:00",
+      "seconds": 0.387,
+      "body_sha256": "c08ad968016e5dce54d849e1f2f431e7df86fc02fdb301658cb1b69d601c9022",
+      "ok": true,
+      "live": true
+    },
+    {
+      "path": "/health",
+      "status": 200,
+      "sampled_at": "2026-09-13T09:15:32.325112+00:00",
+      "seconds": 0.387,
+      "body_sha256": "5295e0fb1eb5c1812de4a81aebb3f95769b1cfa16c8a02a39377171ebd018cca",
+      "ok": true,
+      "db": true
+    },
+    {
+      "path": "/v1/local/check?zip=78754",
+      "status": 200,
+      "sampled_at": "2026-09-13T09:15:34.960088+00:00",
+      "seconds": 3.022,
+      "body_sha256": "849eb20acd5003c92ee0897e84e46ef603c58b6a0ad29a772d4ee608237e1fe7",
+      "asof": "2026-09-13T08:40:00+00:00",
+      "weather_obs_time": "2026-09-13T08:40:00+00:00",
+      "forecast_days": 6,
+      "weather_age_minutes": 35.58266813333333,
+      "within_30_minutes": false
+    }
+  ]
+}
