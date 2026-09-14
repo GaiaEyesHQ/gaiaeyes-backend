@@ -1,0 +1,47 @@
+[
+  {
+    "id": 104068345436,
+    "name": "Morning window gate",
+    "status": "completed",
+    "conclusion": "success",
+    "started_at": "2026-09-14T16:55:00Z",
+    "completed_at": "2026-09-14T16:55:04Z",
+    "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34871536122/job/104068345436"
+  },
+  {
+    "id": 104068385736,
+    "name": "Generate Earthscope \u2192 Supabase",
+    "status": "completed",
+    "conclusion": "success",
+    "started_at": "2026-09-14T16:55:07Z",
+    "completed_at": "2026-09-14T16:56:13Z",
+    "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34871536122/job/104068385736"
+  },
+  {
+    "id": 104068778473,
+    "name": "Render Images \u2192 Media Repo",
+    "status": "completed",
+    "conclusion": "failure",
+    "started_at": "2026-09-14T16:56:16Z",
+    "completed_at": "2026-09-14T16:57:22Z",
+    "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34871536122/job/104068778473"
+  },
+  {
+    "id": 104069166197,
+    "name": "Post Square + Carousel",
+    "status": "completed",
+    "conclusion": "skipped",
+    "started_at": "2026-09-14T16:57:23Z",
+    "completed_at": "2026-09-14T16:57:23Z",
+    "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34871536122/job/104069166197"
+  },
+  {
+    "id": 104069166581,
+    "name": "Build Reel \u2192 Supabase",
+    "status": "completed",
+    "conclusion": "skipped",
+    "started_at": "2026-09-14T16:57:23Z",
+    "completed_at": "2026-09-14T16:57:23Z",
+    "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34871536122/job/104069166581"
+  }
+]

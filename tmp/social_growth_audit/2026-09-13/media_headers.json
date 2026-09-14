@@ -1,0 +1,37 @@
+{
+  "daily_caption.jpg": {
+    "Content-Type": "image/jpeg",
+    "Content-Length": "146462",
+    "Cache-Control": "no-cache",
+    "ETag": "\"e4d3d0656e69d089163b4cd19bf31028\"",
+    "Last-Modified": "Sun, 13 Sep 2026 14:55:02 GMT"
+  },
+  "daily_stats.jpg": {
+    "Content-Type": "image/jpeg",
+    "Content-Length": "139379",
+    "Cache-Control": "no-cache",
+    "ETag": "\"89225a4ba5ff6ace0422cc0bf7431c3d\"",
+    "Last-Modified": "Sun, 13 Sep 2026 14:55:04 GMT"
+  },
+  "daily_affects.jpg": {
+    "Content-Type": "image/jpeg",
+    "Content-Length": "186102",
+    "Cache-Control": "no-cache",
+    "ETag": "\"b2a8bd32468508e4e538b24d0c435181\"",
+    "Last-Modified": "Sun, 13 Sep 2026 14:55:02 GMT"
+  },
+  "daily_playbook.jpg": {
+    "Content-Type": "image/jpeg",
+    "Content-Length": "211861",
+    "Cache-Control": "no-cache",
+    "ETag": "\"e62fb263fdbcfe9f4f7e6ffeaf078e57\"",
+    "Last-Modified": "Sun, 13 Sep 2026 14:55:04 GMT"
+  },
+  "latest.mp4": {
+    "Content-Type": "video/mp4",
+    "Content-Length": "972940",
+    "Cache-Control": "no-cache",
+    "ETag": "\"b522d48510e0b70ef5945350ecc5afb2\"",
+    "Last-Modified": "Sun, 13 Sep 2026 14:56:27 GMT"
+  }
+}

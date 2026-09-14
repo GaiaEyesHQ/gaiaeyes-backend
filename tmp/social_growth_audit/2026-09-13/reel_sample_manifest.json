@@ -1,0 +1,13 @@
+{
+  "fps": 30.0,
+  "frame_count": 389.0,
+  "duration_sec": 12.966666666666667,
+  "samples": [
+    "tmp/social_growth_audit/2026-09-13/reel_frame_0.5s.jpg",
+    "tmp/social_growth_audit/2026-09-13/reel_frame_3.5s.jpg",
+    "tmp/social_growth_audit/2026-09-13/reel_frame_6.5s.jpg",
+    "tmp/social_growth_audit/2026-09-13/reel_frame_9.5s.jpg",
+    "tmp/social_growth_audit/2026-09-13/reel_frame_12.0s.jpg"
+  ],
+  "contact_sheet": "tmp/social_growth_audit/2026-09-13/contact_sheet.jpg"
+}
