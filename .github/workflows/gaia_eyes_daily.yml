@@ -338,7 +338,18 @@ jobs:
             exit 0
           fi
           git commit -m "Update EarthScope daily JSON"
-          git push origin main
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              # Other media workflows may have advanced main during rendering.
+              # Stop on conflicts so a competing daily JSON is never overwritten.
+              git pull --rebase origin main
+            fi
+          done
+          echo "ERROR: Could not publish EarthScope daily JSON after 3 attempts."
+          exit 1
       - name: Get media repo commit sha
         id: media_sha
         run: |
