@@ -62,6 +62,19 @@ data class CurrentSymptomItem(
     val gaugeKeys: List<String> = emptyList(),
     @SerialName("current_context_badge")
     val currentContextBadge: String? = null,
+    @SerialName("pending_follow_up")
+    val pendingFollowUp: CurrentSymptomPendingFollowUp? = null,
+)
+
+@Serializable
+data class CurrentSymptomPendingFollowUp(
+    val id: String = "",
+    @SerialName("episode_id") val episodeId: String = "",
+    @SerialName("symptom_code") val symptomCode: String = "",
+    @SerialName("question_text") val questionText: String = "",
+    val status: String? = null,
+    @SerialName("scheduled_for") val scheduledFor: String? = null,
+    @SerialName("delivered_at") val deliveredAt: String? = null,
 )
 
 @Serializable

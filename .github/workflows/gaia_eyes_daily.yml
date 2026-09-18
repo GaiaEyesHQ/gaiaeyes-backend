@@ -529,6 +529,7 @@ jobs:
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       MEDIA_CDN_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      REEL_VOICE_ENABLED: "0" # Owner-selected music only; narration deferred.
       IG_USER_ID: ${{ secrets.IG_USER_ID }}
       FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
       FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
@@ -606,22 +607,15 @@ jobs:
             exit 1
           fi
 
-      - name: Debug VO env
-        working-directory: bots/earthscope_post
-        env:
-          REEL_TTS_MODEL: gpt-4o-mini-tts
-          REEL_TTS_VOICE: marin
-        run: |
-          echo "OPENAI_API_KEY present: ${{ secrets.OPENAI_API_KEY != '' }}"
-          echo "REEL_TTS_MODEL: $REEL_TTS_MODEL"
-          echo "REEL_TTS_VOICE: $REEL_TTS_VOICE"
+      - name: Log reel audio mode
+        run: echo "REEL_VOICE_ENABLED=$REEL_VOICE_ENABLED (0 = music only)"
       - name: Build reel (reel_builder.py)
         working-directory: bots/earthscope_post
         env:
           REEL_MEDIA_BASE: ${{ env.MEDIA_CDN_BASE }}
           REEL_VO_LEAD_PAD_SEC: "0.15"
           REEL_VO_TAIL_PAD_SEC: "0.8"
-          REEL_BED_URL: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/music/bed01.wav
+          REEL_BED_URL: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/audio/beds/bed01.wav
           REEL_OUT: ${{ github.workspace }}/reel.mp4
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           REEL_TTS_MODEL: gpt-4o-mini-tts
@@ -632,9 +626,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Building reel — using staged images at ${GITHUB_WORKSPACE}/reel_media/images"
-          python reel_builder.py \
-            --bed-url "${REEL_BED_URL}" \
-            --out "${REEL_OUT}"
+          python reel_builder.py
           test -s "${REEL_OUT}"
 
       - name: Validate reel artifact (ffprobe)

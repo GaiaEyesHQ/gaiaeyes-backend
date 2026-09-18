@@ -9,6 +9,7 @@ import com.gaiaeyes.app.core.auth.AuthState
 import com.gaiaeyes.app.core.network.DailyCheckInStatus
 import com.gaiaeyes.app.core.network.ExposureCatalogOption
 import com.gaiaeyes.app.core.network.CurrentSymptomUpdateRequest
+import com.gaiaeyes.app.core.network.CurrentSymptomItem
 import com.gaiaeyes.app.core.network.ProfileLocation
 import com.gaiaeyes.app.core.network.SymptomCodeOption
 import com.gaiaeyes.app.core.network.ProfileLocationUpdate
@@ -64,6 +65,19 @@ class HomeViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val migraineSummaryStore = MigraineSummaryStore(
+        viewModelScope, authRepository::currentAccountId, homeContextRepository::savedMigraineDetail,
+    )
+    internal val savedMigraineSummary = migraineSummaryStore.state
+    internal val migraineFollowUp = MigraineFollowUpFormController(
+        viewModelScope, authRepository::currentAccountId, { _uiState.value.currentSymptoms },
+        homeContextRepository.migraineFollowUpRepository(),
+        onSaved = { accountId -> if (isCurrentAccount(accountId)) loadHomeContext(accountId, showCachedFirst = false) },
+    )
+    internal val migraineMedicine = MigraineMedicineController(
+        viewModelScope, authRepository::currentAccountId, migraineSummaryStore.state,
+        homeContextRepository.migraineMedicineRepository(), migraineSummaryStore::acceptMedicineEdit,
+    )
 
     private var dashboardJob: Job? = null
     private var bodyJob: Job? = null
@@ -97,6 +111,17 @@ class HomeViewModel(
             quickLogCoordinator.pending.collect(::maybeHandleQuickLog)
         }
     }
+
+    internal fun openSavedMigraineSummary(item: CurrentSymptomItem) {
+        val account = _uiState.value.authState as? AuthState.SignedIn ?: return
+        val snapshot = _uiState.value.currentSymptoms ?: return
+        if (snapshot.accountId != account.accountId) return
+        val savedItem = snapshot.symptoms.items.firstOrNull { it.id == item.id } ?: return
+        migraineSummaryStore.open(account.accountId, savedItem)
+    }
+
+    internal fun retrySavedMigraineSummary() = migraineSummaryStore.retry()
+    internal fun closeSavedMigraineSummary() = migraineSummaryStore.close()
 
     fun onEmailChanged(email: String) {
         _uiState.value = _uiState.value.copy(
@@ -679,6 +704,9 @@ class HomeViewModel(
             return
         }
 
+        migraineSummaryStore.close()
+        migraineFollowUp.clear()
+        migraineMedicine.clear()
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSigningOut = true, authMessage = null)
             runCatching {
@@ -692,6 +720,8 @@ class HomeViewModel(
                 outlookRepository.clear(account.accountId)
                 patternsRepository.clear(account.accountId)
                 authRepository.signOut()
+            }.onSuccess {
+                _uiState.value = _uiState.value.copy(isSigningOut = false)
             }.onFailure {
                 _uiState.value = _uiState.value.copy(
                     isSigningOut = false,
@@ -1005,11 +1035,26 @@ class HomeViewModel(
     }
 
     private fun handleAuthState(authState: AuthState) {
+        val previousAccount = (_uiState.value.authState as? AuthState.SignedIn)?.accountId
+        if (authState is AuthState.SignedIn && previousAccount != null && previousAccount != authState.accountId) {
+            // Reuse the local signed-out reset before loading a replacement account.
+            // Otherwise a cache miss can keep the previous account's visible content.
+            handleAuthState(AuthState.SignedOut)
+        }
         val currentAuthState = _uiState.value.authState
-        if (shouldPreserveSignedInSurface(currentAuthState, authState, loadedAccountId)) {
+        val preserveSurface = shouldPreserveSignedInSurface(currentAuthState, authState, loadedAccountId)
+        migraineSummaryStore.accountChanged(
+            if (preserveSurface) authRepository.currentAccountId() else (authState as? AuthState.SignedIn)?.accountId,
+        )
+        migraineFollowUp.accountChanged(
+            if (preserveSurface) authRepository.currentAccountId() else (authState as? AuthState.SignedIn)?.accountId,
+        )
+        migraineMedicine.accountChanged(
+            if (preserveSurface) authRepository.currentAccountId() else (authState as? AuthState.SignedIn)?.accountId,
+        )
+        if (preserveSurface) {
             _uiState.value = _uiState.value.copy(
                 authState = currentAuthState,
-                isSigningOut = false,
                 isStartingGuest = false,
                 authMessage = if (authState is AuthState.SessionProblem) {
                     TRANSIENT_SESSION_MESSAGE
@@ -1022,7 +1067,8 @@ class HomeViewModel(
 
         _uiState.value = _uiState.value.copy(
             authState = authState,
-            isSigningOut = false,
+            // Auth refreshes do not complete an in-flight sign-out operation.
+            isSigningOut = _uiState.value.isSigningOut && authState != AuthState.SignedOut,
             isStartingGuest = false,
             authMessage = if (
                 authState is AuthState.SignedIn &&
@@ -1899,6 +1945,13 @@ class HomeViewModel(
                 backendDetail = health.detail,
             )
         }
+    }
+
+    override fun onCleared() {
+        migraineSummaryStore.close()
+        migraineFollowUp.clear()
+        migraineMedicine.clear()
+        super.onCleared()
     }
 
     private fun isCurrentAccount(accountId: String): Boolean {

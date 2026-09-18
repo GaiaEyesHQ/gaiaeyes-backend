@@ -51,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -156,6 +157,9 @@ fun GaiaEyesApp(
         ),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val savedMigraineSummary by viewModel.savedMigraineSummary.collectAsStateWithLifecycle()
+    val migraineFollowUpState by viewModel.migraineFollowUp.state.collectAsStateWithLifecycle()
+    val migraineMedicineState by viewModel.migraineMedicine.state.collectAsStateWithLifecycle()
     val notificationNavigation by notificationNavigationCoordinator.pending.collectAsStateWithLifecycle()
     var showGuide by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
@@ -229,11 +233,16 @@ fun GaiaEyesApp(
         viewModel.syncNotificationRegistration(canPostNotifications)
     }
 
-    LaunchedEffect(notificationNavigation, uiState.authState, uiState.onboardingStatus) {
+    LaunchedEffect(notificationNavigation, uiState.authState, uiState.isSigningOut, uiState.onboardingStatus, migraineFollowUpState.phase, migraineMedicineState.phase) {
         val request = notificationNavigation ?: return@LaunchedEffect
-        if (uiState.authState !is AuthState.SignedIn || uiState.onboardingStatus != OnboardingStatus.COMPLETE) {
+        // Defer navigation until the kept response is explicitly closed or discarded.
+        if (migraineFollowUpState.phase != MigraineFollowUpPhase.CLOSED) return@LaunchedEffect
+        if (migraineMedicineState.phase != MigraineMedicinePhase.CLOSED) return@LaunchedEffect
+        if (uiState.isSigningOut || uiState.authState !is AuthState.SignedIn || uiState.onboardingStatus != OnboardingStatus.COMPLETE) {
             return@LaunchedEffect
         }
+        // A same-destination route must return to the list, not retain a saved summary.
+        viewModel.closeSavedMigraineSummary()
         showGuide = false
         showSettings = false
         showCurrentSymptoms = false
@@ -361,6 +370,12 @@ fun GaiaEyesApp(
         } else if (showCurrentSymptoms) {
             CurrentSymptomsScreen(
                 uiState = uiState,
+                summaryState = savedMigraineSummary,
+                followUp = viewModel.migraineFollowUp,
+                medicineEditor = viewModel.migraineMedicine,
+                onOpenSavedSummary = viewModel::openSavedMigraineSummary,
+                onRetrySavedSummary = viewModel::retrySavedMigraineSummary,
+                onCloseSavedSummary = viewModel::closeSavedMigraineSummary,
                 onClose = { showCurrentSymptoms = false },
                 onRefresh = viewModel::refresh,
                 onLogSymptom = viewModel::openSymptomLog,
@@ -2215,6 +2230,12 @@ private fun CurrentSymptomsSummaryCard(
 @Composable
 private fun CurrentSymptomsScreen(
     uiState: HomeUiState,
+    summaryState: MigraineSummaryState,
+    followUp: MigraineFollowUpFormController,
+    medicineEditor: MigraineMedicineController,
+    onOpenSavedSummary: (CurrentSymptomItem) -> Unit,
+    onRetrySavedSummary: () -> Unit,
+    onCloseSavedSummary: () -> Unit,
     onClose: () -> Unit,
     onRefresh: () -> Unit,
     onLogSymptom: () -> Unit,
@@ -2223,9 +2244,26 @@ private fun CurrentSymptomsScreen(
     onDismissMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var editingItem by remember { mutableStateOf<CurrentSymptomItem?>(null) }
-    var deletingItem by remember { mutableStateOf<CurrentSymptomItem?>(null) }
+    val accountId = (uiState.authState as? AuthState.SignedIn)?.accountId
+    var editingItem by remember(accountId) { mutableStateOf<CurrentSymptomItem?>(null) }
+    var deletingItem by remember(accountId) { mutableStateOf<CurrentSymptomItem?>(null) }
     val symptoms = uiState.currentSymptoms?.symptoms?.items.orEmpty()
+    val followUpState by followUp.state.collectAsStateWithLifecycle()
+    val followUpUi by followUp.ui.collectAsStateWithLifecycle()
+    if (followUpState.phase != MigraineFollowUpPhase.CLOSED && followUpState.accountId == accountId &&
+        followUpUi.selection?.accountId == accountId) {
+        androidx.compose.runtime.key(accountId, followUpState.episodeId, followUpState.promptId) {
+            MigraineFollowUpForm(followUpState, followUpUi, followUp, modifier)
+        }
+        return
+    }
+    DisposableEffect(accountId) {
+        onDispose { onCloseSavedSummary() }
+    }
+    if (summaryState.episodeId != null && summaryState.accountId == accountId) {
+        SavedMigraineSummaryScreen(summaryState, onCloseSavedSummary, onRetrySavedSummary, modifier, medicineEditor)
+        return
+    }
 
     BackHandler(onBack = onClose)
     ScreenFrame(modifier = modifier) {
@@ -2295,6 +2333,13 @@ private fun CurrentSymptomsScreen(
                         },
                         onEdit = { editingItem = item },
                         onDelete = { deletingItem = item },
+                        onFollowUp = if (migraineFollowUpSelection(accountId, uiState.currentSymptoms, item) != null) {
+                            { followUp.open(item) }
+                        } else null,
+                        onOpenSavedSummary = if (item.symptomCode == "MIGRAINE" &&
+                            accountId != null && uiState.currentSymptoms?.accountId == accountId) {
+                            { onOpenSavedSummary(item) }
+                        } else null,
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                 }
@@ -2368,6 +2413,8 @@ private fun CurrentSymptomEditorCard(
     onStateChange: (String) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onOpenSavedSummary: (() -> Unit)? = null,
+    onFollowUp: (() -> Unit)? = null,
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = GaiaRose.copy(alpha = 0.08f)),
@@ -2414,6 +2461,16 @@ private fun CurrentSymptomEditorCard(
                     lineHeight = 20.sp,
                 )
             }
+            onFollowUp?.let { open ->
+                Button(onClick = open, enabled = !isUpdating, modifier = Modifier.fillMaxWidth()) {
+                    Text("Answer migraine follow-up")
+                }
+            }
+            onOpenSavedSummary?.let { open ->
+                TextButton(onClick = open, enabled = !isUpdating, modifier = Modifier.fillMaxWidth()) {
+                    Text("View saved migraine summary", color = GaiaRose)
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2457,6 +2514,76 @@ private fun CurrentSymptomEditorCard(
                 }
                 TextButton(onClick = onDelete, enabled = !isUpdating) {
                     Text("Delete", color = Color(0xFFADB7C5))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SavedMigraineSummaryScreen(
+    state: MigraineSummaryState,
+    onClose: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    medicineEditor: MigraineMedicineController? = null,
+) {
+    val editState = medicineEditor?.state?.collectAsStateWithLifecycle()?.value
+    if (medicineEditor != null && editState != null && editState.phase != MigraineMedicinePhase.CLOSED &&
+        editState.accountId == state.accountId && editState.summarySelectionId == state.selectionId) {
+        MigraineMedicineScreen(editState, medicineEditor, modifier)
+        return
+    }
+    BackHandler(onBack = onClose)
+    ScreenFrame(modifier = modifier) {
+        ContentColumn(bottomPadding = 36.dp) {
+            Header(subtitle = "Saved migraine", trailing = {
+                TextButton(onClick = onClose) { Text("Close", color = GaiaRose) }
+            })
+            Spacer(Modifier.height(24.dp))
+            Text("Saved migraine summary", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("Saved information for this episode. You can edit medicines here; other changes are available in Current Symptoms.",
+                color = Color(0xFFB7C0CC), fontSize = 15.sp, lineHeight = 22.sp,
+                modifier = Modifier.padding(top = 8.dp, bottom = 18.dp))
+            when {
+                state.isLoading -> ContextLoadingRow("Loading saved episode…")
+                state.summary != null -> {
+                    val summary = state.summary
+                    if (medicineEditor?.canOpen(state.selectionId) == true) {
+                        Button(onClick = { medicineEditor.open(state.selectionId) }, modifier = Modifier.fillMaxWidth()) { Text("Edit medicines") }
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    Text("Times shown in ${summary.displayTimezone}", color = Color(0xFFB7C0CC), fontSize = 14.sp)
+                    if (!summary.hasStructuredDetails) {
+                        Text("This episode does not yet have saved structured details.", color = GaiaAmber,
+                            fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp))
+                    }
+                    summary.sections.forEach { section ->
+                        Spacer(Modifier.height(18.dp))
+                        Card(colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+                            shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(section.title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                                if (section.entries.isEmpty()) {
+                                    Text(section.emptyMessage, color = Color(0xFFB7C0CC), fontSize = 16.sp)
+                                }
+                                section.entries.forEachIndexed { index, entry ->
+                                    if (index > 0) HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                                    Text(entry.title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                    entry.lines.forEach { line ->
+                                        Text(line, color = Color(0xFFC4CCD7), fontSize = 15.sp, lineHeight = 22.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                state.problem != null -> Text(state.problem.message, color = GaiaAmber, fontSize = 16.sp, lineHeight = 24.sp)
+            }
+            if (!state.isLoading) {
+                Spacer(Modifier.height(18.dp))
+                Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (state.summary == null) "Retry read" else "Refresh saved summary")
                 }
             }
         }

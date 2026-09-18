@@ -20,7 +20,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
-class AuthRepository(
+// Open session boundary permits an isolated synthetic implementation without starting the SDK.
+open class AuthRepository(
     context: Context,
     supabaseUrl: String,
     supabaseAnonKey: String,
@@ -46,7 +47,7 @@ class AuthRepository(
             }
         }
 
-    val authState: Flow<AuthState> = client?.auth?.sessionStatus?.map(::mapSessionStatus)
+    open val authState: Flow<AuthState> = client?.auth?.sessionStatus?.map(::mapSessionStatus)
         ?: flowOf(AuthState.Unavailable)
 
     private val _deepLinkError = MutableStateFlow<String?>(null)
@@ -93,7 +94,7 @@ class AuthRepository(
         _deepLinkError.value = null
     }
 
-    suspend fun accessToken(): String {
+    open suspend fun accessToken(): String {
         val auth = requireClient().auth
         var session = auth.currentSessionOrNull()
             ?: error("Sign in before loading private Gaia Eyes data")
@@ -105,7 +106,7 @@ class AuthRepository(
         return session.accessToken
     }
 
-    suspend fun refreshAccessToken(): String {
+    open suspend fun refreshAccessToken(): String {
         val auth = requireClient().auth
         auth.currentSessionOrNull()
             ?: error("Sign in before refreshing your Gaia Eyes session")
@@ -114,9 +115,9 @@ class AuthRepository(
             ?: error("Your Gaia Eyes session could not be refreshed")
     }
 
-    fun currentAccountId(): String? = client?.auth?.currentUserOrNull()?.id
+    open fun currentAccountId(): String? = client?.auth?.currentUserOrNull()?.id
 
-    suspend fun signOut() {
+    open suspend fun signOut() {
         client?.auth?.signOut()
     }
 

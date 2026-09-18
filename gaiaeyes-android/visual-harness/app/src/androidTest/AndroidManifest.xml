@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission tools:node="removeAll" />
+    <application>
+        <provider tools:node="removeAll" />
+        <service tools:node="removeAll" />
+        <receiver tools:node="removeAll" />
+        <meta-data tools:node="removeAll" />
+    </application>
+</manifest>

@@ -14,6 +14,7 @@ from bots.earthscope_post.gaia_eyes_viral_bot import (
     _energy_from_tone_and_bands,
     _earthscope_hook_title,
     _format_public_playbook,
+    _align_stats_wind_with_post_metrics,
     _merge_post_metrics_into_features,
     _public_card_title,
     _public_card_text,
@@ -270,6 +271,39 @@ def test_post_metrics_merge_prefers_top_level_daily_values():
 
     assert feats["bz_min"] == pytest.approx(-6.8)
     assert feats["sw_speed_avg"] == pytest.approx(415.0)
+
+
+def test_stats_wind_alignment_uses_stored_daily_average_without_current():
+    feats = {"sw_speed_current": 536, "sw_speed_avg": 522}
+
+    _align_stats_wind_with_post_metrics(
+        feats,
+        {"solar_wind_kms": 522, "space_json": {"sw_now": None}},
+    )
+
+    assert "sw_speed_current" not in feats
+    rows = build_stats_rows(
+        {
+            **feats,
+            "kp_max": 4.0,
+            "bz_min": -5.2,
+            "sch_any_fundamental_avg_hz": 7.75,
+        },
+        "avg",
+    )
+    wind_row = _row_for_label(rows, "SW speed (avg)")
+    assert wind_row.display == "522 km/s"
+
+
+def test_stats_wind_alignment_preserves_explicit_current_from_post_metrics():
+    feats = {"sw_speed_current": 536, "sw_speed_avg": 522}
+
+    _align_stats_wind_with_post_metrics(
+        feats,
+        {"solar_wind_kms": 522, "space_json": {"sw_now": 536}},
+    )
+
+    assert feats["sw_speed_current"] == 536
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,609 @@
+{
+  "total_count": 5,
+  "jobs": [
+    {
+      "id": 104448277355,
+      "run_id": 34988954778,
+      "workflow_name": "Gaia Eyes — Daily Pipeline",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOPXTBVs8AAAAYUZo7aw",
+      "head_sha": "fb18a7d94cc394cba0f4ecd17508b22a8cc269e5",
+      "url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/jobs/104448277355",
+      "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778/job/104448277355",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-15T15:30:53Z",
+      "started_at": "2026-09-15T15:30:55Z",
+      "completed_at": "2026-09-15T15:30:59Z",
+      "name": "Morning window gate",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-09-15T15:30:56Z",
+          "completed_at": "2026-09-15T15:30:56Z"
+        },
+        {
+          "name": "Decide whether this slot should publish",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-09-15T15:30:56Z",
+          "completed_at": "2026-09-15T15:30:58Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-09-15T15:30:58Z",
+          "completed_at": "2026-09-15T15:30:58Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/check-runs/104448277355",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000458350,
+      "runner_name": "GitHub Actions 1000458350",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 104448322972,
+      "run_id": 34988954778,
+      "workflow_name": "Gaia Eyes — Daily Pipeline",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOPXTBVs8AAAAYUZrtnA",
+      "head_sha": "fb18a7d94cc394cba0f4ecd17508b22a8cc269e5",
+      "url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/jobs/104448322972",
+      "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778/job/104448322972",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-15T15:31:00Z",
+      "started_at": "2026-09-15T15:31:02Z",
+      "completed_at": "2026-09-15T15:32:22Z",
+      "name": "Generate Earthscope → Supabase",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-09-15T15:31:02Z",
+          "completed_at": "2026-09-15T15:31:03Z"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-09-15T15:31:03Z",
+          "completed_at": "2026-09-15T15:31:34Z"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-09-15T15:31:34Z",
+          "completed_at": "2026-09-15T15:31:34Z"
+        },
+        {
+          "name": "Install deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-09-15T15:31:34Z",
+          "completed_at": "2026-09-15T15:31:48Z"
+        },
+        {
+          "name": "Run generator (earthscope_generate.py)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-09-15T15:31:48Z",
+          "completed_at": "2026-09-15T15:32:19Z"
+        },
+        {
+          "name": "Upload EarthScope daily JSON artifact",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-09-15T15:32:19Z",
+          "completed_at": "2026-09-15T15:32:20Z"
+        },
+        {
+          "name": "Upload public EarthScope shadow artifact",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7,
+          "started_at": "2026-09-15T15:32:20Z",
+          "completed_at": "2026-09-15T15:32:20Z"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-09-15T15:32:20Z",
+          "completed_at": "2026-09-15T15:32:20Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-09-15T15:32:20Z",
+          "completed_at": "2026-09-15T15:32:20Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-09-15T15:32:20Z",
+          "completed_at": "2026-09-15T15:32:20Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/check-runs/104448322972",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000458351,
+      "runner_name": "GitHub Actions 1000458351",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 104448855897,
+      "run_id": 34988954778,
+      "workflow_name": "Gaia Eyes — Daily Pipeline",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOPXTBVs8AAAAYUaMPWQ",
+      "head_sha": "fb18a7d94cc394cba0f4ecd17508b22a8cc269e5",
+      "url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/jobs/104448855897",
+      "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778/job/104448855897",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-15T15:32:22Z",
+      "started_at": "2026-09-15T15:32:24Z",
+      "completed_at": "2026-09-15T15:33:16Z",
+      "name": "Render Images → Media Repo",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-09-15T15:32:25Z",
+          "completed_at": "2026-09-15T15:32:26Z"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-09-15T15:32:26Z",
+          "completed_at": "2026-09-15T15:32:38Z"
+        },
+        {
+          "name": "Clone media repo",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-09-15T15:32:38Z",
+          "completed_at": "2026-09-15T15:32:48Z"
+        },
+        {
+          "name": "Configure git identity (media repo)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-09-15T15:32:48Z",
+          "completed_at": "2026-09-15T15:32:48Z"
+        },
+        {
+          "name": "Download EarthScope daily JSON artifact",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-09-15T15:32:48Z",
+          "completed_at": "2026-09-15T15:32:48Z"
+        },
+        {
+          "name": "Stage EarthScope daily JSON into media repo",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-09-15T15:32:48Z",
+          "completed_at": "2026-09-15T15:32:48Z"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-09-15T15:32:48Z",
+          "completed_at": "2026-09-15T15:32:48Z"
+        },
+        {
+          "name": "Install deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-09-15T15:32:48Z",
+          "completed_at": "2026-09-15T15:32:58Z"
+        },
+        {
+          "name": "Render cards (bot commits & pushes)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-09-15T15:32:58Z",
+          "completed_at": "2026-09-15T15:33:07Z"
+        },
+        {
+          "name": "Upload rendered images to Supabase Storage (social/earthscope/latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-09-15T15:33:07Z",
+          "completed_at": "2026-09-15T15:33:13Z"
+        },
+        {
+          "name": "Publish EarthScope daily JSON to media repo",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-09-15T15:33:13Z",
+          "completed_at": "2026-09-15T15:33:14Z"
+        },
+        {
+          "name": "Get media repo commit sha",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-09-15T15:33:14Z",
+          "completed_at": "2026-09-15T15:33:14Z"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23,
+          "started_at": "2026-09-15T15:33:14Z",
+          "completed_at": "2026-09-15T15:33:15Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24,
+          "started_at": "2026-09-15T15:33:15Z",
+          "completed_at": "2026-09-15T15:33:15Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25,
+          "started_at": "2026-09-15T15:33:15Z",
+          "completed_at": "2026-09-15T15:33:15Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/check-runs/104448855897",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000458352,
+      "runner_name": "GitHub Actions 1000458352",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 104449201746,
+      "run_id": 34988954778,
+      "workflow_name": "Gaia Eyes — Daily Pipeline",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOPXTBVs8AAAAYUahWUg",
+      "head_sha": "fb18a7d94cc394cba0f4ecd17508b22a8cc269e5",
+      "url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/jobs/104449201746",
+      "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778/job/104449201746",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-15T15:33:17Z",
+      "started_at": "2026-09-15T15:33:19Z",
+      "completed_at": "2026-09-15T15:36:33Z",
+      "name": "Build Reel → Supabase",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-09-15T15:33:20Z",
+          "completed_at": "2026-09-15T15:33:20Z"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-09-15T15:33:20Z",
+          "completed_at": "2026-09-15T15:34:04Z"
+        },
+        {
+          "name": "Install FFmpeg",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-09-15T15:34:04Z",
+          "completed_at": "2026-09-15T15:34:20Z"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-09-15T15:34:20Z",
+          "completed_at": "2026-09-15T15:34:21Z"
+        },
+        {
+          "name": "Install Python deps (reel)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-09-15T15:34:21Z",
+          "completed_at": "2026-09-15T15:34:39Z"
+        },
+        {
+          "name": "Stage reel images from Supabase (latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-09-15T15:34:39Z",
+          "completed_at": "2026-09-15T15:34:43Z"
+        },
+        {
+          "name": "Debug VO env",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-09-15T15:34:43Z",
+          "completed_at": "2026-09-15T15:34:43Z"
+        },
+        {
+          "name": "Build reel (reel_builder.py)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-09-15T15:34:43Z",
+          "completed_at": "2026-09-15T15:35:05Z"
+        },
+        {
+          "name": "Validate reel artifact (ffprobe)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-09-15T15:35:05Z",
+          "completed_at": "2026-09-15T15:35:05Z"
+        },
+        {
+          "name": "Upload reel to Supabase Storage (reels/latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-09-15T15:35:05Z",
+          "completed_at": "2026-09-15T15:35:05Z"
+        },
+        {
+          "name": "Wait for CDN (reel)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-09-15T15:35:05Z",
+          "completed_at": "2026-09-15T15:35:35Z"
+        },
+        {
+          "name": "Post reel (IG)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-09-15T15:35:35Z",
+          "completed_at": "2026-09-15T15:36:24Z"
+        },
+        {
+          "name": "Post reel (FB)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-09-15T15:36:24Z",
+          "completed_at": "2026-09-15T15:36:30Z"
+        },
+        {
+          "name": "Evaluate EarthScope reel post outcomes",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-09-15T15:36:30Z",
+          "completed_at": "2026-09-15T15:36:30Z"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27,
+          "started_at": "2026-09-15T15:36:30Z",
+          "completed_at": "2026-09-15T15:36:31Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28,
+          "started_at": "2026-09-15T15:36:31Z",
+          "completed_at": "2026-09-15T15:36:31Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29,
+          "started_at": "2026-09-15T15:36:31Z",
+          "completed_at": "2026-09-15T15:36:31Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/check-runs/104449201746",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000458355,
+      "runner_name": "GitHub Actions 1000458355",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 104449201925,
+      "run_id": 34988954778,
+      "workflow_name": "Gaia Eyes — Daily Pipeline",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOPXTBVs8AAAAYUahXBQ",
+      "head_sha": "fb18a7d94cc394cba0f4ecd17508b22a8cc269e5",
+      "url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/actions/jobs/104449201925",
+      "html_url": "https://github.com/GaiaEyesHQ/gaiaeyes-backend/actions/runs/34988954778/job/104449201925",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-15T15:33:17Z",
+      "started_at": "2026-09-15T15:33:19Z",
+      "completed_at": "2026-09-15T15:35:26Z",
+      "name": "Post Square + Carousel",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-09-15T15:33:20Z",
+          "completed_at": "2026-09-15T15:33:21Z"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-09-15T15:33:21Z",
+          "completed_at": "2026-09-15T15:33:34Z"
+        },
+        {
+          "name": "Wait for CDN propagation",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-09-15T15:33:34Z",
+          "completed_at": "2026-09-15T15:34:34Z"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-09-15T15:34:34Z",
+          "completed_at": "2026-09-15T15:34:34Z"
+        },
+        {
+          "name": "Install deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-09-15T15:34:34Z",
+          "completed_at": "2026-09-15T15:34:44Z"
+        },
+        {
+          "name": "Mirror default daily_post to IG platform",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-09-15T15:34:44Z",
+          "completed_at": "2026-09-15T15:34:45Z"
+        },
+        {
+          "name": "Post square (FB) — disabled",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7,
+          "started_at": "2026-09-15T15:34:45Z",
+          "completed_at": "2026-09-15T15:34:45Z"
+        },
+        {
+          "name": "Post carousel (FB)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-09-15T15:34:45Z",
+          "completed_at": "2026-09-15T15:34:53Z"
+        },
+        {
+          "name": "Post carousel (IG)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-09-15T15:34:53Z",
+          "completed_at": "2026-09-15T15:35:23Z"
+        },
+        {
+          "name": "Evaluate EarthScope image post outcomes",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-09-15T15:35:23Z",
+          "completed_at": "2026-09-15T15:35:23Z"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-09-15T15:35:23Z",
+          "completed_at": "2026-09-15T15:35:23Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20,
+          "started_at": "2026-09-15T15:35:23Z",
+          "completed_at": "2026-09-15T15:35:23Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21,
+          "started_at": "2026-09-15T15:35:23Z",
+          "completed_at": "2026-09-15T15:35:23Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/GaiaEyesHQ/gaiaeyes-backend/check-runs/104449201925",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000458356,
+      "runner_name": "GitHub Actions 1000458356",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

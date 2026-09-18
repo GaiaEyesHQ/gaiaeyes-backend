@@ -84,7 +84,9 @@ struct MigraineEpisodeSummary: Equatable {
         contexts = try episode.contexts.enumerated().map { index, context in
             guard !context.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw MigraineSaveError.invalidResponse }
             return Entry(id: "context-\(index)", title: context.label,
-                         lines: ["Observed: \(try time(context.observedAt))", "Note: \(text(context.notes))"])
+                         lines: ["Observed: \(try time(context.observedAt))", "Note: \(text(context.notes))",
+                                 "Type: \(text(context.kind))",
+                                 "Source: \(text(context.source.replacingOccurrences(of: "_", with: " ")))"])
         }
         // The lifecycle timestamp can predate a canonical note/state edit, so
         // it cannot provide a truthful last-updated label for this summary.

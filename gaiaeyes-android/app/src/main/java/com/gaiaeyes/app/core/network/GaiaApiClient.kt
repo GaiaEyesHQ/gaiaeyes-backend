@@ -13,20 +13,38 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.put
+import io.ktor.client.request.request
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.HttpMethod
 import io.ktor.http.URLProtocol
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import io.ktor.utils.io.ByteReadChannel
+import kotlinx.coroutines.CancellationException
 
 class GaiaApiClient(
     apiBase: String,
     private val httpClient: HttpClient = defaultHttpClient(apiBase),
+    migraineHttpClient: HttpClient? = null,
 ) : HealthService {
+    // Separate transport policy leaves the existing journal queue/client unchanged.
+    // Created only if this currently unexposed structured contract is used.
+    private val migraineClient by lazy {
+        migraineHttpClient ?: defaultHttpClient(apiBase, singleAttempt = true)
+    }
+
     override suspend fun health(): HealthResponse {
         val response = httpClient.get("/health")
         check(response.status.isSuccess()) {
@@ -87,6 +105,70 @@ class GaiaApiClient(
             envelope.friendlyError ?: envelope.error ?: "The symptom could not be updated"
         }
         return requireNotNull(envelope.data)
+    }
+
+    suspend fun migraineDetail(accessToken: String, episodeId: String): MigraineDetail {
+        val id = migraineId(episodeId)
+        val response = migraineRequest("/v1/symptoms/current/$id/migraine-detail", accessToken, HttpMethod.Get)
+        return decodeMigraineResponse(write = false) {
+            val envelope = migraineJson.decodeFromJsonElement<MigraineDetailEnvelope>(response)
+            require(envelope.ok)
+            requireNotNull(envelope.data).also { it.validateFor(id) }
+        }
+    }
+
+    suspend fun updateMigraineDetail(
+        accessToken: String,
+        episodeId: String,
+        request: MigraineStructuredEdit,
+    ): MigraineDetail {
+        val id = migraineId(episodeId)
+        require(request.hasChanges) { "At least one structured migraine field is required" }
+        val snapshot = request.toJson()
+        val response = migraineRequest(
+            "/v1/symptoms/current/$id/migraine-detail", accessToken, HttpMethod.Patch, snapshot,
+        )
+        return decodeMigraineResponse(write = true) {
+            val envelope = migraineJson.decodeFromJsonElement<MigraineDetailEnvelope>(response)
+            require(envelope.ok)
+            requireNotNull(envelope.data).also {
+                it.validateFor(id)
+                require(migraineEditAcknowledged(snapshot, it))
+            }
+        }
+    }
+
+    suspend fun respondMigraineFollowUp(
+        accessToken: String,
+        episodeId: String,
+        promptId: String,
+        request: MigraineFollowUpRequest,
+    ): MigraineFollowUpResult {
+        val id = migraineId(episodeId)
+        val prompt = migraineId(promptId)
+        val snapshot = request.toJson()
+        val response = migraineRequest(
+            "/v1/symptoms/follow-ups/$prompt/respond", accessToken, HttpMethod.Post, snapshot,
+        )
+        return decodeMigraineResponse(write = true) {
+            val envelope = migraineJson.decodeFromJsonElement<MigraineFollowUpEnvelope>(response)
+            require(envelope.ok)
+            requireNotNull(envelope.data).also {
+                require(sameMigraineId(it.prompt.id, prompt) && sameMigraineId(it.prompt.episodeId, id))
+                require(it.prompt.symptomCode == "MIGRAINE" && it.prompt.status == "answered")
+                require(sameMigraineId(it.episode.id, id) && it.episode.symptomCode == "MIGRAINE")
+                require(it.episode.currentState == request.state)
+                // Check the structured acknowledgement without widening the legacy DTO.
+                val pending = response.getValue("data").jsonObject.getValue("episode")
+                    .jsonObject["pending_follow_up"]
+                if (pending != null && pending != JsonNull) {
+                    require(!sameMigraineId(pending.jsonObject.getValue("id").jsonPrimitive.content, prompt))
+                }
+                it.migraineDetail.validateFor(id)
+                require(it.migraineDetail.episode.state == request.state)
+                require(migraineEditAcknowledged(snapshot.getValue("migraine").jsonObject, it.migraineDetail))
+            }
+        }
     }
 
     suspend fun deleteCurrentSymptom(
@@ -392,6 +474,64 @@ class GaiaApiClient(
         return result
     }
 
+    private suspend fun migraineRequest(
+        path: String,
+        accessToken: String,
+        method: HttpMethod,
+        snapshot: JsonObject? = null,
+    ): JsonObject {
+        val token = requiredToken(accessToken)
+        val write = snapshot != null
+        val response = try {
+            migraineClient.request(path) {
+                this.method = method
+                header(HttpHeaders.Authorization, "Bearer $token")
+                timeout {
+                    requestTimeoutMillis = if (write) JOURNAL_WRITE_TIMEOUT_MILLIS else DEFAULT_TIMEOUT_MILLIS
+                    connectTimeoutMillis = DEFAULT_TIMEOUT_MILLIS
+                    socketTimeoutMillis = if (write) JOURNAL_WRITE_TIMEOUT_MILLIS else DEFAULT_TIMEOUT_MILLIS
+                }
+                snapshot?.let { setBody(MigraineRequestBody(it.toString().encodeToByteArray())) }
+            }
+        } catch (cancelled: CancellationException) {
+            // Cancellation does not establish whether a submitted write committed.
+            throw cancelled
+        } catch (failure: Exception) {
+            if (write) throw MigraineUnconfirmedWriteException(failure)
+            throw MigraineUnavailableException(failure)
+        }
+        when (response.status.value) {
+            401 -> throw ApiUnauthorizedException()
+            409 -> throw MigraineConflictException()
+            400, 403, 422 -> throw MigraineRejectedException(response.status.value)
+        }
+        val body = decodeMigraineResponse(write) {
+            migraineJson.parseToJsonElement(response.bodyAsText()).jsonObject
+        }
+        val detail = (body["detail"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+        when (response.status.value) {
+            404 -> if (detail == "Not Found") throw MigraineUnavailableException()
+                else throw MigraineEpisodeNotFoundException()
+            503 -> if (detail == "structured migraine detail storage is not installed") {
+                throw MigraineUnavailableException()
+            }
+        }
+        if (response.status != HttpStatusCode.OK) {
+            if (write) throw MigraineUnconfirmedWriteException()
+            throw MigraineUnavailableException()
+        }
+        return body
+    }
+
+    private inline fun <T> decodeMigraineResponse(write: Boolean, decode: () -> T): T = try {
+        decode()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        if (write) throw MigraineUnconfirmedWriteException(failure)
+        throw MigraineInvalidResponseException(failure)
+    }
+
     private suspend fun authenticatedGet(
         path: String,
         accessToken: String,
@@ -481,12 +621,16 @@ class GaiaApiClient(
     }
 
     companion object {
-        private fun defaultHttpClient(apiBase: String): HttpClient {
+        private fun defaultHttpClient(apiBase: String, singleAttempt: Boolean = false): HttpClient {
             val normalizedBase = apiBase.trim().trimEnd('/')
             require(normalizedBase.isNotBlank()) { "GAIA_API_BASE is required" }
 
             return HttpClient(OkHttp) {
                 expectSuccess = false
+                if (singleAttempt) {
+                    followRedirects = false
+                    engine { config { retryOnConnectionFailure(false) } }
+                }
                 install(HttpTimeout) {
                     requestTimeoutMillis = DEFAULT_TIMEOUT_MILLIS
                     connectTimeoutMillis = DEFAULT_TIMEOUT_MILLIS
@@ -524,3 +668,12 @@ interface HealthService {
 }
 
 class ApiUnauthorizedException : IllegalStateException("Your Gaia Eyes session has expired")
+
+// Ktor's OkHttp engine turns ReadChannelContent into a one-shot request body.
+// This also prevents OkHttp's HTTP-response retries (e.g. 503 + Retry-After: 0),
+// which are separate from retryOnConnectionFailure. No retry/queue is added here.
+internal class MigraineRequestBody(private val bytes: ByteArray) : OutgoingContent.ReadChannelContent() {
+    override val contentType = ContentType.Application.Json
+    override val contentLength = bytes.size.toLong()
+    override fun readFrom() = ByteReadChannel(bytes)
+}

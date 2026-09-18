@@ -22,6 +22,8 @@ from pathlib import Path
 import sys
 from typing import Optional, Dict, Any, List
 import hashlib
+from copy import deepcopy
+from functools import wraps
 
 STYLE_GUIDE = (
     "Persona: A clear, thoughtful human editor who explains environmental patterns. "
@@ -173,7 +175,12 @@ def _reset_runtime_trace() -> None:
         "hook_rescue_triggered": False,
         "caption_path": None,
         "sections_path": None,
+        "writer_requests": [],
+        "writer_outcomes": [],
+        "terminal_writer_error": None,
+        "rewrite_outcome": None,
     }
+    _REWRITE_CACHE.clear()
 
 
 def _trace_mark(key: str, value: Any = True) -> None:
@@ -181,7 +188,109 @@ def _trace_mark(key: str, value: Any = True) -> None:
 
 
 def _trace_snapshot() -> Dict[str, Any]:
-    return dict(_RUNTIME_TRACE)
+    return deepcopy(_RUNTIME_TRACE)
+
+
+_TERMINAL_WRITER_CODES = {"insufficient_quota", "credit_balance_exhausted"}
+
+
+class _WriterTerminalError(RuntimeError):
+    def __init__(self, code: str):
+        super().__init__("Writer attempt suppressed after terminal credit error")
+        self.code = code
+
+
+def _writer_error_details(error: Exception) -> Dict[str, Any]:
+    # The SDK exposes code/type and an unwrapped JSON body. Never log its
+    # message, body, headers, request or arbitrary provider-supplied strings.
+    body = getattr(error, "body", None)
+    body = body.get("error", body) if isinstance(body, dict) else {}
+    body = body if isinstance(body, dict) else {}
+    codes = [getattr(error, "code", None), getattr(error, "type", None), body.get("code"), body.get("type")]
+    code = next((code for code in codes if isinstance(code, str) and code in _TERMINAL_WRITER_CODES), None)
+    if not code and "rate_limit_exceeded" in codes:
+        code = "rate_limit_exceeded"
+    status = getattr(error, "status_code", None)
+    return {
+        "category": "terminal_credit" if code in _TERMINAL_WRITER_CODES else "rate_limit" if code == "rate_limit_exceeded" else "provider_error",
+        "code": code,
+        "status_code": status if isinstance(status, int) and 100 <= status <= 599 else None,
+    }
+
+
+class _WriterCopy(dict):
+    """Existing copy mapping, with cache provenance outside serialized copy."""
+    def __init__(self, payload: Dict[str, str], outcome: Dict[str, Any]):
+        super().__init__(payload)
+        self.writer_outcome = deepcopy(outcome)
+
+
+def _writer_stage(stage: str, path_key: Optional[str] = None):
+    """Record acceptance only after the existing stage's validation returns."""
+    def decorate(function):
+        @wraps(function)
+        def run(*args, **kwargs):
+            requests = _RUNTIME_TRACE.setdefault("writer_requests", [])
+            start = len(requests)
+            result = function(*args, **kwargs)
+            payload = result[0] if isinstance(result, tuple) else result
+            latest = requests[-1] if len(requests) > start else {}
+            received = latest.get("outcome") == "response_received"
+            outcome = {
+                "stage": stage,
+                "outcome": "accepted_model" if payload and received else "unverified_origin" if payload else "validation_failed" if received else latest.get("outcome", "not_attempted"),
+                "provider": latest.get("provider"),
+                "model": latest.get("model"),
+                "requested_model": latest.get("requested_model"),
+                "error": latest.get("error"),
+            }
+            retained = getattr(payload, "writer_outcome", None)
+            path = _RUNTIME_TRACE.get(path_key) if path_key else None
+            if path == "hybrid_rewrite":
+                retained = _RUNTIME_TRACE.get("rewrite_outcome")
+            if retained:
+                outcome = {**deepcopy(retained), "stage": stage}
+            elif path == "rule_copy":
+                outcome.update(outcome="fallback", origin="fallback", provider="deterministic", model=None)
+            _RUNTIME_TRACE.setdefault("writer_outcomes", []).append(outcome)
+            has_runtime = isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], dict)
+            if has_runtime:
+                result[1]["writer_outcome"] = deepcopy(outcome)
+            if isinstance(payload, dict) and payload:
+                copy_outcome = {**outcome, "origin": "model" if outcome["outcome"] == "accepted_model" else "unknown"}
+                payload = _WriterCopy(payload, copy_outcome)
+                if has_runtime:
+                    result[1]["writer_outcome"] = deepcopy(copy_outcome)
+                    return payload, result[1]
+                return payload
+            return result
+        return run
+    return decorate
+
+
+def _fallback_writer_copy(payload: Dict[str, str], reason: Optional[str] = None) -> Dict[str, str]:
+    previous = (_RUNTIME_TRACE.get("writer_outcomes") or [{}])[-1]
+    outcome = {
+        "stage": "rewrite_fallback", "outcome": "fallback", "origin": "fallback",
+        "provider": "deterministic", "model": None, "requested_model": _writer_model(),
+        "reason": reason or previous.get("outcome", "not_attempted"),
+        "error": previous.get("error") if reason is None else None,
+    }
+    _RUNTIME_TRACE.setdefault("writer_outcomes", []).append(outcome)
+    return _WriterCopy(payload, outcome)
+
+
+def _record_rewrite_use(payload: Dict[str, str], *, cache_hit: bool) -> None:
+    outcome = deepcopy(getattr(payload, "writer_outcome", {"origin": "unknown", "provider": None, "model": None}))
+    outcome["cache_hit"] = cache_hit
+    _trace_mark("rewrite_outcome", outcome)
+    _trace_mark("rewrite_used", outcome["origin"] == "model")
+    _trace_mark("rewrite_cache_hit", cache_hit)
+
+
+def _log_writer_outcome() -> None:
+    # Internal writing outcome, separate from later publication success.
+    print("[earthscope.writer] " + json.dumps(_trace_snapshot(), sort_keys=True))
 
 
 INTRO_LINES = [
@@ -1170,6 +1279,7 @@ def _fallback_social_title(
 
 
 # --- LLM-based title generator using cached rewrite ---
+@_writer_stage("title")
 def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rewrite: Optional[Dict[str,str]]) -> Optional[str]:
     """Ask the LLM for a short social hook title based on tone + pulse + sections. No numbers, no emojis.
     Returns a plain string or None on failure.
@@ -1229,7 +1339,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         title = _chat_text(resp).strip()
         return _clean_llm_title(title, recent_set)
     except Exception as e:
-        _dbg(f"title: OpenAI call failed: {e}")
+        _dbg(f"title: OpenAI call failed: {_writer_error_details(e)}")
         return None
 
 def _pick_hook(tone: str, last_used: set | None = None) -> str:
@@ -1906,6 +2016,7 @@ def _has_unsupported_event_mention(text: str, event_pattern: str) -> bool:
     return False
 
 
+@_writer_stage("interpretive_rewrite")
 def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str], facts: Dict[str, Any], temperature: float = 0.8, template_id: Optional[int] = None) -> Optional[Dict[str, str]]:
     """Call the LLM to rewrite into interpretive, number-free JSON. Returns dict or None."""
     if not client:
@@ -2075,8 +2186,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
                 raise ValueError("no-json-object-found")
             obj = json.loads(raw)
         except Exception as e:
-            _dbg(f"rewrite: JSON parse failed: {e}")
-            _dbg(f"rewrite: raw snippet => {text[:200]}")
+            _dbg("rewrite: JSON parse failed")
             return None
         # Make response robust: if hashtags missing, inject a sane default before validation
         if isinstance(obj, dict) and ("hashtags" not in obj or not isinstance(obj.get("hashtags"), str) or not obj.get("hashtags").strip()):
@@ -2084,8 +2194,6 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         obj = _normalize_rewrite_payload(obj)
         valid = _validate_rewrite(obj, facts)
         _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
-        if not valid:
-            _dbg(f"rewrite: raw response snippet => {text[:180]}")
         if valid:
             valid = _finalize_rewrite_payload(valid)
             # Soft length diagnostics (debug only)
@@ -2100,10 +2208,11 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             return valid
         return None
     except Exception as e:
-        _dbg(f"rewrite: OpenAI call failed: {e}")
+        _dbg(f"rewrite: OpenAI call failed: {_writer_error_details(e)}")
         return None
 
 
+@_writer_stage("candidate_rewrite")
 def _rewrite_json_candidates(
     client: Optional["OpenAI"],
     draft: Dict[str, str],
@@ -2240,7 +2349,7 @@ def _rewrite_json_candidates(
         _dbg("candidate: selected") if selected else _dbg("candidate: no valid candidate")
         return selected
     except Exception as e:
-        _dbg(f"candidate: OpenAI call failed: {e}")
+        _dbg(f"candidate: OpenAI call failed: {_writer_error_details(e)}")
         return None
 
 
@@ -2251,13 +2360,13 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
     # If no client, return the rule copy unchanged (but scrub)
     if not client:
         _dbg("rewrite: no client; returning scrubbed rule copy")
-        return {
+        return _fallback_writer_copy({
             "caption": _scrub_banned_phrases(_sanitize_caption(caption)),
             "snapshot": _scrub_banned_phrases(snapshot),
             "affects": _scrub_banned_phrases(affects),
             "playbook": _scrub_banned_phrases(playbook),
             "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus",
-        }
+        }, reason="no_client")
 
     draft = {
         "caption": caption,
@@ -2311,13 +2420,13 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
     tone = _tone_from_ctx(ctx)
     cap_out = _fallback_caption_for_tone(tone, ctx)
 
-    return {
+    return _fallback_writer_copy({
         "caption": _scrub_banned_phrases(_sanitize_caption(cap_out)),
         "snapshot": _scrub_banned_phrases(qual_snap),
         "affects": _scrub_banned_phrases(rc_fallback["affects"]),
         "playbook": _scrub_banned_phrases(rc_fallback["playbook"]),
         "hashtags": rc_fallback.get("hashtags", "#GaiaEyes #SpaceWeather #Wellness #HRV #Sleep"),
-    }
+    })
 
 # --- deterministic snapshot builder ---
 # --- deterministic snapshot builder ---
@@ -2776,11 +2885,26 @@ def _chat_create_compat(client: "OpenAI", **kwargs):
     max_completion_tokens or max_tokens, and may not allow custom
     sampling/penalty parameters.
     """
+    requests = _RUNTIME_TRACE.setdefault("writer_requests", [])
+    request = {"provider": "openai", "requested_model": kwargs.get("model"), "model": None}
+    terminal = _RUNTIME_TRACE.get("terminal_writer_error")
+    if terminal:
+        error = _WriterTerminalError(terminal)
+        requests.append({**request, "outcome": "suppressed_terminal_error", "error": _writer_error_details(error)})
+        raise error
     attempt_kwargs = dict(kwargs)
     for _ in range(5):
         try:
-            return client.chat.completions.create(**attempt_kwargs)
+            response = client.chat.completions.create(**attempt_kwargs)
+            model = getattr(response, "model", None)
+            requests.append({**request, "model": model if isinstance(model, str) else None, "outcome": "response_received"})
+            return response
         except Exception as e:
+            error = _writer_error_details(e)
+            requests.append({**request, "outcome": "provider_error", "error": error})
+            if error["category"] == "terminal_credit":
+                _trace_mark("terminal_writer_error", error["code"])
+                raise
             msg = str(e)
             changed = False
 
@@ -2884,8 +3008,7 @@ def _get_cached_rewrite(client: Optional["OpenAI"], ctx: Dict[str, Any]) -> Opti
     _dbg("rewrite-cache: check")
     if key in _REWRITE_CACHE:
         _dbg(f"rewrite-cache: hit key={key_short}")
-        _trace_mark("rewrite_used", True)
-        _trace_mark("rewrite_cache_hit", True)
+        _record_rewrite_use(_REWRITE_CACHE[key], cache_hit=True)
         return _REWRITE_CACHE.get(key)
     if not client:
         _dbg("rewrite-cache: no client; skipping")
@@ -2898,7 +3021,7 @@ def _get_cached_rewrite(client: Optional["OpenAI"], ctx: Dict[str, Any]) -> Opti
     )
     if out:
         _REWRITE_CACHE[key] = out
-        _trace_mark("rewrite_used", True)
+        _record_rewrite_use(out, cache_hit=False)
     _dbg(f"rewrite-cache: {'stored' if key in _REWRITE_CACHE else 'compute failed; using None'} key={key_short}")
     return _REWRITE_CACHE.get(key)
 
@@ -2931,6 +3054,7 @@ def _apply_intro_guard(caption: str, ctx: Dict[str, Any]) -> str:
         return f"{intro} {body}".strip()
     return f"{intro} {cap}".strip()
 
+@_writer_stage("caption", path_key="caption_path")
 def generate_short_caption(
     ctx: Dict[str, Any],
     live_sections: Optional[Dict[str, str]] = None,
@@ -3097,6 +3221,7 @@ def _platform_variant_context(ctx: Dict[str, Any], platform: str) -> Dict[str, A
     return variant_ctx
 
 
+@_writer_stage("facebook_caption")
 def _rewrite_facebook_caption_from_spine(
     client: "OpenAI",
     *,
@@ -3203,7 +3328,7 @@ def _rewrite_facebook_caption_from_spine(
                 "hashtags": hashtags.strip() if isinstance(hashtags, str) else str(default_hashtags or "").strip(),
             }
         except Exception as exc:
-            _dbg(f"facebook_spine: rewrite attempt={attempt + 1} failed: {exc}")
+            _dbg(f"facebook_spine: rewrite attempt={attempt + 1} failed: {_writer_error_details(exc)}")
     return None
 
 
@@ -3330,6 +3455,7 @@ def _validate_reel_spine(
     return out
 
 
+@_writer_stage("reel_spine")
 def _rewrite_reel_from_final_caption(
     client: Optional["OpenAI"],
     *,
@@ -3404,7 +3530,7 @@ def _rewrite_reel_from_final_caption(
             return None
         return _validate_reel_spine(json.loads(raw), caption=caption, facts=facts)
     except Exception as exc:
-        _dbg(f"reel_spine: OpenAI call failed: {exc}")
+        _dbg(f"reel_spine: OpenAI call failed: {_writer_error_details(exc)}")
         return None
 
 
@@ -3522,6 +3648,7 @@ def _build_reel_story(
     }
 
 
+@_writer_stage("sections", path_key="sections_path")
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     client = openai_client()
     if EARTHSCOPE_FORCE_RULES or not client:
@@ -3660,6 +3787,7 @@ def _shadow_sections_from_live_bundle(
     return out
 
 
+@_writer_stage("minimal_caption")
 def _rewrite_shadow_caption_minimal(
     *,
     seed_caption: str,
@@ -3777,6 +3905,7 @@ def _rewrite_shadow_caption_minimal(
         return None, runtime
 
 
+@_writer_stage("shadow_candidate")
 def _rewrite_shadow_candidate_from_draft(
     *,
     draft: Dict[str, str],
@@ -4156,6 +4285,7 @@ def main():
         title = llm_title
     else:
         title = _fallback_social_title(ctx, public_voice_render["title"], _recent_titles(21), hook_text=short_caption)
+    _trace_mark("title_path", "model" if llm_title else "fallback")
     social_variants = _build_social_caption_variants(
         ctx,
         title=title,
@@ -4194,6 +4324,8 @@ def main():
         voiceover=voiceover,
         rewrite=rewrite_for_reel,
     )
+
+    _log_writer_outcome()
 
     # 3) Prepare payloads
     metrics_json = {

@@ -109,6 +109,46 @@ struct MigraineEpisodeSummaryTests {
         #expect(saved == before)
     }
 
+    @Test(arguments: ["exposure", "context"], ["user_reported", "device", "health_record", "environmental_service", "import"])
+    func savedContextDistinguishesEveryContractKindAndSource(kind: String, source: String) throws {
+        let saved = try detail { episode in
+            episode["contexts"] = [["kind": kind, "label": "Recorded observation", "source": source]]
+        }
+        let before = saved
+        let summary = try MigraineEpisodeSummary(detail: saved, episodeID: first, timeZone: zone)
+        let entry = try #require(summary.contexts.first)
+        let sourceLabels = ["user_reported": "user reported", "device": "device", "health_record": "health record",
+                            "environmental_service": "environmental service", "import": "import"]
+        #expect(entry.title == "Recorded observation")
+        #expect(entry.lines.contains("Type: \(kind)"))
+        #expect(entry.lines.contains("Source: \(sourceLabels[source]!)"))
+        #expect(entry.lines.contains("Observed: Not recorded") && entry.lines.contains("Note: Not recorded"))
+        #expect(saved == before)
+    }
+
+    @Test
+    func sameLabelContextsRetainTheirOwnOriginOrderTimeAndCompleteNotes() throws {
+        let saved = try detail { episode in
+            let contexts: [[String: Any]] = [
+                ["kind": "exposure", "label": "Same observation", "source": "user_reported",
+                 "notes": MigraineCalendarFixture.summaryLongNotes],
+                ["kind": "context", "label": "Same observation", "source": "environmental_service",
+                 "observed_at": ["utc": "2026-09-10T12:00:00Z", "timezone_source": "provider"],
+                 "notes": "Second saved context"]
+            ]
+            episode["contexts"] = contexts
+        }
+        let summary = try MigraineEpisodeSummary(detail: saved, episodeID: first, timeZone: zone, locale: Locale(identifier: "en_US_POSIX"))
+        #expect(summary.contexts.map(\.id) == ["context-0", "context-1"])
+        #expect(summary.contexts.map(\.title) == ["Same observation", "Same observation"])
+        #expect(summary.contexts[0].lines.contains("Type: exposure") && summary.contexts[0].lines.contains("Source: user reported"))
+        #expect(summary.contexts[1].lines.contains("Type: context") && summary.contexts[1].lines.contains("Source: environmental service"))
+        #expect(summary.contexts[0].lines[0] == "Observed: Not recorded")
+        #expect(summary.contexts[1].lines[0].contains("7:00:00 AM"))
+        #expect(summary.contexts[0].lines[1] == "Note: \(MigraineCalendarFixture.summaryLongNotes)")
+        #expect(summary.contexts[1].lines[1] == "Note: Second saved context")
+    }
+
     @Test(arguments: ["none", "a_little", "some", "a_lot", "complete", "unknown", "missing"])
     func reliefLabelsPreserveEveryRecordedMeaning(value: String) throws {
         let saved = try detail { episode in

@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <!-- Remove every dependency permission and startup component, not just INTERNET. -->
+    <uses-permission tools:node="removeAll" />
+    <application android:name="com.gaiaeyes.app.visualharness.IsolatedApplication"
+        android:label="G026 Synthetic Only" android:allowBackup="false" android:usesCleartextTraffic="false"
+        android:theme="@style/Theme.GaiaEyes" tools:replace="android:allowBackup">
+        <provider tools:node="removeAll" />
+        <service tools:node="removeAll" />
+        <receiver tools:node="removeAll" />
+        <meta-data tools:node="removeAll" />
+        <activity android:name="androidx.compose.ui.tooling.PreviewActivity" tools:node="remove" />
+        <activity android:name="com.google.android.gms.common.api.GoogleApiActivity" tools:node="remove" />
+        <activity android:name="androidx.activity.ComponentActivity" tools:node="remove" />
+        <activity android:name="com.gaiaeyes.app.visualharness.IsolatedFormActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.gaiaeyes.app.visualharness.IsolatedLargeFontActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.gaiaeyes.app.visualharness.IsolatedMedicineActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.gaiaeyes.app.visualharness.IsolatedMainAppActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+    </application>
+</manifest>

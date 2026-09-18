@@ -8,6 +8,10 @@ import com.gaiaeyes.app.core.network.CurrentSymptomDeleteData
 import com.gaiaeyes.app.core.network.CurrentSymptomItem
 import com.gaiaeyes.app.core.network.CurrentSymptomUpdateRequest
 import com.gaiaeyes.app.core.network.GaiaApiClient
+import com.gaiaeyes.app.core.network.MigraineDetail
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 class HomeContextRepository(
     private val authRepository: AuthRepository,
@@ -17,6 +21,7 @@ class HomeContextRepository(
     suspend fun cachedSymptoms(accountId: String): CurrentSymptomsSnapshot? {
         val cached = cache.readSymptoms(accountId) ?: return null
         return CurrentSymptomsSnapshot(
+            accountId = accountId,
             symptoms = cached.symptoms,
             source = HomeContextSource.CACHE,
             savedAtEpochMillis = cached.savedAtEpochMillis,
@@ -30,6 +35,7 @@ class HomeContextRepository(
         val savedAt = System.currentTimeMillis()
         cache.writeSymptoms(accountId, symptoms, savedAt)
         return CurrentSymptomsSnapshot(
+            accountId = accountId,
             symptoms = symptoms,
             source = HomeContextSource.NETWORK,
             savedAtEpochMillis = savedAt,
@@ -113,6 +119,20 @@ class HomeContextRepository(
         cache.clear(accountId)
     }
 
+    internal fun migraineFollowUpRepository() = MigraineFollowUpRepository(authRepository, apiClient)
+    internal fun migraineMedicineRepository() = MigraineMedicineRepository(authRepository, apiClient)
+
+    // Read-only, with no disk cache. Token refresh must not move this read to
+    // another account, and an old request must never sign out a new account.
+    suspend fun savedMigraineDetail(accountId: String, episodeId: String): MigraineDetail =
+        savedMigraineDetailFor(
+            accountId, episodeId,
+            currentAccountId = authRepository::currentAccountId,
+            accessToken = authRepository::accessToken,
+            readDetail = apiClient::migraineDetail,
+            signOut = authRepository::signOut,
+        )
+
     private suspend fun <T> authenticatedRequest(block: suspend () -> T): T {
         return try {
             block()
@@ -123,7 +143,36 @@ class HomeContextRepository(
     }
 }
 
+// The production saved-summary boundary, with only its external calls injectable.
+// Keeps synthetic tests independent of Android storage, real sessions and network.
+internal suspend fun savedMigraineDetailFor(
+    accountId: String,
+    episodeId: String,
+    currentAccountId: () -> String?,
+    accessToken: suspend () -> String,
+    readDetail: suspend (String, String) -> MigraineDetail,
+    signOut: suspend () -> Unit,
+): MigraineDetail {
+    suspend fun requireAccount() {
+        currentCoroutineContext().ensureActive()
+        if (currentAccountId() != accountId) throw CancellationException("Account changed")
+    }
+    requireAccount()
+    val token = accessToken()
+    requireAccount()
+    val detail = try {
+        readDetail(token, episodeId)
+    } catch (unauthorized: ApiUnauthorizedException) {
+        currentCoroutineContext().ensureActive()
+        if (currentAccountId() == accountId) signOut()
+        throw unauthorized
+    }
+    requireAccount()
+    return detail
+}
+
 data class CurrentSymptomsSnapshot(
+    val accountId: String,
     val symptoms: CurrentSymptomsResponse,
     val source: HomeContextSource,
     val savedAtEpochMillis: Long,

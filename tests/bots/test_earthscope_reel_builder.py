@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 from PIL import Image
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -274,6 +275,71 @@ def test_reel_story_layout_replaces_nonbreaking_hyphen():
     _, wrapped = reel_builder._layout_story_text(draw, "Felted\u2011wool heaviness", font_path)
 
     assert " ".join(wrapped) == "Felted-wool heaviness"
+
+
+def test_reel_hook_long_word_fits_preserved_text_through_maximum_zoom():
+    draw = reel_builder.ImageDraw.Draw(Image.new("RGB", (1080, 1920)))
+    font_path = ROOT / "bots/earthscope_post/fonts/Poppins-Regular.ttf"
+    text = "Standard energy field-consistency wins today"
+
+    font, lines = reel_builder._fit_hook_layout(draw, text, font_path)
+
+    assert " ".join(lines) == text
+    assert 64 <= font.size < 112
+    assert len(lines) <= 4
+    for line in lines:
+        left, _, right, _ = draw.textbbox((0, 0), line, font=font)
+        assert right <= 860
+        # Centered zoom keeps text safely away from both 1080px frame edges.
+        assert 540 + (100 + left - 540) * 1.055 >= 70
+        assert 540 + (100 + right - 540) * 1.055 <= 1010
+
+
+@pytest.mark.parametrize("width_delta,keeps_largest_font", [(0, True), (-1, False)])
+def test_reel_hook_measures_exact_width_boundary(width_delta, keeps_largest_font):
+    draw = reel_builder.ImageDraw.Draw(Image.new("RGB", (1080, 1920)))
+    font_path = ROOT / "bots/earthscope_post/fonts/Poppins-Regular.ttf"
+    largest = reel_builder.ImageFont.truetype(str(font_path), size=112)
+    text = "field-consistency"
+    budget = draw.textbbox((0, 0), text, font=largest)[2] + width_delta
+
+    font, lines = reel_builder._fit_hook_layout(draw, text, font_path, max_width=budget)
+
+    assert (font.size == 112) is keeps_largest_font
+    assert lines == [text]
+    assert draw.textbbox((0, 0), text, font=font)[2] <= budget
+
+
+def test_reel_hook_minimum_font_is_checked_and_preserves_text():
+    draw = reel_builder.ImageDraw.Draw(Image.new("RGB", (1080, 1920)))
+    font_path = ROOT / "bots/earthscope_post/fonts/Poppins-Regular.ttf"
+    minimum = reel_builder.ImageFont.truetype(str(font_path), size=64)
+    text = "field-consistency"
+    budget = draw.textbbox((0, 0), text, font=minimum)[2]
+
+    font, lines = reel_builder._fit_hook_layout(draw, text, font_path, max_width=budget)
+
+    assert font.size == 64
+    assert lines == [text]
+
+
+@pytest.mark.parametrize("text,width,lines", [("field-consistency", 100, 4), ("A title with many separate words", 100, 1)])
+def test_reel_hook_rejects_unfittable_text_without_returning_clipped_or_truncated_copy(text, width, lines):
+    draw = reel_builder.ImageDraw.Draw(Image.new("RGB", (1080, 1920)))
+    font_path = ROOT / "bots/earthscope_post/fonts/Poppins-Regular.ttf"
+
+    with pytest.raises(ValueError, match="text was not truncated"):
+        reel_builder._fit_hook_layout(draw, text, font_path, max_width=width, max_lines=lines)
+
+
+def test_reel_hook_short_title_keeps_existing_large_style():
+    draw = reel_builder.ImageDraw.Draw(Image.new("RGB", (1080, 1920)))
+    font_path = ROOT / "bots/earthscope_post/fonts/Poppins-Regular.ttf"
+
+    font, lines = reel_builder._fit_hook_layout(draw, "Energy today", font_path)
+
+    assert font.size == 112
+    assert " ".join(lines) == "Energy today"
 
 
 def test_reel_opening_clip_uses_motion_from_frame_one(monkeypatch, tmp_path):

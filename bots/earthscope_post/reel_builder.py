@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 reel_builder.py — Build a vertical (1080x1920) Reel from daily Gaia Eyes cards,
-speak a short VO via OpenAI TTS, add a loopable music bed from Supabase, and
+optionally speak a short VO via OpenAI TTS, add a loopable music bed from Supabase, and
 write the final H.264/AAC MP4.
 
 Intended to run in GitHub Actions in the "render" job after cards are generated.
@@ -10,10 +10,15 @@ ENV it uses (all optional, sane defaults applied when possible):
 - MEDIA_REPO_PATH           : path to the gaiaeyes-media checkout (cards and JSON live here)
 - EARTHSCOPE_OUTPUT_JSON_PATH: path to earthscope_daily.json (to pull short VO text)
 - OPENAI_API_KEY            : your OpenAI API key (for TTS). If missing, VO is skipped.
+- REEL_VOICE_ENABLED        : "0" skips all narration work even with an API key;
+                              default "1" preserves optional VO for other callers.
+- REEL_REQUIRE_VO           : "1" makes VO failure fatal; incompatible with voice disabled.
 - REEL_TTS_VOICE            : e.g., "marin" (default), any supported TTS voice
 - REEL_TTS_MODEL            : OpenAI TTS model, default gpt-4o-mini-tts
 - REEL_VO_LEAD_PAD_SEC      : optional leading silence before VO (default 0.15)
-- REEL_MUSIC_VOLUME_DB      : music bed gain before ducking (default -9dB)
+- REEL_MUSIC_VOLUME_DB      : bed gain in optional narration mode (default -9dB);
+                              intentional music-only mode normalizes to -18 LUFS.
+- REEL_BED_URL              : existing music WAV URL; takes priority over the track manifest
 - REEL_DURATION_SEC         : total output duration target (if set, otherwise inferred)
 - SUPABASE_URL              : e.g., https://<project>.supabase.co (for audio manifest default)
 - SUPABASE_AUDIO_BASE       : Explicit prefix for audio assets (default:
@@ -50,9 +55,9 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 def log(msg: str):
     print(f"[reel] {msg}", flush=True)
 
-def run(cmd: List[str]) -> None:
+def run(cmd: List[str], *, timeout: Optional[float] = None) -> None:
     log("RUN " + " ".join(shlex.quote(c) for c in cmd))
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, timeout=timeout)
 
 def which_ffmpeg() -> str:
     ff = subprocess.run(["which", "ffmpeg"], capture_output=True, text=True)
@@ -142,7 +147,9 @@ REEL_TTS_MODEL = env_get("REEL_TTS_MODEL", "gpt-4o-mini-tts")
 REEL_TTS_FALLBACK_MODEL = env_get("REEL_TTS_FALLBACK_MODEL", "gpt-4o-mini-tts")
 REEL_VO_LEAD_PAD_SEC = env_get("REEL_VO_LEAD_PAD_SEC", "0.15")
 REEL_MUSIC_VOLUME_DB = env_get("REEL_MUSIC_VOLUME_DB", "-9")
+REEL_VOICE_ENABLED = env_get("REEL_VOICE_ENABLED", "1") == "1"
 REEL_REQUIRE_VO = env_get("REEL_REQUIRE_VO", "0") == "1"
+REEL_BED_URL = env_get("REEL_BED_URL")
 REEL_MOOD = env_get("REEL_MOOD", None)
 REEL_OUT_PATH = Path(env_get("REEL_OUT_PATH", env_get("REEL_OUT", str(IMAGES_DIR / "reel.mp4"))))
 
@@ -508,13 +515,20 @@ def _fit_hook_layout(
     max_lines: int = 4,
 ) -> tuple[ImageFont.FreeTypeFont, List[str]]:
     clean = " ".join(_safe_reel_text(text or "Today, in your body").split())
-    for size in range(112, 67, -4):
+    # The existing 860px box at x=100 retains a safe margin at 1.055x zoom.
+    # Check individual line extents: wrapping cannot shorten a single word.
+    for size in range(112, 63, -4):
         font = ImageFont.truetype(str(font_path), size=size)
         wrapped = _wrap_story_lines(draw, [clean], font, max_width)
-        if len(wrapped) <= max_lines:
+        if len(wrapped) <= max_lines and all(
+            draw.textbbox((0, 0), line, font=font)[2] <= max_width
+            for line in wrapped
+        ):
             return font, wrapped
-    font = ImageFont.truetype(str(font_path), size=64)
-    return font, _wrap_story_lines(draw, [clean], font, max_width)
+    raise ValueError(
+        f"Hook cannot fit within {max_lines} lines of {max_width}px "
+        "at readable font sizes (64-112px); text was not truncated."
+    )
 
 
 def _overlay_wordmark(canvas: Image.Image) -> None:
@@ -834,6 +848,9 @@ def download_audio(base: Optional[str], rel_url: str, out_wav: Path) -> bool:
     if not base:
         return False
     url = base.rstrip("/") + "/" + rel_url.lstrip("/")
+    return download_audio_url(url, out_wav)
+
+def download_audio_url(url: str, out_wav: Path) -> bool:
     try:
         r = requests.get(url, timeout=60)
         if r.status_code == 200:
@@ -852,7 +869,8 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
     Compose final audio mix and mux with video.
     - If VO + bed: sidechain-compress bed under VO, limiter on master.
     - If VO only: limiter.
-    - If bed only: set bed to configured gain, fade out 200 ms at tail.
+    - If bed only: normalize intentional music-only mode to -18 LUFS;
+      optional narration fallback keeps configured gain. Fade out 200 ms.
     - Else: copy video with no audio.
     """
     # Always re-encode video to be safe for social (yuv420p, H.264 high)
@@ -903,11 +921,17 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
         return
 
     if bed_wav and bed_wav.exists():
+        # A standalone bed needs an audible level; narration/fallback keeps its
+        # existing gain. Resample explicitly after loudnorm's true-peak analysis.
+        bed_level = (
+            "loudnorm=I=-18:TP=-1.5:LRA=7,aresample=44100"
+            if not REEL_VOICE_ENABLED else f"volume={music_volume}"
+        )
         cmd = [
             "ffmpeg", "-y",
             "-i", str(video_in),
             "-stream_loop", "-1", "-i", str(bed_wav),
-            "-filter_complex", f"[1:a]atrim=0:{duration_str},asetpts=N/SR/TB,volume={music_volume},afade=t=out:st={max(0.0, total_duration-0.2):.3f}:d=0.2[aout]",
+            "-filter_complex", f"[1:a]atrim=0:{duration_str},asetpts=N/SR/TB,{bed_level},afade=t=out:st={max(0.0, total_duration-0.2):.3f}:d=0.2[aout]",
             "-map", "0:v",
             "-map", "[aout]",
             *common_video,
@@ -915,7 +939,10 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "-t", duration_str,
             str(video_out)
         ]
-        run(cmd)
+        if not REEL_VOICE_ENABLED:
+            run(cmd, timeout=180)
+        else:
+            run(cmd)
         return
 
     # No audio case
@@ -930,6 +957,8 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
 # ------------ Main orchestration ------------
 
 def main():
+    if REEL_REQUIRE_VO and not REEL_VOICE_ENABLED:
+        raise SystemExit("REEL_REQUIRE_VO=1 conflicts with REEL_VOICE_ENABLED=0")
     which_ffmpeg()
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     REEL_OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -977,49 +1006,57 @@ def main():
     total_duration = max(0.0, sum(clip_durations) - XFADE * (len(clips) - 1))
     log(f"Total visual duration: {total_duration:.3f}s")
 
-    # 4) VO (best-effort) and bed
-    caption_text = resolve_caption(platform=platform, target_day=target_day)
-    post_caption = " ".join((caption_text or "").split())
-    vo_text_raw = resolve_vo_text(platform=platform, target_day=target_day) or caption_text or ""
-    if not vo_text_raw.strip():
-        vo_text_raw = guess_vo_text(EARTHSCOPE_JSON)
-    vo_text = strip_metric_tail(vo_text_raw) if STRIP_METRICS else vo_text_raw
-    if len((vo_text or "").strip()) < 40:
-        log("VO text too short after sanitize; using fallback blurb.")
-        vo_text = "Here is your body read for today, including what changed and what some people may notice."
-    if vo_text != vo_text_raw:
-        log("Sanitized VO: removed trailing metric lines.")
-    log(f"VO: api_key_present={bool(OPENAI_API_KEY)} voice={REEL_TTS_VOICE} model={REEL_TTS_MODEL}")
-    log(f"VO text length={len((vo_text or '').strip())} sanitized={STRIP_METRICS}")
+    # 4) Voice is explicitly optional. Never reuse a previous run's narration.
     vo_wav = tmp_dir / "vo.wav"
+    vo_wav.unlink(missing_ok=True)
     vo_ok = False
-    if OPENAI_API_KEY:
-        log(f"VO using caption chars={len((vo_text or '').strip())}")
-        vo_ok = tts_to_wav(
-            vo_text,
-            vo_wav,
-            api_key=OPENAI_API_KEY,
-            voice=REEL_TTS_VOICE,
-            model=REEL_TTS_MODEL,
-        )
-        if (not vo_ok) and REEL_TTS_FALLBACK_MODEL != REEL_TTS_MODEL:
-            log(f"Retrying TTS with fallback model={REEL_TTS_FALLBACK_MODEL}")
+    if REEL_VOICE_ENABLED:
+        caption_text = resolve_caption(platform=platform, target_day=target_day)
+        post_caption = " ".join((caption_text or "").split())
+        vo_text_raw = resolve_vo_text(platform=platform, target_day=target_day) or caption_text or ""
+        if not vo_text_raw.strip():
+            vo_text_raw = guess_vo_text(EARTHSCOPE_JSON)
+        vo_text = strip_metric_tail(vo_text_raw) if STRIP_METRICS else vo_text_raw
+        if len((vo_text or "").strip()) < 40:
+            log("VO text too short after sanitize; using fallback blurb.")
+            vo_text = "Here is your body read for today, including what changed and what some people may notice."
+        if vo_text != vo_text_raw:
+            log("Sanitized VO: removed trailing metric lines.")
+        log(f"VO: api_key_present={bool(OPENAI_API_KEY)} voice={REEL_TTS_VOICE} model={REEL_TTS_MODEL}")
+        log(f"VO text length={len((vo_text or '').strip())} sanitized={STRIP_METRICS}")
+        if OPENAI_API_KEY:
+            log(f"VO using caption chars={len((vo_text or '').strip())}")
             vo_ok = tts_to_wav(
                 vo_text,
                 vo_wav,
                 api_key=OPENAI_API_KEY,
                 voice=REEL_TTS_VOICE,
-                model=REEL_TTS_FALLBACK_MODEL,
+                model=REEL_TTS_MODEL,
             )
+            if (not vo_ok) and REEL_TTS_FALLBACK_MODEL != REEL_TTS_MODEL:
+                log(f"Retrying TTS with fallback model={REEL_TTS_FALLBACK_MODEL}")
+                vo_ok = tts_to_wav(
+                    vo_text,
+                    vo_wav,
+                    api_key=OPENAI_API_KEY,
+                    voice=REEL_TTS_VOICE,
+                    model=REEL_TTS_FALLBACK_MODEL,
+                )
+        else:
+            log("OPENAI_API_KEY not set; skipping VO.")
+        if REEL_REQUIRE_VO and not vo_ok:
+            raise SystemExit("VO required but TTS failed")
+
     else:
-        log("OPENAI_API_KEY not set; skipping VO.")
-    if REEL_REQUIRE_VO and not vo_ok:
-        raise SystemExit("VO required but TTS failed")
+        log("Narration disabled (REEL_VOICE_ENABLED=0); building music-only reel.")
 
     bed_wav = tmp_dir / "bed.wav"
+    bed_wav.unlink(missing_ok=True)
     bed_ok = False
-    manifest = fetch_audio_manifest(SUPABASE_AUDIO_BASE)
-    if manifest:
+    manifest = None if REEL_BED_URL else fetch_audio_manifest(SUPABASE_AUDIO_BASE)
+    if REEL_BED_URL:
+        bed_ok = download_audio_url(REEL_BED_URL, bed_wav)
+    elif manifest:
         tr = pick_track(manifest, REEL_MOOD)
         if tr:
             rel = tr.get("url") or tr.get("file") or ""
@@ -1031,6 +1068,9 @@ def main():
             log("No track selected; skipping bed.")
     else:
         log("No tracks.json manifest available; skipping bed.")
+
+    if not REEL_VOICE_ENABLED and not (bed_ok and bed_wav.is_file() and bed_wav.stat().st_size):
+        raise SystemExit("Music-only reel requires a downloaded music bed; refusing a silent output")
 
     # --- If the VO is longer than the visual chain, extend detail beats but keep the hook fast. ---
     # Optional padding after VO to avoid abrupt cut

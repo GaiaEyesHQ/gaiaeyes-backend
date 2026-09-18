@@ -2,6 +2,8 @@
 
 Strategy corrected by Jennifer on 2026-09-06. **Build a scalable user-acquisition and engagement system while continuing to improve Gaia Eyes.** Grow the user base, learn what people value, support repeated use and develop the research/medical vision. Revenue and costs remain measured context; immediate profitability or a payer threshold is not the primary gate for development. The original audit's paid-user gate and revenue-led experiment sequence are superseded.
 
+**September 16 handoff reconciliation:** PMF work supports growth and product learning while development continues. It is not an approval test for whether Gaia Eyes deserves further development. The financial and production counts below retain their original evidence dates; this strategy update is not a fresh financial, analytics or provider-account audit.
+
 ## Governing growth context
 
 Jennifer reports that Gaia Eyes has not yet received sustained serious marketing. Some of its strongest download growth followed occasional posts she personally made in relevant Facebook groups. Several target audiences have shown promising interest and provided useful product feedback. Her limited time prevents continuous manual repetition. These are legitimate qualitative/channel signals supplied by the owner, not assumptions to dismiss because attribution is incomplete. Exact historical lift, sample sizes and comparative channel rates remain unverified.
@@ -25,7 +27,7 @@ Research-level data and increasingly medically meaningful functionality are also
 | Acquisition | Existing social/content/site infrastructure; Jennifer reports particularly encouraging download growth from personal posts in relevant Facebook groups | The manual channel has promising qualitative evidence. Sustained serious marketing and a repeatable low-effort distribution/engagement workflow have not yet been established |
 | Audience feedback | Jennifer reports promising interest and useful product feedback from several target audiences | Recover available feedback examples and channel context as evidence; absence of a structured repository dataset does not mean absence of feedback |
 
-The near-term milestone is an operating, repeatable acquisition-and-engagement loop with reduced founder workload and improving product value. Define baselines, cadence, ownership and feedback capture; compare downloads/new accounts, meaningful activation, return and user-reported usefulness across repeated cycles. The earlier ten-account/three-payer gate is withdrawn. $1,000 MRR may remain a later financial milestone if Jennifer chooses, but it does not govern what can be built now.
+The near-term milestone is an operating, repeatable acquisition-and-engagement loop with reduced founder workload and improving product value. Define baselines, cadence, ownership and feedback capture; compare downloads/new accounts, meaningful activation, return and user-reported usefulness across repeated cycles. The earlier ten-account/three-payer gate is withdrawn. The original $1,000 MRR proposal is not an assigned current milestone and must not be carried forward as a development prerequisite.
 
 ## Current audience and value-proposition hypotheses
 
@@ -33,7 +35,7 @@ The near-term milestone is an operating, repeatable acquisition-and-engagement l
 |---|---|---|---|
 | Migraine/headache: “Help me keep a usable episode history and notice what repeatedly coincides with it.” | Existing migraine logs, Siri work, planned follow-up; 13 migraine/headache events from five IDs in 30 days; consistent with the audiences Jennifer says are showing interest | Small measured sample; internal users unknown; comparative response and clinical/predictive validation not established | Developed workflow worth improving now; progress from useful history and evidence toward reviewed stronger capabilities without overstating current validation |
 | Trigger/pattern seekers: “Help me compare how I feel with my health and local environment over time.” | 57 symptom events from nine IDs; patterns engine and exposure/check-in UI; 15 IDs viewed Patterns | Logs sparse vs dashboard activity; no evidence that surfaced correlations drove return/payment | Strong mission fit; activation must explain logging, adequate data and uncertainty before promising insight |
-| Earth/space/environment interest: “Help me understand today's conditions and compare them with my own observations.” | Home dominates observed tab views; active visuals/environmental content and social distribution | Home is default and repeatedly instrumented; visits do not establish a personal job, subscription intent or value of every feed | Easy curiosity entry, weak proven path to paid repeated personal value; test against a concrete tracking message |
+| Earth/space/environment interest: “Help me understand today's conditions and compare them with my own observations.” | Home dominates observed tab views; active visuals/environmental content and social distribution | Home is default and repeatedly instrumented; visits do not establish a personal job or the usefulness of every feed | Promising curiosity entry; the path to repeated personal value remains unmeasured. Compare useful environmental understanding and concrete tracking messages without requiring purchase |
 
 The audience rows are overlapping working hypotheses, not a requirement to pick one winner before growing. Jennifer's reported multi-audience interest/feedback is evidence across the program; its exact mapping to these rows still needs recovery. Scientific/mystical preference is presentation, not a proven customer segment. Do not infer medical conditions or beliefs from browsing or group membership. Optional job-intent choices can distinguish relevant needs without collecting diagnosis histories for marketing.
 
@@ -85,12 +87,16 @@ Meta browser figures were excluded because the inspected asset identity was not 
 
 ## Minimum measurement work
 
+Use three views of progress: (1) acquisition and founder effort, (2) activation, repeated value and feedback for free and Plus users, and (3) revenue/cost and capacity. The third view informs sustainable operation; it does not override the first two or veto research and product foundations because their monetary return is not immediate. Sparse conversion data should generate questions about reach, audience, product generosity and Plus value, not a default conclusion of weak demand.
+
 1. Define cohort start, first meaningful activity, foreground session and meaningful D7 return. Include accepted log/check-in or completed health sync followed by a personal result; a default tab render alone should not count as activation.
 2. Record platform/version, bounded acquisition source/job intent and a controlled internal-account exclusion. Do not collect names, precise location, diagnoses or notes solely for analytics.
 3. Reuse existing analytics routes with a small reviewed taxonomy: onboarding milestone, meaningful activity accepted, personal insight viewed/usefulness, paywall exposure and notification open. Avoid symptom detail/severity/medication properties in generic telemetry.
 4. Bind queued events to the correct account, handle guest→registered continuity and sign-out, and test retries/deduplication. Client analytics currently uses a global pending-events key; fix attribution before adding more events.
 5. Reconcile server/provider payment lifecycle, manual grants, refunds, renewals and annual normalization. Event-driven purchase UI analytics cannot substitute for provider records.
 6. Produce a weekly growth/engagement report: eligible opportunities, content prepared/approved/published, visits/downloads/new accounts where observable, meaningful activation/return, feedback, and Jennifer's preparation/review minutes. Label unattributed gaps. Track revenue/runtime cost alongside it on an appropriate financial cadence; do not let them dominate the weekly product decisions.
+
+**September 17 reporting clarification:** show free-user and Plus-user usefulness together in the primary growth/engagement view. Record reach, first useful action, repeat use, feedback and founder time with their evidence dates and denominators; leave unknown values unknown. Keep the financial view visible for capacity planning and later Plus refinement. A weak or inconclusive campaign result changes that campaign or its measurement; it does not automatically withdraw support for product or research development.
 
 ## Current growth experiments
 

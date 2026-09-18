@@ -6,7 +6,7 @@ Reconciled **September 6, 2026 UTC / September 5 CDT**. The audit is complete wi
 
 ## Executive report
 
-**Where we left off:** iOS is released with an update in progress. Android is a substantial native app, still unreleased. Main contains recent mobile, member-content and social fixes; additional Siri work is stranded in an older dirty checkout. The DUNS number and LLC documents are now ready, but Apple membership conversion and Google organization enrollment have not happened.
+**Where we left off:** iOS is released with an update in progress. Android is a substantial native app, still unreleased. Main contains recent mobile, member-content and social fixes; additional Siri work is stranded in an older dirty checkout. The DUNS number and LLC documents are ready. Latest September 16 screenshot evidence confirms an existing Gaia Eyes organization-account app, `com.gaiaeyes.app`, **Draft**, installed audience **0**, last updated **September 7, 2026**. This supersedes the immediately preceding no-app statement. Do not create a duplicate app. Apple membership conversion remains separately unverified. See [Android account correction](ANDROID_ACCOUNT_STATE_CORRECTION.md).
 
 **What works:** both current source trees build; Android's 76 unit tests/lint/debug build and 34 focused backend tests pass. API/database/queue checks pass, native HealthKit and Health Connect rows exist, and member EarthScope has current output for all four currently active Plus account IDs. These results do not certify devices, TestFlight or billing lifecycle.
 

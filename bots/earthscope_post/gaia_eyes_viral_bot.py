@@ -645,6 +645,20 @@ def _merge_post_metrics_into_features(feats: Optional[dict], metrics: Optional[d
     return merged
 
 
+def _stats_metrics_include_stored_wind(metrics: Optional[dict]) -> bool:
+    if not isinstance(metrics, dict):
+        return False
+    if metrics.get("solar_wind_kms") is None:
+        return False
+    space_json = metrics.get("space_json")
+    return not (isinstance(space_json, dict) and space_json.get("sw_now") is not None)
+
+
+def _align_stats_wind_with_post_metrics(stats_feats: dict, metrics: Optional[dict]) -> None:
+    if _stats_metrics_include_stored_wind(metrics):
+        stats_feats.pop("sw_speed_current", None)
+
+
 def fetch_post_for(day: dt.date, platform: str="default") -> Optional[dict]:
     if not SUPABASE_REST_URL:
         return None
@@ -2091,6 +2105,7 @@ def main(args: Optional[argparse.Namespace] = None):
     if metrics_now.get("sw") is not None:
         stats_feats["sw_speed_current"] = metrics_now["sw"]
         stats_feats.setdefault("sw_speed_avg", stats_feats.get("sw_speed_avg"))
+    _align_stats_wind_with_post_metrics(stats_feats, metrics)
     stats_feats.setdefault("caption", caption_text)
     stats_feats.setdefault("affects", affects_txt)
     if isinstance(metrics, dict):
