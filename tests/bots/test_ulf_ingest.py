@@ -1,6 +1,7 @@
 import asyncio
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 
 from bots.geomag_ulf import ingest_ulf
@@ -128,3 +129,47 @@ def test_run_raises_when_no_station_windows(monkeypatch: pytest.MonkeyPatch) -> 
 
     with pytest.raises(RuntimeError, match="ULF ingest produced no fresh derived rows"):
         asyncio.run(ingest_ulf._run())
+
+
+def test_run_exhausts_usgs_timeouts_and_reports_no_data(monkeypatch):
+    """Reproduce issues #171-#173 without network or database writes."""
+    monkeypatch.setattr(ingest_ulf, "_resolve_dsn", lambda: "postgresql://example")
+    monkeypatch.setattr(ingest_ulf, "ULF_STATIONS", ["BOU", "CMO"])
+    monkeypatch.setattr(ingest_ulf, "HTTP_RETRY_TRIES", 3)
+    monkeypatch.setattr(ingest_ulf, "HTTP_RETRY_BASE_SLEEP", 0)
+    requested_stations = []
+
+    def timeout(request):
+        requested_stations.append(request.url.params["id"])
+        raise httpx.ReadTimeout("", request=request)
+
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        ingest_ulf.httpx,
+        "AsyncClient",
+        lambda **kwargs: original_client(transport=httpx.MockTransport(timeout), **kwargs),
+    )
+
+    class Connection:
+        closed = False
+
+        async def close(self):
+            self.closed = True
+
+    conn = Connection()
+
+    async def connect(dsn):
+        return conn
+
+    async def unexpected_upsert(*args):
+        pytest.fail("A complete USGS outage must not write derived rows")
+
+    monkeypatch.setattr(ingest_ulf.asyncpg, "connect", connect)
+    monkeypatch.setattr(ingest_ulf, "upsert_station_rows", unexpected_upsert)
+    monkeypatch.setattr(ingest_ulf, "upsert_context_rows", unexpected_upsert)
+
+    with pytest.raises(RuntimeError, match=r"station_windows=BOU=0, CMO=0"):
+        asyncio.run(ingest_ulf._run())
+
+    assert requested_stations == ["BOU"] * 3 + ["CMO"] * 3
+    assert conn.closed
