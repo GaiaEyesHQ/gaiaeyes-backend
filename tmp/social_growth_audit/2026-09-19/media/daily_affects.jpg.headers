@@ -1,0 +1,22 @@
+{
+  "Accept-Ranges": "bytes",
+  "Access-Control-Allow-Origin": "*",
+  "CF-Cache-Status": "MISS",
+  "CF-Ray": "a3dae4d61a54cbf9-IAH",
+  "Cache-Control": "no-cache",
+  "Connection": "close",
+  "Content-Length": "231954",
+  "Content-Type": "image/jpeg",
+  "Date": "Sat, 19 Sep 2026 19:11:02 GMT",
+  "ETag": "\"3393f4ae335bec39a148553518e54df8\"",
+  "Last-Modified": "Sat, 19 Sep 2026 14:19:34 GMT",
+  "Server": "cloudflare",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+  "alt-svc": "h3=\":443\"; ma=86400",
+  "sb-gateway-mode": "direct",
+  "sb-gateway-version": "1",
+  "sb-project-ref": "qadwzkwubfbfuslfxkzl",
+  "sb-request-id": "01a0bb14-41db-706b-98cf-37859b583bd5",
+  "set-cookie": "__cf_bm=qDG5j51VhW44Jl_VPvEQxmgZOARc46qJp.WUmY0V_2Q-1789845062.0986676-1.0.1.1-GsBe3HGkF5gGBbb9N8mz4MKgZCDSy0q.3uEtGR0dAsLvugIbzKeZQ4BvV.GxiD2fqPRgoKA8ZLHsKtd0W.S3lfvYa5VxYez4tYM8_TRgGqNhZZIkBUOHJcpvWURQZNEo; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Sat, 19 Sep 2026 19:41:02 GMT",
+  "x-robots-tag": "none"
+}

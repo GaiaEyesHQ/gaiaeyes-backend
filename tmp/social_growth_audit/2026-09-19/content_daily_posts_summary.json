@@ -1,0 +1,514 @@
+[
+  {
+    "caption_head": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)",
+    "created_at": "2026-09-19T14:18:41.819464+00:00",
+    "day": "2026-09-19",
+    "fb_caption_head": "",
+    "id": 883,
+    "ig_caption_head": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 433.0
+    },
+    "platform": "default",
+    "reel_story": {
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "hook": "Is Your Body Whispering Today?",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Is Your Body Whispering Today?"
+  },
+  {
+    "caption_head": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)",
+    "created_at": "2026-09-19T14:18:41.819464+00:00",
+    "day": "2026-09-19",
+    "fb_caption_head": "",
+    "id": 884,
+    "ig_caption_head": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 433.0
+    },
+    "platform": "ig",
+    "reel_story": {
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "hook": "Is Your Body Whispering Today?",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Is Your Body Whispering Today?"
+  },
+  {
+    "caption_head": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)",
+    "created_at": "2026-09-18T14:54:55.973061+00:00",
+    "day": "2026-09-18",
+    "fb_caption_head": "",
+    "id": 881,
+    "ig_caption_head": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 1.0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 421.0
+    },
+    "platform": "default",
+    "reel_story": {
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "hook": "Feeling Off For No Reason?",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Feeling Off For No Reason?"
+  },
+  {
+    "caption_head": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)",
+    "created_at": "2026-09-18T14:54:55.973061+00:00",
+    "day": "2026-09-18",
+    "fb_caption_head": "",
+    "id": 882,
+    "ig_caption_head": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 1.0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 421.0
+    },
+    "platform": "ig",
+    "reel_story": {
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "hook": "Feeling Off For No Reason?",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Feeling Off For No Reason?"
+  },
+  {
+    "caption_head": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)",
+    "created_at": "2026-09-17T15:31:04.514415+00:00",
+    "day": "2026-09-17",
+    "fb_caption_head": "",
+    "id": 879,
+    "ig_caption_head": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 450.0
+    },
+    "platform": "default",
+    "reel_story": {
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "hook": "Feeling Different Today?",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "signal": "The background looks steady enough to keep the day simple.",
+      "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Feeling Different Today?"
+  },
+  {
+    "caption_head": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)",
+    "created_at": "2026-09-17T15:31:04.514415+00:00",
+    "day": "2026-09-17",
+    "fb_caption_head": "",
+    "id": 880,
+    "ig_caption_head": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 450.0
+    },
+    "platform": "ig",
+    "reel_story": {
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "hook": "Feeling Different Today?",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "signal": "The background looks steady enough to keep the day simple.",
+      "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Feeling Different Today?"
+  },
+  {
+    "caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.2 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+    "created_at": "2026-09-16T15:24:14.115617+00:00",
+    "day": "2026-09-16",
+    "fb_caption_head": "",
+    "id": 877,
+    "ig_caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.2 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 522.0
+    },
+    "platform": "default",
+    "reel_story": {
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "hook": "Brain Fog On A Loop?",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.2 nT \u2022 Schumann 7.75 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Brain Fog On A Loop?"
+  },
+  {
+    "caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.2 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+    "created_at": "2026-09-16T15:24:14.115617+00:00",
+    "day": "2026-09-16",
+    "fb_caption_head": "",
+    "id": 878,
+    "ig_caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.2 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 522.0
+    },
+    "platform": "ig",
+    "reel_story": {
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "hook": "Brain Fog On A Loop?",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.2 nT \u2022 Schumann 7.75 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Brain Fog On A Loop?"
+  },
+  {
+    "caption_head": "Standard energy field\u2014consistency wins today. \u2014 Kp 3.0 \u2022 Bz -2.9 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "created_at": "2026-09-15T15:32:19.140904+00:00",
+    "day": "2026-09-15",
+    "fb_caption_head": "",
+    "id": 875,
+    "ig_caption_head": "Standard energy field\u2014consistency wins today. \u2014 Kp 3.0 \u2022 Bz -2.9 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 412.0
+    },
+    "platform": "default",
+    "reel_story": {
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "hook": "Standard energy field\u2014consistency wins today",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "signal": "Signals are sitting in a fairly ordinary range today.",
+      "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 3.0 \u2022 Bz -2.9 nT \u2022 Schumann 7.69 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Energy hard to hold?"
+  },
+  {
+    "caption_head": "Standard energy field\u2014consistency wins today. \u2014 Kp 3.0 \u2022 Bz -2.9 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "created_at": "2026-09-15T15:32:19.140904+00:00",
+    "day": "2026-09-15",
+    "fb_caption_head": "",
+    "id": 876,
+    "ig_caption_head": "Standard energy field\u2014consistency wins today. \u2014 Kp 3.0 \u2022 Bz -2.9 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 412.0
+    },
+    "platform": "ig",
+    "reel_story": {
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "hook": "Standard energy field\u2014consistency wins today",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "signal": "Signals are sitting in a fairly ordinary range today.",
+      "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 3.0 \u2022 Bz -2.9 nT \u2022 Schumann 7.69 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Energy hard to hold?"
+  },
+  {
+    "caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -9.1 nT \u2022 Schumann 7.72 Hz (snapshot at write time)",
+    "created_at": "2026-09-14T16:56:09.509536+00:00",
+    "day": "2026-09-14",
+    "fb_caption_head": "",
+    "id": 872,
+    "ig_caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -9.1 nT \u2022 Schumann 7.72 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 1.0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 379.0
+    },
+    "platform": "default",
+    "reel_story": {
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "hook": "Body Buzzing Today?",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -9.1 nT \u2022 Schumann 7.72 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Body Buzzing Today?"
+  },
+  {
+    "caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -9.1 nT \u2022 Schumann 7.72 Hz (snapshot at write time)",
+    "created_at": "2026-09-14T16:56:09.509536+00:00",
+    "day": "2026-09-14",
+    "fb_caption_head": "",
+    "id": 874,
+    "ig_caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -9.1 nT \u2022 Schumann 7.72 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 1.0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 379.0
+    },
+    "platform": "ig",
+    "reel_story": {
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "hook": "Body Buzzing Today?",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -9.1 nT \u2022 Schumann 7.72 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Body Buzzing Today?"
+  },
+  {
+    "caption_head": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 3.0 \u2022 Bz -6.7 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "created_at": "2026-09-13T14:54:16.402226+00:00",
+    "day": "2026-09-13",
+    "fb_caption_head": "",
+    "id": 870,
+    "ig_caption_head": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 3.0 \u2022 Bz -6.7 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 433.0
+    },
+    "platform": "default",
+    "reel_story": {
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "hook": "Feeling Jittery Today?",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 3.0 \u2022 Bz -6.7 nT \u2022 Schumann 7.71 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Feeling Jittery Today?"
+  },
+  {
+    "caption_head": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 3.0 \u2022 Bz -6.7 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "created_at": "2026-09-13T14:54:16.402226+00:00",
+    "day": "2026-09-13",
+    "fb_caption_head": "",
+    "id": 871,
+    "ig_caption_head": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 3.0 \u2022 Bz -6.7 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 433.0
+    },
+    "platform": "ig",
+    "reel_story": {
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "hook": "Feeling Jittery Today?",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 3.0 \u2022 Bz -6.7 nT \u2022 Schumann 7.71 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Feeling Jittery Today?"
+  },
+  {
+    "caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 3.0 \u2022 Bz -6.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "created_at": "2026-09-12T16:56:20.765849+00:00",
+    "day": "2026-09-12",
+    "fb_caption_head": "",
+    "id": 868,
+    "ig_caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 3.0 \u2022 Bz -6.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 2.0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 402.0
+    },
+    "platform": "default",
+    "reel_story": {
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "hook": "Feeling Wired And Worn Out?",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 3.0 \u2022 Bz -6.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Feeling Wired And Worn Out?"
+  },
+  {
+    "caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 3.0 \u2022 Bz -6.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "created_at": "2026-09-12T16:56:20.765849+00:00",
+    "day": "2026-09-12",
+    "fb_caption_head": "",
+    "id": 869,
+    "ig_caption_head": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 3.0 \u2022 Bz -6.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "metrics": {
+      "bz": null,
+      "cmes_24h": 2.0,
+      "flares_m_24h": null,
+      "flares_x_24h": null,
+      "kp": null,
+      "schumann_hz": null,
+      "solar_wind_kms": 402.0
+    },
+    "platform": "ig",
+    "reel_story": {
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "hook": "Feeling Wired And Worn Out?",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 3.0 \u2022 Bz -6.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_daily": null,
+      "sw_now": null
+    },
+    "title": "Feeling Wired And Worn Out?"
+  }
+]
