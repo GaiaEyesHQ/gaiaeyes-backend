@@ -302,14 +302,27 @@ class GaiaApiClient(
         return response.body()
     }
 
-    suspend fun magnetosphere(): MagnetosphereResponse =
-        publicGet("/v1/space/magnetosphere")
+    suspend fun magnetosphere(accessToken: String): MagnetosphereResponse =
+        authenticatedGet("/v1/space/magnetosphere", accessToken).body()
 
     suspend fun schumannLatest(): SchumannLatestResponse =
         publicGet("/v1/earth/schumann/latest")
 
-    suspend fun quakesLatest(): QuakesLatestResponse =
-        publicGet("/v1/quakes/latest")
+    suspend fun quakesLatest(accessToken: String): QuakesLatestResponse =
+        authenticatedGet("/v1/quakes/latest", accessToken).body()
+
+    suspend fun schumannSeries(): SchumannSeriesResponse =
+        publicGet("/v1/earth/schumann/series_primary?limit=192")
+
+    suspend fun tomskLatest(): TomskLatestResponse =
+        publicGet("/v1/earth/schumann/tomsk_params/latest")
+
+    suspend fun ulfLatest(): UlfLatestResponse = publicGet("/v1/earth/ulf/latest")
+
+    suspend fun ulfSeries(): UlfSeriesResponse = publicGet("/v1/earth/ulf/series?hours=48")
+
+    suspend fun spaceHistory(accessToken: String): SpaceHistoryResponse =
+        authenticatedGet("/v1/space/history?hours=24", accessToken).body()
 
     suspend fun hazards(): HazardsResponse =
         publicGet("/v1/hazards/gdacs/full")

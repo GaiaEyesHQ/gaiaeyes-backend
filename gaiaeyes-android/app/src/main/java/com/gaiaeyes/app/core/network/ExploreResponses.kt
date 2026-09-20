@@ -16,6 +16,8 @@ data class MagnetosphereData(
     val ts: String? = null,
     val kpis: MagnetosphereKpis = MagnetosphereKpis(),
     @SerialName("sw") val solarWind: MagnetosphereSolarWind = MagnetosphereSolarWind(),
+    val series: MagnetosphereSeries = MagnetosphereSeries(),
+    val trend: Map<String, String?> = emptyMap(),
 )
 
 @Serializable
@@ -129,4 +131,80 @@ data class ExplorePayload(
     val schumann: SchumannLatestResponse? = null,
     val quakes: QuakesLatestResponse? = null,
     val hazards: HazardsResponse? = null,
+    val schumannSeries: SchumannSeriesResponse? = null,
+    val tomsk: TomskLatestResponse? = null,
+    val ulf: UlfLatestResponse? = null,
+    val ulfSeries: UlfSeriesResponse? = null,
+    val spaceHistory: SpaceHistoryResponse? = null,
+    // Per-source request failures survive cache round trips; a successful sibling cannot mark them live.
+    val sourceErrors: Map<String, String> = emptyMap(),
+    val fetchedAt: Map<String, Long> = emptyMap(),
 )
+
+@Serializable
+data class MagnetosphereSeries(val r0: List<EnvironmentPoint> = emptyList())
+
+@Serializable
+data class EnvironmentPoint(val t: String? = null, val v: Double? = null)
+
+@Serializable
+data class SpaceHistoryResponse(val ok: Boolean = false, val data: SpaceHistoryData? = null)
+
+@Serializable
+data class SpaceHistoryData(val series24: Map<String, List<List<JsonElement>>> = emptyMap())
+
+@Serializable
+data class SchumannSeriesResponse(val ok: Boolean = false, val rows: List<SchumannSeriesRow> = emptyList())
+
+@Serializable
+data class SchumannSeriesRow(
+    val ts: String? = null,
+    val harmonics: SchumannHarmonics = SchumannHarmonics(),
+    val amplitude: SchumannAmplitude = SchumannAmplitude(),
+    val quality: SchumannQuality = SchumannQuality(),
+)
+
+@Serializable
+data class TomskLatestResponse(
+    val ok: Boolean = false,
+    @SerialName("generated_at") val generatedAt: String? = null,
+    @SerialName("station_id") val stationId: String? = null,
+    val usable: Boolean? = null,
+    @SerialName("quality_score") val qualityScore: Double? = null,
+    @SerialName("frequency_hz") val frequencyHz: Map<String, Double?> = emptyMap(),
+    val amplitude: Map<String, Double?> = emptyMap(),
+    @SerialName("q_factor") val qFactor: Map<String, Double?> = emptyMap(),
+)
+
+// ULF endpoints intentionally have no `ok` envelope.
+@Serializable
+data class UlfLatestResponse(
+    @SerialName("latest_context") val context: UlfContext? = null,
+    @SerialName("latest_by_station") val stations: List<UlfStation> = emptyList(),
+)
+
+@Serializable
+data class UlfContext(
+    @SerialName("ts_utc") val timestamp: String? = null,
+    @SerialName("stations_used") val stations: List<String> = emptyList(),
+    @SerialName("regional_intensity") val intensity: Double? = null,
+    @SerialName("regional_coherence") val coherence: Double? = null,
+    @SerialName("regional_persistence") val persistence: Double? = null,
+    @SerialName("context_class") val classification: String? = null,
+    @SerialName("confidence_score") val confidence: Double? = null,
+    @SerialName("quality_flags") val qualityFlags: List<String> = emptyList(),
+)
+
+@Serializable
+data class UlfStation(
+    @SerialName("station_id") val stationId: String? = null,
+    @SerialName("ts_utc") val timestamp: String? = null,
+    @SerialName("component_used") val component: String? = null,
+    @SerialName("dbdt_rms") val dbdtRms: Double? = null,
+    @SerialName("ulf_band_proxy") val bandProxy: Double? = null,
+    @SerialName("ulf_index_station") val index: Double? = null,
+    @SerialName("quality_flags") val qualityFlags: List<String> = emptyList(),
+)
+
+@Serializable
+data class UlfSeriesResponse(val series: List<UlfContext> = emptyList())

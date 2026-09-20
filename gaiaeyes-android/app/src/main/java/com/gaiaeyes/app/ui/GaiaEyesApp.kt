@@ -3277,6 +3277,12 @@ private fun ExploreScreen(
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
+                ExploreSignalCard(
+                    summary = checkNotNull(signalSummaries[ExploreDetail.ULF]),
+                    onClick = { onOpenDetail(ExploreDetail.ULF) },
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
                 Text(
                     text = "More to Explore",
                     color = Color.White,
@@ -3375,6 +3381,7 @@ internal enum class ExploreDetail {
     SPACE_WEATHER,
     MAGNETOSPHERE,
     SCHUMANN,
+    ULF,
     EARTHQUAKES,
     HAZARDS,
 }
@@ -3454,7 +3461,7 @@ private fun ExploreSignalCard(
 }
 
 @Composable
-private fun ExploreDetailScreen(
+internal fun ExploreDetailScreen(
     detail: ExploreDetail,
     snapshot: ExploreSnapshot?,
     isLoading: Boolean,
@@ -3466,6 +3473,7 @@ private fun ExploreDetailScreen(
     BackHandler(onBack = onBack)
     val summary = exploreSignalSummaries(snapshot, isLoading).first { it.detail == detail }
     val hasData = hasExploreDetailData(detail, snapshot)
+    val isEnvironmental = detail in listOf(ExploreDetail.SPACE_WEATHER, ExploreDetail.MAGNETOSPHERE, ExploreDetail.SCHUMANN, ExploreDetail.ULF)
     ScreenFrame(modifier = modifier) {
         ContentColumn(bottomPadding = 32.dp) {
             Header(
@@ -3482,7 +3490,7 @@ private fun ExploreDetailScreen(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = if (hasData) summary.subtitle else exploreDetailEmptyText(detail),
+                text = if (hasData || isEnvironmental) summary.subtitle else exploreDetailEmptyText(detail),
                 color = Color(0xFF9BA6B4),
                 fontSize = 15.sp,
                 lineHeight = 22.sp,
@@ -3490,7 +3498,9 @@ private fun ExploreDetailScreen(
             )
             Spacer(modifier = Modifier.height(18.dp))
 
-            if (hasData && snapshot != null) {
+            if (isEnvironmental) {
+                EnvironmentalDetailContent(detail, snapshot, isLoading)
+            } else if (hasData && snapshot != null) {
                 SettingsSectionCard(title = "Current readings") {
                     summary.metrics.forEach { metric ->
                         SettingsStatusRow(
@@ -3550,6 +3560,7 @@ private fun ExploreEvidenceCard(
             payload.schumann?.quality?.primarySource?.let { "Primary source: $it" },
             payload.schumann?.fusion?.displayF0Source?.let { "Displayed resonance source: $it" },
         )
+        ExploreDetail.ULF -> emptyList()
         ExploreDetail.EARTHQUAKES -> listOfNotNull(
             payload.quakes?.item?.day?.let { "Daily rollup: $it" },
             "Source: USGS-derived Gaia Eyes feed",
@@ -3588,8 +3599,6 @@ internal fun exploreSignalSummaries(
     isLoading: Boolean = false,
 ): List<ExploreSignalSummary> {
     val payload = snapshot?.payload
-    val magnetosphere = payload?.magnetosphere?.data
-    val schumann = payload?.schumann
     val quakes = payload?.quakes?.item
     val hazards = payload?.hazards
     fun unavailableStatus(hasData: Boolean): String = when {
@@ -3606,69 +3615,20 @@ internal fun exploreSignalSummaries(
         !liveStatus.isNullOrBlank() -> liveStatus
         else -> unavailableStatus(hasData)
     }
-    val f0 = schumann?.fusion?.displayF0Hz
-        ?: schumann?.harmonics?.f0
-        ?: schumann?.harmonics?.combinedF1
 
     return listOf(
-        ExploreSignalSummary(
-            detail = ExploreDetail.SPACE_WEATHER,
-            title = "Space Weather",
-            subtitle = "Current solar wind and geomagnetic readings.",
-            status = sourceStatus(
-                ExploreDetail.SPACE_WEATHER,
-                magnetosphere != null,
-                magnetosphere?.kpis?.storminess?.displaySignalText(),
-            ),
-            color = GaiaBlue,
-            metrics = listOfNotNull(
-                magnetosphere?.kpis?.kp?.let { "Kp" to formatExploreNumber(it) },
-                magnetosphere?.solarWind?.speedKms?.let { "Wind" to "${it.roundToInt()} km/s" },
-                magnetosphere?.solarWind?.bzNt?.let { "Bz" to "${formatExploreNumber(it)} nT" },
-            ),
-        ),
-        ExploreSignalSummary(
-            detail = ExploreDetail.MAGNETOSPHERE,
-            title = "Magnetosphere",
-            subtitle = "Modeled boundary and geomagnetic context.",
-            status = sourceStatus(
-                ExploreDetail.MAGNETOSPHERE,
-                magnetosphere != null,
-                magnetosphere?.kpis?.geoRisk?.displaySignalText(),
-            ),
-            color = GaiaGreen,
-            metrics = listOfNotNull(
-                magnetosphere?.kpis?.standoffDistanceEarthRadii?.let {
-                    "Standoff" to "${formatExploreNumber(it)} Re"
-                },
-                magnetosphere?.kpis?.plasmapauseEarthRadii?.let {
-                    "Plasmapause" to "${formatExploreNumber(it)} Re"
-                },
-                magnetosphere?.solarWind?.densityCm3?.let {
-                    "Density" to "${formatExploreNumber(it)} cm⁻³"
-                },
-            ),
-        ),
-        ExploreSignalSummary(
-            detail = ExploreDetail.SCHUMANN,
-            title = "Schumann Resonance",
-            subtitle = "Current resonance frequency and source quality.",
-            status = sourceStatus(
-                ExploreDetail.SCHUMANN,
-                schumann != null,
-                when (schumann?.quality?.usable) {
-                    true -> "Available"
-                    false -> "Limited"
-                    null -> null
-                },
-            ),
-            color = GaiaAmber,
-            metrics = listOfNotNull(
-                f0?.let { "F0" to "${formatExploreNumber(it)} Hz" },
-                schumann?.quality?.qualityScore?.let { "Quality" to formatExploreNumber(it) },
-                schumann?.amplitude?.total0To20?.let { "Amplitude" to formatExploreNumber(it) },
-            ),
-        ),
+        *listOf(ExploreDetail.SPACE_WEATHER, ExploreDetail.MAGNETOSPHERE, ExploreDetail.SCHUMANN, ExploreDetail.ULF).map { detail ->
+            val panel = environmentalPanel(detail, snapshot)
+            val first = panel.readings.firstOrNull { it.metrics.isNotEmpty() } ?: panel.readings.firstOrNull()
+            ExploreSignalSummary(
+                detail = detail,
+                title = panel.title,
+                subtitle = panel.explanation,
+                status = if (!panel.hasReadings && isLoading) "Updating" else first?.status ?: "No readings",
+                color = if (detail == ExploreDetail.SCHUMANN || detail == ExploreDetail.ULF) GaiaAmber else GaiaBlue,
+                metrics = panel.readings.flatMap { it.metrics.take(1) }.take(3),
+            )
+        }.toTypedArray(),
         ExploreSignalSummary(
             detail = ExploreDetail.EARTHQUAKES,
             title = "Earthquakes",
@@ -3712,8 +3672,7 @@ internal fun exploreSignalSummaries(
 private fun hasExploreDetailData(detail: ExploreDetail, snapshot: ExploreSnapshot?): Boolean =
     when (detail) {
         ExploreDetail.SPACE_WEATHER,
-        ExploreDetail.MAGNETOSPHERE -> snapshot?.payload?.magnetosphere?.data != null
-        ExploreDetail.SCHUMANN -> snapshot?.payload?.schumann != null
+        ExploreDetail.MAGNETOSPHERE, ExploreDetail.SCHUMANN, ExploreDetail.ULF -> environmentalPanel(detail, snapshot).hasReadings
         ExploreDetail.EARTHQUAKES -> snapshot?.payload?.quakes?.item != null
         ExploreDetail.HAZARDS -> snapshot?.payload?.hazards != null
     }
@@ -3721,18 +3680,20 @@ private fun hasExploreDetailData(detail: ExploreDetail, snapshot: ExploreSnapsho
 internal fun exploreSourceUnavailable(detail: ExploreDetail, snapshot: ExploreSnapshot): Boolean {
     val sourceName = when (detail) {
         ExploreDetail.SPACE_WEATHER,
-        ExploreDetail.MAGNETOSPHERE -> "Space Weather and Magnetosphere"
+        ExploreDetail.MAGNETOSPHERE -> "Magnetosphere"
         ExploreDetail.SCHUMANN -> "Schumann Resonance"
+        ExploreDetail.ULF -> "ULF"
         ExploreDetail.EARTHQUAKES -> "Earthquakes"
         ExploreDetail.HAZARDS -> "Global Hazards"
     }
-    return sourceName in snapshot.unavailableSources
+    return sourceName in snapshot.unavailableSources || sourceName in snapshot.payload.sourceErrors
 }
 
 private fun exploreDetailTitle(detail: ExploreDetail): String = when (detail) {
     ExploreDetail.SPACE_WEATHER -> "Space Weather"
     ExploreDetail.MAGNETOSPHERE -> "Magnetosphere"
     ExploreDetail.SCHUMANN -> "Schumann Resonance"
+    ExploreDetail.ULF -> "ULF Geomagnetic Activity"
     ExploreDetail.EARTHQUAKES -> "Earthquakes"
     ExploreDetail.HAZARDS -> "Global Hazards"
 }

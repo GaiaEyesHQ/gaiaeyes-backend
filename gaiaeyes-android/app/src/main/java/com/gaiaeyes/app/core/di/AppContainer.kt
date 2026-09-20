@@ -72,6 +72,8 @@ class AppContainer(
     val exploreRepository = ExploreRepository(
         apiClient = apiClient,
         cache = ExploreCache(context.applicationContext),
+        accessToken = authRepository::accessToken,
+        currentAccountId = authRepository::currentAccountId,
     )
     val patternsRepository = PatternsRepository(
         authRepository = authRepository,

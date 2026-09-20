@@ -29,13 +29,14 @@ class ExplorePresentationTest {
                 ExploreDetail.SPACE_WEATHER,
                 ExploreDetail.MAGNETOSPHERE,
                 ExploreDetail.SCHUMANN,
+                ExploreDetail.ULF,
                 ExploreDetail.EARTHQUAKES,
                 ExploreDetail.HAZARDS,
             ),
             summaries.map { it.detail },
         )
-        assertEquals("Unavailable", summaries.first().status)
-        assertEquals("Available", summaries[2].status)
+        assertEquals("No readings", summaries.first().status)
+        assertEquals("No readings", summaries[2].status)
         assertEquals("Unavailable", summaries.last().status)
     }
 
@@ -56,7 +57,7 @@ class ExplorePresentationTest {
         val schumann = exploreSignalSummaries(snapshot)
             .first { it.detail == ExploreDetail.SCHUMANN }
 
-        assertEquals("Saved", schumann.status)
+        assertEquals("Could not refresh", schumann.status)
         assertEquals(true, exploreSourceUnavailable(ExploreDetail.SCHUMANN, snapshot))
     }
 
@@ -64,7 +65,7 @@ class ExplorePresentationTest {
     fun showsUpdatingBeforeMissingSourcesResolve() {
         val summaries = exploreSignalSummaries(snapshot = null, isLoading = true)
 
-        assertEquals(5, summaries.size)
+        assertEquals(6, summaries.size)
         assertEquals(setOf("Updating"), summaries.map { it.status }.toSet())
     }
 }

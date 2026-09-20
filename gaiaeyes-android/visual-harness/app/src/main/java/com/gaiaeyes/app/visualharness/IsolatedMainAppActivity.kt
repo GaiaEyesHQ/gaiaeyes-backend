@@ -70,7 +70,7 @@ internal class MainAppFixture(activity: ComponentActivity) {
     val health = HealthRepository(api)
     val healthConnect = HealthConnectRepository(context, auth, api, HealthSampleQueue(context), { error("No background work in synthetic medicine checks") })
     val home = HomeContextRepository(auth, api, HomeContextCache(context))
-    val explore = ExploreRepository(api, ExploreCache(context))
+    val explore = ExploreRepository(api, ExploreCache(context), auth::accessToken, auth::currentAccountId)
     val journal = JournalRepository(auth, api, JournalWriteQueue(context), { error("No background work in synthetic medicine checks") })
     val notifications = NotificationRepository(context, auth, api)
     val outlook = OutlookRepository(auth, api, OutlookCache(context))

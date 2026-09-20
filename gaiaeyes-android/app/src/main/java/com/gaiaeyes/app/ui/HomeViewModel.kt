@@ -1870,7 +1870,7 @@ class HomeViewModel(
                         exploreMessage = explore.unavailableSources
                             .takeIf(List<String>::isNotEmpty)
                             ?.joinToString(
-                                prefix = "Some Explore details are using saved data: ",
+                                prefix = "Some Explore sources could not refresh (saved readings appear where available): ",
                                 postfix = ".",
                             ),
                     )
