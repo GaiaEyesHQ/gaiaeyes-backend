@@ -261,7 +261,6 @@ final class APIClient {
         return // No live path monitor in the isolated configuration.
 #else
         self.session = session ?? APIClient.makeTunedSession()
-#endif
 
         // Start path monitor
         let q = DispatchQueue(label: "api.path.monitor")
@@ -270,6 +269,7 @@ final class APIClient {
             self?.logger?("[NET] satisfied=\(path.status == .satisfied) exp=\(path.isExpensive) constr=\(path.isConstrained)")
         }
         pathMonitor.start(queue: q)
+#endif
     }
 
     deinit {

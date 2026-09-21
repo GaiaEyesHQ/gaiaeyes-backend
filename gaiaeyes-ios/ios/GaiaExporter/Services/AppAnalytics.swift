@@ -92,18 +92,19 @@ enum AppAnalytics {
     static func configure(uploader: @escaping ([AppAnalyticsEvent]) async throws -> Void) {
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
         return
-#endif
+#else
         registerLifecycleObserversIfNeeded()
         Task {
             await store.configure(uploader: uploader)
             await store.flush()
         }
+#endif
     }
 
     static func track(_ name: String, properties: [String: String] = [:]) {
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
         return
-#endif
+#else
         let normalized = properties
             .map { key, value in "\(key)=\(value)" }
             .sorted()
@@ -130,15 +131,17 @@ enum AppAnalytics {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             await store.flush()
         }
+#endif
     }
 
     static func flush() {
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
         return
-#endif
+#else
         Task {
             await store.flush()
         }
+#endif
     }
 
     private static func registerLifecycleObserversIfNeeded() {

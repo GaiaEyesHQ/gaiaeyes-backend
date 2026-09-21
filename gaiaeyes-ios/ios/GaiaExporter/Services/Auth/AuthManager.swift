@@ -964,7 +964,7 @@ private struct KeychainStore {
     func readResult(_ key: String) -> KeychainReadResult {
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
         return KeychainReadResult(value: nil, status: errSecItemNotFound)
-#endif
+#else
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -979,12 +979,13 @@ private struct KeychainStore {
             return KeychainReadResult(value: nil, status: status)
         }
         return KeychainReadResult(value: String(data: data, encoding: .utf8), status: status)
+#endif
     }
 
     func write(_ value: String, key: String) {
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
         return
-#endif
+#else
         delete(key)
         let data = value.data(using: .utf8) ?? Data()
         let query: [String: Any] = [
@@ -995,18 +996,20 @@ private struct KeychainStore {
             kSecValueData as String: data,
         ]
         SecItemAdd(query as CFDictionary, nil)
+#endif
     }
 
     func delete(_ key: String) {
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
         return
-#endif
+#else
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
         SecItemDelete(query as CFDictionary)
+#endif
     }
 }
 

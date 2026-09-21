@@ -43,7 +43,7 @@ struct MigraineIntegrationTests {
 
     private func error(_ status: Int, _ detail: String) -> APIError {
         let data = try! JSONSerialization.data(withJSONObject: ["detail": detail])
-        return .server(status, String(decoding: data, as: UTF8.self))
+        return .server(code: status, body: String(decoding: data, as: UTF8.self))
     }
 
     @Test func capabilityRequiresTheSpecificServerSignal() {

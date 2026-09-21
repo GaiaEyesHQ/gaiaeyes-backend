@@ -20,6 +20,7 @@ struct HelpCenterView: View {
 
     private var launchArticleIDs: [String] {
         [
+            "voice-commands",
             "what-gaia-eyes-does",
             "why-sleep-may-not-appear-immediately",
             "how-background-health-sync-works",
@@ -309,8 +310,9 @@ struct HelpArticleView: View {
                                 .foregroundStyle(Color.white.opacity(0.52))
                         }
                         Text(article.title)
-                            .font(.system(size: 30, weight: .bold, design: .rounded))
+                            .font(article.id == "voice-commands" ? .title.weight(.bold) : .system(size: 30, weight: .bold, design: .rounded))
                             .foregroundStyle(Color.white)
+                            .accessibilityIdentifier("help-article-title-" + article.id)
                         Text(article.summary)
                             .font(.headline)
                             .foregroundStyle(Color.white.opacity(0.82))
@@ -318,12 +320,16 @@ struct HelpArticleView: View {
                     }
                 }
 
-                ForEach(article.bodySections) { section in
+                ForEach(article.displaySections(
+                    structuredMigraine: MigraineStructuredFollowUpFeature.isEnabled,
+                    timeEditing: MigraineTimeEditingFeature.isEnabled
+                )) { section in
                     HelpSurfaceCard(accent: Color.white.opacity(0.08)) {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(section.title)
                                 .font(.headline)
                                 .foregroundStyle(Color.white)
+                                .accessibilityIdentifier("help-section-" + section.id)
                             ForEach(section.paragraphs, id: \.self) { paragraph in
                                 Text(paragraph)
                                     .font(.subheadline)
@@ -465,6 +471,25 @@ struct HelpArticleView: View {
         }
     }
 
+}
+
+struct VoiceCommandsHelpLink: View {
+    var context = HelpCenterContext()
+    var accessibilityID = "voice-commands-help-open"
+
+    var body: some View {
+        if let article = HelpCenterContent.shared.article(id: "voice-commands") {
+            NavigationLink {
+                HelpArticleView(article: article, document: HelpCenterContent.shared, context: context)
+            } label: {
+                Label("Voice commands", systemImage: "mic")
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(minHeight: 44, alignment: .leading)
+            }
+            .accessibilityIdentifier(accessibilityID)
+        }
+    }
 }
 
 private struct HelpCategoryCard: View {

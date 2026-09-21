@@ -100,7 +100,11 @@ final class MigraineAppVerificationServer: @unchecked Sendable {
             let accepted = request.url?.host == "gaia-app-verification.invalid" && allowed
             var record: [String: Any] = ["method": method, "path": path, "accepted": accepted,
                 "scope": request.value(forHTTPHeaderField: "X-Dev-UserId") ?? "none"]
-            if accepted, let body = request.httpBody { record["body"] = try JSONSerialization.jsonObject(with: body) }
+            if accepted, let body = request.httpBody {
+                record["body"] = try JSONSerialization.jsonObject(with: body)
+                // Keep original synthetic bytes for exact Decimal decoding in request assertions.
+                record["body_utf8"] = String(decoding: body, as: UTF8.self)
+            }
             captured.append(record)
             guard accepted else { throw URLError(.unsupportedURL) } // Never open a socket or redirect.
             func json(_ value: Any) throws -> (Int, Data) {
@@ -116,7 +120,7 @@ final class MigraineAppVerificationServer: @unchecked Sendable {
             let otherAccount = request.value(forHTTPHeaderField: "X-Dev-UserId") == "different-fixture-account"
             if otherAccount, path.hasPrefix(episodePath) { return try error(404, "Migraine episode not found") }
             if path == "/v1/symptoms/follow-ups/fixture-prompt/respond" {
-                guard !otherAccount, scenario == "followup", !responded, let body = request.httpBody,
+                guard !otherAccount, ["followup", "followup-uncertain"].contains(scenario), !responded, let body = request.httpBody,
                       let value = try JSONSerialization.jsonObject(with: body) as? [String: Any],
                       value["state"] as? String == "ongoing", let edit = value["migraine"] as? [String: Any] else {
                     throw URLError(.unsupportedURL)
@@ -129,13 +133,14 @@ final class MigraineAppVerificationServer: @unchecked Sendable {
                 save.url = URL(string: "https://gaia-app-verification.invalid" + episodePath); save.httpMethod = "GET"; save.httpBody = nil
                 let item = (try JSONSerialization.jsonObject(with: fixture.response(save).1) as! [String: Any])["data"]!
                 responded = true; prompt["status"] = "answered"
+                if scenario == "followup-uncertain" { throw URLError(.networkConnectionLost) }
                 return try json(["prompt": prompt, "episode": item, "migraine_detail": detail])
             }
             if path == "/v1/symptoms/current" {
                 var itemRequest = request; itemRequest.url = request.url!.deletingLastPathComponent().appendingPathComponent("current/" + id)
                 let data = try fixture.response(itemRequest).1
                 var item = (try JSONSerialization.jsonObject(with: data) as! [String: Any])["data"] as! [String: Any]
-                if scenario == "followup", !responded { item["pending_follow_up"] = prompt }
+                if ["followup", "followup-uncertain"].contains(scenario), !responded { item["pending_follow_up"] = prompt }
                 return try json(["generated_at": ISO8601DateFormatter().string(from: Date()), "window_hours": 24,
                     "summary": ["active_count": otherAccount ? 0 : 1, "new_count": 0, "ongoing_count": otherAccount ? 0 : 1,
                                 "improving_count": 0, "worse_count": 0, "follow_up_available": false],

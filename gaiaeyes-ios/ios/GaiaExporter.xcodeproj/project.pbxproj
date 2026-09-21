@@ -883,10 +883,9 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = GaiaExporter/Info.plist;
+				INFOPLIST_FILE = "MigraineCandidate-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Gaia Eyes";
 				INFOPLIST_KEY_CFBundleName = GaiaEyes;
-				INFOPLIST_KEY_GAIA_MIGRAINE_BUILD_MODE = "release-candidate";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads the Apple Health categories you select, including heart rate, sleep, HRV, blood oxygen, respiratory rate, steps, blood pressure, and wrist temperature, to show daily wellness trends and personal patterns.";

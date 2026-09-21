@@ -4,6 +4,24 @@ import Testing
 
 struct HelpCenterContentTests {
 
+    @Test(arguments: [false, true], [false, true])
+    func voiceGuideMatchesAvailableEditors(structured: Bool, timeEditing: Bool) throws {
+        let iosRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let document = try HelpCenterContent.load(from: iosRoot.appendingPathComponent("GaiaExporter/Resources/HelpCenterContent.json"))
+        let article = try #require(document.article(id: "voice-commands"))
+        let sections = article.displaySections(structuredMigraine: structured, timeEditing: timeEditing)
+        let ids = Set(sections.map(\.id))
+        #expect(ids.contains("voice-review-basic") == !structured)
+        #expect(ids.contains("voice-review-structured") == structured)
+        #expect(ids.contains("voice-review-times") == timeEditing)
+        #expect(ids.contains("voice-start") && ids.contains("voice-stop"))
+        #expect(ids.contains("voice-offline") && ids.contains("voice-dictation"))
+        #expect(document.search("Siri migraine").contains(where: { $0.id == article.id }))
+        let other = try #require(document.article(id: "what-gaia-eyes-does"))
+        #expect(other.displaySections(structuredMigraine: structured, timeEditing: timeEditing) == other.bodySections)
+    }
+
     @Test
     func decodesSharedHelpCenterContent() throws {
         let iosRoot = URL(fileURLWithPath: #filePath)

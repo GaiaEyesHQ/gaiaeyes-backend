@@ -775,6 +775,9 @@ struct SymptomsLogPage: View {
                                     toggleSelection(item)
                                 }
                             }
+                            if category == .head {
+                                VoiceCommandsHelpLink(accessibilityID: "log-migraine-voice-commands-open")
+                            }
                         }
                     }
                 }
@@ -798,6 +801,7 @@ struct SymptomsLogPage: View {
 
                 SymptomSectionCard(title: "Notes (optional)", icon: "note.text") {
                     TextField("Anything else you want to note?", text: $notes, axis: .vertical)
+                        .accessibilityIdentifier("symptom-log-notes")
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(3...6)
                         .focused($notesFocused)

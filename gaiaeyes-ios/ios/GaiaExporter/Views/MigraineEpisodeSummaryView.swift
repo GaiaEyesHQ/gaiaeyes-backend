@@ -53,6 +53,11 @@ struct MigraineEpisodeSummaryView: View {
                     if args.contains("-gaia-preview-migraine-follow-up-fixture") && args.contains("calendar-summary-large") {
                         size = .accessibility3
                     }
+#if GAIA_MIGRAINE_APP_VERIFICATION
+                    if MigraineAppVerification.isActive && MigraineAppVerification.largeText {
+                        size = .accessibility3
+                    }
+#endif
                 }
 #endif
             }

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.gaiaexporter.refresh</string>
+		<string>com.gaiaexporter.processing</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.gaiaeyes.GaiaExporter.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gaiaeyes</string>
+			</array>
+		</dict>
+	</array>
+	<key>GAIA_API_BASE</key>
+	<string>https://gaiaeyes-backend.onrender.com</string>
+	<key>GAIA_MAGICLINK_REDIRECT</key>
+	<string>gaiaeyes://auth/callback</string>
+	<key>MEDIA_BASE_URL</key>
+	<string>https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Gaia Eyes may use Bluetooth to connect to optional heart-rate sensors for recovery and signal tracking. Bluetooth is only used when you choose to connect a supported device.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Gaia Eyes may use Bluetooth to connect to optional heart-rate sensors when you choose to pair a supported device.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Gaia Eyes may use the camera for an optional wellness check that estimates pulse-related signals from fingertip video. Camera data is processed for the check and is not used unless you start it.</string>
+	<key>REVENUECAT_IOS_API_KEY</key>
+	<string>appl_yiYbPrukxNEjnWCTlzKULBDhaJL</string>
+	<key>REVENUECAT_PLUS_ENTITLEMENT_ID</key>
+	<string>plus</string>
+	<key>REVENUECAT_PLUS_MONTHLY_PRODUCT_ID</key>
+	<string>gaiaeyes_plus_monthly</string>
+	<key>REVENUECAT_PLUS_YEARLY_PRODUCT_ID</key>
+	<string>gaiaeyes_plus_yearly</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhZHd6a3d1YmZiZnVzbGZ4a3psIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5ODgxOTEsImV4cCI6MjA3MTU2NDE5MX0.tS67xEsIyRJXXkqmnWJNfqv280WYbOPwTdMhCaudSQU</string>
+	<key>SUPABASE_URL</key>
+	<string>https://qadwzkwubfbfuslfxkzl.supabase.co</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>remote-notification</string>
+	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
+	<key>GAIA_MIGRAINE_BUILD_MODE</key>
+	<string>release-candidate</string>
+</dict>
+</plist>

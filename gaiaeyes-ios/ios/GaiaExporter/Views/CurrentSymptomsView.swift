@@ -996,6 +996,7 @@ struct CurrentSymptomsView: View {
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("symptom-timeline-open")
                 }
+                VoiceCommandsHelpLink(accessibilityID: "symptoms-voice-commands-open")
                 if MigraineCalendarFeature.isEnabled {
                     NavigationLink {
                         MigraineHistoryView(api: api, accountScope: currentAccountScope)
@@ -1951,12 +1952,15 @@ private struct CurrentSymptomFollowUpSheet: View {
                         if responseRecovery.pending != nil { confirmUncertainClose = true } else { dismiss() }
                     }
                         .disabled(isBusy || isSubmitting)
+                        .accessibilityIdentifier("migraine-followup-close")
                 }
             }
             .interactiveDismissDisabled(inputsLocked)
-            .confirmationDialog("Close with an unconfirmed response?", isPresented: $confirmUncertainClose, titleVisibility: .visible) {
+            .alert("Close with an unconfirmed response?", isPresented: $confirmUncertainClose) {
                 Button("Set aside response and close", role: .destructive) { dismiss() }
+                    .accessibilityIdentifier("migraine-followup-discard-and-close")
                 Button("Keep editing", role: .cancel) {}
+                    .accessibilityIdentifier("migraine-followup-keep-editing")
             } message: {
                 Text("The response may already be saved. Closing sends nothing else and sets aside this local draft. Reopen the migraine to review its saved details.")
             }
@@ -2697,13 +2701,15 @@ struct HistoricalSymptomEditor: View {
             ToolbarItem(placement: .bottomBar) { MigraineAppVerificationControls() }
 #endif
         }
-        .confirmationDialog("Close with an unconfirmed save?", isPresented: $confirmUnconfirmedClose, titleVisibility: .visible) {
+        .alert("Close with an unconfirmed save?", isPresented: $confirmUnconfirmedClose) {
             Button("Discard local draft and close", role: .destructive) {
                 guard navigationState.canClose else { return }
                 onBusyChange(false)
                 dismiss()
             }
+            .accessibilityIdentifier("migraine-history-discard-and-close")
             Button("Keep editing", role: .cancel) {}
+                .accessibilityIdentifier("migraine-history-keep-editing")
         } message: {
             Text("The save may already have reached the server. Closing sends nothing and does not cancel it. The local draft and exact retry request will be discarded. Reopen the episode to review what is saved.")
         }

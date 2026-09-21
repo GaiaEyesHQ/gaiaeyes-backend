@@ -128,7 +128,7 @@ final class RevenueCatService: ObservableObject {
     func syncIdentity(appUserID: String?, allowLogOut: Bool = true) async {
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
         return
-#endif
+#else
         guard let normalizedAppUserID = normalizedAppUserID(appUserID) else {
             guard allowLogOut else {
                 appLog("[RC] skipped RevenueCat logout while auth session continuity is present")
@@ -139,12 +139,13 @@ final class RevenueCatService: ObservableObject {
         }
 
         await identifyIfNeeded(appUserID: normalizedAppUserID)
+#endif
     }
 
     func configureIfNeeded(appUserID: String? = nil) throws {
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
         throw URLError(.unsupportedURL)
-#endif
+#else
         if isConfigured {
             return
         }
@@ -159,6 +160,7 @@ final class RevenueCatService: ObservableObject {
         configuredAppUserID = appUserID
         isConfigured = true
         lastError = nil
+#endif
     }
 
     func identifyIfNeeded(appUserID: String?) async {

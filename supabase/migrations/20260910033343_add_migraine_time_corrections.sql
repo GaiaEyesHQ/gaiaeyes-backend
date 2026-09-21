@@ -43,7 +43,9 @@ begin
     if position('marts.symptom_daily' in definition) > 0
        and position('marts.symptom_daily_effective' in definition) = 0 then
       execute 'create or replace view marts.user_lunar_patterns with (security_invoker = true) as '
-        || replace(definition, 'marts.symptom_daily', 'marts.symptom_daily_effective');
+        -- pg_get_viewdef also qualifies columns with symptom_daily. Rename the
+        -- complete identifier (including those qualifiers), not just FROM.
+        || regexp_replace(definition, '\msymptom_daily\M', 'symptom_daily_effective', 'g');
     end if;
   end if;
   if exists (select 1 from pg_roles where rolname = 'service_role') then

@@ -1,49 +1,114 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<Scheme LastUpgradeVersion="2610" version="1.7">
-   <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES" buildArchitectures="Automatic">
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "2610"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES"
+      buildArchitectures = "Automatic">
       <BuildActionEntries>
-         <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="0CA35D522E5B8F960099297E" BuildableName="GaiaEyes.app" BlueprintName="GaiaEyes" ReferencedContainer="container:GaiaExporter.xcodeproj">
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "0CA35D522E5B8F960099297E"
+               BuildableName = "GaiaEyes.app"
+               BlueprintName = "GaiaEyes"
+               ReferencedContainer = "container:GaiaExporter.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
-   <TestAction buildConfiguration="MigraineVerification" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="NO" shouldAutocreateTestPlan="YES">
+   <TestAction
+      buildConfiguration = "MigraineVerification"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "NO"
+      shouldAutocreateTestPlan = "YES">
       <Testables>
-         <TestableReference skipped="NO">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="0CA35D6A2E5B8F980099297E" BuildableName="GaiaExporterUITests.xctest" BlueprintName="GaiaExporterUITests" ReferencedContainer="container:GaiaExporter.xcodeproj">
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "0CA35D6A2E5B8F980099297E"
+               BuildableName = "GaiaExporterUITests.xctest"
+               BlueprintName = "GaiaExporterUITests"
+               ReferencedContainer = "container:GaiaExporter.xcodeproj">
             </BuildableReference>
             <SelectedTests>
-               <Test Identifier="MigraineAppIntegrationUITests">
+               <Test
+                  Identifier = "MigraineAppIntegrationUITests">
                </Test>
             </SelectedTests>
          </TestableReference>
       </Testables>
    </TestAction>
-   <LaunchAction buildConfiguration="MigraineVerification" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" enableGPUFrameCaptureMode="3" allowLocationSimulation="YES">
-      <BuildableProductRunnable runnableDebuggingMode="0">
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="0CA35D522E5B8F960099297E" BuildableName="GaiaEyes.app" BlueprintName="GaiaEyes" ReferencedContainer="container:GaiaExporter.xcodeproj">
+   <LaunchAction
+      buildConfiguration = "MigraineVerification"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "NO"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      enableGPUFrameCaptureMode = "3"
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "0CA35D522E5B8F960099297E"
+            BuildableName = "GaiaEyes.app"
+            BlueprintName = "GaiaEyes"
+            ReferencedContainer = "container:GaiaExporter.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
-         <CommandLineArgument argument="-gaia-verify-normal-app" isEnabled="YES">
+         <CommandLineArgument
+            argument = "-gaia-verify-normal-app"
+            isEnabled = "YES">
          </CommandLineArgument>
-         <CommandLineArgument argument="-gaia-enable-structured-migraine-follow-up" isEnabled="YES">
+         <CommandLineArgument
+            argument = "-gaia-enable-structured-migraine-follow-up"
+            isEnabled = "YES">
          </CommandLineArgument>
-         <CommandLineArgument argument="-gaia-enable-migraine-calendar" isEnabled="YES">
+         <CommandLineArgument
+            argument = "-gaia-enable-migraine-calendar"
+            isEnabled = "YES">
          </CommandLineArgument>
-         <CommandLineArgument argument="-gaia-enable-migraine-time-editing" isEnabled="YES">
+         <CommandLineArgument
+            argument = "-gaia-enable-migraine-time-editing"
+            isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
-      </LaunchAction>
-   <ProfileAction buildConfiguration="MigraineVerification" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES">
-      <BuildableProductRunnable runnableDebuggingMode="0">
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="0CA35D522E5B8F960099297E" BuildableName="GaiaEyes.app" BlueprintName="GaiaEyes" ReferencedContainer="container:GaiaExporter.xcodeproj">
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "MigraineVerification"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "0CA35D522E5B8F960099297E"
+            BuildableName = "GaiaEyes.app"
+            BlueprintName = "GaiaEyes"
+            ReferencedContainer = "container:GaiaExporter.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
-   <AnalyzeAction buildConfiguration="MigraineVerification">
+   <AnalyzeAction
+      buildConfiguration = "MigraineVerification">
    </AnalyzeAction>
-   <ArchiveAction buildConfiguration="MigraineVerification" revealArchiveInOrganizer="YES">
+   <ArchiveAction
+      buildConfiguration = "MigraineVerification"
+      revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>

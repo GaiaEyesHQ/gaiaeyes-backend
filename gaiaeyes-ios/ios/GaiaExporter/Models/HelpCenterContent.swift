@@ -117,6 +117,18 @@ struct HelpCenterArticle: Identifiable, Decodable, Hashable {
         let sectionText = bodySections.flatMap { $0.paragraphs + $0.bullets + [$0.title] }
         return ([title, summary] + keywords + sectionText).joined(separator: " ").lowercased()
     }
+
+    func displaySections(structuredMigraine: Bool, timeEditing: Bool) -> [HelpCenterSection] {
+        guard id == "voice-commands" else { return bodySections }
+        return bodySections.filter { section in
+            switch section.id {
+            case "voice-review-basic": return !structuredMigraine
+            case "voice-review-structured": return structuredMigraine
+            case "voice-review-times": return timeEditing
+            default: return true
+            }
+        }
+    }
 }
 
 struct HelpCenterDocument: Decodable, Hashable {

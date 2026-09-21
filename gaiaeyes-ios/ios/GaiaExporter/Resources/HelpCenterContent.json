@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "updated_at": "2026-04-09",
+    "updated_at": "2026-09-21",
     "support_email": "help@gaiaeyes.com",
     "web_support_url": "https://gaiaeyes.com/support",
     "privacy_policy_url": "https://gaiaeyes.com/privacy/",
@@ -51,6 +51,86 @@
     }
   ],
   "articles": [
+    {
+      "id": "voice-commands",
+      "title": "Voice commands",
+      "summary": "Start or stop a migraine with Siri, then review details when you are ready.",
+      "category": "patterns-drivers-earthscope",
+      "keywords": [
+        "Siri",
+        "voice",
+        "migraine",
+        "shortcut",
+        "dictation",
+        "offline",
+        "sign in"
+      ],
+      "body_sections": [
+        {
+          "id": "voice-start",
+          "title": "Start a migraine",
+          "paragraphs": [
+            "Say to Siri: “Log a migraine in Gaia Eyes” or “Gaia Eyes, log my migraine”.",
+            "This records a migraine now at intensity 5/10. These shortcuts do not ask for intensity, medicines, notes or an earlier time."
+          ]
+        },
+        {
+          "id": "voice-stop",
+          "title": "Stop a migraine",
+          "paragraphs": [
+            "Say to Siri: “Stop my migraine in Gaia Eyes” or “Gaia Eyes, my migraine is over”.",
+            "This marks the most recently logged active migraine as resolved now. Check Symptoms if Siri cannot find it."
+          ]
+        },
+        {
+          "id": "voice-session",
+          "title": "Before using Siri",
+          "paragraphs": [
+            "Open Gaia Eyes and finish setup first. A usable app session is needed, but the shortcuts do not normally open the app. If Siri asks you to sign in, open Gaia Eyes and restore your session.",
+            "Include “Gaia Eyes” in the command. If Siri chooses Apple Health or another app, cancel and try the Gaia Eyes shortcut in Shortcuts. Wait for the result; repeats within 30 seconds may be ignored."
+          ]
+        },
+        {
+          "id": "voice-offline",
+          "title": "When the connection drops",
+          "paragraphs": [
+            "A new migraine can be saved on this phone for later sync if your app session is still usable. An expired session may need an online sign-in first. Open Gaia Eyes online in the same account and confirm the entry has synced before signing out.",
+            "Stopping a migraine needs a connection and is not queued. If the result is unconfirmed, check its status in Gaia Eyes when connected before trying again. Siri itself may also need a connection."
+          ]
+        },
+        {
+          "id": "voice-review-basic",
+          "title": "Review or correct an entry",
+          "paragraphs": [
+            "Open Symptoms and choose “Add or edit details” on the entry to correct intensity or notes. Review the entry and save your changes.",
+            "For a new entry at an earlier time, use Log Symptoms and set Date & time before saving."
+          ]
+        },
+        {
+          "id": "voice-review-structured",
+          "title": "Review details and medicines",
+          "paragraphs": [
+            "Open Symptoms and choose “Details and medicines” on the migraine. Review the saved details, update the fields you need and save. Medicine names, amounts, units and relief are entered in the app; the Siri shortcuts do not fill them.",
+            "If saving is unconfirmed, keep the pending request and use the app’s retry or review options. Closing does not cancel a save that may already have reached the server."
+          ]
+        },
+        {
+          "id": "voice-review-times",
+          "title": "Correct the start or end time",
+          "paragraphs": [
+            "Use the time controls in the migraine editor when available. Review the times and save the correction separately from medicine or note changes. If the server cannot support time editing, the app explains that state."
+          ]
+        },
+        {
+          "id": "voice-dictation",
+          "title": "Dictate into a text field",
+          "paragraphs": [
+            "Keyboard dictation puts words into the selected text field, such as Notes. It does not run a Siri shortcut or turn a sentence into structured medicine fields.",
+            "Review the dictated words and use the app’s Save button. The two Siri actions above are the supported voice shortcuts for migraine logging."
+          ]
+        }
+      ]
+    },
     {
       "id": "what-gaia-eyes-does",
       "title": "What Gaia Eyes does",
