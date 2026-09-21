@@ -1,0 +1,22 @@
+HTTP/2 200 
+date: Mon, 21 Sep 2026 19:05:57 GMT
+content-type: image/jpeg
+content-length: 236375
+cf-ray: a3eb5823fff816b6-IAH
+cf-cache-status: MISS
+accept-ranges: bytes
+access-control-allow-origin: *
+cache-control: no-cache
+etag: "b9a877d3880511b3a45af857929d571f"
+last-modified: Mon, 21 Sep 2026 16:58:38 GMT
+server: cloudflare
+sb-gateway-mode: direct
+sb-gateway-version: 1
+sb-project-ref: qadwzkwubfbfuslfxkzl
+sb-request-id: 01a0c55c-5286-78af-990f-2629859b841a
+x-robots-tag: none
+x-smart-cdn: true
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+set-cookie: __cf_bm=h84YKAAsuGsJJhve8N2a5OCnoIqSc2AKEUeKkkf8mDA-1790017557.1168191-1.0.1.1-UnjG7DqzpxdIC6hBYxqiAFpuiwYwh9vHlC1mZzIypPWlSUJM.gL_FQ34yZTVjWRi9x29mp5deajSBgewQWv07zyYW9f3JaPJKqTLClnozs3XWzwgpEwSV2lF8scYprJa; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Mon, 21 Sep 2026 19:35:57 GMT
+alt-svc: h3=":443"; ma=86400
+

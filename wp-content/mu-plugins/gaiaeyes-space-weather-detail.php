@@ -9,6 +9,7 @@
 
 if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/gaiaeyes-api-helpers.php';
+require_once __DIR__ . '/gaiaeyes-spark-helper.php';
 
 add_action('template_redirect', function () {
   $request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
@@ -84,6 +85,7 @@ function ge_val_or_dash($v, $suffix='') {
  * [gaia_space_weather_detail sw_url="" fc_url="" cache="10"]
  */
 function gaia_space_weather_detail_shortcode($atts){
+  gaiaeyes_enqueue_spark_assets();
   $a = shortcode_atts([
     'sw_url' => GAIAEYES_SW_URL,
     'fc_url' => GAIAEYES_FC_URL,
@@ -104,6 +106,7 @@ function gaia_space_weather_detail_shortcode($atts){
   if ($api_base) {
     $outlook = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/forecast/outlook', 'ge_fc_outlook', $ttl, $api_bearer);
     $features = gaiaeyes_http_get_json_api_cached($api_base . '/v1/features/today', 'ge_sw_features', $ttl, $api_bearer);
+    $features = is_array($features['data'] ?? null) ? $features['data'] : $features;
 
     // New dedicated space endpoints for history and flares
     $sw_history = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/history?hours=24', 'ge_sw_history', $ttl, $api_bearer);
@@ -112,7 +115,7 @@ function gaia_space_weather_detail_shortcode($atts){
 
     // Shape a minimal legacy-compatible $sw/$fc for rendering
     $sw = [
-      'timestamp_utc' => gmdate('Y-m-d H:i:s\\Z'),
+      'timestamp_utc' => null,
       'now' => [
         'kp' => null, 'solar_wind_kms' => null, 'bz_nt' => null
       ],
@@ -189,7 +192,8 @@ function gaia_space_weather_detail_shortcode($atts){
         }
       }
     }
-    if (is_array($features)) {
+    if (is_array($features) || !empty($sw_history['ok'])) {
+      $features = is_array($features) ? $features : [];
       // tolerant extraction helpers (support nested {value:...} or strings)
       $pickNum = function($arr, $keys){
         foreach ($keys as $k){
@@ -225,10 +229,7 @@ function gaia_space_weather_detail_shortcode($atts){
         }
       }
 
-      // If the space history endpoint provided series24, use it for sparklines
-      if (is_array($sw_history) && !empty($sw_history['ok']) && !empty($sw_history['data']['series24']) && is_array($sw_history['data']['series24'])) {
-        $sw['series24'] = $sw_history['data']['series24'];
-      }
+      $sw['series24'] = gaiaeyes_history_series($sw_history);
 
       // Helper to extract last value and max from a [ts, val] style series
       $extract_last = function($series){
@@ -256,16 +257,16 @@ function gaia_space_weather_detail_shortcode($atts){
         return $max;
       };
 
-      // If features didn't provide kp/sw/bz, derive them from series24
+      // Prefer dated observations over un-timestamped feature summaries
       if (isset($sw['series24']) && is_array($sw['series24'])) {
         $series24 = $sw['series24'];
-        if ($kp === null && isset($series24['kp'])) {
+        if (!empty($series24['kp'])) {
           $kp = $extract_last($series24['kp']);
         }
-        if ($swk === null && isset($series24['sw'])) {
+        if (!empty($series24['sw'])) {
           $swk = $extract_last($series24['sw']);
         }
-        if ($bzv === null && isset($series24['bz'])) {
+        if (!empty($series24['bz'])) {
           $bzv = $extract_last($series24['bz']);
         }
         // Also derive 24h maxima if not present
@@ -412,16 +413,12 @@ function gaia_space_weather_detail_shortcode($atts){
              " conf=" . (is_null($dbg_conf)?'null':esc_html((string)$dbg_conf)) . " -->\n";
       ?>
       <div class="ge-sw__meta">
-        <?php if (is_array($sw) && !empty($sw['timestamp_utc'])): ?>
-          Updated <?php echo esc_html($sw['timestamp_utc']); ?>
-        <?php else: ?>
-          <span>Updated —</span>
-        <?php endif; ?>
+        <span>Each observation is dated below; forecast and visual products may use different snapshots.</span>
       </div>
     </header>
 
     <?php if (!$sw): ?>
-      <div class="ge-sw__error">Space Weather data unavailable.</div>
+      <div class="ge-sw__error">Space Weather data unavailable.</div></section>
       <?php return ob_get_clean(); ?>
     <?php endif; ?>
 
@@ -439,11 +436,17 @@ function gaia_space_weather_detail_shortcode($atts){
           $kpmax = isset($last['kp_max']) ? (float)$last['kp_max'] : null;
           $swmax = isset($last['solar_wind_max_kms']) ? (int)$last['solar_wind_max_kms'] : null;
 
-          echo ge_row('Kp (now)', ge_val_or_dash($kp));
+          echo ge_row('Kp (latest)', ge_val_or_dash($kp));
           if ($kpmax !== null) echo ge_row('Kp (24h max)', ge_val_or_dash($kpmax));
-          echo '<div class="sw-row"><span class="sw-row__label" id="solar-wind">Solar wind (now)</span><span class="sw-row__val">' . esc_html( ge_val_or_dash($swk, 'km/s') ) . '</span></div>';
+          echo '<div class="sw-row"><span class="sw-row__label" id="solar-wind">Solar wind (latest)</span><span class="sw-row__val">' . esc_html( ge_val_or_dash($swk, 'km/s') ) . '</span></div>';
           if ($swmax !== null) echo ge_row('Solar wind (24h max)', ge_val_or_dash($swmax, 'km/s'));
           echo '<div class="sw-row"><span class="sw-row__label" id="bz">Bz (IMF)</span><span class="sw-row__val">' . esc_html( ge_val_or_dash($bz, 'nT') ) . '</span></div>';
+          foreach (['kp'=>['Kp',$kp], 'sw'=>['Solar wind',$swk], 'bz'=>['Bz',$bz]] as $key=>$metric) {
+            $points = $sw['series24'][$key] ?? [];
+            $point = $points ? end($points) : null;
+            echo gaiaeyes_data_status($point[0] ?? ($sw['timestamp_utc'] ?? null), $metric[1] !== null, $metric[0]);
+          }
+
         ?>
       </article>
 
@@ -642,10 +645,9 @@ function gaia_space_weather_detail_shortcode($atts){
       .pfu-gauge__center .pfu-val{opacity:.9;font-size:.9rem}
     </style>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha256-5l5wxg6rE6sBJP6opc0bDO3sTZ5yH5rICwW7X8P9qvo=" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script>
       (function(){
+        function initialiseDetailCharts(){
         try {
           const sw = <?php echo wp_json_encode($sw); ?>;
           const wrap = document.getElementById('ge-spark-wrap');
@@ -756,6 +758,9 @@ function gaia_space_weather_detail_shortcode($atts){
           }
           if (rendered && wrap) wrap.style.display = 'block';
         } catch(e){}
+        }
+        if (window.GaiaSpark && window.GaiaSpark.renderSpark) initialiseDetailCharts();
+        else window.addEventListener('gaiaSparkReady', initialiseDetailCharts, {once:true});
       })();
     </script>
     <?php

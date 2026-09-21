@@ -1,9 +1,10 @@
 import ast
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 
 import pytest
 import yaml
@@ -20,9 +21,11 @@ ENV = {
 
 @pytest.fixture
 def images(tmp_path):
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
     for name in uploader.REQUIRED_ASSETS:
-        (tmp_path / name).write_bytes(b"synthetic-image")
-    return tmp_path
+        (image_dir / name).write_bytes(b"synthetic-image")
+    return image_dir
 
 
 def fake_curl(monkeypatch, results):
@@ -85,7 +88,7 @@ def test_missing_directory_fails_closed(tmp_path, monkeypatch):
     assert calls == []
 
 
-@pytest.mark.parametrize("code", [6, 7, 18, 28, 35, 52, 55, 56, 92])
+@pytest.mark.parametrize("code", [5, 6, 7, 18, 28, 35, 52, 55, 56, 92])
 def test_transient_transport_then_success_has_exact_attempts(images, monkeypatch, code):
     calls = fake_curl(monkeypatch, [(code, "000"), (0, "200")])
     result, logs, sleeps = invoke(images)
@@ -225,6 +228,47 @@ def test_manifest_matches_current_renderer_and_consumers():
     assert 'repo_paths.extend(save_reel_backgrounds(energy))' in renderer
 
 
+def test_real_curl_put_contract_against_loopback_only(images, monkeypatch):
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_PUT(self):
+            requests.append((self.path, dict(self.headers), self.rfile.read(int(self.headers["Content-Length"]))))
+            self.send_response(503 if len(requests) == 1 else 200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *_):
+            pass
+
+    for name in ["ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"]:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logs, sleeps = [], []
+    try:
+        assert uploader.upload_asset(
+            images / "daily_caption.jpg", f"http://127.0.0.1:{server.server_port}",
+            ENV["SUPABASE_SERVICE_ROLE_KEY"], required=True, log=logs.append, sleep=sleeps.append,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    assert len(requests) == 2 and sleeps == [2]
+    assert requests[0] == requests[1]
+    path, headers, body = requests[0]
+    assert path == uploader.OBJECT_PATH_BASE + "/daily_caption.jpg"
+    assert headers["Authorization"] == f'Bearer {ENV["SUPABASE_SERVICE_ROLE_KEY"]}'
+    assert headers["apikey"] == ENV["SUPABASE_SERVICE_ROLE_KEY"]
+    assert headers["x-upsert"] == "true" and headers["Content-Type"] == "image/jpeg"
+    assert body == b"synthetic-image"
+    assert "http=503 result=retry" in logs[0] and "http=200 result=ok" in logs[1]
+    assert ENV["SUPABASE_SERVICE_ROLE_KEY"] not in "\n".join(logs)
+
+
 @pytest.mark.parametrize("failed_asset", ["", "daily_stats.jpg"])
 def test_actual_workflow_step_exit_with_fake_curl(images, tmp_path, failed_asset):
     """Execute the actual step and CLI; the only transport is a temporary stub."""
@@ -256,8 +300,6 @@ sys.stdout.write("403" if name == os.environ["FAIL_ASSET"] else "200")
              "FAIL_ASSET": failed_asset, "CURL_CALLS": str(log)},
         capture_output=True, text=True, timeout=10,
     )
-    # The workflow expects a directory literally named images.
-    # Move fixture contents there before execution in the fixture below.
     assert result.returncode == (1 if failed_asset else 0), result.stdout + result.stderr
     calls = [json.loads(line) for line in log.read_text().splitlines()]
     assert len(calls) == 8 and all(c["put"] and c["upsert"] for c in calls)

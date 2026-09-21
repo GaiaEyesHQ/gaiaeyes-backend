@@ -7,6 +7,7 @@
 if (!defined('ABSPATH')) exit;
 
 require_once __DIR__ . '/gaiaeyes-api-helpers.php';
+require_once __DIR__ . '/gaiaeyes-spark-helper.php';
 
 if (!defined('GAIAEYES_SPACE_VISUALS_ENDPOINT')){
   $endpoint = getenv('GAIAEYES_SPACE_VISUALS_ENDPOINT');
@@ -48,6 +49,7 @@ function ge_visual_url($images, $key){
 }
 
 add_shortcode('gaia_space_detail', function($atts){
+  gaiaeyes_enqueue_spark_assets();
   $defaults = [
     'api' => defined('GAIAEYES_SPACE_VISUALS_ENDPOINT') ? GAIAEYES_SPACE_VISUALS_ENDPOINT : '',
     'url' => '',
@@ -185,7 +187,17 @@ add_shortcode('gaia_space_detail', function($atts){
     }
   }
 
+  $history_response = null;
+  if ($api_base_hist) {
+    $history_response = gaiaeyes_http_get_json_api_cached(
+      $api_base_hist . '/v1/space/history?hours=24', 'ge_sw_history', $ttl,
+      defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : ''
+    );
+  }
+  $history_series = gaiaeyes_history_series($history_response);
+
   $client_payload = [
+    'historySeries' => $history_series,
     'series' => $structured_series,
     'legacySeries' => $legacy_series,
     'featureFlags' => $overlay_flags,
@@ -217,7 +229,7 @@ add_shortcode('gaia_space_detail', function($atts){
   <section class="ge-panel ge-space">
     <div class="ge-headrow">
       <div class="ge-title">Space Dashboard</div>
-      <?php if($updated): ?><div class="ge-updated">Updated <?php echo $updated; ?></div><?php endif; ?>
+      <?php echo gaiaeyes_data_status($updated, (bool)($api_payload || $legacy_payload), 'Visual index', 3600); ?>
     </div>
 
     <div class="ge-grid">
@@ -378,16 +390,18 @@ add_shortcode('gaia_space_detail', function($atts){
           <div class="spark-box"><canvas id="sparkProtons" class="spark-canvas"></canvas></div>
           <div class="spark-cap">GOES Protons (7d)</div>
         </div>
-        <div class="spark-wrap">
-          <div class="spark-head"><span id="sparkBzVal">—</span></div>
-          <div class="spark-box"><canvas id="sparkBz" class="spark-canvas"></canvas></div>
-          <div class="spark-cap">IMF Bz (last 24h)</div>
+        <?php foreach (['bz'=>['sparkBz','IMF Bz','nT',1], 'sw'=>['sparkSw','Solar wind speed','km/s',0]] as $key=>$metric):
+          $points = $history_series[$key];
+          $latest = $points ? end($points) : null;
+        ?>
+        <div class="spark-wrap" data-history="<?php echo esc_attr($key); ?>">
+          <div class="spark-head"><span id="<?php echo esc_attr($metric[0]); ?>Val"><?php echo $latest ? esc_html(number_format($latest[1], $metric[3]) . ' ' . $metric[2]) : '—'; ?></span></div>
+          <div class="spark-cap"><?php echo esc_html($metric[1]); ?> (last 24h)</div>
+          <?php echo gaiaeyes_data_status($latest[0] ?? null, (bool)$latest, $metric[1] . ' history'); ?>
+          <div class="spark-box" <?php if (!$points) echo 'hidden'; ?>><canvas id="<?php echo esc_attr($metric[0]); ?>" class="spark-canvas" role="img" aria-label="<?php echo esc_attr($metric[1] . ' history over the last 24 hours'); ?>"></canvas></div>
+          <p id="<?php echo esc_attr($metric[0]); ?>Status" class="ge-note"><?php if (!$points) echo 'No observations available for this period.'; ?></p>
         </div>
-        <div class="spark-wrap">
-          <div class="spark-head"><span id="sparkSwVal">—</span></div>
-          <div class="spark-box"><canvas id="sparkSw" class="spark-canvas"></canvas></div>
-          <div class="spark-cap">Solar wind speed (last 24h)</div>
-        </div>
+        <?php endforeach; ?>
       </article>
 
       <!-- GEOSPACE -->
@@ -556,11 +570,9 @@ add_shortcode('gaia_space_detail', function($atts){
       }
     </style>
 
-    <!-- Chart.js + date adapter for time-series sparks -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script>
       (function(){
+        function initialiseVisualCharts(){
         const visualsPayload = <?php echo wp_json_encode($client_payload); ?> || {};
         const structuredSeries = visualsPayload.series || {};
         const legacySeries = visualsPayload.legacySeries || {};
@@ -951,37 +963,19 @@ add_shortcode('gaia_space_detail', function($atts){
           setVal('sparkProtonsVal', lp ? (lp.y.toFixed(0)+' pfu') : '—');
         })();
 
-        Promise.all([
-          fetch('https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null),
-          fetch('https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null)
-        ]).then(([mag,plasma])=>{
-          try{
-            const mRows = Array.isArray(mag)? mag.filter(r=>r && r.active === true):[];
-            const bz = [];
-            mRows.forEach(r=>{
-              const t = r.time_tag, v = parseFloat(r.bz_gsm);
-              if (!t || !isFinite(v)) return;
-              const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
-              bz.push({ x: new Date(ts), y: v });
-            });
-            bz.sort((a,b)=>a.x-b.x);
-            renderSpark('sparkBz', bz, { xLabel:'UTC time', yLabel:'IMF Bz', units:'nT', zeroLine:true, color:'#a7d3ff' });
-            const lp = latestPoint(bz); setVal('sparkBzVal', lp ? (lp.y.toFixed(1)+' nT') : '—');
-          }catch(e){}
-          try{
-            const pRows = Array.isArray(plasma)? plasma.filter(r=>r && r.active === true):[];
-            const sw = [];
-            pRows.forEach(r=>{
-              const t = r.time_tag, v = parseFloat(r.proton_speed);
-              if (!t || !isFinite(v)) return;
-              const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
-              sw.push({ x: new Date(ts), y: v });
-            });
-            sw.sort((a,b)=>a.x-b.x);
-            renderSpark('sparkSw', sw, { xLabel:'UTC time', yLabel:'Solar wind speed', units:'km/s', yMin:0, color:'#ffd089' });
-            const lp = latestPoint(sw); setVal('sparkSwVal', lp ? (lp.y.toFixed(0)+' km/s') : '—');
-          }catch(e){}
+        const history = visualsPayload.historySeries || {};
+        [['bz','sparkBz','IMF Bz','nT','#a7d3ff'], ['sw','sparkSw','Solar wind speed','km/s','#ffd089']].forEach(([key,id,label,units,color]) => {
+          const points = (history[key] || []).map(([time,value]) => ({x: Date.parse(time), y:value}));
+          if (!points.length) return;
+          let chart = null;
+          try {
+            chart = window.GaiaSpark.renderSpark(id, points, {xLabel:'Local time', yLabel:key === 'sw' ? 'Speed' : label, units, color, zeroLine:key === 'bz', ...(key === 'sw' ? {yMin:0} : {})});
+          } catch (error) {}
+          if (!chart) document.getElementById(id + 'Status').textContent = 'Chart unavailable; the latest reported value is shown above.';
         });
+        }
+        if (window.GaiaSpark && window.GaiaSpark.renderSpark) initialiseVisualCharts();
+        else window.addEventListener('gaiaSparkReady', initialiseVisualCharts, {once:true});
       })();
     </script>
   </section>

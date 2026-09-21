@@ -1,5 +1,67 @@
 <?php if (!defined('ABSPATH')) exit;
 
+// Observation time is distinct from request/cache time. Never invent "now".
+function gaiaeyes_observation_epoch($value) {
+  if (!is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/', $value)) return null;
+  try {
+    $date = new DateTimeImmutable($value, new DateTimeZone('UTC'));
+    $errors = DateTimeImmutable::getLastErrors();
+    return $errors && ($errors['warning_count'] || $errors['error_count']) ? null : $date->getTimestamp();
+  } catch (Exception $e) {
+    return null;
+  }
+}
+
+function gaiaeyes_history_series($response) {
+  $series = is_array($response) && !empty($response['ok']) ? ($response['data']['series24'] ?? []) : [];
+  $out = ['kp'=>[], 'sw'=>[], 'bz'=>[]];
+  foreach ($out as $key => $_) {
+    $rows = $series[$key] ?? [];
+    foreach ((is_array($rows) ? $rows : []) as $point) {
+      if (!is_array($point) || !isset($point[0], $point[1]) || !is_numeric($point[1])) continue;
+      $epoch = gaiaeyes_observation_epoch($point[0]);
+      if ($epoch === null || !is_finite((float)$point[1])) continue;
+      $out[$key][] = [gmdate('c', $epoch), (float)$point[1]];
+    }
+    usort($out[$key], function($a, $b) { return strcmp($a[0], $b[0]); });
+  }
+  return $out;
+}
+
+function gaiaeyes_data_status($timestamp, $has_data = true, $label = 'Data', $max_age = 3600, $day = null) {
+  $epoch = gaiaeyes_observation_epoch($timestamp);
+  $now = time();
+  $state = 'unavailable';
+  $text = 'Unavailable';
+  $date_text = '';
+  if ($has_data) {
+    $state = 'unknown';
+    $text = 'Time unavailable';
+    if ($day !== null) {
+      // A features-response day is not the publication day of its latest post.
+      $valid_day = is_string($day) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)
+        && ($parsed_day = DateTimeImmutable::createFromFormat('!Y-m-d', $day)) && $parsed_day->format('Y-m-d') === $day;
+      $today = (new DateTimeImmutable('now', new DateTimeZone('America/Chicago')))->format('Y-m-d');
+      if ($valid_day) {
+        $state = $day === $today ? 'current' : ($day < $today ? 'stale' : 'unknown');
+        $text = $state === 'current' ? 'Current edition' : ($state === 'stale' ? 'Earlier edition — awaiting an update' : 'Edition date is ahead of today');
+        $date_text = ' · Edition ' . esc_html($day) . ' (America/Chicago)';
+      } else {
+        $text = 'Publication day unavailable';
+      }
+    } elseif ($epoch !== null && $epoch <= $now + 300) {
+      $state = $now - $epoch > $max_age ? 'stale' : 'current';
+      $text = $state === 'stale' ? 'Stale snapshot' : 'Current snapshot';
+    } elseif ($epoch !== null) {
+      $text = 'Timestamp is ahead of the current time';
+    }
+  }
+  if ($has_data && $epoch !== null) {
+    $date_text .= ' · ' . ($day !== null ? 'Published' : 'As of') . ' <time datetime="' . esc_attr(gmdate('c', $epoch)) . '">' . esc_html(gmdate('Y-m-d H:i', $epoch)) . ' UTC</time>';
+  }
+  return '<p class="ge-data-status" data-state="' . esc_attr($state) . '" data-label="' . esc_attr($label) . '" data-has-data="' . ($has_data ? '1' : '0') . '" data-observed-at="' . esc_attr($epoch !== null ? gmdate('c', $epoch) : '') . '" data-max-age="' . intval($max_age) . '" data-edition="' . esc_attr($day !== null ? $day : '') . '" data-daily="' . ($day !== null ? '1' : '0') . '" style="font-size:.8rem;line-height:1.5;margin:6px 0;color:' . ($state === 'stale' ? '#ffd089' : 'inherit') . '"><strong>' . esc_html($label . ': ' . $text) . '</strong>' . $date_text . '</p>';
+}
+
 if (!function_exists('gaiaeyes_http_get_json_api_cached')){
   function gaiaeyes_http_get_json_api_cached($url, $cache_key, $ttl, $bearer = '', $dev_user = ''){
     $cached = get_transient($cache_key);

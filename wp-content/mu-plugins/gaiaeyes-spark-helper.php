@@ -9,6 +9,11 @@ if (!defined('ABSPATH')) {
   exit;
 }
 
+function gaiaeyes_enqueue_spark_assets() {
+  wp_enqueue_script('gaiaeyes-chart', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js', [], '4.4.1', true);
+  wp_enqueue_script('gaiaeyes-chart-date-adapter', 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js', ['gaiaeyes-chart'], '3.0.0', true);
+}
+
 if (!function_exists('gaiaeyes_output_spark_helper')) {
   function gaiaeyes_output_spark_helper() {
     static $printed = false;
@@ -19,6 +24,32 @@ if (!function_exists('gaiaeyes_output_spark_helper')) {
     ?>
     <script>
       (function(window){
+        // Re-evaluate cached page labels on arrival and while the page stays open.
+        function refreshDataStatuses(){
+          const now = Date.now();
+          const today = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+          document.querySelectorAll('.ge-data-status[data-has-data="1"]').forEach(el => {
+            const data = el.dataset;
+            const observed = Date.parse(data.observedAt);
+            let state = 'unknown', text = 'Time unavailable';
+            if (data.daily === '1') {
+              const day = data.edition;
+              const parsed = new Date(day + 'T00:00:00Z');
+              if (/^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(+parsed) && parsed.toISOString().slice(0,10) === day) {
+                state = day === today ? 'current' : day < today ? 'stale' : 'unknown';
+                text = state === 'current' ? 'Current edition' : state === 'stale' ? 'Earlier edition — awaiting an update' : 'Edition date is ahead of today';
+              } else text = 'Publication day unavailable';
+            } else if (Number.isFinite(observed) && observed <= now + 300000) {
+              state = now - observed > Number(data.maxAge) * 1000 ? 'stale' : 'current';
+              text = state === 'stale' ? 'Stale snapshot' : 'Current snapshot';
+            } else if (Number.isFinite(observed)) text = 'Timestamp is ahead of the current time';
+            el.dataset.state = state;
+            el.style.color = state === 'stale' ? '#ffd089' : 'inherit';
+            el.querySelector('strong').textContent = data.label + ': ' + text;
+          });
+        }
+        refreshDataStatuses();
+        window.setInterval(refreshDataStatuses, 60000);
         if (window.GaiaSpark && window.GaiaSpark.renderSpark) {
           return;
         }
@@ -66,6 +97,7 @@ if (!function_exists('gaiaeyes_output_spark_helper')) {
                 x = d;
               }
             }
+            if (norm.y == null || (typeof norm.y === 'string' && norm.y.trim() === '') || typeof norm.y === 'boolean') return;
             const y = Number(norm.y);
             if (!isFinite(y)) return;
             out.push({ x, y });
@@ -242,5 +274,6 @@ if (!function_exists('gaiaeyes_output_spark_helper')) {
     </script>
     <?php
   }
-  add_action('wp_footer', 'gaiaeyes_output_spark_helper', 1);
+  // WordPress prints queued footer dependencies at priority 20.
+  add_action('wp_footer', 'gaiaeyes_output_spark_helper', 25);
 }

@@ -265,13 +265,8 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
     }
 
     // If neither JSON nor API provide anything, bail out
-    $series24 = null;
-    if ( is_array( $sw_history )
-         && ! empty( $sw_history['ok'] )
-         && ! empty( $sw_history['data']['series24'] )
-         && is_array( $sw_history['data']['series24'] ) ) {
-      $series24 = $sw_history['data']['series24'];
-    }
+    $normalised_history = gaiaeyes_history_series($sw_history);
+    $series24 = array_filter($normalised_history) ? $normalised_history : null;
 
     if ( ( ! is_array( $data ) || empty( $data['now'] ) ) && ! $series24 ) {
       return '<section class="gaia-sw"><div class="gaia-sw__card">Space Weather: unavailable</div></section>';
@@ -358,13 +353,18 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
       }
     }
 
-    $ts = ! empty( $data['timestamp_utc'] ) ? strtotime( $data['timestamp_utc'] ) : time();
+    $metric_times = [];
+    foreach (['kp','sw','bz'] as $key) {
+      $points = $series24[$key] ?? [];
+      $point = $points ? end($points) : null;
+      $metric_times[$key] = $point[0] ?? ($data['timestamp_utc'] ?? null);
+    }
 
     $kp  = $kp_now_val !== null ? number_format( $kp_now_val, 1 ) : '—';
     $sw  = $sw_now_val !== null ? intval( $sw_now_val ) : '—';
     $bzv = $bz_now_val !== null ? $bz_now_val : null;
     $bz  = ( $bzv !== null ) ? number_format( $bzv, 1 ) : '—';
-    $bzpol = ( $bzv !== null && $bzv < 0 ) ? 'southward' : 'northward';
+    $bzpol = $bzv === null ? 'direction unavailable' : ($bzv < 0 ? 'southward' : ($bzv > 0 ? 'northward' : 'neutral'));
 
     $kp_max24 = $kp_max24_val !== null ? number_format( $kp_max24_val, 1 ) : null;
     $sw_max24 = $sw_max24_val !== null ? intval( $sw_max24_val ) : null;
@@ -436,17 +436,20 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
     <section class="gaia-sw">
       <header class="gaia-sw__head">
         <h3 class="gaia-sw__title"><a href="<?php echo esc_url( $detail ); ?>" class="gaia-link">Space Weather Bar</a></h3>
-        <time datetime="<?php echo esc_attr( gmdate( 'c', $ts ) ); ?>">
-          Updated <?php echo esc_html( gmdate( 'D, d M Y H:i', $ts ) ); ?> UTC
-        </time>
+        <span>Latest observations · timestamps shown per signal</span>
       </header>
 
       <div class="gaia-sw__row">
         <div class="gaia-sw__card">
-          <div class="gaia-sw__label">Now (UTC)</div>
+          <div class="gaia-sw__label">Latest observations</div>
           <div>Kp: <strong><a href="<?php echo esc_url( $detail . '#kp' ); ?>" class="gaia-link"><?php echo esc_html( $kp ); ?></a></strong><?php if ($kp_max24 !== null): ?> <span class="gaia-sw__sub">(24h max <?php echo esc_html($kp_max24); ?>)</span><?php endif; ?></div>
           <div>Solar wind: <strong><a href="<?php echo esc_url( $detail . '#solar-wind' ); ?>" class="gaia-link"><?php echo esc_html( $sw ); ?></a></strong> km/s<?php if ($sw_max24 !== null): ?> <span class="gaia-sw__sub">(24h max <?php echo esc_html($sw_max24); ?>)</span><?php endif; ?></div>
           <div>Bz: <strong><a href="<?php echo esc_url( $detail . '#bz' ); ?>" class="gaia-link"><?php echo esc_html( $bz ); ?></a> nT</strong> (<?php echo esc_html( $bzpol ); ?>)</div>
+          <?php
+            echo gaiaeyes_data_status($metric_times['kp'], $kp_now_val !== null, 'Kp');
+            echo gaiaeyes_data_status($metric_times['sw'], $sw_now_val !== null, 'Solar wind');
+            echo gaiaeyes_data_status($metric_times['bz'], $bz_now_val !== null, 'Bz');
+          ?>
         </div>
 
         <div class="gaia-sw__card">
@@ -647,6 +650,8 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     $aurora_chip = '';
     $quakes_pill = '';
     $has_api_payload = false;
+    $publication_day = '';
+    $publication_time = null;
 
     // Prefer Supabase-backed backend payload first.
     $features_response = null;
@@ -686,6 +691,9 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         (is_array($post_metrics) && !empty($post_metrics))
       ) {
         $has_api_payload = true;
+        // Do not use features.day: its latest public post can be from an earlier day.
+        $publication_day = $features['post_day'] ?? '';
+        $publication_time = $features['post_published_at'] ?? null;
         $title = $post_title;
         $caption = $post_caption;
         $affects = $extract_section($post_body, [
@@ -775,7 +783,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         if ( ! is_array($d) ) return '<section class="gaia-es">EarthScope is unavailable right now.</section>';
       }
     } elseif ( ! $has_api_payload ) {
-      return '<section class="gaia-es">EarthScope is unavailable right now (API payload missing).</section>';
+      return '<section class="gaia-es">EarthScope is unavailable right now.</section>';
     }
 
     if ( ! $has_api_payload && $is_daily ) {
@@ -812,6 +820,11 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       $affects = ''; $playbook = '';
     }
 
+    if (!$has_api_payload && is_array($d)) {
+      $publication_day = $d['day'] ?? '';
+      $publication_time = $d['timestamp_utc'] ?? null;
+    }
+
     // Best-effort sections fallback
     if ( is_array($d) ) {
       if ( empty($caption) && isset($d['sections']['caption']) ) $caption = (string) $d['sections']['caption'];
@@ -835,7 +848,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     <section class="gaia-es" data-gaia-earthscope-live="1">
       <div class="gaia-es__head">
         <div class="gaia-es__head-left">
-          <h3 class="gaia-es__title">Your Body Today</h3>
+          <h3 class="gaia-es__title">Your Body · EarthScope</h3>
           <?php if ( $title ): ?>
             <span class="gaia-es__badge"><?php echo esc_html($title); ?></span>
           <?php endif; ?>
@@ -848,10 +861,12 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         </div>
       </div>
 
+      <?php echo gaiaeyes_data_status($publication_time, $title !== '' || $caption !== '' || $affects !== '' || $playbook !== '', 'EarthScope', 86400, $publication_day); ?>
+
       <div class="gaia-es__grid">
         <!-- Card 1: Now -->
         <div class="gaia-es__card">
-          <div class="gaia-es__label">Now</div>
+          <div class="gaia-es__label">Check-in</div>
           <div class="gaia-es__caption"><?php echo nl2br( esc_html( $caption ) ); ?></div>
         </div>
 
@@ -863,7 +878,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
 
         <!-- Card 3: What may help right now -->
         <div class="gaia-es__card">
-          <div class="gaia-es__label">What may help right now</div>
+          <div class="gaia-es__label">What may help</div>
           <div class="gaia-es__body"><?php echo nl2br( esc_html( $playbook ) ); ?></div>
         </div>
       </div>

@@ -175,6 +175,11 @@ $section_id = 'ga-aurora-' . wp_unique_id();
     </section>
   </div>
 
+  <section id="photo-tips" class="ga-aurora__forecast" aria-labelledby="ga-aurora-photo-tips-title" tabindex="-1" style="scroll-margin-top:5rem">
+    <h3 id="ga-aurora-photo-tips-title">How to Capture Auroras</h3>
+    <p>Wide lens; ISO 1600–3200; 4–6s exposure; manual focus on a bright star; shoot RAW.</p>
+  </section>
+
   <footer class="ga-aurora__footer">
     <div class="ga-aurora__diagnostics" data-role="diagnostics">Diagnostics pending…</div>
   </footer>

@@ -1,0 +1,572 @@
+[
+  {
+    "id": 887,
+    "day": "2026-09-21",
+    "platform": "default",
+    "title": "Battery dipping early?",
+    "created_at": "2026-09-21T16:57:35.927604+00:00",
+    "updated_at": "2026-09-21T16:57:35.927604+00:00",
+    "caption": "Standard energy field—consistency wins today. — Kp 1.7 • Bz -2.5 nT • Schumann 7.74 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Standard energy field—consistency wins today. — Kp 1.7 • Bz -2.5 nT • Schumann 7.74 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Standard energy field—consistency wins today",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Standard energy field—consistency wins today. — Kp 1.7 • Bz -2.5 nT • Schumann 7.74 Hz (snapshot at write time)"
+    },
+    "voiceover": "Standard energy field—consistency wins today. — Kp 1.7 • Bz -2.5 nT • Schumann 7.74 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "quiet",
+      "sw": "normal"
+    },
+    "kp_max_24h": 1.67,
+    "bz_min": -2.51,
+    "schumann_value_hz": 7.74,
+    "solar_wind_kms": 323.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 885,
+    "day": "2026-09-20",
+    "platform": "default",
+    "title": "Feeling Different Today?",
+    "created_at": "2026-09-20T14:39:13.222489+00:00",
+    "updated_at": "2026-09-20T14:39:13.222489+00:00",
+    "caption": "Ordinary signal mix today—small steady choices do the work. — Kp 3.0 • Bz -4.1 nT • Schumann 7.71 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Ordinary signal mix today—small steady choices do the work. — Kp 3.0 • Bz -4.1 nT • Schumann 7.71 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Feeling Different Today?",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Ordinary signal mix today—small steady choices do the work. — Kp 3.0 • Bz -4.1 nT • Schumann 7.71 Hz (snapshot at write time)"
+    },
+    "voiceover": "Ordinary signal mix today—small steady choices do the work. — Kp 3.0 • Bz -4.1 nT • Schumann 7.71 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "unsettled",
+      "sw": "normal"
+    },
+    "kp_max_24h": 3.0,
+    "bz_min": -4.14,
+    "schumann_value_hz": 7.71,
+    "solar_wind_kms": 406.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 886,
+    "day": "2026-09-20",
+    "platform": "ig",
+    "title": "Feeling Different Today?",
+    "created_at": "2026-09-20T14:39:13.222489+00:00",
+    "updated_at": "2026-09-20T14:39:13.222489+00:00",
+    "caption": "Ordinary signal mix today—small steady choices do the work. — Kp 3.0 • Bz -4.1 nT • Schumann 7.71 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Ordinary signal mix today—small steady choices do the work. — Kp 3.0 • Bz -4.1 nT • Schumann 7.71 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Feeling Different Today?",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Ordinary signal mix today—small steady choices do the work. — Kp 3.0 • Bz -4.1 nT • Schumann 7.71 Hz (snapshot at write time)"
+    },
+    "voiceover": "Ordinary signal mix today—small steady choices do the work. — Kp 3.0 • Bz -4.1 nT • Schumann 7.71 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "unsettled",
+      "sw": "normal"
+    },
+    "kp_max_24h": 3.0,
+    "bz_min": -4.14,
+    "schumann_value_hz": 7.71,
+    "solar_wind_kms": 406.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 883,
+    "day": "2026-09-19",
+    "platform": "default",
+    "title": "Is Your Body Whispering Today?",
+    "created_at": "2026-09-19T14:18:41.819464+00:00",
+    "updated_at": "2026-09-19T14:18:41.819464+00:00",
+    "caption": "Middle-lane space weather today—keep the rhythm simple. — Kp 2.7 • Bz -5.5 nT • Schumann 7.67 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Middle-lane space weather today—keep the rhythm simple. — Kp 2.7 • Bz -5.5 nT • Schumann 7.67 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Is Your Body Whispering Today?",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Middle-lane space weather today—keep the rhythm simple. — Kp 2.7 • Bz -5.5 nT • Schumann 7.67 Hz (snapshot at write time)"
+    },
+    "voiceover": "Middle-lane space weather today—keep the rhythm simple. — Kp 2.7 • Bz -5.5 nT • Schumann 7.67 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "quiet",
+      "sw": "normal"
+    },
+    "kp_max_24h": 2.67,
+    "bz_min": -5.49,
+    "schumann_value_hz": 7.67,
+    "solar_wind_kms": 433.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 884,
+    "day": "2026-09-19",
+    "platform": "ig",
+    "title": "Is Your Body Whispering Today?",
+    "created_at": "2026-09-19T14:18:41.819464+00:00",
+    "updated_at": "2026-09-19T14:18:41.819464+00:00",
+    "caption": "Middle-lane space weather today—keep the rhythm simple. — Kp 2.7 • Bz -5.5 nT • Schumann 7.67 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Middle-lane space weather today—keep the rhythm simple. — Kp 2.7 • Bz -5.5 nT • Schumann 7.67 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Is Your Body Whispering Today?",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Middle-lane space weather today—keep the rhythm simple. — Kp 2.7 • Bz -5.5 nT • Schumann 7.67 Hz (snapshot at write time)"
+    },
+    "voiceover": "Middle-lane space weather today—keep the rhythm simple. — Kp 2.7 • Bz -5.5 nT • Schumann 7.67 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "quiet",
+      "sw": "normal"
+    },
+    "kp_max_24h": 2.67,
+    "bz_min": -5.49,
+    "schumann_value_hz": 7.67,
+    "solar_wind_kms": 433.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 881,
+    "day": "2026-09-18",
+    "platform": "default",
+    "title": "Feeling Off For No Reason?",
+    "created_at": "2026-09-18T14:54:55.973061+00:00",
+    "updated_at": "2026-09-18T14:54:55.973061+00:00",
+    "caption": "Ordinary signal mix today—small steady choices do the work. — Kp 2.0 • Bz -3.6 nT • Schumann 7.66 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Ordinary signal mix today—small steady choices do the work. — Kp 2.0 • Bz -3.6 nT • Schumann 7.66 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Feeling Off For No Reason?",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Ordinary signal mix today—small steady choices do the work. — Kp 2.0 • Bz -3.6 nT • Schumann 7.66 Hz (snapshot at write time)"
+    },
+    "voiceover": "Ordinary signal mix today—small steady choices do the work. — Kp 2.0 • Bz -3.6 nT • Schumann 7.66 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "quiet",
+      "sw": "normal"
+    },
+    "kp_max_24h": 2.0,
+    "bz_min": -3.63,
+    "schumann_value_hz": 7.66,
+    "solar_wind_kms": 421.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 882,
+    "day": "2026-09-18",
+    "platform": "ig",
+    "title": "Feeling Off For No Reason?",
+    "created_at": "2026-09-18T14:54:55.973061+00:00",
+    "updated_at": "2026-09-18T14:54:55.973061+00:00",
+    "caption": "Ordinary signal mix today—small steady choices do the work. — Kp 2.0 • Bz -3.6 nT • Schumann 7.66 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Ordinary signal mix today—small steady choices do the work. — Kp 2.0 • Bz -3.6 nT • Schumann 7.66 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Feeling Off For No Reason?",
+      "signal": "The field looks fairly middle-of-the-road today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Ordinary signal mix today—small steady choices do the work. — Kp 2.0 • Bz -3.6 nT • Schumann 7.66 Hz (snapshot at write time)"
+    },
+    "voiceover": "Ordinary signal mix today—small steady choices do the work. — Kp 2.0 • Bz -3.6 nT • Schumann 7.66 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "quiet",
+      "sw": "normal"
+    },
+    "kp_max_24h": 2.0,
+    "bz_min": -3.63,
+    "schumann_value_hz": 7.66,
+    "solar_wind_kms": 421.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 879,
+    "day": "2026-09-17",
+    "platform": "default",
+    "title": "Feeling Different Today?",
+    "created_at": "2026-09-17T15:31:04.514415+00:00",
+    "updated_at": "2026-09-17T15:31:04.514415+00:00",
+    "caption": "Middle-lane space weather today—keep the rhythm simple. — Kp 3.3 • Bz -5.0 nT • Schumann 7.63 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Middle-lane space weather today—keep the rhythm simple. — Kp 3.3 • Bz -5.0 nT • Schumann 7.63 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Feeling Different Today?",
+      "signal": "The background looks steady enough to keep the day simple.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Middle-lane space weather today—keep the rhythm simple. — Kp 3.3 • Bz -5.0 nT • Schumann 7.63 Hz (snapshot at write time)"
+    },
+    "voiceover": "Middle-lane space weather today—keep the rhythm simple. — Kp 3.3 • Bz -5.0 nT • Schumann 7.63 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "unsettled",
+      "sw": "normal"
+    },
+    "kp_max_24h": 3.33,
+    "bz_min": -4.95,
+    "schumann_value_hz": 7.63,
+    "solar_wind_kms": 450.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 880,
+    "day": "2026-09-17",
+    "platform": "ig",
+    "title": "Feeling Different Today?",
+    "created_at": "2026-09-17T15:31:04.514415+00:00",
+    "updated_at": "2026-09-17T15:31:04.514415+00:00",
+    "caption": "Middle-lane space weather today—keep the rhythm simple. — Kp 3.3 • Bz -5.0 nT • Schumann 7.63 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Middle-lane space weather today—keep the rhythm simple. — Kp 3.3 • Bz -5.0 nT • Schumann 7.63 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Feeling Different Today?",
+      "signal": "The background looks steady enough to keep the day simple.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Middle-lane space weather today—keep the rhythm simple. — Kp 3.3 • Bz -5.0 nT • Schumann 7.63 Hz (snapshot at write time)"
+    },
+    "voiceover": "Middle-lane space weather today—keep the rhythm simple. — Kp 3.3 • Bz -5.0 nT • Schumann 7.63 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "unsettled",
+      "sw": "normal"
+    },
+    "kp_max_24h": 3.33,
+    "bz_min": -4.95,
+    "schumann_value_hz": 7.63,
+    "solar_wind_kms": 450.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 877,
+    "day": "2026-09-16",
+    "platform": "default",
+    "title": "Brain Fog On A Loop?",
+    "created_at": "2026-09-16T15:24:14.115617+00:00",
+    "updated_at": "2026-09-16T15:24:14.115617+00:00",
+    "caption": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -5.2 nT • Schumann 7.75 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -5.2 nT • Schumann 7.75 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Brain Fog On A Loop?",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "voiceover": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -5.2 nT • Schumann 7.75 Hz (snapshot at write time)"
+    },
+    "voiceover": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -5.2 nT • Schumann 7.75 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "active",
+      "sw": "elevated"
+    },
+    "kp_max_24h": 4.0,
+    "bz_min": -5.16,
+    "schumann_value_hz": 7.75,
+    "solar_wind_kms": 522.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 878,
+    "day": "2026-09-16",
+    "platform": "ig",
+    "title": "Brain Fog On A Loop?",
+    "created_at": "2026-09-16T15:24:14.115617+00:00",
+    "updated_at": "2026-09-16T15:24:14.115617+00:00",
+    "caption": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -5.2 nT • Schumann 7.75 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -5.2 nT • Schumann 7.75 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Brain Fog On A Loop?",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "voiceover": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -5.2 nT • Schumann 7.75 Hz (snapshot at write time)"
+    },
+    "voiceover": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -5.2 nT • Schumann 7.75 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "active",
+      "sw": "elevated"
+    },
+    "kp_max_24h": 4.0,
+    "bz_min": -5.16,
+    "schumann_value_hz": 7.75,
+    "solar_wind_kms": 522.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 875,
+    "day": "2026-09-15",
+    "platform": "default",
+    "title": "Energy hard to hold?",
+    "created_at": "2026-09-15T15:32:19.140904+00:00",
+    "updated_at": "2026-09-15T15:32:19.140904+00:00",
+    "caption": "Standard energy field—consistency wins today. — Kp 3.0 • Bz -2.9 nT • Schumann 7.69 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Standard energy field—consistency wins today. — Kp 3.0 • Bz -2.9 nT • Schumann 7.69 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Standard energy field—consistency wins today",
+      "signal": "Signals are sitting in a fairly ordinary range today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Standard energy field—consistency wins today. — Kp 3.0 • Bz -2.9 nT • Schumann 7.69 Hz (snapshot at write time)"
+    },
+    "voiceover": "Standard energy field—consistency wins today. — Kp 3.0 • Bz -2.9 nT • Schumann 7.69 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "unsettled",
+      "sw": "normal"
+    },
+    "kp_max_24h": 3.0,
+    "bz_min": -2.88,
+    "schumann_value_hz": 7.69,
+    "solar_wind_kms": 412.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 876,
+    "day": "2026-09-15",
+    "platform": "ig",
+    "title": "Energy hard to hold?",
+    "created_at": "2026-09-15T15:32:19.140904+00:00",
+    "updated_at": "2026-09-15T15:32:19.140904+00:00",
+    "caption": "Standard energy field—consistency wins today. — Kp 3.0 • Bz -2.9 nT • Schumann 7.69 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "Standard energy field—consistency wins today. — Kp 3.0 • Bz -2.9 nT • Schumann 7.69 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Standard energy field—consistency wins today",
+      "signal": "Signals are sitting in a fairly ordinary range today.",
+      "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+      "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+      "voiceover": "Standard energy field—consistency wins today. — Kp 3.0 • Bz -2.9 nT • Schumann 7.69 Hz (snapshot at write time)"
+    },
+    "voiceover": "Standard energy field—consistency wins today. — Kp 3.0 • Bz -2.9 nT • Schumann 7.69 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "bands": {
+      "bz": "slightly southward",
+      "kp": "unsettled",
+      "sw": "normal"
+    },
+    "kp_max_24h": 3.0,
+    "bz_min": -2.88,
+    "schumann_value_hz": 7.69,
+    "solar_wind_kms": 412.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 872,
+    "day": "2026-09-14",
+    "platform": "default",
+    "title": "Body Buzzing Today?",
+    "created_at": "2026-09-14T16:56:09.509536+00:00",
+    "updated_at": "2026-09-14T23:03:23.123324+00:00",
+    "caption": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -9.1 nT • Schumann 7.72 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -9.1 nT • Schumann 7.72 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Body Buzzing Today?",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "voiceover": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -9.1 nT • Schumann 7.72 Hz (snapshot at write time)"
+    },
+    "voiceover": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -9.1 nT • Schumann 7.72 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "bands": {
+      "bz": "southward",
+      "kp": "active",
+      "sw": "normal"
+    },
+    "kp_max_24h": 4.0,
+    "bz_min": -9.11,
+    "schumann_value_hz": 7.72,
+    "solar_wind_kms": 379.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  },
+  {
+    "id": 874,
+    "day": "2026-09-14",
+    "platform": "ig",
+    "title": "Body Buzzing Today?",
+    "created_at": "2026-09-14T16:56:09.509536+00:00",
+    "updated_at": "2026-09-14T23:03:23.123324+00:00",
+    "caption": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -9.1 nT • Schumann 7.72 Hz (snapshot at write time)",
+    "fb_caption": null,
+    "ig_caption": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -9.1 nT • Schumann 7.72 Hz (snapshot at write time)",
+    "reel_story": {
+      "hook": "Body Buzzing Today?",
+      "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+      "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+      "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+      "voiceover": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -9.1 nT • Schumann 7.72 Hz (snapshot at write time)"
+    },
+    "voiceover": "A few bumps in the road—keep a slow and steady pace today. — Kp 4.0 • Bz -9.1 nT • Schumann 7.72 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "bands": {
+      "bz": "southward",
+      "kp": "active",
+      "sw": "normal"
+    },
+    "kp_max_24h": 4.0,
+    "bz_min": -9.11,
+    "schumann_value_hz": 7.72,
+    "solar_wind_kms": 379.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "space_json": {
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null,
+      "aurora_window": "Next 72h",
+      "aurora_headline": null
+    }
+  }
+]
