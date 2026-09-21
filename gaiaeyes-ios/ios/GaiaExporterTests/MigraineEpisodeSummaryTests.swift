@@ -9,6 +9,22 @@ struct MigraineEpisodeSummaryTests {
     private let second = "33333333-3333-4333-8333-333333333333"
     private let zone = TimeZone(identifier: "America/Chicago")!
 
+    private func episodeRequests(_ server: MigraineFixtureServer) -> [URLRequest] {
+        let requests = server.requests
+        // APIClient performs one public health preflight before authorization.
+        // Verify its isolation explicitly; every remaining request is still
+        // subject to the episode-specific method/path/count assertions below.
+        let health = requests.filter { $0.url?.path == "/health" }
+        #expect(health.count == 1 && requests.first?.url?.path == "/health")
+        #expect(health.allSatisfy {
+            $0.httpMethod == "GET" && $0.url?.host == "gaia-fixture.invalid"
+                && $0.url?.query == nil && ($0.httpBody?.isEmpty ?? true)
+                && $0.value(forHTTPHeaderField: "Authorization") == nil
+                && $0.value(forHTTPHeaderField: "X-Dev-UserId") == nil
+        })
+        return requests.filter { $0.url?.path != "/health" }
+    }
+
     private func detail(id: String? = nil, revision: Int = 2,
                         change: (inout [String: Any]) -> Void = { _ in }) throws -> MigraineEpisodeDetail {
         var body = try JSONSerialization.jsonObject(with: MigraineFixtureServer.detailDataForScenario("entries")) as! [String: Any]
@@ -55,8 +71,9 @@ struct MigraineEpisodeSummaryTests {
             #expect(store.summary?.revision == 0 && store.summary?.notes == "Saved manual migraine note.")
             #expect(store.summary?.medicines.isEmpty == true && store.errorMessage == nil)
         }
-        #expect(server.requests.count == 2)
-        #expect(server.requests.allSatisfy { $0.httpMethod == "GET" && $0.url?.path == "/v1/symptoms/current/\(first)/migraine-detail" })
+        let requests = episodeRequests(server)
+        #expect(requests.count == 2)
+        #expect(requests.allSatisfy { $0.httpMethod == "GET" && $0.url?.path == "/v1/symptoms/current/\(first)/migraine-detail" })
     }
 
     @Test
@@ -78,8 +95,9 @@ struct MigraineEpisodeSummaryTests {
         #expect(after.episode.notes == intended)
         await store.load(episodeID: second, scope: "a", timeZone: zone)
         #expect(store.summary?.notes == intended && store.summary?.revision == before.revision)
-        #expect(server.requests.filter { $0.httpMethod == "POST" }.count == 1)
-        #expect(server.requests.allSatisfy { $0.url?.path == "/v1/symptoms/current/\(second)/migraine-detail"
+        let requests = episodeRequests(server)
+        #expect(requests.filter { $0.httpMethod == "POST" }.count == 1)
+        #expect(requests.allSatisfy { ($0.httpMethod == "GET" && $0.url?.path == "/v1/symptoms/current/\(second)/migraine-detail")
             || ($0.httpMethod == "POST" && $0.url?.path == "/v1/symptoms/current/\(second)/updates") })
     }
 
@@ -237,7 +255,7 @@ struct MigraineEpisodeSummaryTests {
             await store.load(episodeID: first, scope: "a", timeZone: zone)
             #expect(store.summary?.medicines.count == 4 && store.errorMessage == nil)
         }
-        #expect(server.requests.allSatisfy { $0.httpMethod == "GET" && $0.url?.path == "/v1/symptoms/current/\(first)/migraine-detail" })
+        #expect(episodeRequests(server).allSatisfy { $0.httpMethod == "GET" && $0.url?.path == "/v1/symptoms/current/\(first)/migraine-detail" })
     }
 
     @Test
@@ -248,7 +266,7 @@ struct MigraineEpisodeSummaryTests {
         api.bearerProvider = { account = "b"; return "synthetic-token" }
         let store = MigraineEpisodeSummaryStore(api: api, accountScope: { account })
         await store.load(episodeID: first, scope: "a", timeZone: zone)
-        #expect(store.summary == nil && server.requests.isEmpty)
+        #expect(store.summary == nil && episodeRequests(server).isEmpty)
     }
 
     @Test(arguments: ["episode", "refresh", "account", "dismiss", "cancel"])

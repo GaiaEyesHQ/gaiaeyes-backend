@@ -1,11 +1,12 @@
 import Foundation
 
 enum MigraineCalendarFeature {
-    static func resolve(isDebugBuild: Bool, arguments: [String]) -> Bool {
-        isDebugBuild && arguments.contains("-gaia-enable-migraine-calendar")
+    static func resolve(isDebugBuild: Bool, arguments: [String], releaseCandidateEnabled: Bool = false) -> Bool {
+        releaseCandidateEnabled || (isDebugBuild && arguments.contains("-gaia-enable-migraine-calendar"))
     }
     static var isEnabled: Bool {
-        resolve(isDebugBuild: _isDebugAssertConfiguration(), arguments: ProcessInfo.processInfo.arguments)
+        resolve(isDebugBuild: _isDebugAssertConfiguration(), arguments: ProcessInfo.processInfo.arguments,
+                releaseCandidateEnabled: MigraineStructuredFollowUpFeature.releaseCandidateEnabled)
     }
 }
 

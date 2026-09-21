@@ -32,12 +32,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.*
 
 /** Actual app composable, HomeViewModel.Factory, account collector and repositories. */
-class IsolatedMainAppActivity : ComponentActivity() {
+open class IsolatedMainAppActivity : ComponentActivity() {
+    protected open val fontScale = 1f
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base.createConfigurationContext(android.content.res.Configuration(base.resources.configuration).apply { fontScale = this@IsolatedMainAppActivity.fontScale }))
+    }
     internal lateinit var fixture: MainAppFixture
         private set
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        fixture = MainAppFixture(this)
+        fixture = MainAppFixture(this, intent.getBooleanExtra("g037", false))
         setContent { GaiaEyesTheme {
             with(fixture) {
                 GaiaEyesApp(auth, body, dashboard, location, health, healthConnect, home, explore, journal,
@@ -51,10 +55,12 @@ class IsolatedMainAppActivity : ComponentActivity() {
     }
 }
 
-internal class MainAppFixture(activity: ComponentActivity) {
+class IsolatedMainAppLargeFontActivity : IsolatedMainAppActivity() { override val fontScale = 1.6f }
+
+internal class MainAppFixture(activity: ComponentActivity, parity: Boolean = false) {
     private val context = activity.applicationContext
     val auth = SyntheticMainAuth(context)
-    val server = MainAppServer(context.assets.open("migraine-detail.json").bufferedReader().use { it.readText() })
+    val server = MainAppServer(context.assets.open("migraine-detail.json").bufferedReader().use { it.readText() }, if (parity) parityReplies(context) else emptyMap())
     val engine = SyntheticEngine(server::handle)
     val client = HttpClient(engine) {
         expectSuccess = false; followRedirects = false
@@ -148,7 +154,8 @@ internal class SyntheticMainAuth(context: Context) : AuthRepository(context, "",
     fun releaseAll() { gates.forEach { it.complete(Unit) }; nextTokenGate?.complete(Unit); signOutGate?.complete(Unit) }
 }
 
-internal class MainAppServer(raw: String) {
+internal class MainAppServer(raw: String, readOverrides: Map<String, Reply> = emptyMap()) {
+    val readOverrides = readOverrides.toMutableMap()
     val original = migraineJson.decodeFromJsonElement<MigraineDetail>(migraineJson.parseToJsonElement(raw).jsonObject.getValue("data"))
     val details = Collections.synchronizedMap(mutableMapOf<String, MigraineDetail>())
     val requests = Collections.synchronizedList(mutableListOf<String>())
@@ -208,6 +215,11 @@ internal class MainAppServer(raw: String) {
         if (path == "/v1/symptoms/current") currentSymptomsGate?.let { gate ->
             gates += gate; currentSymptomsHeld = true; withContext(NonCancellable) { gate.await() }
         }
+        readOverrides[path]?.let {
+            if (path.startsWith("/v1/profile/") || path == "/v1/users/me/drivers" || path == "/v1/dashboard/gauges") check(account?.startsWith("synthetic-") == true)
+            if (path == "/v1/local/check") check(account == null)
+            return it
+        }
         return when (path) {
             "/v1/profile/preferences" -> Reply(body = """{"ok":true,"preferences":{"onboarding_completed":true}}""")
             "/v1/profile/location" -> Reply(body = """{"ok":true,"location":null}""")
@@ -223,3 +235,10 @@ internal class MainAppServer(raw: String) {
     private fun envelope(value: MigraineDetail) = Reply(body = buildJsonObject { put("ok", true); put("data", migraineJson.encodeToJsonElement(value)) }.toString())
     fun releaseAll() { gates.toList().forEach { it.complete(Unit) }; patchGate?.complete(Unit); readGate?.complete(Unit); currentSymptomsGate?.complete(Unit) }
 }
+
+private fun parityReplies(context: Context): Map<String, Reply> = mapOf(
+    "/v1/local/check" to Reply(body = context.assets.open("g037-local.json").bufferedReader().use { it.readText() }),
+    "/v1/users/me/drivers" to Reply(body = context.assets.open("g037-drivers.json").bufferedReader().use { it.readText() }),
+    "/v1/profile/location" to Reply(body = """{"ok":true,"location":{"zip":"78754","label":"Austin, TX","local_insights_enabled":true,"use_gps":false}}"""),
+    "/v1/dashboard/gauges" to Reply(body = """{"day":"2026-09-20","gauges":{"pain":38,"focus":25,"heart":22,"stamina":41,"energy":41,"sleep":33,"mood":29,"health_status":28}}"""),
+)

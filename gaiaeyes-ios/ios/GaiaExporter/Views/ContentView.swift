@@ -13457,6 +13457,7 @@ struct ContentView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("home-current-symptoms-open")
 
                 if currentSymptomsSnapshot == nil {
                     HStack(spacing: 8) {
@@ -19476,6 +19477,10 @@ struct ContentView: View {
                 }
             }
             .task {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                await fetchCurrentSymptomsSummary(api: state.apiWithAuth())
+                return
+#endif
                 guard !didRunInitialTasks else { return }
                 didRunInitialTasks = true
                 let identityReady = await ensureBackendIdentity(reason: "initial dashboard task")
@@ -19505,6 +19510,9 @@ struct ContentView: View {
                 _ = await (c, d)
             }
             .refreshable {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 let identityReady = await ensureBackendIdentity(reason: "manual refresh")
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
@@ -19531,6 +19539,9 @@ struct ContentView: View {
                 _ = await (c, d)
             }
             .onAppear {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 let hadOnboardingOpen = showOnboardingFlow
                 auth.loadFromKeychain()
                 let hasStoredAuthSession = auth.currentSupabaseUserId()?.isEmpty == false || auth.supabaseAccessToken?.isEmpty == false
@@ -19597,12 +19608,23 @@ struct ContentView: View {
                 hydrateSymptomPresetsFromCache()
             }
             .onChange(of: auth.supabaseUserId, initial: false) { _, _ in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                currentSymptomsSnapshot = nil
+                currentSymptomsCacheJSON = ""
+                return
+#endif
                 handleAuthScopeChangeIfNeeded()
             }
             .onChange(of: auth.supabaseAccessToken, initial: false) { _, _ in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 handleAuthScopeChangeIfNeeded()
             }
             .onChange(of: scenePhase, initial: false) { _, newPhase in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 if newPhase == .active {
                     state.refreshStatus()
                     Task {
@@ -19635,6 +19657,9 @@ struct ContentView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaAuthNeedsReauthentication).receive(on: RunLoop.main)) { note in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 let info = note.userInfo as? [String: String]
                 presentReauthenticationPrompt(
                     reason: info?["reason"] ?? "auth_needs_reauthentication",
@@ -19642,6 +19667,9 @@ struct ContentView: View {
                 )
             }
             .onChange(of: selectedTab, initial: true) { oldValue, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 let trigger = oldValue == newValue ? "initial" : "switch"
                 AppAnalytics.track(
                     "tab_viewed",
@@ -19653,6 +19681,9 @@ struct ContentView: View {
                 )
             }
             .onChange(of: featuresCacheJSON, initial: false) { oldValue, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeFeatures(from: newValue) else { return }
                 lastKnownFeatures = decoded
                 if let resolved = resolvedCacheVisibleFeatures(decoded, current: features) {
@@ -19665,6 +19696,9 @@ struct ContentView: View {
                 }
             }
             .onChange(of: spaceVisualsCacheJSON, initial: false) { oldValue, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeSpaceVisuals(from: newValue) else { return }
                 lastKnownSpaceVisuals = decoded
                 if spaceVisuals == nil {
@@ -19673,6 +19707,9 @@ struct ContentView: View {
                 }
             }
             .onChange(of: spaceOutlookCacheJSON, initial: false) { oldValue, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeSpaceOutlook(from: newValue) else { return }
                 lastKnownSpaceOutlook = decoded
                 if spaceOutlook == nil {
@@ -19681,6 +19718,9 @@ struct ContentView: View {
                 }
             }
             .onChange(of: userOutlookCacheJSON, initial: false) { oldValue, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeUserOutlook(from: newValue) else { return }
                 lastKnownUserOutlook = decoded
                 if userOutlook == nil {
@@ -19689,6 +19729,9 @@ struct ContentView: View {
                 }
             }
             .onChange(of: dashboardPayloadCacheJSON, initial: false) { oldValue, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeDashboardPayload(from: newValue) else { return }
                 if let g = decoded.gauges {
                     lastNonNilDashboardGauges = g
@@ -19704,6 +19747,9 @@ struct ContentView: View {
                 }
             }
             .onChange(of: localHealthZip, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 let sanitized = sanitizedZip(newValue)
                 if sanitized != newValue {
                     localHealthZip = sanitized
@@ -19716,6 +19762,9 @@ struct ContentView: View {
                 scheduleLocalHealthRefresh()
             }
             .onChange(of: showDebug, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue else { return }
                 Task {
                     await fetchFeaturesDiagnostics()
@@ -19723,24 +19772,36 @@ struct ContentView: View {
                 }
             }
             .onChange(of: showHazards, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue, !hazardsLoading else { return }
                 if hazardsBrief == nil || hazardsBrief?.ok != true {
                     Task { await fetchHazardsBrief() }
                 }
             }
             .onChange(of: showQuakes, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue, !quakeLoading else { return }
                 if quakeEvents.isEmpty {
                     Task { await fetchQuakes() }
                 }
             }
             .onChange(of: showMagnetosphere, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue, !magnetosphereLoading else { return }
                 if magnetosphere == nil {
                     Task { await fetchMagnetosphere(force: true) }
                 }
             }
             .onChange(of: showMissionInsightsSheet, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 state.suspendNonessentialNetworkRefresh = newValue
                 guard newValue else {
                     missionInsightsPath = []
@@ -19751,18 +19812,27 @@ struct ContentView: View {
                 }
             }
             .onChange(of: showCurrentSymptomsSheet, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue else { return }
                 Task {
                     await fetchCurrentSymptomsSummary(api: state.apiWithAuth())
                 }
             }
             .onChange(of: showDailyCheckInSheet, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue else { return }
                 Task {
                     await fetchDailyCheckInStatus(api: state.apiWithAuth())
                 }
             }
             .onChange(of: showMissionSettingsSheet, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 state.suspendNonessentialNetworkRefresh = newValue
                 if newValue {
                     syncMissionSettingsLocationDrafts(force: true)
@@ -19802,6 +19872,9 @@ struct ContentView: View {
                 }
             }
             .onChange(of: showLocalConditionsSheet, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue else { return }
                 Task {
                     await fetchLocalHealth()
@@ -19809,22 +19882,34 @@ struct ContentView: View {
                 }
             }
             .onChange(of: showSchumannDashboardSheet, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard newValue else { return }
                 Task {
                     await refreshLiveSchumannSignalBar(api: state.apiWithAuth())
                 }
             }
             .onChange(of: showCameraHealthCheckSheet, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 if !newValue {
                     Task { await fetchLatestCameraCheck() }
                 }
             }
             .onChange(of: showOnboardingFlow, initial: false) { _, newValue in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 if newValue {
                     AppAnalytics.track("onboarding_started", properties: ["step": onboardingStepRaw])
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .featuresShouldRefresh).receive(on: RunLoop.main)) { _ in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard !showMissionInsightsSheet else { return }
                 pendingRefreshTask?.cancel()
                 pendingRefreshToken &+= 1
@@ -19857,6 +19942,9 @@ struct ContentView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .dashboardShouldRefresh).receive(on: RunLoop.main)) { _ in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard !showMissionInsightsSheet else { return }
                 pendingDashboardRefreshTask?.cancel()
                 pendingDashboardRefreshTask = Task {
@@ -19873,6 +19961,9 @@ struct ContentView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushTokenDidChange).receive(on: RunLoop.main)) { _ in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 Task {
                     await applyStoredPushState()
                     let prefs = await MainActor.run { notificationPreferences }
@@ -19880,22 +19971,34 @@ struct ContentView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushAuthorizationDidChange).receive(on: RunLoop.main)) { _ in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 Task {
                     await applyStoredPushState()
                     await reconcilePushRegistration(reason: "authorization changed")
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushDeepLinkReceived).receive(on: RunLoop.main)) { note in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard let userInfo = note.userInfo, let route = GaiaPushRoute(userInfo: userInfo) else { return }
                 handleIncomingPushRoute(route)
             }
             .task {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 await reconcilePushRegistration(reason: "initial task")
                 if let pendingRoute = PushNotificationService.consumePendingRoute() {
                     handleIncomingPushRoute(pendingRoute)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AppLogLine")).receive(on: RunLoop.main)) { note in
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+                return
+#endif
                 guard let line = note.object as? String else { return }
                 let now = Date()
                 // Drop if any line was appended in the last 0.30s to avoid UI reflow storms

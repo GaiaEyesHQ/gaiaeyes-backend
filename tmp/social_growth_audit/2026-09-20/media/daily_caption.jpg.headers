@@ -1,0 +1,22 @@
+{
+  "Date": "Sun, 20 Sep 2026 19:26:03 GMT",
+  "Content-Type": "image/jpeg",
+  "Content-Length": "170022",
+  "Connection": "close",
+  "CF-Ray": "a3e338381da4845b-IAH",
+  "CF-Cache-Status": "REVALIDATED",
+  "Accept-Ranges": "bytes",
+  "Access-Control-Allow-Origin": "*",
+  "Cache-Control": "no-cache",
+  "ETag": "\"926396ca9f9dcfb8fac1ce42106671c2\"",
+  "Last-Modified": "Sun, 20 Sep 2026 14:39:59 GMT",
+  "Server": "cloudflare",
+  "sb-gateway-mode": "direct",
+  "sb-gateway-version": "1",
+  "sb-project-ref": "qadwzkwubfbfuslfxkzl",
+  "sb-request-id": "01a0c048-5f23-7cc0-89f8-8ad3f9988579",
+  "x-robots-tag": "none",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+  "set-cookie": "__cf_bm=99dbxdC3yZKtgsyd1peUQjiobVJa6lpsjXYhBclZfT0-1789932363.5378425-1.0.1.1-dNfjGaNLtg5cZNSt2IcmqYUMcRYBzBFtYQspYUbN9krlhM2H8xLxROgIebybg0tZdTbXr5lOo8oFSth5Rp7QRaaZH6n_uWzPo8HueAyVmPgeWrACSHycC8FHpRuvNUCK; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Sun, 20 Sep 2026 19:56:03 GMT",
+  "alt-svc": "h3=\":443\"; ma=86400"
+}

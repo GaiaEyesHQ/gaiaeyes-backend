@@ -47,6 +47,14 @@ struct MigraineEpisodeSummaryView: View {
                         Button("Retry summary") { Task { await load() } }.accessibilityIdentifier("migraine-summary-retry")
                     }
                 }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+#if DEBUG
+                .transformEnvironment(\.dynamicTypeSize) { size in
+                    let args = ProcessInfo.processInfo.arguments
+                    if args.contains("-gaia-preview-migraine-follow-up-fixture") && args.contains("calendar-summary-large") {
+                        size = .accessibility3
+                    }
+                }
+#endif
             }
             .background(Color(red: 0.03, green: 0.05, blue: 0.09).ignoresSafeArea())
             .foregroundStyle(.white).tint(.cyan)

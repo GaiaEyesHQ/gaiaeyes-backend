@@ -256,7 +256,12 @@ final class APIClient {
         self.baseURL = URL(string: config.baseURLString) ?? URL(string: "http://127.0.0.1:8000")!
 
         // Tuned session: short timeouts, limited concurrency to avoid UI stalls
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+        self.session = MigraineAppVerification.makeSession()
+        return // No live path monitor in the isolated configuration.
+#else
         self.session = session ?? APIClient.makeTunedSession()
+#endif
 
         // Start path monitor
         let q = DispatchQueue(label: "api.path.monitor")
@@ -763,8 +768,8 @@ final class APIClient {
         try await getJSON("v1/symptoms/codes", as: Envelope<[SymptomCodeDefinition]>.self)
     }
 
-    func fetchCurrentSymptoms(windowHours: Int = 12) async throws -> Envelope<CurrentSymptomsSnapshot> {
-        try await getJSON("v1/symptoms/current?window_hours=\(windowHours)", as: Envelope<CurrentSymptomsSnapshot>.self)
+    func fetchCurrentSymptoms(windowHours: Int = 12, validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> Envelope<CurrentSymptomsSnapshot> {
+        try await getJSON("v1/symptoms/current?window_hours=\(windowHours)", as: Envelope<CurrentSymptomsSnapshot>.self, validateRequest: validateRequest)
     }
 
     func postExposureEvent(
@@ -798,8 +803,8 @@ final class APIClient {
         try await getJSON("v1/users/me/drivers", as: AllDriversSnapshot.self, perRequestTimeout: 60)
     }
 
-    func fetchCurrentSymptomTimeline(days: Int = 7) async throws -> Envelope<[CurrentSymptomTimelineEntry]> {
-        try await getJSON("v1/symptoms/current/timeline?days=\(days)", as: Envelope<[CurrentSymptomTimelineEntry]>.self)
+    func fetchCurrentSymptomTimeline(days: Int = 7, validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> Envelope<[CurrentSymptomTimelineEntry]> {
+        try await getJSON("v1/symptoms/current/timeline?days=\(days)", as: Envelope<[CurrentSymptomTimelineEntry]>.self, validateRequest: validateRequest)
     }
 
     func fetchMigraineHistory(range: DateInterval, cursor: String?,
@@ -814,10 +819,10 @@ final class APIClient {
             as: Envelope<MigraineHistoryPage>.self, retries: 0, validateRequest: validateRequest)
     }
 
-    func fetchCurrentSymptom(episodeId: String) async throws -> Envelope<CurrentSymptomItem> {
+    func fetchCurrentSymptom(episodeId: String, validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> Envelope<CurrentSymptomItem> {
         try await getJSON(
             "v1/symptoms/current/\(episodeId)",
-            as: Envelope<CurrentSymptomItem>.self
+            as: Envelope<CurrentSymptomItem>.self, validateRequest: validateRequest
         )
     }
 

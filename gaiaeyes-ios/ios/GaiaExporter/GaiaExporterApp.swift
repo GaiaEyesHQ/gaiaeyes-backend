@@ -4,6 +4,9 @@ import AppIntents
 
 @main
 struct GaiaEyesApp: App {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+    private let verificationBootstrap: Void = MigraineAppVerification.bootstrap()
+#endif
     @UIApplicationDelegateAdaptor(PushNotificationAppDelegate.self) private var pushDelegate
     @StateObject private var appState = AppState()
     @StateObject private var auth = AuthManager.shared
@@ -52,7 +55,12 @@ struct GaiaEyesApp: App {
 
     @ViewBuilder
     private var rootView: some View {
-#if DEBUG
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+        if MigraineAppVerification.isActive {
+            ContentView()
+                .dynamicTypeSize(MigraineAppVerification.largeText ? .accessibility3 : .large)
+        } else { Color.clear }
+#elseif DEBUG
         if ProcessInfo.processInfo.arguments.contains("-gaia-preview-migraine-follow-up-fixture") {
             MigraineFollowUpFixtureScreen()
         } else if MigraineLocalVerification.isActive {

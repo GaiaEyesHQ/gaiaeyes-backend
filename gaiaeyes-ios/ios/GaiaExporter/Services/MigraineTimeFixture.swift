@@ -80,9 +80,14 @@ final class MigraineTimeFixture {
     private var lastDetailRequest: NSDictionary?
     private var laterDetailChanged = false
     var stored: [String: Any] { context }
-    init(scenario: String) {
+    init(scenario: String, activeEpisode: Bool = false) {
         self.scenario = scenario
         context = try! JSONSerialization.jsonObject(with: Self.contextData) as! [String: Any]
+        if activeEpisode {
+            var episode = context["episode"] as! [String: Any]
+            episode["state"] = "ongoing"; episode["end"] = NSNull()
+            context["episode"] = episode; context["raw_end_utc"] = NSNull()
+        }
         if scenario.contains("entries") {
             let detail = try! JSONSerialization.jsonObject(with: MigraineFixtureServer.detailDataForScenario(scenario)) as! [String: Any]
             var episode = context["episode"] as! [String: Any]

@@ -1,5 +1,15 @@
 # G016 development preview and remaining test handoff
 
+## September 20 native acceptance — G036
+
+Ordinary Xcode GUI execution now verifies **56 model cases + the existing gate (57 total)** and **all nine saved-summary UI journeys + one editor compatibility journey** on an owned arm64 iPhone 17e / iOS 26.5 Simulator. Positive function/parameter identities, explicit success and no unexplained skips are recorded. Corrected focused UI runs supplement the retained initial full run; the initial run was not entirely green. This supersedes the pending/unexecuted statements in the historical sections below.
+
+The tests now explicitly verify the existing public `/health` preflight, correctly locate the loading activity indicator, and require actual enlarged text before accepting the accessibility fixture. A DEBUG-only synthetic override ensures summary content receives accessibility3 sizing. Exact dose, full note ending, missingness, error/retry, ordinary revision-0 episodes, account switching, selected-day retention and acknowledged-note reopening were verified. Fresh request receipts show GET-only summaries and exactly one intended synthetic note update followed by a fresh read, with unchanged structured revision/lifecycle.
+
+A fresh **Release arm64 simulator build succeeded** through the same GUI route on September 20, **19:39:35–19:42:20 UTC**. All **15 fixture markers are absent from strings and symbols**. The executable is retained with SHA-256 `8b4d8c4e9ae567e7e57778e7e49015701b1bdac9bcaa32805baca09cadd63795`. Distribution signing was disabled; the Mach-O has only the linker's ad-hoc signature, no team/certificate/resource seal. No Release app was installed, run, uploaded or distributed. Default-off/Release feature gates remain unchanged.
+
+[Current native handoff, result bundles, request receipts, reviewed screenshots and source diff](/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g036-ios-native-verification/HANDOFF.md). The disposable G036 simulator was removed and the user's original Xcode project/scheme/destination restored. G031/G034 diagnostics were not rerun. Physical-device, authenticated backend, Siri, HealthKit, subscriptions, push and distribution acceptance remain separate. G035's accepted Android APK and the four reconciled strategy documents were preserved.
+
 ## September 17 source update — G032
 
 The saved-summary parity review selected one contract-backed gap: iOS now includes each recorded context's **Type** (`kind`) and **Source** (`source`), distinguishing user reports from device, health-record, environmental-service and imported observations. Existing observation-time/note positions, order, read-only behavior, account guards and Debug/default-off gates are unchanged. Android already displays these fields; G030 remains the unchanged owner debug APK. The two changed iOS files are the summary projection and its model tests; the previous 18-file G016 source pin set is historical, with those two explicitly superseded in the G032 diff.

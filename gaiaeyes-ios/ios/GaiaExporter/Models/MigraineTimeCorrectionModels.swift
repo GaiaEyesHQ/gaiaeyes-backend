@@ -1,10 +1,11 @@
 import Foundation
 
 enum MigraineTimeEditingFeature {
-    static func resolve(isDebugBuild: Bool, arguments: [String]) -> Bool {
-        isDebugBuild && arguments.contains("-gaia-enable-migraine-time-editing")
+    static func resolve(isDebugBuild: Bool, arguments: [String], releaseCandidateEnabled: Bool = false) -> Bool {
+        releaseCandidateEnabled || (isDebugBuild && arguments.contains("-gaia-enable-migraine-time-editing"))
     }
-    static var isEnabled: Bool { resolve(isDebugBuild: _isDebugAssertConfiguration(), arguments: ProcessInfo.processInfo.arguments) }
+    static var isEnabled: Bool { resolve(isDebugBuild: _isDebugAssertConfiguration(), arguments: ProcessInfo.processInfo.arguments,
+                releaseCandidateEnabled: MigraineStructuredFollowUpFeature.releaseCandidateEnabled) }
 }
 
 struct MigraineTimeContext: Decodable {

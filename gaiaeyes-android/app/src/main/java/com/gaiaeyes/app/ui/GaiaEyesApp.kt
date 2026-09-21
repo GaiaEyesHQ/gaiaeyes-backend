@@ -60,6 +60,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.Color
@@ -1960,9 +1961,10 @@ private fun HomeScreen(
 
     ScreenFrame(modifier = modifier) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val columns = if (maxWidth > 660.dp) 4 else 2
-            ContentColumn(bottomPadding = 104.dp) {
+            val columns = if (LocalDensity.current.fontScale >= 1.3f) 1 else if (maxWidth > 660.dp) 4 else 2
+            ContentColumn(bottomPadding = if (LocalDensity.current.fontScale >= 1.3f) 180.dp else 104.dp) {
                 Header(
+                    compact = true,
                     subtitle = account.email ?: "Signed in",
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1981,7 +1983,7 @@ private fun HomeScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Your body, in context.",
+                            text = "Home",
                             color = Color.White,
                             fontSize = 30.sp,
                             fontWeight = FontWeight.Bold,
@@ -2091,7 +2093,7 @@ private fun BodyScreen(
     ScreenFrame(modifier = modifier) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val wide = maxWidth > 660.dp
-            ContentColumn(bottomPadding = 104.dp) {
+            ContentColumn(bottomPadding = if (LocalDensity.current.fontScale >= 1.3f) 180.dp else 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
                     trailing = { SettingsButton(onClick = onOpenSettings) },
@@ -2689,7 +2691,7 @@ private fun PatternsScreen(
     ScreenFrame(modifier = modifier) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val columns = if (maxWidth > 660.dp) 2 else 1
-            ContentColumn(bottomPadding = 104.dp) {
+            ContentColumn(bottomPadding = if (LocalDensity.current.fontScale >= 1.3f) 180.dp else 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
                     trailing = { SettingsButton(onClick = onOpenSettings) },
@@ -3039,7 +3041,7 @@ private fun OutlookScreen(
     ScreenFrame(modifier = modifier) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val columns = if (maxWidth > 660.dp) 2 else 1
-            ContentColumn(bottomPadding = 104.dp) {
+            ContentColumn(bottomPadding = if (LocalDensity.current.fontScale >= 1.3f) 180.dp else 104.dp) {
                 Header(
                     subtitle = account.email ?: "Signed in",
                     trailing = { SettingsButton(onClick = onOpenSettings) },
@@ -3148,8 +3150,9 @@ private fun ExploreScreen(
 ) {
     ScreenFrame(modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
-            ContentColumn(bottomPadding = 104.dp) {
+            ContentColumn(bottomPadding = if (LocalDensity.current.fontScale >= 1.3f) 180.dp else 104.dp) {
                 Header(
+                    compact = true,
                     subtitle = account.email ?: "Signed in",
                     trailing = { SettingsButton(onClick = onOpenSettings) },
                 )
@@ -3215,20 +3218,20 @@ private fun ExploreScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                     MessageCard(
                         message = message,
-                        positive = uiState.explore != null,
+                        positive = false,
                         onDismiss = onDismissMessage,
                     )
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
                 Text(
-                    text = "Explore what Gaia Eyes is watching.",
+                    text = "Explore the signals around you.",
                     color = Color.White,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "Open any area for current readings and more context.",
+                    text = "Local, Earth, and space conditions in one place.",
                     color = Color(0xFF9BA6B4),
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
@@ -3323,9 +3326,10 @@ private fun AllDriversScreen(
     BackHandler(onBack = onBack)
     ScreenFrame(modifier = modifier) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val columns = if (maxWidth > 660.dp) 2 else 1
+            val columns = if (maxWidth > 660.dp && LocalDensity.current.fontScale < 1.3f) 2 else 1
             ContentColumn(bottomPadding = 36.dp) {
                 Header(
+                    compact = true,
                     subtitle = "Explore",
                     trailing = { TextButton(onClick = onBack) { Text("Back") } },
                 )
@@ -3344,10 +3348,16 @@ private fun AllDriversScreen(
                     modifier = Modifier.padding(top = 6.dp),
                 )
                 Spacer(modifier = Modifier.height(18.dp))
+                uiState.homeContextMessage?.let { Text(it, color = GaiaAmber, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp)) }
+                uiState.drivers?.let { snapshot ->
+                    Text(listOfNotNull(if (snapshot.source == HomeContextSource.CACHE) "Saved copy" else "Fetched",
+                        localTimestampText(snapshot.drivers.generatedAt ?: snapshot.drivers.asof, "Updated")).joinToString(" • "),
+                        color = Color(0xFF9BA6B4), fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
+                }
                 val response = uiState.drivers?.drivers
                 when {
                     response?.drivers?.isNotEmpty() == true -> {
-                        ExploreSummaryCard(response = response, onClick = null)
+                        Text("${response.drivers.size} tracked · order reflects relevance to you", color = GaiaBlue, fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(18.dp))
                         ExploreDriverGrid(
                             drivers = exploreDrivers(response),
@@ -3411,12 +3421,8 @@ private fun ExploreSignalCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = summary.title,
                         color = Color.White,
@@ -3433,23 +3439,7 @@ private fun ExploreSignalCard(
                 }
                 DriverPill(summary.status, summary.color)
             }
-            if (summary.metrics.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    summary.metrics.take(3).forEach { metric ->
-                        SupportingStatChip(
-                            label = metric.first,
-                            value = metric.second,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    repeat(3 - summary.metrics.take(3).size) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
+            if (summary.metrics.isNotEmpty()) SummaryMetricRows(summary.metrics.take(3))
             Text(
                 text = "View details ›",
                 color = summary.color,
@@ -3710,6 +3700,26 @@ private fun String.displaySignalText(): String =
     trim().replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
 
 @Composable
+private fun SummaryMetricRows(metrics: List<Pair<String, String>>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        metrics.forEach { (label, value) ->
+            if (LocalDensity.current.fontScale >= 1.3f) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(label, color = Color(0xFFADB7C5), fontSize = 14.sp)
+                    Text(value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(label, color = Color(0xFFADB7C5), fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text(value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun LocalConditionsSummaryCard(
     snapshot: LocalWeatherSnapshot?,
     isLoading: Boolean,
@@ -3762,23 +3772,9 @@ private fun LocalConditionsSummaryCard(
             }
 
             if (metrics.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(9.dp),
-                ) {
-                    metrics.take(3).forEach { metric ->
-                        SupportingStatChip(
-                            label = metric.label,
-                            value = metric.value,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    repeat(3 - metrics.take(3).size) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
+                SummaryMetricRows(listOf(metrics[0], metrics[4], metrics[2]).map { it.label to it.value })
                 Text(
-                    text = "Open weather, air quality, and pressure ›",
+                    text = "Weather, air quality, pressure, and allergens ›",
                     color = GaiaAmber,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -3819,6 +3815,7 @@ private fun LocalWeatherScreen(
     ScreenFrame(modifier = modifier) {
         ContentColumn(bottomPadding = 36.dp) {
             Header(
+                    compact = true,
                 subtitle = "Explore",
                 trailing = {
                     TextButton(onClick = onClose) {
@@ -3840,7 +3837,7 @@ private fun LocalWeatherScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "Weather, air quality, and pressure near ${localWeatherLocationLabel(snapshot)}.",
+                        text = "Weather, air quality, and allergens near ${localWeatherLocationLabel(snapshot)}.",
                         color = Color(0xFF9BA6B4),
                         fontSize = 15.sp,
                         lineHeight = 22.sp,
@@ -3859,7 +3856,7 @@ private fun LocalWeatherScreen(
                 Spacer(modifier = Modifier.height(14.dp))
                 MessageCard(
                     message = message,
-                    positive = snapshot?.local != null,
+                    positive = false,
                     onDismiss = onDismissMessage,
                 )
             }
@@ -3885,6 +3882,7 @@ private fun LocalWeatherScreen(
                             color = Color.White,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
                         )
                         DriverPill(
                             label = localWeatherSourceLabel(snapshot),
@@ -3895,7 +3893,7 @@ private fun LocalWeatherScreen(
                             },
                         )
                     }
-                    localWeatherObservedText(snapshot)?.let { observed ->
+                    localTimestampText(snapshot?.local?.asof, "Snapshot updated")?.let { observed ->
                         Text(
                             text = observed,
                             color = Color(0xFF9BA6B4),
@@ -3907,23 +3905,13 @@ private fun LocalWeatherScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
             when {
-                metrics.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    metrics.chunked(2).forEach { rowMetrics ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            rowMetrics.forEach { metric ->
-                                LocalWeatherMetricCard(
-                                    metric = metric,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                            repeat(2 - rowMetrics.size) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
+                snapshot?.local != null -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    localConditionSections(snapshot).forEach { section -> LocalConditionSectionCard(section) }
+                    val forecast = localForecastMetrics(snapshot)
+                    LocalConditionSectionCard(LocalConditionSection("Daily forecast", forecast,
+                        if (forecast.isEmpty()) "Forecast unavailable. Other local readings remain available."
+                        else "Daily forecasts use the local calendar date; they are separate from observed conditions."))
+                    LocalConditionSectionCard(localMoonSection(snapshot))
                 }
                 uiState.isLoadingLocalWeather -> ContextLoadingRow("Checking local conditions…")
                 else -> Card(
@@ -3996,6 +3984,24 @@ private fun LocalWeatherScreen(
 }
 
 @Composable
+private fun LocalConditionSectionCard(section: LocalConditionSection) {
+    val columns = if (LocalDensity.current.fontScale >= 1.3f || section.title == "Daily forecast") 1 else 2
+    Card(colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        border = BorderStroke(1.dp, GaiaAmber.copy(alpha = 0.18f)),
+        shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(section.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(section.detail, color = Color(0xFFADB7C5), fontSize = 13.sp, lineHeight = 19.sp)
+            section.metrics.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { LocalWeatherMetricCard(it, Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun LocalWeatherMetricCard(
     metric: LocalWeatherMetric,
     modifier: Modifier = Modifier,
@@ -4008,7 +4014,7 @@ private fun LocalWeatherMetricCard(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(15.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -4021,7 +4027,7 @@ private fun LocalWeatherMetricCard(
             Text(
                 text = metric.value,
                 color = Color.White,
-                fontSize = 24.sp,
+                fontSize = if (metric.value == "Unavailable") 16.sp else 24.sp,
                 fontWeight = FontWeight.Bold,
             )
             metric.detail?.let { detail ->
@@ -4077,22 +4083,12 @@ private fun ExploreSummaryCard(
                     )
                 }
                 DriverPill(
-                    label = if (response.summary.activeDriverCount > 0) {
-                        "${response.summary.activeDriverCount} active"
-                    } else {
-                        "Current order"
-                    },
-                    color = if (response.summary.activeDriverCount > 0) GaiaGreen else GaiaBlue,
+                    label = "Tracked",
+                    color = GaiaBlue,
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(9.dp),
-            ) {
-                DriverMetric("Visible", visible, Modifier.weight(1f))
-                DriverMetric("Leading", counts.leading, Modifier.weight(1f))
-                DriverMetric("Supporting", counts.supporting, Modifier.weight(1f))
-            }
+            SummaryMetricRows(listOf("Visible" to visible.toString(), "Leading" to counts.leading.toString(), "Supporting" to counts.supporting.toString()))
+            Text("Order reflects relevance to you, not environmental severity.", color = Color(0xFF9BA6B4), fontSize = 12.sp)
             if (onClick != null) {
                 Text(
                     text = "View all drivers ›",
@@ -4217,6 +4213,7 @@ private fun ExploreDriverCard(
 ) {
     val tint = driverCategoryColor(driver)
     val reason = driverDisplayReason(driver)
+    var showPersonalContext by rememberSaveable(driver.id, driver.key) { mutableStateOf(false) }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.08f)),
@@ -4251,35 +4248,9 @@ private fun ExploreDriverCard(
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }
-                DriverPill(
-                    label = driver.stateLabel
-                        ?.trim()
-                        ?.takeIf(String::isNotEmpty)
-                        ?: driver.state.ifBlank { "Current" },
-                    color = tint,
-                )
             }
-
-            driver.reading
-                ?.trim()
-                ?.takeIf(String::isNotEmpty)
-                ?.let { reading ->
-                    Text(
-                        text = reading,
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-
-            LinearProgressIndicator(
-                progress = { driverSignalProgress(driver) },
-                color = tint,
-                trackColor = Color.White.copy(alpha = 0.09f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp),
-            )
+            Text(driverMeasurement(driver), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            DriverPill(driverConditionLabel(driver), tint)
 
             if (reason.isNotEmpty()) {
                 Text(
@@ -4288,6 +4259,14 @@ private fun ExploreDriverCard(
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                 )
+            }
+
+            Text(driverProvenance(driver), color = Color(0xFF9BA6B4), fontSize = 12.sp, lineHeight = 18.sp)
+            driverPersonalContext(driver)?.let { personal ->
+                TextButton(onClick = { showPersonalContext = !showPersonalContext }) {
+                    Text(if (showPersonalContext) "Hide personal context" else "Why included", color = tint)
+                }
+                if (showPersonalContext) Text(personal, color = Color(0xFFB7C0CC), fontSize = 14.sp, lineHeight = 20.sp)
             }
 
             if (driver.currentSymptoms.isNotEmpty()) {
@@ -4308,7 +4287,7 @@ private fun ExploreDriverCard(
                 ?.takeIf(String::isNotEmpty)
                 ?.takeUnless { it.equals(reason, ignoreCase = true) }
                 ?.takeUnless { it == "We’re still learning how this tends to affect you." }
-            if (patternLabel != null || patternSummary != null) {
+            if (patternSummary != null) {
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                 patternLabel?.let {
                     Text(
@@ -5030,40 +5009,17 @@ private fun SignedInNavigation(
             .fillMaxWidth()
             .widthIn(max = 460.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            SignedInNavigationItem(
-                label = "Home",
-                selected = selectedPage == SignedInPage.HOME,
-                onClick = { onSelectPage(SignedInPage.HOME) },
-                modifier = Modifier.weight(1f),
-            )
-            SignedInNavigationItem(
-                label = "Body",
-                selected = selectedPage == SignedInPage.BODY,
-                onClick = { onSelectPage(SignedInPage.BODY) },
-                modifier = Modifier.weight(1f),
-            )
-            SignedInNavigationItem(
-                label = "Patterns",
-                selected = selectedPage == SignedInPage.PATTERNS,
-                onClick = { onSelectPage(SignedInPage.PATTERNS) },
-                modifier = Modifier.weight(1f),
-            )
-            SignedInNavigationItem(
-                label = "Outlook",
-                selected = selectedPage == SignedInPage.OUTLOOK,
-                onClick = { onSelectPage(SignedInPage.OUTLOOK) },
-                modifier = Modifier.weight(1f),
-            )
-            SignedInNavigationItem(
-                label = "Explore",
-                selected = selectedPage == SignedInPage.EXPLORE,
-                onClick = { onSelectPage(SignedInPage.EXPLORE) },
-                modifier = Modifier.weight(1f),
-            )
+        val large = LocalDensity.current.fontScale >= 1.3f
+        val tabs = listOf("Home" to SignedInPage.HOME, "Body" to SignedInPage.BODY,
+            "Patterns" to SignedInPage.PATTERNS, "Outlook" to SignedInPage.OUTLOOK, "Explore" to SignedInPage.EXPLORE)
+        Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            tabs.chunked(if (large) 3 else 5).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { (label, page) ->
+                        SignedInNavigationItem(label, selectedPage == page, { onSelectPage(page) }, Modifier.weight(1f))
+                    }
+                }
+            }
         }
     }
 }
@@ -5086,7 +5042,9 @@ private fun SignedInNavigationItem(
         Text(
             text = label,
             color = tint,
-            fontSize = 15.sp,
+            fontSize = 13.sp,
+            maxLines = 1,
+            softWrap = false,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             textAlign = TextAlign.Center,
             modifier = Modifier
@@ -5411,75 +5369,17 @@ private fun SymptomChip(
 
 @Composable
 private fun DriverPreviewRow(driver: DriverItem) {
-    val tint = when (driver.category.lowercase()) {
-        "space" -> GaiaBlue
-        "local" -> GaiaGreen
-        else -> GaiaAmber
-    }
-    val reason = driver.personalReason
-        ?.trim()
-        ?.takeIf(String::isNotEmpty)
-        ?: driver.shortReason.trim()
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.10f)),
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(15.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = driver.label.ifBlank { "Current signal" },
-                        color = Color.White,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    driver.roleLabel
-                        ?.trim()
-                        ?.takeIf(String::isNotEmpty)
-                        ?.let {
-                            Text(
-                                text = it,
-                                color = tint,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = driver.stateLabel?.takeIf(String::isNotBlank) ?: driver.state,
-                        color = tint,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    driver.reading
-                        ?.takeIf(String::isNotBlank)
-                        ?.let {
-                            Text(
-                                text = it,
-                                color = Color(0xFFADB7C5),
-                                fontSize = 12.sp,
-                            )
-                        }
-                }
+    val tint = driverCategoryColor(driver)
+    Card(colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.24f)),
+        shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(driver.label.ifBlank { "Current signal" }, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text("${driverMeasurement(driver)} · ${driverConditionLabel(driver)}", color = tint, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            driverDisplayReason(driver).takeIf(String::isNotEmpty)?.let {
+                Text(it, color = Color(0xFFB7C0CC), fontSize = 14.sp, lineHeight = 20.sp)
             }
-            if (reason.isNotEmpty()) {
-                Text(
-                    text = reason,
-                    color = Color(0xFFB7C0CC),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                )
-            }
+            Text(driverProvenance(driver), color = Color(0xFF9BA6B4), fontSize = 12.sp, lineHeight = 18.sp)
         }
     }
 }
@@ -5538,7 +5438,22 @@ private fun ContentColumn(
 private fun Header(
     subtitle: String,
     trailing: @Composable (() -> Unit)? = null,
+    compact: Boolean = false,
 ) {
+    if (compact) {
+        if (LocalDensity.current.fontScale >= 1.3f) {
+            Column(Modifier.fillMaxWidth()) {
+                Text("Gaia Eyes", color = GaiaBlue, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { trailing?.invoke() }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Gaia Eyes", color = GaiaBlue, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                trailing?.invoke()
+            }
+        }
+        return
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -5610,27 +5525,17 @@ private fun GaugeGrid(
     onGaugeClick: (GaugeDefinition) -> Unit,
 ) {
     val definitions = if (showAll) allGaugeDefinitions else allGaugeDefinitions.take(4)
-    val rows = (definitions.size + columns - 1) / columns
-    val gridHeight = (rows * 164 + (rows - 1).coerceAtLeast(0) * 10).dp
-
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        userScrollEnabled = false,
-        contentPadding = PaddingValues(0.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.height(gridHeight),
-    ) {
-        items(definitions, key = { it.key }) { definition ->
-            GaugeCard(
-                definition = definition,
-                value = dashboard?.gauges?.get(definition.key),
-                delta = dashboard?.gaugesDelta?.get(definition.key),
-                displayLabel = dashboard?.gaugeLabels?.get(definition.key)
-                    ?: definition.fallbackLabel,
-                zoneLabel = dashboard?.gaugesMeta?.get(definition.key)?.label,
-                onClick = { onGaugeClick(definition) },
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        definitions.chunked(columns).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { definition ->
+                    Box(Modifier.weight(1f)) {
+                        GaugeCard(definition, dashboard?.gauges?.get(definition.key), dashboard?.gaugesDelta?.get(definition.key),
+                            dashboard?.gaugeLabels?.get(definition.key) ?: definition.fallbackLabel,
+                            dashboard?.gaugesMeta?.get(definition.key)?.label, onClick = { onGaugeClick(definition) })
+                    }
+                }
+            }
         }
     }
 }
@@ -5655,12 +5560,12 @@ private fun GaugeCard(
         ),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier
-            .height(164.dp)
+            .heightIn(min = 164.dp)
             .clickable(onClick = onClick),
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -5684,7 +5589,7 @@ private fun GaugeCard(
                     color = definition.color,
                     trackColor = Color.White.copy(alpha = 0.10f),
                     strokeWidth = 7.dp,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(

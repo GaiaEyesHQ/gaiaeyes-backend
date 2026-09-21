@@ -4,19 +4,32 @@ enum MigraineStructuredFollowUpFeature {
     static let launchArgument = "-gaia-enable-structured-migraine-follow-up"
     static let environmentKey = "GAIA_ENABLE_STRUCTURED_MIGRAINE_FOLLOW_UP"
 
+    // Ordinary Debug/Release stay opt-in. The dedicated release candidate has
+    // real app routing, never DEBUG fixture routing or launch-argument enablement.
+    static var releaseCandidateEnabled: Bool {
+#if GAIA_MIGRAINE_RELEASE_CANDIDATE
+        true
+#else
+        false
+#endif
+    }
+
     static var isEnabled: Bool {
         resolve(
             isDebugBuild: _isDebugAssertConfiguration(),
             arguments: ProcessInfo.processInfo.arguments,
-            environment: ProcessInfo.processInfo.environment
+            environment: ProcessInfo.processInfo.environment,
+            releaseCandidateEnabled: releaseCandidateEnabled
         )
     }
 
     static func resolve(
         isDebugBuild: Bool,
         arguments: [String],
-        environment: [String: String]
+        environment: [String: String],
+        releaseCandidateEnabled: Bool = false
     ) -> Bool {
+        if releaseCandidateEnabled { return true }
         guard isDebugBuild else { return false }
         return arguments.contains(launchArgument) || environment[environmentKey] == "1"
     }
@@ -523,6 +536,14 @@ struct MigraineFollowUpDraft: Hashable {
         selectedMedicineID = medicineRows.first?.id
         removedMedicineIndices = []
         medicineMode = medicineRows.isEmpty ? .retain : .taken
+    }
+
+    // Optional details may become available after the person has already typed
+    // a legacy note. Applying their saved baseline must retain that local edit.
+    mutating func applyInitialDetail(_ detail: MigraineEpisodeDetail, currentAccountScope: String,
+                                    visibleNote: String, originalVisibleNote: String) throws {
+        try apply(detail, forAccountScope: currentAccountScope)
+        if visibleNote != originalVisibleNote { noteText = visibleNote }
     }
 
     // Move the concurrency baseline only when the time receipt proves that

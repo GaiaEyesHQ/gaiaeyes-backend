@@ -53,3 +53,14 @@ Ten distinct actual-form instrumentation cases passed: the nine-case suite and o
 This verifies the production form/controller seam on an emulator with synthetic services. It does not verify production HomeViewModel construction, the real auth observer, notification navigation, process death/recreation persistence, physical-device behavior, real network/backend responses, Health Connect, Firebase delivery, purchase/restore, or release/store readiness. The draft remains memory-only. The synthetic ledger's mutation count describes only the in-process fixture.
 
 No production source change was needed for this harness. G023 remains the existing owner APK; it does not contain this harness or the later follow-up form work.
+
+## G037 visual/data parity extension
+
+`LocalConditionsParityScreenTest` uses `IsolatedMainAppActivity` with the explicit `g037` intent flag and the actual `GaiaEyesApp`, `HomeViewModel`, account observer, repositories and API client. The original G026 description above about not constructing HomeViewModel applies to the form harness, not this main-app extension. Existing medicine scenarios do not enable the G037 flag.
+
+The added local/Drivers JSON assets are labelled synthetic fixtures, with public-derived weather/forecast values and deliberately populated pollen/AQI inputs. The in-memory server requires synthetic bearer auth for profile/Drivers/dashboard reads and no bearer for the public local route. Both manifests still deny INTERNET and remove automatic startup components. No production service, real account, Health Connect sample, billing flow or Firebase client is exercised.
+
+Five cases cover normal and activity-scoped 1.6 text across Home/Explore/Drivers/Local Conditions, full pressure text layout, native navigation, empty pollen without losing weather/AQI, a failed refresh retaining saved data, an actual API-client 401 and synthetic sign-out, plus the preserved ULF regional/history component. Screenshots/semantics/request ledgers are written to `files/g037`. The screenshot helper waits 350 ms after Compose/Android idle for the system window transition to settle. iOS references render actual production components in an owned fixture copy; they are not authenticated whole-app acceptance.
+
+The G037 delivery packet contains the final results, comparison gallery, build commands, isolated runtime receipts and owner APK guide:
+`/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g037-android-visual-data-parity`

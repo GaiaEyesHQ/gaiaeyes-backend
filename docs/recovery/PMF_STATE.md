@@ -2,7 +2,7 @@
 
 Strategy corrected by Jennifer on 2026-09-06. **Build a scalable user-acquisition and engagement system while continuing to improve Gaia Eyes.** Grow the user base, learn what people value, support repeated use and develop the research/medical vision. Revenue and costs remain measured context; immediate profitability or a payer threshold is not the primary gate for development. The original audit's paid-user gate and revenue-led experiment sequence are superseded.
 
-**September 16 handoff reconciliation:** PMF work supports growth and product learning while development continues. It is not an approval test for whether Gaia Eyes deserves further development. The financial and production counts below retain their original evidence dates; this strategy update is not a fresh financial, analytics or provider-account audit.
+**September 20 handoff reconciliation:** PMF work supports growth and product learning while development continues. The primary near-term outcome is a repeatable acquisition and engagement system that saves Jennifer time and helps free and Plus users receive continuing value. PMF work is not an approval test for whether Gaia Eyes deserves further development. The financial and production counts below retain their original evidence dates; this strategy update is not a fresh financial, analytics or provider-account audit.
 
 ## Governing growth context
 
@@ -96,7 +96,7 @@ Use three views of progress: (1) acquisition and founder effort, (2) activation,
 5. Reconcile server/provider payment lifecycle, manual grants, refunds, renewals and annual normalization. Event-driven purchase UI analytics cannot substitute for provider records.
 6. Produce a weekly growth/engagement report: eligible opportunities, content prepared/approved/published, visits/downloads/new accounts where observable, meaningful activation/return, feedback, and Jennifer's preparation/review minutes. Label unattributed gaps. Track revenue/runtime cost alongside it on an appropriate financial cadence; do not let them dominate the weekly product decisions.
 
-**September 17 reporting clarification:** show free-user and Plus-user usefulness together in the primary growth/engagement view. Record reach, first useful action, repeat use, feedback and founder time with their evidence dates and denominators; leave unknown values unknown. Keep the financial view visible for capacity planning and later Plus refinement. A weak or inconclusive campaign result changes that campaign or its measurement; it does not automatically withdraw support for product or research development.
+**September 20 reporting clarification:** show free-user and Plus-user usefulness together in the primary growth/engagement view. Record reach, first useful action, repeat use, feedback and founder time with their evidence dates and denominators; leave unknown values unknown. Keep the financial view visible for capacity planning and later Plus refinement. A weak or inconclusive campaign result changes that campaign or its measurement; it does not automatically withdraw support for product or research development. Evaluate low Plus conversion alongside the deliberate free/ad-free offering, limited sustained marketing and what users request; the available evidence does not identify it as a pricing, demand or product-failure diagnosis.
 
 ## Current growth experiments
 

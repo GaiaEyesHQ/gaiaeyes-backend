@@ -76,28 +76,67 @@ internal fun driverRoleCounts(response: AllDriversResponse?): DriverRoleCounts {
     )
 }
 
-internal fun driverDisplayReason(driver: DriverItem): String {
-    return driver.personalReason
-        ?.trim()
-        ?.takeIf(String::isNotEmpty)
-        ?: driver.shortReason.trim().takeIf(String::isNotEmpty)
-        ?: driver.activeNowText?.trim().orEmpty()
-}
+// Measurements and environmental categories are separate from personal ranking.
+internal fun driverDisplayReason(driver: DriverItem): String = sequenceOf(
+    driver.activeNowText,
+    driver.voiceSemantic?.interpretation?.seedShortReason,
+    driver.shortReason,
+).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+    .firstOrNull { !isGenericTrackingReason(it) }.orEmpty()
 
-internal fun driverSignalProgress(driver: DriverItem): Float {
-    val score = driver.displayScore ?: driver.signalStrength
-    if (score != null) return score.toFloat().coerceIn(0.08f, 1f)
+private fun isGenericTrackingReason(text: String): Boolean =
+    text.contains("matches what you asked Gaia Eyes to track", ignoreCase = true)
 
-    return when (
-        driver.severity?.trim()?.lowercase()
-            ?: driver.state.trim().lowercase()
-    ) {
-        "strong", "high", "elevated", "active" -> 0.82f
-        "watch", "moderate", "medium" -> 0.64f
-        "mild", "low" -> 0.38f
-        else -> 0.22f
+internal fun driverPersonalContext(driver: DriverItem): String? {
+    val reason = driver.voiceSemantic?.interpretation?.seedPersonalReason
+        ?.trim()?.takeIf(String::isNotEmpty)
+        ?: driver.personalReason?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    return when {
+        isGenericTrackingReason(reason) -> "Included in your tracking preferences."
+        reason.equals(driverDisplayReason(driver), ignoreCase = true) -> null
+        else -> reason
     }
 }
+
+internal fun aqiCategory(aqi: Double?): String? = aqi?.takeIf { it.isFinite() && it >= 0 }?.let {
+    when {
+        it <= 50 -> "Good"
+        it <= 100 -> "Moderate"
+        it <= 150 -> "Unhealthy for sensitive groups"
+        it <= 200 -> "Unhealthy"
+        it <= 300 -> "Very unhealthy"
+        else -> "Hazardous"
+    }
+}
+
+internal fun driverConditionLabel(driver: DriverItem): String {
+    val keys = (listOf(driver.key, driver.sourceKey.orEmpty()) + driver.aliases).map(::normalizedDriverKey)
+    if ("aqi" in keys) {
+        // Older cached responses have only a formatted reading. Parse only an exact AQI measurement.
+        val aqi = driver.readingValue ?: driver.reading?.trim()?.let {
+            Regex("(?i)^(?:AQI\\s+)?([0-9]+(?:\\.[0-9]+)?)(?:\\s+AQI)?$")
+                .matchEntire(it)?.groupValues?.get(1)?.toDoubleOrNull()
+        }
+        return aqiCategory(aqi) ?: "Unavailable"
+    }
+    if (driver.reading.isNullOrBlank() && driver.readingValue == null) return "Unavailable"
+    val state = driver.state.trim().lowercase()
+    // Backend 'active' includes mild conditions. It is not evidence of elevation.
+    if (state == "active" || state.isBlank()) return "Tracked"
+    return driver.stateLabel?.trim()?.takeIf(String::isNotEmpty)
+        ?: state.replace('_', ' ').replaceFirstChar { it.uppercase() }
+}
+
+internal fun driverMeasurement(driver: DriverItem): String =
+    driver.reading?.trim()?.takeIf(String::isNotEmpty)
+        ?: driver.readingValue?.takeIf(Double::isFinite)?.let {
+            listOfNotNull(formatLocalNumber(it), driver.readingUnit?.trim()?.takeIf(String::isNotEmpty)).joinToString(" ")
+        } ?: "Reading unavailable"
+
+internal fun driverProvenance(driver: DriverItem): String = listOfNotNull(
+    driver.sourceHint?.trim()?.takeIf(String::isNotEmpty)?.let { "Source: $it" },
+    localTimestampText(driver.updatedAt ?: driver.asof, "Updated") ?: "Update time unavailable",
+).joinToString(" • ")
 
 private fun possibleSymptomsForDriver(driver: DriverItem): List<String> {
     val keys = buildList {

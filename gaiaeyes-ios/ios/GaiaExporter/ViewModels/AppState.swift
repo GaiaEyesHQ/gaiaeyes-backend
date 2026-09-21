@@ -346,6 +346,9 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
 
     // MARK: - API client
     func apiWithAuth() -> APIClient {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+        return MigraineAppVerification.api
+#else
         let trimmedBase = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         let storedBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
         let auth = AuthManager.shared
@@ -403,6 +406,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             warnedAboutAnonymousDevRequest = true
         }
         return client
+    #endif
     }
 
     func applyDeveloperCredentials() {

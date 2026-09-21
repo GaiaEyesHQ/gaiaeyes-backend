@@ -1,5 +1,13 @@
 import Foundation
 
+struct MigraineEditorNavigationState {
+    let requestInFlight: Bool
+    let detailPending: Bool
+    let timePending: Bool
+    var canClose: Bool { !requestInFlight }
+    var requiresConfirmation: Bool { detailPending || timePending }
+}
+
 // The follow-up receipt covers the whole response, not just its medicine array.
 struct MigraineFollowUpSaveRecovery {
     struct Pending: Hashable {
@@ -194,12 +202,25 @@ enum MigraineFollowUpWorkflow {
         }
     }
 
-    static func isUnsupportedCapability(_ error: Error) -> Bool {
+    enum Capability { case details, calendar, timeEditing }
+
+    static func isUnsupportedCapability(_ error: Error, for capability: Capability = .details) -> Bool {
         guard case let APIError.server(code, body) = error,
               let data = body.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let detail = object["detail"] as? String else { return false }
-        return (code == 404 && detail == "Not Found")
-            || (code == 503 && detail == "structured migraine detail storage is not installed")
+        if code == 404 { return detail == "Not Found" }
+        guard code == 503 else { return false }
+        switch capability {
+        case .details:
+            return detail == "structured migraine detail storage is not installed"
+        case .calendar:
+            return ["migraine calendar history is not enabled",
+                    "canonical migraine history storage is not installed"].contains(detail)
+        case .timeEditing:
+            return ["Migraine time editing is not enabled",
+                    "migraine time correction storage is not installed",
+                    "structured migraine detail storage is not installed"].contains(detail)
+        }
     }
 }

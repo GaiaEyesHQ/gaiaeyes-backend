@@ -128,6 +128,7 @@ private func isRecoverableCurrentSymptomsMutationError(_ error: Error) -> Bool {
 }
 
 struct CurrentSymptomsView: View {
+    @ObservedObject private var auth = AuthManager.shared
     let api: APIClient
     var mode: ExperienceMode = .scientific
     var tone: ToneStyle = .balanced
@@ -139,6 +140,7 @@ struct CurrentSymptomsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var snapshot: CurrentSymptomsSnapshot?
+    @State private var openedAccountScope: String
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
     @State private var selectedEpisodeId: String?
@@ -173,6 +175,7 @@ struct CurrentSymptomsView: View {
 
         let firstItem = initialSnapshot?.items.first
         _snapshot = State(initialValue: initialSnapshot)
+        _openedAccountScope = State(initialValue: MigraineFollowUpWorkflow.accountScope())
         _selectedEpisodeId = State(initialValue: firstItem?.id)
         _noteDraft = State(initialValue: firstItem?.notePreview ?? "")
         _severityDraft = State(initialValue: firstItem?.severity ?? firstItem?.originalSeverity ?? 5)
@@ -275,12 +278,17 @@ struct CurrentSymptomsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                headerCard
-                activeNowCard
-                contributingCard
-                patternCard
-                journalCard
-                followUpCard
+                if openedAccountScope == currentAccountScope {
+                    headerCard
+                    activeNowCard
+                    contributingCard
+                    patternCard
+                    journalCard
+                    followUpCard
+                } else {
+                    Text("Your signed-in account changed. Close Symptoms and open it again.")
+                        .accessibilityIdentifier("current-symptoms-account-changed")
+                }
             }
             .padding(16)
         }
@@ -288,6 +296,9 @@ struct CurrentSymptomsView: View {
         .navigationTitle(copy.pageTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+            ToolbarItem(placement: .bottomBar) { MigraineAppVerificationControls() }
+#endif
             if showsCloseButton {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
@@ -302,6 +313,11 @@ struct CurrentSymptomsView: View {
         }
         .refreshable {
             await loadSnapshot()
+        }
+        .onChange(of: currentAccountScope) { _, _ in
+            snapshot = nil; editingItem = nil; followUpComposer = nil
+            selectedEpisodeId = nil; noteDraft = ""; rowFeedback = [:]
+            journalStatus = nil; optimisticStates = [:]; updatingEpisodeIds = []
         }
         .sheet(item: $editingItem) { item in
             CurrentSymptomEditorSheet(
@@ -373,6 +389,8 @@ struct CurrentSymptomsView: View {
     }
 
     private func loadSnapshot(showLoading: Bool = true, surfaceErrors: Bool = true) async {
+        let scope = openedAccountScope
+        guard scope == currentAccountScope else { return }
         if showLoading {
             await MainActor.run {
                 isLoading = true
@@ -386,7 +404,9 @@ struct CurrentSymptomsView: View {
             }
         }
         do {
-            let payload = try payload(from: try await api.fetchCurrentSymptoms())
+            let payload = try payload(from: try await api.fetchCurrentSymptoms(
+                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope }) }))
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope })
             await MainActor.run {
                 applySnapshot(payload)
                 if showLoading {
@@ -395,6 +415,7 @@ struct CurrentSymptomsView: View {
             }
             appLog("[CurrentSymptoms] snapshot ok active=\(payload.summary.activeCount)")
         } catch {
+            guard scope == currentAccountScope else { return }
             if isCurrentSymptomsCancellation(error) {
                 if showLoading {
                     await MainActor.run {
@@ -416,8 +437,12 @@ struct CurrentSymptomsView: View {
     }
 
     private func refreshSnapshotSilently() async -> CurrentSymptomsSnapshot? {
+        let scope = openedAccountScope
+        guard scope == currentAccountScope else { return nil }
         do {
-            let refreshed = try payload(from: try await api.fetchCurrentSymptoms())
+            let refreshed = try payload(from: try await api.fetchCurrentSymptoms(
+                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope }) }))
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope })
             await MainActor.run {
                 applySnapshot(refreshed)
             }
@@ -969,6 +994,17 @@ struct CurrentSymptomsView: View {
                         Label(copy.timelineTitle, systemImage: "clock.arrow.circlepath")
                     }
                     .buttonStyle(.bordered)
+                    .accessibilityIdentifier("symptom-timeline-open")
+                }
+                if MigraineCalendarFeature.isEnabled {
+                    NavigationLink {
+                        MigraineHistoryView(api: api, accountScope: currentAccountScope)
+                            .id(auth.supabaseUserId)
+                    } label: {
+                        Label("Migraine calendar and summaries", systemImage: "calendar")
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityIdentifier("symptoms-migraine-calendar-open")
                 }
             }
         }
@@ -1076,14 +1112,23 @@ struct CurrentSymptomsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Button {
-                openEditor(for: item)
-            } label: {
-                Text(copy.editDetailsTitle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.white.opacity(0.78))
+            if item.symptomCode.uppercased() == "MIGRAINE", structuredMigraineFollowUpEnabled {
+                NavigationLink {
+                    HistoricalSymptomEditor(api: api, episodeId: item.id,
+                        onSaved: { Task { await loadSnapshot() } })
+                } label: {
+                    Label("Details and medicines", systemImage: "square.and.pencil")
+                }
+                .disabled(isSaving)
+                .accessibilityIdentifier("current-migraine-details-" + item.id)
+            } else {
+                Button { openEditor(for: item) } label: {
+                    Text(copy.editDetailsTitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.78))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(14)
         .background(Color.white.opacity(0.05))
@@ -1952,7 +1997,8 @@ private struct CurrentSymptomFollowUpSheet: View {
         defer { isLoadingMigraineDetail = false }
         do {
             try MigraineFollowUpWorkflow.checkAccount(accountScope, current: accountScopeProvider)
-            let response = try await api.fetchMigraineEpisodeDetail(episodeId: item.id)
+            let response = try await api.fetchMigraineEpisodeDetail(episodeId: item.id,
+                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(accountScope, current: accountScopeProvider) })
             try MigraineFollowUpWorkflow.checkAccount(accountScope, current: accountScopeProvider)
             guard response.ok != false, let detail = response.payload, detail.episode.episodeId == item.id else {
                 throw NSError(
@@ -2293,6 +2339,8 @@ struct CurrentSymptomsTimelineView: View {
     @ObservedObject private var auth = AuthManager.shared
 
     @State private var entries: [CurrentSymptomTimelineEntry] = []
+    @State private var loadGeneration = UUID()
+    private var currentAccountScope: String { MigraineFollowUpWorkflow.accountScope() }
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
 
@@ -2377,7 +2425,8 @@ struct CurrentSymptomsTimelineView: View {
         )
         .navigationTitle("Symptom history")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .task(id: currentAccountScope) {
+            entries = []; errorMessage = nil
             appLog("[CurrentSymptoms] timeline_open")
             await loadTimeline()
         }
@@ -2387,12 +2436,20 @@ struct CurrentSymptomsTimelineView: View {
     }
 
     private func loadTimeline() async {
+        let scope = currentAccountScope
+        let generation = UUID(); loadGeneration = generation
+        let validate: @MainActor () throws -> Void = {
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope })
+            guard generation == loadGeneration else { throw CancellationError() }
+        }
         await MainActor.run {
             isLoading = true
             errorMessage = nil
         }
         do {
-            let envelope = try await api.fetchCurrentSymptomTimeline()
+            try validate()
+            let envelope = try await api.fetchCurrentSymptomTimeline(validateRequest: validate)
+            try validate()
             if envelope.ok == false && (envelope.data ?? []).isEmpty {
                 throw NSError(domain: "CurrentSymptomsTimeline", code: 1, userInfo: [NSLocalizedDescriptionKey: envelope.error ?? "Timeline unavailable"])
             }
@@ -2401,10 +2458,9 @@ struct CurrentSymptomsTimelineView: View {
                 isLoading = false
             }
         } catch {
+            guard generation == loadGeneration, scope == currentAccountScope else { return }
             if isCurrentSymptomsCancellation(error) {
-                await MainActor.run {
-                    isLoading = false
-                }
+                await MainActor.run { isLoading = false }
                 return
             }
             await MainActor.run {
@@ -2441,12 +2497,17 @@ struct CurrentSymptomsTimelineView: View {
 }
 
 struct HistoricalSymptomEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var auth = AuthManager.shared
     let api: APIClient
     let episodeId: String
     var accountScopeProvider: @MainActor () -> String = { MigraineFollowUpWorkflow.accountScope() }
     var onSaved: @MainActor () -> Void = {}
     var onBusyChange: @MainActor (Bool) -> Void = { _ in }
     @State private var loadedAccountScope: String?
+    @State private var showSavedSummary = false
+    @State private var migraineDetailNeedsRetry = false
+    @State private var confirmUnconfirmedClose = false
 
     @State private var item: CurrentSymptomItem?
     @State private var severity = 5
@@ -2474,7 +2535,14 @@ struct HistoricalSymptomEditor: View {
         _timeStore = StateObject(wrappedValue: MigraineTimeEditorStore(api: api, episodeId: episodeId, accountScope: accountScopeProvider))
     }
     private var saving: Bool { isSaving || isSavingMigraine || isSavingTimeCorrection || isReloadingMigraine }
-    private var otherEditsLocked: Bool { saving || timeStore.isLoading || timeStore.pendingRequest != nil || migraineRecovery.pending != nil }
+    private var navigationState: MigraineEditorNavigationState {
+        .init(requestInFlight: isLoading || saving || timeStore.isLoading || timeStore.isSaving,
+              detailPending: migraineRecovery.pending != nil, timePending: timeStore.pendingRequest != nil)
+    }
+    private var otherEditsLocked: Bool { isLoading || saving || timeStore.isLoading || timeStore.pendingRequest != nil || migraineRecovery.pending != nil }
+    private func updateParentBusyState() {
+        onBusyChange(navigationState.requestInFlight || navigationState.requiresConfirmation)
+    }
     private var detailSaveLocked: Bool { saving || timeStore.isLoading || timeStore.pendingRequest != nil || migraineRecovery.needsConflictReload }
     private var noteBinding: Binding<String> {
         Binding(get: { note }, set: { if !otherEditsLocked { note = $0 } })
@@ -2512,6 +2580,21 @@ struct HistoricalSymptomEditor: View {
                         .focused($noteIsFocused)
                         .disabled(otherEditsLocked)
                         .lineLimit(3...6)
+                }
+                if item.symptomCode.uppercased() == "MIGRAINE", MigraineCalendarFeature.isEnabled {
+                    Section {
+                        Button { showSavedSummary = true } label: { Label("View saved summary", systemImage: "doc.text") }
+                            .accessibilityIdentifier("migraine-history-summary")
+                            .disabled(otherEditsLocked)
+                    }
+                }
+                if migraineDetailNeedsRetry {
+                    Section("Migraine details") {
+                        Text(migraineStatusMessage ?? "Extra details could not be loaded. Your other edits remain available.")
+                            .font(.footnote).accessibilityIdentifier("migraine-history-unavailable")
+                        Button("Retry migraine details") { Task { await loadInitialMigraineDetails() } }
+                            .disabled(otherEditsLocked).accessibilityIdentifier("migraine-history-retry-details")
+                    }
                 }
                 if item.symptomCode.uppercased() == "MIGRAINE", MigraineTimeEditingFeature.isEnabled {
                     MigraineTimeFields(store: timeStore) { await saveTimes() }
@@ -2597,10 +2680,44 @@ struct HistoricalSymptomEditor: View {
         }
         .navigationTitle("Edit symptom")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(otherEditsLocked)
+        .interactiveDismissDisabled(otherEditsLocked)
+        .onChange(of: otherEditsLocked, initial: true) { _, _ in updateParentBusyState() }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") {
+                    guard navigationState.canClose else { return }
+                    if navigationState.requiresConfirmation { confirmUnconfirmedClose = true }
+                    else { onBusyChange(false); dismiss() }
+                }
+                .disabled(!navigationState.canClose)
+                .accessibilityIdentifier("migraine-history-close")
+            }
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+            ToolbarItem(placement: .bottomBar) { MigraineAppVerificationControls() }
+#endif
+        }
+        .confirmationDialog("Close with an unconfirmed save?", isPresented: $confirmUnconfirmedClose, titleVisibility: .visible) {
+            Button("Discard local draft and close", role: .destructive) {
+                guard navigationState.canClose else { return }
+                onBusyChange(false)
+                dismiss()
+            }
+            Button("Keep editing", role: .cancel) {}
+        } message: {
+            Text("The save may already have reached the server. Closing sends nothing and does not cancel it. The local draft and exact retry request will be discarded. Reopen the episode to review what is saved.")
+        }
         .scrollDismissesKeyboard(.interactively)
+        .sheet(isPresented: $showSavedSummary) {
+            MigraineEpisodeSummaryView(api: api, episodeID: episodeId,
+                accountScope: loadedAccountScope ?? currentAccountScope, timeZone: .current,
+                accountScopeProvider: accountScopeProvider)
+        }
         .onChange(of: currentAccountScope) { _, _ in
+            confirmUnconfirmedClose = false
+            showSavedSummary = false; migraineDetailNeedsRetry = false
             item = nil; migraineDraft = nil; timeStore.invalidate()
-            migraineRecovery = MigraineDetailSaveRecovery(); onBusyChange(false)
+            migraineRecovery = MigraineDetailSaveRecovery(); updateParentBusyState()
             medicineConflictReview = nil; setAsideMedicineDraft = nil
             statusMessage = "Your signed-in account changed. Close this editor and open it again."
         }
@@ -2612,7 +2729,8 @@ struct HistoricalSymptomEditor: View {
         loadedAccountScope = scope
         do {
             try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
-            let response = try await api.fetchCurrentSymptom(episodeId: episodeId)
+            let response = try await api.fetchCurrentSymptom(episodeId: episodeId,
+                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider) })
             try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
             guard response.ok != false, let loaded = response.payload, loaded.id == episodeId else {
                 throw NSError(domain: "HistoricalSymptomEditor", code: 1, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Symptom unavailable"])
@@ -2622,23 +2740,7 @@ struct HistoricalSymptomEditor: View {
             note = loaded.notePreview ?? ""
             if loaded.symptomCode.uppercased() == "MIGRAINE",
                MigraineStructuredFollowUpFeature.isEnabled {
-                var draft = MigraineFollowUpDraft(
-                    accountScope: scope,
-                    promptId: "history:\(episodeId)",
-                    episodeId: episodeId
-                )
-                let detailResponse = try await api.fetchMigraineEpisodeDetail(episodeId: episodeId)
-                try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
-                guard detailResponse.ok != false, let detail = detailResponse.payload, detail.episode.episodeId == episodeId else {
-                    throw NSError(
-                        domain: "HistoricalSymptomEditor",
-                        code: 3,
-                        userInfo: [NSLocalizedDescriptionKey: detailResponse.error ?? "Migraine details unavailable"]
-                    )
-                }
-                try draft.apply(detail, forAccountScope: currentAccountScope)
-                migraineDraft = draft
-                note = draft.noteText
+                await loadInitialMigraineDetails()
             }
         } catch {
             if scope != currentAccountScope {
@@ -2655,14 +2757,40 @@ struct HistoricalSymptomEditor: View {
         isLoading = false
     }
 
+    private func loadInitialMigraineDetails() async {
+        guard let item, let scope = loadedAccountScope, migraineDraft == nil, !saving else { return }
+        isReloadingMigraine = true; updateParentBusyState()
+        defer { isReloadingMigraine = false; updateParentBusyState() }
+        do {
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
+            let response = try await api.fetchMigraineEpisodeDetail(episodeId: episodeId,
+                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider) })
+            try MigraineFollowUpWorkflow.checkAccount(scope, current: accountScopeProvider)
+            guard response.ok != false, let detail = response.payload, detail.episode.episodeId == episodeId else {
+                throw MigraineSaveError.invalidResponse
+            }
+            var draft = MigraineFollowUpDraft(accountScope: scope, promptId: "history:\(episodeId)", episodeId: episodeId)
+            try draft.applyInitialDetail(detail, currentAccountScope: currentAccountScope,
+                visibleNote: note, originalVisibleNote: item.notePreview ?? "")
+            note = draft.noteText
+            migraineDraft = draft; migraineDetailNeedsRetry = false; migraineStatusMessage = nil
+        } catch {
+            guard scope == currentAccountScope, !Task.isCancelled else { return }
+            migraineDetailNeedsRetry = true
+            migraineStatusMessage = MigraineFollowUpWorkflow.isUnsupportedCapability(error)
+                ? "Extra migraine details are not available yet. You can still edit severity and notes."
+                : "Extra details could not be loaded. Your severity and note edits are still here."
+        }
+    }
+
     private func save() async {
         guard item != nil, let scope = loadedAccountScope, !otherEditsLocked else { return }
         noteIsFocused = false
-        isSaving = true; timeStore.externalBusy = true; onBusyChange(true)
+        isSaving = true; timeStore.externalBusy = true; updateParentBusyState()
         let submittedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         var acknowledged = false
         defer {
-            isSaving = false; timeStore.externalBusy = false; onBusyChange(false)
+            isSaving = false; timeStore.externalBusy = false; updateParentBusyState()
             if acknowledged, MigraineTimeEditingFeature.isEnabled { Task { await timeStore.otherDetailsSaved() } }
         }
         do {
@@ -2697,13 +2825,13 @@ struct HistoricalSymptomEditor: View {
         noteIsFocused = false
         draft.noteText = note
         migraineDraft = draft
-        isSavingMigraine = true; timeStore.externalBusy = true; onBusyChange(true)
+        isSavingMigraine = true; timeStore.externalBusy = true; updateParentBusyState()
         var acknowledged = false
         migraineStatusMessage = nil
         defer {
             isSavingMigraine = false
             timeStore.externalBusy = migraineRecovery.pending != nil
-            onBusyChange(migraineRecovery.pending != nil)
+            updateParentBusyState()
             if acknowledged, MigraineTimeEditingFeature.isEnabled { Task { await timeStore.otherDetailsSaved() } }
         }
         do {
@@ -2754,10 +2882,10 @@ struct HistoricalSymptomEditor: View {
 
     private func reviewUncertainMigraineSave() async {
         guard !saving, let pending = migraineRecovery.pending, migraineRecovery.needsUncertainReview else { return }
-        isReloadingMigraine = true; timeStore.externalBusy = true; onBusyChange(true)
+        isReloadingMigraine = true; timeStore.externalBusy = true; updateParentBusyState()
         defer {
             isReloadingMigraine = false; timeStore.externalBusy = migraineRecovery.pending != nil
-            onBusyChange(migraineRecovery.pending != nil)
+            updateParentBusyState()
         }
         do {
             try MigraineFollowUpWorkflow.checkAccount(pending.accountScope, current: accountScopeProvider)
@@ -2779,7 +2907,7 @@ struct HistoricalSymptomEditor: View {
             let detail = try migraineRecovery.useReviewedVersion(accountScope: currentAccountScope)
             try draft.apply(detail, forAccountScope: currentAccountScope)
             migraineDraft = draft; note = draft.noteText
-            timeStore.externalBusy = false; onBusyChange(false)
+            timeStore.externalBusy = false; updateParentBusyState()
             migraineStatusMessage = "Using the reviewed saved version. The unconfirmed edits were set aside; no new save was sent."
             if MigraineTimeEditingFeature.isEnabled { Task { await timeStore.load(preservingDraft: true) } }
         } catch { migraineStatusMessage = error.localizedDescription }
@@ -2789,8 +2917,8 @@ struct HistoricalSymptomEditor: View {
         guard var draft = migraineDraft, !otherEditsLocked else { return }
         draft.noteText = note
         noteIsFocused = false
-        isReloadingMigraine = true; timeStore.externalBusy = true; onBusyChange(true)
-        defer { isReloadingMigraine = false; timeStore.externalBusy = false; onBusyChange(false) }
+        isReloadingMigraine = true; timeStore.externalBusy = true; updateParentBusyState()
+        defer { isReloadingMigraine = false; timeStore.externalBusy = false; updateParentBusyState() }
         do {
             try MigraineFollowUpWorkflow.checkAccount(draft.accountScope, current: accountScopeProvider)
             let response = try await api.fetchMigraineEpisodeDetail(episodeId: episodeId,
@@ -2818,8 +2946,8 @@ struct HistoricalSymptomEditor: View {
         guard !saving, migraineRecovery.pending == nil, !timeStore.inputsLocked else { return }
         noteIsFocused = false
         isSavingTimeCorrection = true
-        onBusyChange(true)
-        defer { isSavingTimeCorrection = false; onBusyChange(false) }
+        updateParentBusyState()
+        defer { isSavingTimeCorrection = false; updateParentBusyState() }
         if let saved = await timeStore.save() {
             if var draft = migraineDraft {
                 if !draft.advanceAfterTimeCorrection(saved, currentAccountScope: currentAccountScope) {

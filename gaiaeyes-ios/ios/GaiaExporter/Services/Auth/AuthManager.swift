@@ -4,6 +4,20 @@ import Security
 @MainActor
 final class AuthManager: ObservableObject {
     static let shared = AuthManager()
+    private init() {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+        replaceVerificationAccount()
+#endif
+    }
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+    func replaceVerificationAccount() {
+        supabaseUserId = supabaseUserId == nil ? "fixture-account" : "different-fixture-account"
+        supabaseAccessToken = "synthetic-local-token"
+        supabaseEmail = "synthetic@example.invalid"
+        supabaseRefreshToken = nil
+        supabaseExpiresAt = .distantFuture
+    }
+#endif
     static let continuityEmailDefaultsKey = "gaia.auth.last_signed_in_email"
     static let diagnosticsLastEventKey = "gaia.auth.last_event"
     static let diagnosticsLastDetailKey = "gaia.auth.last_detail"
@@ -51,6 +65,7 @@ final class AuthManager: ObservableObject {
     }
 
     func loadFromKeychain() {
+        guard !MigraineLocalVerification.isActive else { return }
         let accessTokenRead = keychain.readResult("access_token")
         let refreshTokenRead = keychain.readResult("refresh_token")
         let userIdRead = keychain.readResult("user_id")
@@ -947,6 +962,9 @@ private struct KeychainStore {
     }
 
     func readResult(_ key: String) -> KeychainReadResult {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+        return KeychainReadResult(value: nil, status: errSecItemNotFound)
+#endif
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -964,6 +982,9 @@ private struct KeychainStore {
     }
 
     func write(_ value: String, key: String) {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+        return
+#endif
         delete(key)
         let data = value.data(using: .utf8) ?? Data()
         let query: [String: Any] = [
@@ -977,6 +998,9 @@ private struct KeychainStore {
     }
 
     func delete(_ key: String) {
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+        return
+#endif
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

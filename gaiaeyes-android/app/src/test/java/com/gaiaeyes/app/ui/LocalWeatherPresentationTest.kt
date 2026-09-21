@@ -34,11 +34,11 @@ class LocalWeatherPresentationTest {
         val metrics = localWeatherMetrics(snapshot)
 
         assertEquals("Austin, TX", localWeatherLocationLabel(snapshot))
-        assertEquals("Live", localWeatherSourceLabel(snapshot))
+        assertEquals("Fetched", localWeatherSourceLabel(snapshot))
         assertEquals("86°F", metrics.first().value)
         assertEquals("+3.6°F in 24h", metrics.first().detail)
         assertEquals("72%", metrics[1].value)
-        assertEquals("1015 hPa", metrics[2].value)
+        assertEquals("1014.6 hPa", metrics[2].value)
         assertEquals("-3.2 hPa in 24h • falling", metrics[2].detail)
         assertEquals("47 AQI", metrics.last().value)
     }
@@ -71,7 +71,7 @@ class LocalWeatherPresentationTest {
                 savedAtEpochMillis = 1L,
             )
 
-            assertEquals("Observed Aug 2, 4:35 PM", localWeatherObservedText(snapshot))
+            assertEquals("Observed Aug 2, 4:35 PM · Stale", localWeatherObservedText(snapshot))
         } finally {
             TimeZone.setDefault(originalTimeZone)
         }

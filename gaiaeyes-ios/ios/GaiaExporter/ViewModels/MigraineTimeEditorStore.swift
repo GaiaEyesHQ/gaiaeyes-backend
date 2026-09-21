@@ -55,7 +55,9 @@ final class MigraineTimeEditorStore: ObservableObject {
         } catch {
             guard token == generation else { return }
             if scope != accountScope() { invalidate(); return }
-            message = "Saved times could not be loaded. Your changes are still here."
+            message = MigraineFollowUpWorkflow.isUnsupportedCapability(error, for: .timeEditing)
+                ? "Time editing is not available yet. Other episode details remain available. Any time changes you entered are still here."
+                : "Saved times could not be loaded. Your changes are still here."
             needsReload = true
         }
     }
@@ -94,6 +96,9 @@ final class MigraineTimeEditorStore: ObservableObject {
                     : "Check the times and status. Your changes are still here."
             } else if let validation = error as? MigraineTimeError {
                 pendingRequest = nil; message = validation.localizedDescription
+            } else if MigraineFollowUpWorkflow.isUnsupportedCapability(error, for: .timeEditing) {
+                // Retain the exact request: an earlier uncertain attempt may have committed.
+                message = "Time editing is unavailable. This correction has not been confirmed; your request is still kept. Retry when available or reload the saved version."
             } else {
                 message = "The save could not be confirmed. Retry the same correction, or reload the saved version before changing it."
             }

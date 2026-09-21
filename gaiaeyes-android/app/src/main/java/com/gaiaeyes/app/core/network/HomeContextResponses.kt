@@ -145,6 +145,44 @@ data class LocalCheckResponse(
     val air: LocalAir = LocalAir(),
     val health: LocalHealth = LocalHealth(),
     val asof: String? = null,
+    val allergens: LocalAllergens? = null,
+    val moon: LocalMoon? = null,
+    @SerialName("forecast_daily") val forecastDaily: List<LocalForecastDay>? = null,
+)
+
+@Serializable
+data class LocalMoon(val phase: String? = null, val illum: Double? = null)
+
+@Serializable
+data class LocalAllergens(
+    @SerialName("overall_level") val overallLevel: String? = null,
+    @SerialName("overall_label") val overallLabel: String? = null,
+    @SerialName("overall_index") val overallIndex: Double? = null,
+    @SerialName("primary_type") val primaryType: String? = null,
+    @SerialName("primary_label") val primaryLabel: String? = null,
+    @SerialName("tree_level") val treeLevel: String? = null,
+    @SerialName("grass_level") val grassLevel: String? = null,
+    @SerialName("weed_level") val weedLevel: String? = null,
+    @SerialName("mold_level") val moldLevel: String? = null,
+    @SerialName("tree_index") val treeIndex: Double? = null,
+    @SerialName("grass_index") val grassIndex: Double? = null,
+    @SerialName("weed_index") val weedIndex: Double? = null,
+    @SerialName("mold_index") val moldIndex: Double? = null,
+    val source: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+data class LocalForecastDay(
+    val day: String = "",
+    @SerialName("temp_high_c") val temperatureHighC: Double? = null,
+    @SerialName("temp_low_c") val temperatureLowC: Double? = null,
+    @SerialName("precip_probability") val precipitationProbabilityPercent: Double? = null,
+    @SerialName("humidity_avg") val humidityAverage: Double? = null,
+    @SerialName("wind_speed") val windSpeed: Double? = null,
+    @SerialName("condition_summary") val shortForecast: String? = null,
+    val source: String? = null,
+    @SerialName("issued_at") val issuedAt: String? = null,
 )
 
 @Serializable
@@ -234,6 +272,12 @@ data class DriverItem(
     val stateLabel: String? = null,
     val severity: String? = null,
     val reading: String? = null,
+    @SerialName("reading_value") val readingValue: Double? = null,
+    @SerialName("reading_unit") val readingUnit: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    val asof: String? = null,
+    @SerialName("source_hint") val sourceHint: String? = null,
+    @SerialName("voice_semantic") val voiceSemantic: DriverVoiceSemantic? = null,
     @SerialName("short_reason")
     val shortReason: String = "",
     @SerialName("personal_reason")
@@ -256,4 +300,13 @@ data class DriverItem(
     val displayScore: Double? = null,
     @SerialName("is_objectively_active")
     val isObjectivelyActive: Boolean? = null,
+)
+
+@Serializable
+data class DriverVoiceSemantic(val interpretation: DriverInterpretation? = null)
+
+@Serializable
+data class DriverInterpretation(
+    @SerialName("seed_short_reason") val seedShortReason: String? = null,
+    @SerialName("seed_personal_reason") val seedPersonalReason: String? = null,
 )

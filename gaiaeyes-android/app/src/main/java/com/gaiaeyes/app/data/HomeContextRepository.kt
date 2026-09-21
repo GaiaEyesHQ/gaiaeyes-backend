@@ -52,9 +52,7 @@ class HomeContextRepository(
     }
 
     suspend fun refreshDrivers(accountId: String): DriversSnapshot {
-        val drivers = authenticatedRequest {
-            apiClient.allDrivers(authRepository.accessToken())
-        }
+        val drivers = readForAccount(accountId, apiClient::allDrivers)
         val savedAt = System.currentTimeMillis()
         cache.writeDrivers(accountId, drivers, savedAt)
         return DriversSnapshot(
@@ -75,15 +73,14 @@ class HomeContextRepository(
     }
 
     suspend fun refreshLocal(accountId: String): LocalWeatherSnapshot {
-        val location = authenticatedRequest {
-            apiClient.profileLocation(authRepository.accessToken())
-        }
+        val location = readForAccount(accountId, apiClient::profileLocation)
         val local = location
             ?.takeUnless { it.localInsightsEnabled == false }
             ?.zip
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?.let { apiClient.localCheck(it) }
+        requireHomeContextAccount(accountId, authRepository::currentAccountId)
         val savedAt = System.currentTimeMillis()
         cache.writeLocal(accountId, location, local, savedAt)
         return LocalWeatherSnapshot(
@@ -141,6 +138,34 @@ class HomeContextRepository(
             throw unauthorized
         }
     }
+
+    private suspend fun <T> readForAccount(accountId: String, read: suspend (String) -> T): T =
+        readHomeContextForAccount(accountId, authRepository::currentAccountId,
+            authRepository::accessToken, authRepository::signOut, read)
+}
+
+internal suspend fun requireHomeContextAccount(accountId: String, currentAccountId: () -> String?) {
+    currentCoroutineContext().ensureActive()
+    if (currentAccountId() != accountId) throw CancellationException("Account changed")
+}
+
+internal suspend fun <T> readHomeContextForAccount(
+    accountId: String,
+    currentAccountId: () -> String?,
+    accessToken: suspend () -> String,
+    signOut: suspend () -> Unit,
+    read: suspend (String) -> T,
+): T {
+    requireHomeContextAccount(accountId, currentAccountId)
+    val token = accessToken()
+    requireHomeContextAccount(accountId, currentAccountId)
+    val result = try { read(token) } catch (unauthorized: ApiUnauthorizedException) {
+        currentCoroutineContext().ensureActive()
+        if (currentAccountId() == accountId) signOut()
+        throw unauthorized
+    }
+    requireHomeContextAccount(accountId, currentAccountId)
+    return result
 }
 
 // The production saved-summary boundary, with only its external calls injectable.

@@ -121,7 +121,7 @@ final class MigraineEpisodeSummaryUITests: XCTestCase {
 
     @MainActor func testAccountChangeRejectsDelayedSummary() {
         let app = launch("calendar-summary-account"); openSummary(first, app)
-        XCTAssertTrue(app.staticTexts["migraine-summary-loading"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.activityIndicators["migraine-summary-loading"].waitForExistence(timeout: 10))
         app.buttons["migraine-summary-fixture-account"].tap()
         XCTAssertTrue(app.staticTexts["No migraine episodes recorded for this day."].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["migraine-summary-saved"].exists)
@@ -131,6 +131,8 @@ final class MigraineEpisodeSummaryUITests: XCTestCase {
 
     @MainActor func testLargeTextKeepsExactDoseAndCompleteNotesReadable() {
         let app = launch("calendar-summary-large"); openSummary(second, app); saved(app)
+        XCTAssertGreaterThan(app.staticTexts["migraine-summary-duration-line-0"].frame.height, 30,
+                             "The summary must actually use accessibility text sizing.")
         capture(app, "G016 saved summary at accessibility3 text size")
         let dose = app.staticTexts["migraine-summary-medicine-1-line-1"]; reveal(dose, app)
         XCTAssertEqual(dose.label, "Dose: 2.500000000000000001 mg")

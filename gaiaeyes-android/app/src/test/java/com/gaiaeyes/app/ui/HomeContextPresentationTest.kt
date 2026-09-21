@@ -120,7 +120,7 @@ class HomeContextPresentationTest {
     }
 
     @Test
-    fun driverPresentationPrefersPersonalContextAndDisplayScore() {
+    fun driverPresentationSeparatesMeasuredAndPersonalContext() {
         val driver = DriverItem(
             key = "schumann",
             label = "Schumann",
@@ -132,10 +132,10 @@ class HomeContextPresentationTest {
         )
 
         assertEquals(
-            "This has lined up with focus shifts in your history.",
+            "Active right now.",
             driverDisplayReason(driver),
         )
-        assertEquals(0.88f, driverSignalProgress(driver), 0.001f)
+        assertEquals("This has lined up with focus shifts in your history.", driverPersonalContext(driver))
     }
 
     @Test

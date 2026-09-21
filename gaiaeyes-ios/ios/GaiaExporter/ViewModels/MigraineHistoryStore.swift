@@ -80,7 +80,7 @@ final class MigraineHistoryStore: ObservableObject {
             if case APIError.server(409, _) = error {
                 items = []; nextCursor = nil; snapshot = nil; asOf = nil; seenCursors = []
                 errorMessage = "History changed while loading. Refresh this month to load the current episodes."
-            } else if case APIError.server(let code, _) = error, code == 404 || code == 503 {
+            } else if MigraineFollowUpWorkflow.isUnsupportedCapability(error, for: .calendar) {
                 errorMessage = "Migraine calendar history is not available on this server yet. Recent symptom history is still available."
             } else {
                 errorMessage = items.isEmpty ? "History could not be loaded. Try again."

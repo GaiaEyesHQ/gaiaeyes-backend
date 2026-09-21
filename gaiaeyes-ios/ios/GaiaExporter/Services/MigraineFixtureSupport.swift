@@ -15,9 +15,13 @@ final class MigraineFixtureSession: ObservableObject {
 
 enum MigraineLocalVerification {
     static var isActive: Bool {
-        ProcessInfo.processInfo.arguments.contains("-gaia-preview-migraine-follow-up-fixture")
+#if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
+        return true // Verification configuration never starts live services, even without launch arguments.
+#else
+        return ProcessInfo.processInfo.arguments.contains("-gaia-preview-migraine-follow-up-fixture")
             || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
             || NSClassFromString("XCTestCase") != nil
+#endif
     }
 }
 
