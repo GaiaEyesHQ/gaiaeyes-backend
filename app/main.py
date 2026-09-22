@@ -12,6 +12,7 @@ from .routers import (
     dashboard,
     drivers,
     earth,
+    earthscope_writer,
     exposures,
     feedback,
     health as health_router,
@@ -141,6 +142,7 @@ app.include_router(earth.router, dependencies=[Depends(require_read_auth)])
 app.include_router(schumann_tomsk_params.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
+app.include_router(earthscope_writer.router)  # Dedicated, default-off worker auth on both routes.
 app.include_router(lunar.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space_forecasts.router, dependencies=[Depends(require_read_auth)])
 app.include_router(outlook.router)

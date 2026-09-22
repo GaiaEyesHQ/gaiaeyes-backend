@@ -1,0 +1,19 @@
+{
+  "fixture_status": "synthetic_only_not_observed_conditions",
+  "day": "2026-09-21",
+  "now": "2026-09-21T22:00:00+00:00",
+  "inputs": {
+    "space": {"day":"2026-09-21","updated_at":"2026-09-21T21:50:00+00:00","now_ts":"2026-09-21T21:45:00+00:00","kp_max":5.0,"kp_now":3.0,"bz_min":-7.0,"sw_speed_avg":410.0,"sw_speed_now_kms":520.0,"sw_speed_now":520.0,"flares_count":2,"cmes_count":1},
+    "kp": {"kp_time":"2026-09-21T21:44:00+00:00","kp":4.0},
+    "kp_fallback": {"ts_utc":"2026-09-21T21:43:00+00:00","kp_index":3.0},
+    "pulse": {"ts":"2026-09-21T21:42:00+00:00","kp_latest":2.0},
+    "schumann": [
+      {"day":"2026-09-21","station_id":"tomsk-main","f0_avg_hz":7.8,"last_fundamental_ts":"2026-09-21T21:30:00+00:00"},
+      {"day":"2026-09-21","station_id":"cumiana","f0_avg_hz":8.0,"last_fundamental_ts":"2026-09-21T21:35:00+00:00"}
+    ],
+    "public_copy": [
+      {"day":"2026-09-20","updated_at":"2026-09-20T14:00:00+00:00","title":"A Steadier Pace","caption":"A little room to settle. Synthetic previous-day editorial context only.","ig_caption":"Room to settle, at your own pace.","fb_caption":"A Steadier Pace. An invented fixture for repetition review.","kp_max_24h":6.0,"bz_min":-8.0,"solar_wind_kms":550.0},
+      {"day":"2026-09-17","updated_at":"2026-09-17T14:00:00+00:00","title":"Your Own Rhythm","caption":"A different opening. Synthetic older copy, not carryover evidence.","ig_caption":null,"fb_caption":null,"kp_max_24h":7.0,"bz_min":-11.0,"solar_wind_kms":650.0}
+    ]
+  }
+}

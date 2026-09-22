@@ -1,0 +1,42 @@
+name: EarthScope local writer draft shadow
+permissions:
+  contents: read
+on:
+  workflow_dispatch:
+    inputs:
+      enabled:
+        description: "Run draft-only queue preparation and bounded receipt wait"
+        required: true
+        type: boolean
+        default: false
+      version:
+        description: "Explicit job version (no automatic retry or new generation)"
+        required: true
+        default: "1"
+concurrency:
+  group: earthscope-local-draft-shadow
+  cancel-in-progress: false
+jobs:
+  draft_shadow:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.enabled == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EARTHSCOPE_DRAFT_SHADOW_ENABLED: "1"
+      EARTHSCOPE_DRAFT_PREPARER_DSN: ${{ secrets.EARTHSCOPE_DRAFT_PREPARER_DSN }}
+      EARTHSCOPE_DRAFT_WORKER_ID: ${{ vars.EARTHSCOPE_DRAFT_WORKER_ID }}
+      DRAFT_JOB_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Prepare and wait for a draft-only receipt
+        run: python scripts/earthscope_draft_shadow.py --version "$DRAFT_JOB_VERSION" --wait-seconds 300 --receipt artifacts/local-draft-receipt.json
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: earthscope-local-draft-${{ github.run_id }}
+          path: artifacts/local-draft-receipt.json
+          if-no-files-found: warn

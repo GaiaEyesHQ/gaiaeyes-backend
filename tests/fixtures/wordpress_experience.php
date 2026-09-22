@@ -3,6 +3,9 @@
 $repo = dirname(__DIR__, 2);
 $scenario = $argv[1] ?? 'current';
 $view = $argv[2] ?? 'home';
+if ($scenario === 'api-response') {
+  $features_response = json_decode(file_get_contents($argv[3]), true, 512, JSON_THROW_ON_ERROR);
+}
 define('ABSPATH', $repo . '/');
 define('MINUTE_IN_SECONDS', 60);
 define('GAIAEYES_API_BASE', 'https://fixture.invalid');
@@ -67,6 +70,7 @@ function wp_remote_get($url, $args) {
     'series'=>[['key'=>'goes_protons','samples'=>[['ts'=>fixture_time(),'value'=>2,'energy'=>'>=10 MeV']]]],
   ];
   elseif ($path === '/v1/features/today') {
+    if ($GLOBALS['scenario'] === 'api-response') return ['code'=>200, 'data'=>$GLOBALS['features_response']];
     $features = ['kp'=>0.7,'sw_speed_kms'=>324,'bz_nt'=>0.3,'day'=>gmdate('Y-m-d')];
     if ($GLOBALS['scenario'] === 'api-day-missing') $features += ['post_title'=>'Synthetic edition','post_caption'=>'A useful check-in.'];
     if ($GLOBALS['scenario'] === 'no-features') return ['code'=>503,'data'=>null];
@@ -99,6 +103,8 @@ ob_start();
 if ($view === 'home') {
   echo gaia_earthscope_banner(['client_refresh'=>'false']);
   echo gaia_space_weather_bar([]);
+} elseif ($view === 'earthscope') {
+  echo gaia_earthscope_banner(['client_refresh'=>'false', 'allow_legacy_fallback'=>'false']);
 } elseif ($view === 'space' || $view === 'space-reverse') {
   if ($view === 'space-reverse') echo $shortcodes['gaia_space_detail']([]);
   echo gaia_space_weather_detail_shortcode([]);

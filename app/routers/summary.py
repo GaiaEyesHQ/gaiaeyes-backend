@@ -903,6 +903,7 @@ async def _fetch_daily_post(conn, day_local: date) -> Dict[str, Any]:
         await cur.execute(
             """
             select p0.title as post_title,
+                   p0.day as post_day,
                    p0.caption as post_caption,
                    p0.body_markdown as post_body,
                    p0.hashtags as post_hashtags,
@@ -924,6 +925,9 @@ async def _fetch_daily_post(conn, day_local: date) -> Dict[str, Any]:
         row = await cur.fetchone() or {}
     return {
         "post_title": row.get("post_title"),
+        "post_day": row.get("post_day"),
+        # This table records creation/update times, not publication time.
+        "post_published_at": None,
         "post_caption": row.get("post_caption"),
         "post_body": row.get("post_body"),
         "post_hashtags": row.get("post_hashtags"),
@@ -1100,6 +1104,8 @@ _FEATURE_DEFAULTS: Dict[str, Any] = {
     "sch_f3_hz": None,
     "sch_f4_hz": None,
     "post_title": None,
+    "post_day": None,
+    "post_published_at": None,
     "post_caption": None,
     "post_body": None,
     "post_hashtags": None,
@@ -1564,6 +1570,23 @@ def _normalize_features_payload(
     )
     normalized["cycle_updated_at"] = _iso_dt(
         _coerce_datetime(normalized.get("cycle_updated_at"))
+    )
+
+    # Keep edition provenance separate from the feature day and refresh time.
+    post_day = _coerce_day(normalized.get("post_day"))
+    normalized["post_day"] = (
+        _iso_date(post_day) if type(post_day) is date else None
+    )
+    published_at = normalized.get("post_published_at")
+    if isinstance(published_at, str):
+        try:
+            published_at = datetime.fromisoformat(published_at)
+        except ValueError:
+            published_at = None
+    normalized["post_published_at"] = (
+        _iso_dt(published_at)
+        if isinstance(published_at, datetime) and published_at.utcoffset() is not None
+        else None
     )
 
     for key in _INT_FIELDS:
