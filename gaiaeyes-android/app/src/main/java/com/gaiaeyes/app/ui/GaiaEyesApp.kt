@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,6 +67,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -119,6 +125,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @Composable
 fun GaiaEyesApp(
@@ -3906,11 +3913,8 @@ private fun LocalWeatherScreen(
             Spacer(modifier = Modifier.height(16.dp))
             when {
                 snapshot?.local != null -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    localConditionSections(snapshot).forEach { section -> LocalConditionSectionCard(section) }
-                    val forecast = localForecastMetrics(snapshot)
-                    LocalConditionSectionCard(LocalConditionSection("Daily forecast", forecast,
-                        if (forecast.isEmpty()) "Forecast unavailable. Other local readings remain available."
-                        else "Daily forecasts use the local calendar date; they are separate from observed conditions."))
+                    localConditionSections(snapshot).forEach { section -> LocalCurrentConditionCard(section) }
+                    LocalForecastCard(snapshot)
                     LocalConditionSectionCard(localMoonSection(snapshot))
                 }
                 uiState.isLoadingLocalWeather -> ContextLoadingRow("Checking local conditions…")
@@ -3984,6 +3988,106 @@ private fun LocalWeatherScreen(
 }
 
 @Composable
+private fun LocalForecastCard(snapshot: LocalWeatherSnapshot?) {
+    val forecast = localForecastMetrics(snapshot)
+    var expanded by rememberSaveable(snapshot?.location?.zip, forecast.map { it.label }) { mutableStateOf(false) }
+    val headingRequest = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    Card(colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        border = BorderStroke(1.dp, GaiaAmber.copy(alpha = 0.18f)),
+        shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Daily forecast", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.bringIntoViewRequester(headingRequest).semantics { heading() })
+            Text(if (forecast.isEmpty()) "Forecast unavailable. Other local readings remain available."
+                else "Daily forecasts use the local calendar date; they are separate from observed conditions.",
+                color = Color(0xFFADB7C5), fontSize = 13.sp, lineHeight = 19.sp)
+            val visible = localForecastVisibleCount(forecast.size, expanded)
+            forecast.take(visible).forEachIndexed { index, day ->
+                if (index > 0) HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(day.label, color = GaiaAmber, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.semantics { heading() })
+                    Text(day.value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    day.detail?.let { Text(it, color = Color(0xFFADB7C5), fontSize = 13.sp, lineHeight = 19.sp) }
+                }
+            }
+            if (forecast.size > 3) {
+                Text("Showing $visible of ${forecast.size} days", color = Color(0xFFADB7C5), fontSize = 13.sp)
+                TextButton(onClick = {
+                    expanded = !expanded
+                    if (!expanded) scope.launch { headingRequest.bringIntoView() }
+                }, modifier = Modifier.heightIn(min = 48.dp).semantics {
+                    stateDescription = if (expanded) "Expanded" else "Collapsed"
+                }) {
+                    Text(if (expanded) "Show fewer days" else "Show all ${forecast.size} days", color = GaiaAmber)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalCurrentConditionCard(section: LocalConditionSection) {
+    // Fixed signal-type accents, independent of readings, severity or freshness.
+    val accent = when (section.title) {
+        "Weather" -> GaiaAmber
+        "Barometric pressure" -> GaiaBlue
+        "Air quality" -> Color(0xFF7ED0C6)
+        "Allergens" -> Color(0xFFC3AAF0)
+        else -> GaiaAmber
+    }
+    val columns = if (LocalDensity.current.fontScale >= 1.3f) 1 else 2
+    Card(colors = CardDefaults.cardColors(containerColor = GaiaPanel),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.25f)),
+        shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(6.dp, 22.dp).background(accent, RoundedCornerShape(3.dp)))
+                Text(section.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f).semantics { heading() })
+            }
+            section.metrics.firstOrNull()?.let { primary ->
+                Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (!primary.label.equals(section.title, ignoreCase = true)) {
+                        Text(primary.label, color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.fillMaxWidth())
+                    }
+                    Text(primary.value, color = Color.White,
+                        fontSize = if (primary.value == "Unavailable") 20.sp else 28.sp,
+                        lineHeight = if (primary.value == "Unavailable") 26.sp else 34.sp,
+                        fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
+                    primary.detail?.let { Text(it, color = Color(0xFFC4CCD7), fontSize = 14.sp, lineHeight = 20.sp,
+                        modifier = Modifier.fillMaxWidth()) }
+                }
+            }
+            section.metrics.drop(1).chunked(columns).forEach { metrics ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    metrics.forEach { metric ->
+                        Card(colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.07f)),
+                            border = BorderStroke(1.dp, accent.copy(alpha = 0.2f)),
+                            shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f)) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp).semantics(mergeDescendants = true) {},
+                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(metric.label, color = accent, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.fillMaxWidth())
+                                Text(metric.value, color = Color.White, fontSize = 18.sp, lineHeight = 24.sp,
+                                    fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
+                                metric.detail?.let { Text(it, color = Color(0xFFC4CCD7), fontSize = 13.sp, lineHeight = 18.sp,
+                                    modifier = Modifier.fillMaxWidth()) }
+                            }
+                        }
+                    }
+                }
+            }
+            // Always visible: preserve every timestamp, source, missing-data and date warning.
+            Text(section.detail, color = Color(0xFFADB7C5), fontSize = 13.sp, lineHeight = 19.sp)
+        }
+    }
+}
+
+@Composable
 private fun LocalConditionSectionCard(section: LocalConditionSection) {
     val columns = if (LocalDensity.current.fontScale >= 1.3f || section.title == "Daily forecast") 1 else 2
     Card(colors = CardDefaults.cardColors(containerColor = GaiaPanel),
@@ -4027,7 +4131,11 @@ private fun LocalWeatherMetricCard(
             Text(
                 text = metric.value,
                 color = Color.White,
-                fontSize = if (metric.value == "Unavailable") 16.sp else 24.sp,
+                fontSize = when (metric.value) {
+                    "Unavailable" -> 16.sp
+                    "None", "Very low", "Low", "Moderate", "High", "Very high" -> 18.sp
+                    else -> 24.sp
+                },
                 fontWeight = FontWeight.Bold,
             )
             metric.detail?.let { detail ->

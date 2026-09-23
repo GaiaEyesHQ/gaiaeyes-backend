@@ -1,5 +1,6 @@
 package com.gaiaeyes.app.ui
 
+import com.gaiaeyes.app.core.network.LocalForecastDay
 import com.gaiaeyes.app.core.network.LocalAllergens
 import com.gaiaeyes.app.data.HomeContextSource
 import com.gaiaeyes.app.data.LocalWeatherSnapshot
@@ -49,36 +50,75 @@ internal fun localConditionSections(snapshot: LocalWeatherSnapshot?): List<Local
     val local = snapshot?.local ?: return emptyList()
     val metrics = localWeatherMetrics(snapshot)
     val observed = localTimestampText(local.weather.observationTime, "Observed") ?: "Observation time unavailable"
-    val a = local.allergens
-    val allergenCategory = a?.overallLevel.cleanOrNull()?.let(::localCategory)
-    val allergenSummary = listOfNotNull(
-        allergenCategory,
-        a?.overallLabel.cleanOrNull()?.takeUnless { it.equals(allergenCategory, true) },
-        a?.primaryLabel.cleanOrNull()?.let { "Main contributor: $it" },
-    ).joinToString(" • ").ifBlank { null }
     return listOf(
         LocalConditionSection("Weather", listOf(metrics[0], metrics[1], metrics[3]), observed),
         LocalConditionSection("Barometric pressure", listOf(metrics[2]), observed),
         LocalConditionSection("Air quality", listOf(metrics[4]),
             "US AQI • Observation time and source not supplied in this snapshot."),
-        LocalConditionSection("Allergens", listOf(
-            LocalWeatherMetric("Overall", pollenIndex(a?.overallIndex), allergenSummary),
-        ) + allergenTypeMetrics(a), listOfNotNull(
-            "Pollen index · 0–5",
-            a?.source.cleanOrNull()?.let { "Source: $it" } ?: "Source unavailable",
-            localTimestampText(a?.updatedAt, "Updated", staleAfterHours = 24) ?: "Update time unavailable",
-            if (a?.source?.contains("forecast", ignoreCase = true) == true) "Forecast, not a direct observation." else null,
-        ).joinToString(" • ")),
+        localAllergenSection(local.allergens),
     )
+}
+
+internal fun localAllergenSection(a: LocalAllergens?, now: Instant = Instant.now()): LocalConditionSection {
+    if (!hasPollenReadings(a)) return LocalConditionSection("Allergens", emptyList(),
+        "No pollen readings are available for this location in this update. Missing data does not mean a low pollen level.")
+    val category = pollenLevel(a?.overallLevel)
+    val summary = listOfNotNull(category?.takeIf { validPollenIndex(a?.overallIndex) != null }, a?.overallLabel.cleanOrNull()?.takeUnless { it.equals(category, true) },
+        a?.primaryLabel.cleanOrNull()?.let { "Main contributor: $it" }).joinToString(" • ").ifBlank { null }
+    val updated = a?.updatedAt.cleanOrNull()?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }
+    val dated = a?.forecastDay.cleanOrNull()?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    val today = now.atZone(java.time.ZoneOffset.UTC).toLocalDate()
+    val old = (updated != null && updated.isBefore(now.minusSeconds(24 * 3600))) || (dated != null && dated.isBefore(today))
+    val label = if (old) "Last reported" else if (dated != null && dated.isAfter(today)) "Forecast" else "Overall"
+    return LocalConditionSection("Allergens", listOf(
+        LocalWeatherMetric(label, pollenValue(a?.overallIndex, a?.overallLevel), summary),
+    ) + allergenTypeMetrics(a), listOfNotNull(
+        "Pollen index · 0–5; categories can be supplied without a numeric index.",
+        a?.source.cleanOrNull()?.let { "Source: $it" } ?: "Source unavailable",
+        when {
+            updated == null -> "Update time unavailable; freshness unverified"
+            updated.isAfter(now) -> "Update time is in the future; freshness unverified"
+            else -> localTimestampText(a?.updatedAt, "Updated", now, staleAfterHours = 24)
+        },
+        dated?.let { "Forecast date: $it (UTC)" },
+        if (dated != null && dated != today) "Not today's pollen forecast." else null,
+        if (a?.forecastDay != null && dated == null) "Forecast date could not be verified." else null,
+        if (a?.source?.contains("forecast", ignoreCase = true) == true) "Forecast, not a direct observation." else null,
+    ).joinToString(" • "))
 }
 
 private fun allergenTypeMetrics(a: LocalAllergens?) = listOf(
     Triple("Tree", a?.treeIndex, a?.treeLevel), Triple("Grass", a?.grassIndex, a?.grassLevel),
     Triple("Weed", a?.weedIndex, a?.weedLevel), Triple("Mold", a?.moldIndex, a?.moldLevel),
-).map { (name, value, level) -> LocalWeatherMetric(name, pollenIndex(value), level.cleanOrNull()?.let(::localCategory)) }
+).filter { (name, value, level) -> name != "Mold" || validPollenIndex(value) != null || pollenLevel(level) != null }
+    .map { (name, value, level) -> LocalWeatherMetric(name, pollenValue(value, level),
+        pollenLevel(level)?.takeUnless { validPollenIndex(value) == null }) }
 
-private fun pollenIndex(value: Double?): String = value.finite()?.takeIf { it in 0.0..5.0 }
-    ?.let { "${formatLocalNumber(it)} / 5" } ?: "Unavailable"
+private fun validPollenIndex(value: Double?): Double? = value.finite()?.takeIf { it in 0.0..5.0 }
+private fun pollenLevel(value: String?): String? = value.cleanOrNull()?.lowercase(Locale.US)?.replace(' ', '_')
+    ?.takeIf { it in setOf("none", "very_low", "low", "moderate", "high", "very_high") }?.let(::localCategory)
+private fun pollenValue(value: Double?, level: String?): String = validPollenIndex(value)
+    ?.let { "${formatLocalNumber(it)} / 5" } ?: pollenLevel(level) ?: "Unavailable"
+private fun hasPollenReadings(a: LocalAllergens?): Boolean = a != null && (
+    listOf(a.overallIndex, a.treeIndex, a.grassIndex, a.weedIndex, a.moldIndex).any { validPollenIndex(it) != null } ||
+    listOf(a.overallLevel, a.treeLevel, a.grassLevel, a.weedLevel, a.moldLevel).any { pollenLevel(it) != null })
+
+private fun forecastPollen(day: LocalForecastDay): String? {
+    val a = LocalAllergens(overallIndex = day.pollenOverallIndex, overallLevel = day.pollenOverallLevel,
+        treeIndex = day.pollenTreeIndex, grassIndex = day.pollenGrassIndex, weedIndex = day.pollenWeedIndex,
+        moldIndex = day.pollenMoldIndex, treeLevel = day.pollenTreeLevel, grassLevel = day.pollenGrassLevel,
+        weedLevel = day.pollenWeedLevel, moldLevel = day.pollenMoldLevel)
+    if (!hasPollenReadings(a)) return null
+    val parts = mutableListOf<String>()
+    if (validPollenIndex(a.overallIndex) != null || pollenLevel(a.overallLevel) != null)
+        parts += pollenValue(a.overallIndex, a.overallLevel)
+    allergenTypeMetrics(a).filter { it.value != "Unavailable" }.forEach { parts += "${it.label} ${it.value}" }
+    return listOfNotNull("Pollen forecast (${day.day} UTC): ${parts.joinToString(", ")}",
+        day.pollenSource.cleanOrNull()?.let { "Source: $it" },
+        localTimestampText(day.pollenUpdatedAt, "Pollen updated", staleAfterHours = 24) ?: "Pollen update time unavailable")
+        .joinToString(" • ")
+}
+
 private fun localCategory(value: String) = value.replace('_', ' ').replaceFirstChar { it.uppercase() }
 
 internal fun localForecastMetrics(snapshot: LocalWeatherSnapshot?): List<LocalWeatherMetric> =
@@ -87,15 +127,35 @@ internal fun localForecastMetrics(snapshot: LocalWeatherSnapshot?): List<LocalWe
         LocalWeatherMetric(date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US)),
             listOfNotNull(day.temperatureHighC.finite()?.let { "High ${formatTemperatureF(it)}" },
                 day.temperatureLowC.finite()?.let { "Low ${formatTemperatureF(it)}" }).joinToString(" · ").ifBlank { "Temperature unavailable" },
-            listOfNotNull(day.shortForecast.cleanOrNull(), percent(day.precipitationProbabilityPercent)?.let { "Rain $it" },
-                percent(day.humidityAverage)?.let { "Humidity $it" },
-                day.windSpeed.finite()?.takeIf { it >= 0 }?.let {
-                    // forecast_outlook._parse_wind_value converts NWS mph/knots to km/h.
-                    "Wind ${formatLocalNumber(it)} ${if (day.source?.startsWith("nws:") == true) "km/h" else "(unit unavailable)"}"
+            listOfNotNull(
+                day.shortForecast.cleanOrNull(),
+                day.temperatureDeltaFromPriorDayC.finite()?.let {
+                    val deltaF = it * 9.0 / 5.0
+                    "${if (deltaF > 0) "+" else ""}${formatLocalNumber(deltaF)}°F vs prior day"
                 },
-                day.source.cleanOrNull()?.let { "Source: $it" },
-                localTimestampText(day.issuedAt, "Issued", staleAfterHours = 24) ?: "Issue time unavailable").joinToString(" • "))
+                listOfNotNull(
+                    percent(day.precipitationProbabilityPercent)?.let { "Rain $it" },
+                    percent(day.humidityAverage)?.let { "Humidity $it" },
+                    forecastWind("Wind", day.windSpeed, day.source),
+                    forecastWind("Gust", day.windGust, day.source),
+                    day.aqiForecast.finite()?.takeIf { it >= 0 }?.let { "Forecast AQI ${formatLocalNumber(it)}" },
+                ).joinToString(" • ").ifBlank { null },
+                forecastPollen(day),
+                listOfNotNull(day.source.cleanOrNull()?.let { "Source: $it" },
+                    localTimestampText(day.issuedAt, "Issued", staleAfterHours = 24) ?: "Issue time unavailable")
+                    .joinToString(" • "),
+            ).joinToString("\n"))
     }.take(7)
+
+
+private fun forecastWind(label: String, value: Double?, source: String?): String? =
+    value.finite()?.takeIf { it >= 0 }?.let {
+        // Both NWS speed and gust pass through forecast_outlook._parse_wind_value (km/h).
+        "$label ${formatLocalNumber(it)} ${if (source?.startsWith("nws:") == true) "km/h" else "(unit unavailable)"}"
+    }
+
+internal fun localForecastVisibleCount(available: Int, expanded: Boolean): Int =
+    available.coerceIn(0, if (expanded) 7 else 3)
 
 internal fun localWeatherObservedText(snapshot: LocalWeatherSnapshot?): String? =
     localTimestampText(snapshot?.local?.weather?.observationTime, "Observed")

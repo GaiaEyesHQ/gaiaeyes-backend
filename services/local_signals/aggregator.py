@@ -153,7 +153,7 @@ async def _fetch_pollen_forecast(zip_code: str, lat: float, lon: float, *, days:
         try:
             payload = await pollen.forecast_by_latlon(candidate_lat, candidate_lon, days=days)
         except Exception as e:
-            print(f"[local_signals] pollen forecast error for zip={zip_code} candidate={idx}: {e}")
+            print(f"[local_signals] pollen forecast error for zip={zip_code} candidate={idx}: {type(e).__name__}")
             continue
         if isinstance(payload, dict) and not first_payload:
             first_payload = payload
@@ -288,7 +288,7 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
         return_exceptions=True,
     )
     if isinstance(pollen_payload, Exception):
-        print(f"[local_signals] pollen forecast error for zip={zip_code}: {pollen_payload}")
+        print(f"[local_signals] pollen forecast error for zip={zip_code}: {type(pollen_payload).__name__}")
         pollen_payload = {}
 
     # Air quality (pick the highest AQI among any pollutants returned)

@@ -48,14 +48,14 @@ class PollenNormalizationTests(unittest.TestCase):
             ]
         }
 
-        snapshot = pollen.current_snapshot(payload)
+        snapshot = pollen.current_snapshot(payload, target_day=date(2026, 3, 19))
 
         self.assertEqual(snapshot["overall_level"], "very_high")
         self.assertEqual(snapshot["overall_label"], "High")
         self.assertEqual(snapshot["primary_type"], "grass")
         self.assertEqual(snapshot["primary_label"], "Grass pollen")
 
-    def test_missing_index_info_falls_back_to_low(self) -> None:
+    def test_missing_index_info_remains_unknown(self) -> None:
         payload = {
             "dailyInfo": [
                 {
@@ -71,10 +71,12 @@ class PollenNormalizationTests(unittest.TestCase):
         rows = pollen.normalize_daily_forecast(payload)
 
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["pollen_tree_level"], "low")
-        self.assertEqual(rows[0]["pollen_grass_level"], "low")
-        self.assertEqual(rows[0]["pollen_overall_level"], "low")
-        self.assertEqual(rows[0]["pollen_primary_type"], "tree")
+        self.assertIsNone(rows[0]["pollen_tree_level"])
+        self.assertIsNone(rows[0]["pollen_grass_level"])
+        self.assertIsNone(rows[0]["pollen_overall_level"])
+        self.assertIsNone(rows[0]["pollen_primary_type"])
+        self.assertIsNone(rows[0]["pollen_source"])
+        self.assertIsNone(rows[0]["pollen_updated_at"])
 
 
 if __name__ == "__main__":

@@ -989,7 +989,7 @@ def summarize_local_forecast_days(
             "pollen_overall_level": pollen_row.get("pollen_overall_level"),
             "pollen_primary_type": pollen_row.get("pollen_primary_type"),
             "pollen_source": pollen_row.get("pollen_source"),
-            "pollen_updated_at": _parse_iso_datetime(pollen_row.get("pollen_updated_at")) or updated_at,
+            "pollen_updated_at": _parse_iso_datetime(pollen_row.get("pollen_updated_at")),
             "pollen_tree_index": _safe_float(pollen_row.get("pollen_tree_index")),
             "pollen_grass_index": _safe_float(pollen_row.get("pollen_grass_index")),
             "pollen_weed_index": _safe_float(pollen_row.get("pollen_weed_index")),

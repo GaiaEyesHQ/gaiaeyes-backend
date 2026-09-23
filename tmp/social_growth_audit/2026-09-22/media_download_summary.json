@@ -1,0 +1,47 @@
+[
+  {
+    "headers_excerpt": "HTTP/2 200 \ndate: Tue, 22 Sep 2026 19:03:38 GMT\ncontent-type: image/jpeg\ncontent-length: 123270\ncache-control: no-cache\netag: \"cf1c1b7cdd170e77507fdfb38022509d\"\nlast-modified: Tue, 22 Sep 2026 15:30:02 GMT",
+    "mtime": "2026-09-22T14:03:38-0500",
+    "name": "daily_caption.jpg",
+    "returncode": 0,
+    "size": 123270,
+    "stderr": "",
+    "url_sanitized": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_caption.jpg"
+  },
+  {
+    "headers_excerpt": "HTTP/2 200 \ndate: Tue, 22 Sep 2026 19:03:38 GMT\ncontent-type: image/jpeg\ncontent-length: 143504\ncache-control: no-cache\netag: \"3db334acb62aff0e027754037ad45bb7\"\nlast-modified: Tue, 22 Sep 2026 15:30:02 GMT",
+    "mtime": "2026-09-22T14:03:38-0500",
+    "name": "daily_stats.jpg",
+    "returncode": 0,
+    "size": 143504,
+    "stderr": "",
+    "url_sanitized": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_stats.jpg"
+  },
+  {
+    "headers_excerpt": "HTTP/2 200 \ndate: Tue, 22 Sep 2026 19:03:39 GMT\ncontent-type: image/jpeg\ncontent-length: 247795\ncache-control: no-cache\netag: \"3017e1b38f951d16f915134217e954ab\"\nlast-modified: Tue, 22 Sep 2026 15:30:02 GMT",
+    "mtime": "2026-09-22T14:03:39-0500",
+    "name": "daily_affects.jpg",
+    "returncode": 0,
+    "size": 247795,
+    "stderr": "",
+    "url_sanitized": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_affects.jpg"
+  },
+  {
+    "headers_excerpt": "HTTP/2 200 \ndate: Tue, 22 Sep 2026 19:03:40 GMT\ncontent-type: image/jpeg\ncontent-length: 206688\ncache-control: no-cache\netag: \"bf7fe5eeee9f900918bc41b475cd1413\"\nlast-modified: Tue, 22 Sep 2026 15:30:03 GMT",
+    "mtime": "2026-09-22T14:03:40-0500",
+    "name": "daily_playbook.jpg",
+    "returncode": 0,
+    "size": 206688,
+    "stderr": "",
+    "url_sanitized": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_playbook.jpg"
+  },
+  {
+    "headers_excerpt": "HTTP/2 200 \ndate: Tue, 22 Sep 2026 19:03:41 GMT\ncontent-type: video/mp4\ncontent-length: 1034905\ncache-control: no-cache\netag: \"a4eb77c406138bcb0476d9e94176c74c\"\nlast-modified: Tue, 22 Sep 2026 15:31:49 GMT",
+    "mtime": "2026-09-22T14:03:41-0500",
+    "name": "latest.mp4",
+    "returncode": 0,
+    "size": 1034905,
+    "stderr": "",
+    "url_sanitized": "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4"
+  }
+]

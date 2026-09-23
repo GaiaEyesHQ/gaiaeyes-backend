@@ -13,7 +13,7 @@ class LocalConditionsParityTest {
   val sections=localConditionSections(snapshot(local)); val a=sections[3]
   assertEquals("96.8°F",sections[0].metrics.first().value); assertEquals("52 AQI",sections[2].metrics.single().value)
   assertEquals("3 / 5",a.metrics.first().value); assertTrue(a.metrics.first().detail!!.contains("High"))
-  assertEquals("0 / 5",a.metrics.first{it.label=="Weed"}.value); assertEquals("Unavailable",a.metrics.first{it.label=="Mold"}.value)
+  assertEquals("0 / 5",a.metrics.first{it.label=="Weed"}.value); assertFalse(a.metrics.any{it.label=="Mold"})
   assertTrue(a.detail.contains("google-pollen:forecast")); assertTrue(a.detail.contains("0–5")); assertTrue(a.detail.contains("Forecast, not a direct observation"))
  }
  @Test fun missingAndInvalidValuesDoNotEraseSiblingReadings() {
@@ -21,7 +21,7 @@ class LocalConditionsParityTest {
   val s=localConditionSections(snapshot(local))
   assertEquals("32°F",s[0].metrics.first().value); assertEquals("Unavailable",s[0].metrics[1].value)
   assertEquals("Unavailable",s[1].metrics.single().value); assertEquals("52 AQI",s[2].metrics.single().value)
-  assertEquals("Unavailable",s[3].metrics.first().value); assertEquals(5,localConditionSections(snapshot(LocalCheckResponse()))[3].metrics.size)
+  assertTrue(s[3].metrics.isEmpty()); assertEquals(0,localConditionSections(snapshot(LocalCheckResponse()))[3].metrics.size)
  }
  @Test fun observationTimeIsIndependentOfTransportAndWeatherSibling() {
   val s=snapshot(LocalCheckResponse(weather=LocalWeather(observationTime="2026-09-20T20:00:00Z"),asof="2026-09-20T20:01:00Z"))

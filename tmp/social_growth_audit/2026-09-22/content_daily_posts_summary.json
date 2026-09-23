@@ -1,0 +1,578 @@
+[
+  {
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "created_at": "2026-09-22T15:29:17.055366+00:00",
+    "day": "2026-09-22",
+    "id": 890,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "default",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Standard energy field\u2014consistency wins today",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Battery dipping early?",
+    "updated_at": "2026-09-22T15:29:17.055366+00:00"
+  },
+  {
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "created_at": "2026-09-22T15:29:17.055366+00:00",
+    "day": "2026-09-22",
+    "id": 891,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "ig",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Standard energy field\u2014consistency wins today",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Battery dipping early?",
+    "updated_at": "2026-09-22T15:29:17.055366+00:00"
+  },
+  {
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+    "created_at": "2026-09-21T16:57:35.927604+00:00",
+    "day": "2026-09-21",
+    "id": 887,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "default",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Standard energy field\u2014consistency wins today",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-21T19:30:14.690725+00:00"
+  },
+  {
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+    "created_at": "2026-09-21T16:57:35.927604+00:00",
+    "day": "2026-09-21",
+    "id": 889,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "ig",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Standard energy field\u2014consistency wins today",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-21T19:30:14.690725+00:00"
+  },
+  {
+    "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 3.0 \u2022 Bz -4.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "created_at": "2026-09-20T14:39:13.222489+00:00",
+    "day": "2026-09-20",
+    "id": 885,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "default",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 3.0 \u2022 Bz -4.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Feeling Different Today?",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 3.0 \u2022 Bz -4.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 3.0 \u2022 Bz -4.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-20T14:39:13.222489+00:00"
+  },
+  {
+    "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 3.0 \u2022 Bz -4.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+    "created_at": "2026-09-20T14:39:13.222489+00:00",
+    "day": "2026-09-20",
+    "id": 886,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "ig",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 3.0 \u2022 Bz -4.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Feeling Different Today?",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 3.0 \u2022 Bz -4.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 3.0 \u2022 Bz -4.1 nT \u2022 Schumann 7.71 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-20T14:39:13.222489+00:00"
+  },
+  {
+    "caption": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)",
+    "created_at": "2026-09-19T14:18:41.819464+00:00",
+    "day": "2026-09-19",
+    "id": 883,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "default",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Is Your Body Whispering Today?",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Is Your Body Whispering Today?",
+    "updated_at": "2026-09-19T14:18:41.819464+00:00"
+  },
+  {
+    "caption": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)",
+    "created_at": "2026-09-19T14:18:41.819464+00:00",
+    "day": "2026-09-19",
+    "id": 884,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "ig",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Is Your Body Whispering Today?",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 2.7 \u2022 Bz -5.5 nT \u2022 Schumann 7.67 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Is Your Body Whispering Today?",
+    "updated_at": "2026-09-19T14:18:41.819464+00:00"
+  },
+  {
+    "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)",
+    "created_at": "2026-09-18T14:54:55.973061+00:00",
+    "day": "2026-09-18",
+    "id": 881,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "default",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Feeling Off For No Reason?",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Feeling Off For No Reason?",
+    "updated_at": "2026-09-18T14:54:55.973061+00:00"
+  },
+  {
+    "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)",
+    "created_at": "2026-09-18T14:54:55.973061+00:00",
+    "day": "2026-09-18",
+    "id": 882,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "ig",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Feeling Off For No Reason?",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The field looks fairly middle-of-the-road today.",
+        "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe field looks fairly middle-of-the-road today. Consistency wins. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -3.6 nT \u2022 Schumann 7.66 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Feeling Off For No Reason?",
+    "updated_at": "2026-09-18T14:54:55.973061+00:00"
+  },
+  {
+    "caption": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)",
+    "created_at": "2026-09-17T15:31:04.514415+00:00",
+    "day": "2026-09-17",
+    "id": 879,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "default",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Feeling Different Today?",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The background looks steady enough to keep the day simple.",
+        "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe background looks steady enough to keep the day simple. Let rhythm do the heavy lifting. Drivers: southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-17T15:31:04.514415+00:00"
+  },
+  {
+    "caption": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)",
+    "created_at": "2026-09-17T15:31:04.514415+00:00",
+    "day": "2026-09-17",
+    "id": 880,
+    "metrics_keys": [
+      "bands",
+      "bz_min",
+      "cmes_24h",
+      "flares_24h",
+      "harmonics",
+      "kp_max_24h",
+      "schumann_value_hz",
+      "sections",
+      "social_variants",
+      "solar_wind_kms",
+      "space_json",
+      "space_outlook",
+      "tone",
+      "voice_semantic"
+    ],
+    "platform": "ig",
+    "platform_copy": null,
+    "reel_story": null,
+    "sections": {
+      "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+      "caption": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)",
+      "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+      "reel_story": {
+        "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+        "hook": "Feeling Different Today?",
+        "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+        "signal": "The background looks steady enough to keep the day simple.",
+        "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)"
+      },
+      "snapshot": "Space Weather Snapshot\nThe background looks steady enough to keep the day simple. Let rhythm do the heavy lifting. Drivers: southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+      "voiceover": "Middle-lane space weather today\u2014keep the rhythm simple. \u2014 Kp 3.3 \u2022 Bz -5.0 nT \u2022 Schumann 7.63 Hz (snapshot at write time)"
+    },
+    "space_json": {
+      "aurora_headline": null,
+      "aurora_window": "Next 72h",
+      "bz_now": null,
+      "kp_now": 2.0,
+      "sw_now": null
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-17T15:31:04.514415+00:00"
+  }
+]

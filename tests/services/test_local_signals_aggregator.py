@@ -1,4 +1,5 @@
 import os
+from datetime import UTC, datetime
 import sys
 from pathlib import Path
 
@@ -99,7 +100,7 @@ async def test_fetch_pollen_forecast_tries_nearby_coordinates_when_exact_centroi
     pollen_payload = {
         "dailyInfo": [
             {
-                "date": {"year": 2026, "month": 4, "day": 23},
+                "date": datetime.now(UTC).date().isoformat(),
                 "pollenTypeInfo": [
                     {
                         "code": "TREE",

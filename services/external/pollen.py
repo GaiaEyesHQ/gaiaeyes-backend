@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import math
 from datetime import UTC, date, datetime
 from typing import Any, Mapping
 
@@ -44,11 +45,12 @@ STATE_LABELS = {
 
 def _safe_float(value: Any) -> float | None:
     try:
-        if value is None:
+        if value is None or isinstance(value, bool):
             return None
         if isinstance(value, str) and not value.strip():
             return None
-        return float(value)
+        result = float(value)
+        return result if math.isfinite(result) else None
     except Exception:
         return None
 
@@ -62,6 +64,11 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def _pollen_index(value: Any) -> float | None:
+    value = _safe_float(value)
+    return value if value is not None and 0 <= value <= 5 else None
+
+
 def _normalize_level(*, category: Any = None, display_name: Any = None, index_value: Any = None) -> str | None:
     token = str(category or display_name or "").strip().lower().replace("-", "_").replace(" ", "_")
     if token in {"very_high", "veryhigh"}:
@@ -73,7 +80,7 @@ def _normalize_level(*, category: Any = None, display_name: Any = None, index_va
     if token in {"none", "very_low", "low"}:
         return "low"
 
-    numeric = _safe_int(index_value)
+    numeric = _pollen_index(index_value)
     if numeric is None:
         return None
     if numeric >= 5:
@@ -137,15 +144,12 @@ def _normalize_type_infos(daily_info: Mapping[str, Any]) -> dict[str, dict[str, 
         if not type_key:
             continue
         index_info = _index_block(item)
-        value = _safe_float(index_info.get("value"))
+        value = _pollen_index(index_info.get("value"))
         level = _normalize_level(
             category=index_info.get("category"),
             display_name=index_info.get("displayName") or item.get("displayName"),
             index_value=value,
         )
-        if level is None and not index_info:
-            # Google omits indexInfo when the pollen count is low/out of season.
-            level = "low"
         out[type_key] = {
             "level": level,
             "index": value,
@@ -186,17 +190,19 @@ def _primary_type(types: Mapping[str, Mapping[str, Any]]) -> str | None:
 
 
 def _overall_index(types: Mapping[str, Mapping[str, Any]], overall_level: str | None) -> float | None:
-    indices = [_safe_float((item or {}).get("index")) for item in types.values()]
+    indices = [_pollen_index((item or {}).get("index")) for item in types.values()]
     indices = [value for value in indices if value is not None]
     if indices:
         return round(max(indices), 1)
-    if overall_level:
-        return float(LEVEL_RANK.get(overall_level, 0))
+    # A category rank is not a measured Universal Pollen Index.
     return None
 
 
 def _relevance_score(types: Mapping[str, Mapping[str, Any]], overall_level: str | None) -> float | None:
     base = _overall_index(types, overall_level)
+    if base is None and overall_level in LEVEL_RANK:
+        # This separate relevance score may use category weights; the UPI cannot.
+        base = float(LEVEL_RANK[overall_level])
     if base is None:
         return None
     moderate_plus = sum(
@@ -270,8 +276,8 @@ def normalize_daily_forecast(payload: Mapping[str, Any] | None) -> list[dict[str
                 "pollen_primary_type": primary_type,
                 "pollen_primary_label": TYPE_LABELS.get(primary_type) if primary_type else None,
                 "pollen_state_label": _state_label(overall_level),
-                "pollen_source": "google-pollen:forecast",
-                "pollen_updated_at": updated_at,
+                "pollen_source": "google-pollen:forecast" if overall_level is not None or overall_index is not None else None,
+                "pollen_updated_at": updated_at if overall_level is not None or overall_index is not None else None,
                 "allergen_relevance_score": _relevance_score(types, overall_level),
                 "recommendations": recommendations,
                 "raw_types": {
@@ -289,13 +295,17 @@ def normalize_daily_forecast(payload: Mapping[str, Any] | None) -> list[dict[str
     return rows
 
 
-def current_snapshot(payload: Mapping[str, Any] | None) -> dict[str, Any]:
-    rows = normalize_daily_forecast(payload)
-    if not rows:
+def current_snapshot(payload: Mapping[str, Any] | None, *, target_day: date | None = None) -> dict[str, Any]:
+    # Google forecast days are UTC dates. Never promote an old/future day simply
+    # because the response was fetched now; forecasts remain in the daily rows.
+    target_day = target_day or datetime.now(UTC).date()
+    rows = [row for row in normalize_daily_forecast(payload) if row["day"] == target_day]
+    if not rows or not rows[0].get("pollen_source"):
         return {}
 
     first = dict(rows[0])
     return {
+        "forecast_day": first["day"].isoformat(),
         "overall_level": first.get("pollen_overall_level"),
         "overall_label": first.get("pollen_state_label"),
         "overall_index": first.get("pollen_overall_index"),

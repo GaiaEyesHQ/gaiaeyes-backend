@@ -2,7 +2,7 @@
 
 Strategy corrected by Jennifer on 2026-09-06. **Build a scalable user-acquisition and engagement system while continuing to improve Gaia Eyes.** Grow the user base, learn what people value, support repeated use and develop the research/medical vision. Revenue and costs remain measured context; immediate profitability or a payer threshold is not the primary gate for development. The original audit's paid-user gate and revenue-led experiment sequence are superseded.
 
-**September 21 governing correction:** PMF work supports growth and product learning while development continues. The primary near-term outcome is a repeatable acquisition and engagement system that saves Jennifer time and helps free and Plus users receive continuing value. PMF work is not an approval test for whether Gaia Eyes deserves further development. The financial and production counts below retain their original evidence dates; this strategy update is not a fresh financial, analytics or provider-account audit.
+**September 22 governing correction:** PMF work supports growth and product learning while development continues. The primary near-term outcome is a repeatable acquisition and engagement system that saves Jennifer time and helps free and Plus users receive continuing value. PMF work is not an approval test for whether Gaia Eyes deserves further development. The financial and production counts below retain their original evidence dates; this strategy update is not a fresh financial, analytics or provider-account audit.
 
 ## Governing growth context
 
@@ -101,6 +101,8 @@ Use three views of progress: (1) acquisition and founder effort, (2) activation,
 At each product review, identify the user or research benefit, the smallest useful increment, and evidence appropriate to that increment. Research provenance, accurate health histories, accessibility and useful free functionality can justify work before an acquisition or payment effect is measurable. Record revenue/cost in the accompanying capacity view; a missing monetary return estimate is not a failed product acceptance criterion. Later Plus experiments should test additional value people want while preserving the intentional free offering.
 
 ## Current growth experiments
+
+**September 22 product increment:** [G050 Android forecast parity](/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g050-android-forecast-parity/HANDOFF.md) supplies a locally verified product improvement alongside the acquisition program. Its test/build results are product evidence, not new downloads, retention, clinical validation or revenue evidence. Founder workload, attributable arrivals, useful activation, repeat use and feedback remain the acquisition/engagement success measures; this Android increment does not wait for a payer threshold.
 
 **September 21 reliability increment:** [G040](/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g040-earthscope-upload-reliability/HANDOFF.md) prepares a local repair for the failed EarthScope asset-upload boundary, with 84 offline tests passing. Its intended contribution is fewer interrupted content cycles and less manual recovery effort. It is not yet deployed and supplies no new reach, acquisition, retention or conversion result. Reliable Page/reel delivery is one component of the scalable system; it does not establish that Jennifer's successful community participation has been reproduced or replace the community-specific acquisition and engagement work below.
 

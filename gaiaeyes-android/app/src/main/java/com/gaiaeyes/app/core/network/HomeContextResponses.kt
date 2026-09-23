@@ -155,6 +155,7 @@ data class LocalMoon(val phase: String? = null, val illum: Double? = null)
 
 @Serializable
 data class LocalAllergens(
+    @SerialName("forecast_day") val forecastDay: String? = null,
     @SerialName("overall_level") val overallLevel: String? = null,
     @SerialName("overall_label") val overallLabel: String? = null,
     @SerialName("overall_index") val overallIndex: Double? = null,
@@ -177,12 +178,28 @@ data class LocalForecastDay(
     val day: String = "",
     @SerialName("temp_high_c") val temperatureHighC: Double? = null,
     @SerialName("temp_low_c") val temperatureLowC: Double? = null,
+    @SerialName("temp_delta_from_prior_day_c") val temperatureDeltaFromPriorDayC: Double? = null,
     @SerialName("precip_probability") val precipitationProbabilityPercent: Double? = null,
     @SerialName("humidity_avg") val humidityAverage: Double? = null,
     @SerialName("wind_speed") val windSpeed: Double? = null,
+    @SerialName("wind_gust") val windGust: Double? = null,
+    @SerialName("aqi_forecast") val aqiForecast: Double? = null,
     @SerialName("condition_summary") val shortForecast: String? = null,
     val source: String? = null,
     @SerialName("issued_at") val issuedAt: String? = null,
+    @SerialName("pollen_overall_level") val pollenOverallLevel: String? = null,
+    @SerialName("pollen_overall_index") val pollenOverallIndex: Double? = null,
+    @SerialName("pollen_primary_type") val pollenPrimaryType: String? = null,
+    @SerialName("pollen_tree_level") val pollenTreeLevel: String? = null,
+    @SerialName("pollen_grass_level") val pollenGrassLevel: String? = null,
+    @SerialName("pollen_weed_level") val pollenWeedLevel: String? = null,
+    @SerialName("pollen_mold_level") val pollenMoldLevel: String? = null,
+    @SerialName("pollen_tree_index") val pollenTreeIndex: Double? = null,
+    @SerialName("pollen_grass_index") val pollenGrassIndex: Double? = null,
+    @SerialName("pollen_weed_index") val pollenWeedIndex: Double? = null,
+    @SerialName("pollen_mold_index") val pollenMoldIndex: Double? = null,
+    @SerialName("pollen_source") val pollenSource: String? = null,
+    @SerialName("pollen_updated_at") val pollenUpdatedAt: String? = null,
 )
 
 @Serializable
