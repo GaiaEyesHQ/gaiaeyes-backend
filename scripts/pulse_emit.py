@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, json, pathlib
+import os, sys, json, pathlib, math
 from datetime import datetime, timezone
 
 MEDIA_DIR = os.getenv("MEDIA_DIR", "../gaiaeyes-media")
@@ -26,6 +26,7 @@ def main():
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z")
     wx  = load("space_weather.json") or {}
     fc  = load("flares_cmes.json") or {}
+    if not isinstance(fc, dict): fc = {}
     es  = load("earthscope.json") or {}
     qk  = load("quakes_latest.json") or {}
     nws = load("alerts_us_latest.json") or {}
@@ -34,18 +35,38 @@ def main():
     cards = []
 
     # CME
-    cmes = (fc.get("cmes") or {})
-    cme_head = cmes.get("headline")
-    speeds = [e.get("speed_kms") or 0 for e in (cmes.get("last_72h") or [])]
-    max_spd = max(speeds) if speeds else 0
-    if cmes.get("last_72h"):
-        sev = "high" if max_spd >= 1000 else ("medium" if max_spd >= 600 else "low")
-        tw  = "Next 2–3 days" if max_spd >= 400 else "Next few days"
-        title = "Fast CMEs Observed" if sev == "high" else ("CME Activity Continues" if sev == "medium" else "Two Slow CMEs Expected Oct 7–8")
-        cards.append(card("cme", title,
-                          cme_head or "Recent CMEs observed; monitor for geomagnetic effects.",
-                          severity=sev, time_window=tw,
-                          data={"max_speed_kms": max_spd}))
+    cmes = fc.get("cmes")
+    rows = cmes.get("last_72h") if isinstance(cmes, dict) else None
+    rows = [e for e in rows if isinstance(e, dict) and e] if isinstance(rows, list) else []
+    if rows:
+        # Observation speed and direction flags do not provide an arrival forecast.
+        directions = [e.get("earth_directed") for e in rows]
+        if any(d is True for d in directions):
+            summary = "At least one reported CME is marked Earth-directed."
+            if any(d is not True and d is not False for d in directions):
+                summary += " Other reported CME directions are unconfirmed."
+        elif all(d is False for d in directions):
+            summary = "Reported CMEs are marked non-Earth-directed."
+        else:
+            summary = "Earth-directed status is unconfirmed for some or all reported CMEs."
+        summary += " Arrival timing is not provided by these observations."
+        speeds = [e.get("speed_kms") for e in rows]
+        speeds = [s for s in speeds if type(s) in (int, float) and math.isfinite(s) and s >= 0]
+        data = {"max_speed_kms": max(speeds) if speeds else None}
+        source_time = fc.get("timestamp_utc")
+        tw = "Source snapshot time unavailable"
+        try:
+            source_dt = datetime.fromisoformat(source_time.replace("Z", "+00:00"))
+            if source_dt.utcoffset() is not None:
+                source_utc = source_dt.astimezone(timezone.utc)
+                data["source_timestamp_utc"] = source_utc.isoformat().replace("+00:00", "Z")
+                tw = "Source snapshot: " + source_utc.strftime("%Y-%m-%d %H:%M UTC")
+        except (AttributeError, TypeError, ValueError):
+            pass
+        if isinstance(fc.get("sources"), dict):
+            data["sources"] = fc["sources"]
+        cards.append(card("cme", "CME Observations", summary,
+                          severity="info", time_window=tw, data=data))
 
     # Flare
     max24 = (fc.get("flares") or {}).get("max_24h")
