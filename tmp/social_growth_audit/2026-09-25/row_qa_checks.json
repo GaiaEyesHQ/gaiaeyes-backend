@@ -1,0 +1,130 @@
+[
+  {
+    "id": 896,
+    "day": "2026-09-25",
+    "platform": "default",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 897,
+    "day": "2026-09-25",
+    "platform": "ig",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 894,
+    "day": "2026-09-24",
+    "platform": "default",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 895,
+    "day": "2026-09-24",
+    "platform": "ig",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 892,
+    "day": "2026-09-23",
+    "platform": "default",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 893,
+    "day": "2026-09-23",
+    "platform": "ig",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 890,
+    "day": "2026-09-22",
+    "platform": "default",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 891,
+    "day": "2026-09-22",
+    "platform": "ig",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 887,
+    "day": "2026-09-21",
+    "platform": "default",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 889,
+    "day": "2026-09-21",
+    "platform": "ig",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 885,
+    "day": "2026-09-20",
+    "platform": "default",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 886,
+    "day": "2026-09-20",
+    "platform": "ig",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 883,
+    "day": "2026-09-19",
+    "platform": "default",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 884,
+    "day": "2026-09-19",
+    "platform": "ig",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 881,
+    "day": "2026-09-18",
+    "platform": "default",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  },
+  {
+    "id": 882,
+    "day": "2026-09-18",
+    "platform": "ig",
+    "missing_reel_story_keys": [],
+    "duplicate_beats": false,
+    "caption_metric_match": true
+  }
+]
