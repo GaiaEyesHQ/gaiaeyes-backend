@@ -28,7 +28,6 @@ jobs:
       EARTHSCOPE_DRAFT_PREPARER_DSN: ${{ secrets.EARTHSCOPE_DRAFT_PREPARER_DSN }}
       DATABASE_URL: ${{ secrets.EARTHSCOPE_DRAFT_PREPARER_DSN }}
       EARTHSCOPE_DRAFT_DB_CA_PEM: ${{ secrets.EARTHSCOPE_DRAFT_DB_CA_PEM }}
-      PGSSLROOTCERT: ${{ runner.temp }}/earthscope-db-ca.pem
       EARTHSCOPE_DRAFT_WORKER_ID: ${{ vars.EARTHSCOPE_DRAFT_WORKER_ID }}
       EARTHSCOPE_LOCAL_CAPTION_PROFILE: structured_authored_caption_v2_policy_assembly_v1
       EARTHSCOPE_LOCAL_VALIDATOR_ID: gaia-two-stage-policy-assembly-v1+compact-machine-v1
@@ -48,9 +47,11 @@ jobs:
           value = os.environ.get('EARTHSCOPE_DRAFT_DB_CA_PEM', '')
           if '-----BEGIN CERTIFICATE-----' not in value:
               raise SystemExit('Dedicated preparer CA certificate is missing')
-          path = Path(os.environ['PGSSLROOTCERT'])
+          path = Path(os.environ['RUNNER_TEMP']) / 'earthscope-db-ca.pem'
           path.write_text(value)
           path.chmod(0o600)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'PGSSLROOTCERT={path}\n')
           PY
       - name: Prove actual GitHub preparer identity
         run: python scripts/earthscope_preparer_identity.py --receipt artifacts/preparer-identity.json
