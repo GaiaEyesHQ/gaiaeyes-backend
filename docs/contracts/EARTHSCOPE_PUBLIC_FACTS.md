@@ -1,9 +1,9 @@
 # EarthScope public-facts qualification
 
-G046 compatibility revision, September 21, 2026 (G044 input contract preserved). Local, default-off preparation for the existing
+G046 compatibility foundation with G053 bounded public-copy context, September 24, 2026 (G044 wire contract preserved). Local, default-off preparation for the existing
 `gaia-draft-worker-v1-r1` contract. This qualifies inputs; it does not certify
 copy quality, medical/scientific conclusions, renderer compatibility or a
-production takeover. No public writer behavior was changed.
+production takeover. The separate default-off consumer is documented in [EARTHSCOPE_LOCAL_PRIMARY.md](EARTHSCOPE_LOCAL_PRIMARY.md).
 
 ## Traceable parity matrix
 
@@ -22,7 +22,7 @@ The source of truth for active inputs is `bots/earthscope_post/earthscope_genera
 | `fetch_schumann_from_marts`: Tomsk/Cumiana f0 group means, else available stations | Existing `schumann_value_hz` | Derive station/day/f0/`last_fundamental_ts` directly from `ext.schumann` fundamental samples, with explicit UTC bounds and UTC grouping; label that actual source in the manifest/ledger. The existing hosted `marts.schumann_daily` view has no sample-time column and remains unchanged. Average only same-day rows with nonfuture dated fundamental samples. Preserve equal weighting of the available Tomsk/Cumiana group means; fallback to other valid stations if both unavailable. Do not mix previous-day fallback rows into today. Station measurements are not global personal exposure. |
 | Schumann harmonic dictionary and note | Not added to wire | Main does not send harmonics in `_build_facts`; they are rendered/exported context, not required facts for the new copy contract. f0 provenance/meaning is supplied. No unused schema fields added. |
 | Outlook aurora impact, then main's Kp-derived replacement when Kp ≥5 | Existing `aurora_headline`, `aurora_window` | Same G1/G2/G3+ threshold text from daily maximum, else Kp now. At lower/unknown Kp, headline stays null. Legacy can retain “Next 72h” or set “Next 24h” despite deriving the headline from an observed maximum. Shadow explicitly says observed UTC-day Kp context, not a forecast or local visibility prediction. |
-| Recent default captions/openers; IG/FB variants; titles | `recent_public_copy` | Filtered public default rows, at most 21 previous calendar days; latest five caption sets and 21 titles. Include IG/FB captions stored in canonical `metrics_json.social_variants`. Text limited to 2048 characters, titles 160. No full body or arbitrary JSON. Avoid duplicate data sources and member/user rows. Older standalone IG/FB platform rows and legacy `lead` fallback are deliberately excluded; this is a bounded canonical-copy qualification, not exhaustive historical repetition proof. |
+| Recent default captions/openers; IG/FB variants; titles | `recent_public_copy` | Filtered public default rows, at most 21 previous calendar days; latest five caption sets and 21 titles. Include IG/FB captions stored in canonical `metrics_json.social_variants`. Text limited to 2048 characters, titles 160. G053 adds the latest three sets of snapshot/affects/playbook/voiceover (768 characters each) and five reel beats (256 each), as named public text excerpts. No arbitrary JSON or member-body access. Avoid duplicate data sources and member/user rows. Older standalone IG/FB platform rows and legacy `lead` fallback are deliberately excluded; this is a bounded canonical-copy qualification, not exhaustive historical repetition proof. |
 | `_recent_signal_history`: three prior post metric snapshots | `facts.recent_signal_history` | At most the preceding three calendar days; dates, source IDs and source-update timestamps remain attached. Stored public metrics are historical context, not newly observed measurements or health-causation evidence. Older posts may inform repetition, never recent carryover. |
 | Pulse, `space_weather.json`, consolidated `earthscope.json` helpers | No loader, no new provider | AST/source trace finds their definitions but no calls in the current generator. Therefore `quakes_count` and `severe_summary` remain null. Unknown local conditions are not zero events or calm weather. |
 | Tone, bands, hook-lane/template selection, first-person setting, brand/editorial brief | Existing Local AI editorial layer | These are derived/editorial controls, not new observations. `sample_kind` retains existing core quiet/active/missing-data classification. This adapter does not import or modify the production generator or freeze editorial wording into a facts field. |
@@ -124,3 +124,7 @@ conversion follows [PostgreSQL date/time operators](https://www.postgresql.org/d
 The Supabase changelog was reviewed for this local SQL change; no relevant
 breaking change to these PostgreSQL primitives was identified. No extension,
 Data API, Realtime or authentication change is part of G046.
+
+## G053 additive history and publication boundary
+
+Migration `20260924145345_earthscope_complete_public_copy_history.sql` follows the unchanged queue migration and revised G046 migration. Its history-view addition preserves the fixed public/default filter and only appends named text columns. New consumers fail if that projection is not installed; they do not silently return empty repetition context. Existing stored queue facts remain immutable and are reused by version on retry. The same migration adds a separate cloud-only Meta delivery-intent table, never readable/writable by the Mac or queue roles; see the local-primary contract for its at-most-one automatic attempt behavior. This table does not expand preparer privileges.

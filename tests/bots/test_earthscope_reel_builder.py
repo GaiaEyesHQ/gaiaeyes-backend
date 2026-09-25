@@ -50,6 +50,25 @@ def test_reel_visual_contract_uses_two_story_beats_and_not_pattern():
     ]
 
 
+def test_primary_reel_labels_observation_and_unknown_without_inferred_effects(monkeypatch, tmp_path):
+    story = {"signal": "Geomagnetic activity is active.", "effects": "Aurora visibility is unknown."}
+    assert reel_builder.visual_story_beats(story, observed_context=True) == [
+        ("Observed signal", story["signal"]), ("Uncertainty", story["effects"])]
+    source = tmp_path / "background.jpg"
+    Image.new("RGB", (1080, 1920), "#14313e").save(source)
+    texts = []
+    original = reel_builder.ImageDraw.ImageDraw.text
+    def capture(self, xy, text, *args, **kwargs):
+        texts.append(text)
+        return original(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(reel_builder.ImageDraw.ImageDraw, "text", capture)
+    reel_builder.build_hook_card(source, tmp_path / "primary.jpg", "Observed Activity", observed_context=True)
+    assert "Observed context" in texts and "Your body today" not in texts
+    texts.clear()
+    reel_builder.build_hook_card(source, tmp_path / "legacy.jpg", "Observed Activity")
+    assert "Your body today" in texts and "Observed context" not in texts
+
+
 def test_reel_story_never_falls_back_to_finished_cards(tmp_path):
     for name in ("daily_affects.jpg", "daily_caption.jpg", "daily_playbook.jpg", "daily_stats.jpg"):
         (tmp_path / name).write_bytes(b"finished-card")

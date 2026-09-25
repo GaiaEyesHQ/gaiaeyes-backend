@@ -23,7 +23,9 @@ PUBLIC_SOURCES = {
 SPACE_COLUMNS = ("day", "updated_at", "kp_max", "bz_min", "sw_speed_avg", "flares_count",
                  "cmes_count", "sw_speed_now_kms", "sw_speed_now", "now_ts", "kp_now")
 COPY_COLUMNS = ("day", "updated_at", "title", "caption", "ig_caption", "fb_caption",
-                "kp_max_24h", "bz_min", "solar_wind_kms")
+                "kp_max_24h", "bz_min", "solar_wind_kms",
+                "snapshot", "affects", "playbook", "voiceover",
+                "reel_hook", "reel_signal", "reel_effects", "reel_pattern", "reel_voiceover")
 
 
 def utc(value):
@@ -218,6 +220,13 @@ def prepare_public_packet(day, *, now, space, kp=None, schumann=(), kp_fallback=
             value = row[key]
             if isinstance(value, str) and value.strip():
                 recent.append({"source_id": f"{copy_id}:{old_day}:{key}", "text": value.strip()[:2048]})
+        # Complete compact-copy context for the latest three observed days.
+        # The view bounds each field; these are historical excerpts, never facts.
+        if len(seen) <= 3:
+            for key in COPY_COLUMNS[9:]:
+                value = row[key]
+                if isinstance(value, str) and value.strip():
+                    recent.append({"source_id": f"{copy_id}:{old_day}:{key}", "text": value.strip()})
         # Carryover is bounded to the three preceding calendar days, not three arbitrary old posts.
         if day - old_day <= timedelta(days=3):
             history.append({"source_id": copy_id, "day": old_day.isoformat(),

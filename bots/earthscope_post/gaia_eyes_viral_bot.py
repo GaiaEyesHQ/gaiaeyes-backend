@@ -1097,7 +1097,7 @@ def _blur_panel(im: Image.Image, box: tuple[int,int,int,int], blur_radius: int =
     panel = Image.new("RGBA", (x1 - x0, y1 - y0), (0, 0, 0, panel_alpha))
     im.alpha_composite(panel, (x0, y0))
 
-def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str = "square") -> Image.Image:
+def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str = "square", *, observed_context: bool = False) -> Image.Image:
     if kind == "tall":
         W, H = 1080, 1350
     else:
@@ -1130,7 +1130,7 @@ def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str =
         y += 16
 
     mood = strip_hashtags_and_emojis(mood)
-    section("How it may feel", mood)
+    section("Observed context" if observed_context else "How it may feel", mood)
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 
@@ -1185,6 +1185,8 @@ def build_stats_rows(
     feats: Optional[dict],
     sch_label: str,
     pulse: Optional[dict] = None,
+    *,
+    observed_context: bool = False,
 ) -> List[StatRow]:
     feats = feats or {}
     pulse = pulse or {}
@@ -1209,7 +1211,7 @@ def build_stats_rows(
 
     bz_val = _safe_float(bz_val_raw)
     if bz_source == "bz_min":
-        bz_label = "Bz (min)"
+        bz_label = "Bz (UTC-day min)" if observed_context else "Bz (min)"
     else:
         bz_label = "Bz (current)"
 
@@ -1224,9 +1226,12 @@ def build_stats_rows(
         sw_val = feats.get("sw_speed_avg")
         sw_label = "SW speed (avg)"
 
+    if feats.get("solar_wind_label") == "SW speed (observed)":
+        sw_label = feats["solar_wind_label"]
+
     rows: List[StatRow] = [
         StatRow(
-            "Kp (max)",
+            "Kp (UTC-day max)" if observed_context else "Kp (max)",
             format_metric_float(feats.get("kp_max"), 2),
             (255, 180, 60, 220),
             "KP",
@@ -1249,7 +1254,7 @@ def build_stats_rows(
             _safe_float(sw_val),
         ),
         StatRow(
-            f"Schumann ({sch_label})",
+            "Schumann (mean)" if observed_context else f"Schumann ({sch_label})",
             format_metric_float(sch_val, 2, "Hz"),
             (160, 120, 240, 220),
             "Sch",
@@ -1257,20 +1262,20 @@ def build_stats_rows(
         ),
     ]
 
-    if not _is_zero_or_none(feats.get("flares_count")):
+    if (feats.get("flares_count") is not None if observed_context else not _is_zero_or_none(feats.get("flares_count"))):
         rows.append(
             StatRow(
-                "Flares",
+                "Flares (UTC day)" if observed_context else "Flares",
                 format_metric_int(feats.get("flares_count")),
                 (240, 120, 120, 220),
                 "Fl",
                 _safe_float(feats.get("flares_count")),
             )
         )
-    if not _is_zero_or_none(feats.get("cmes_count")):
+    if (feats.get("cmes_count") is not None if observed_context else not _is_zero_or_none(feats.get("cmes_count"))):
         rows.append(
             StatRow(
-                "CMEs",
+                "CMEs (UTC day)" if observed_context else "CMEs",
                 format_metric_int(feats.get("cmes_count")),
                 (240, 160, 120, 220),
                 "CM",
@@ -1332,6 +1337,8 @@ def render_stats_card_from_features(
     energy: Optional[str] = None,
     kind: str = "square",
     pulse: Optional[dict] = None,
+    *,
+    observed_context: bool = False,
 ) -> Image.Image:
     if kind == "tall":
         W, H = 1080, 1350
@@ -1380,7 +1387,8 @@ def render_stats_card_from_features(
         feats,
         "avg" if feats.get("sch_cumiana_fundamental_avg_hz") and feats.get("sch_fundamental_avg_hz")
         else ("Tomsk" if feats.get("sch_fundamental_avg_hz") is not None else "Cumiana"),
-        pulse=pulse
+        pulse=pulse,
+        observed_context=observed_context,
     )
     font_val = _load_font(["Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 44)
     chip_font = _load_font(["ChangaOne-Regular.ttf", "Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf"], 26)
@@ -1427,7 +1435,13 @@ def render_stats_card_from_features(
     # “Did you know” footer
     y += 40
     did_font = _load_font(["Oswald-VariableFont_wght.ttf", "Poppins-Regular.ttf"], 36)
-    cta = select_earthscope_cta(day.isoformat(), context=_cta_context_from_stats(feats, pulse)).get("card", "").strip()
+    # Primary facts carry UTC-day extrema/counts and a mean of station means.
+    # Do not infer a single station or add an unqualified body-effects CTA.
+    cta = (
+        "UTC day: calendar-day observations. Schumann: mean of available same-day station means."
+        if observed_context else
+        select_earthscope_cta(day.isoformat(), context=_cta_context_from_stats(feats, pulse)).get("card", "").strip()
+    )
     y = _draw_wrapped_multilines(draw, cta, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
 
@@ -1684,7 +1698,7 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
 
     title_norm = (title or "").strip().lower()
     is_affects_card = title_norm in ("how this affects you", "how it may feel") or title_norm.endswith("?") or bool(tip_head)
-    is_care_card = title_norm in ("self-care playbook", "care notes")
+    is_care_card = title_norm in ("self-care playbook", "care notes", "optional actions")
     font_h1 = _font_that_fits(draw, title_faces, title, start=66, minimum=44, max_width=W - x0 - 120)
 
     accent = _earthscope_hook_accent(title, energy)
@@ -1890,61 +1904,73 @@ def main(args: Optional[argparse.Namespace] = None):
     key_prefix = (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY)[:8] if (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY) else "(none)"
     logging.info("Supabase REST: url=%s key[0:8]=%s", SUPABASE_REST_URL or "(unset)", key_prefix)
 
-    day = target_day_utc()
-    feats_probe = fetch_daily_features_for(day) if SUPABASE_REST_URL else None
-    post_probe  = fetch_post_for(day, "default") if SUPABASE_REST_URL else None
-    if not TARGET_DAY and not feats_probe and not post_probe:
-        latest = fetch_latest_day_from_supabase()
-        if latest:
-            logging.info("No data for today; rendering latest available day from Supabase: %s", latest.isoformat())
-            day = latest
-
-    feats = fetch_daily_features_for(day) if SUPABASE_REST_URL else None
-    if feats:
-        kp = float(feats.get("kp_max") or 0.0)
-        sch_any = feats.get("sch_any_fundamental_avg_hz") or feats.get("sch_fundamental_avg_hz")
-        sch = float(sch_any or 7.83)
+    from services.earthscope_local_primary import load_primary_post
+    primary = load_primary_post(allow_review=args.dry_run)
+    if primary:
+        post = primary
+        day = dt.date.fromisoformat(primary["day"])
+        frozen = primary["metrics_json"]
+        feats = _merge_post_metrics_into_features({}, frozen)
+        feats["solar_wind_label"] = frozen["solar_wind_label"]
+        metrics_now = {"kp": frozen.get("kp_now"), "bz": None, "sw": None}
+        energy, mood, tip = "Observed context", "", None
+        sch, kp = frozen.get("schumann_value_hz"), frozen.get("kp_max_24h")
     else:
-        logging.info("No marts.daily_features for target day; using mirror sources")
-        sch = fetch_schumann_from_repo_csv(MEDIA_REPO_PATH) or 7.83
-        kp = fetch_kp_index()
+        day = target_day_utc()
+        feats_probe = fetch_daily_features_for(day) if SUPABASE_REST_URL else None
+        post_probe  = fetch_post_for(day, "default") if SUPABASE_REST_URL else None
+        if not TARGET_DAY and not feats_probe and not post_probe:
+            latest = fetch_latest_day_from_supabase()
+            if latest:
+                logging.info("No data for today; rendering latest available day from Supabase: %s", latest.isoformat())
+                day = latest
 
-    overrides = {"kp": args.kp, "bz": args.bz, "sw": args.sw}
-    metrics_now, metric_sources = resolve_space_weather_metrics(feats, overrides=overrides)
-    feats = feats or {}
-    if metrics_now.get("kp") is not None:
-        feats.setdefault("kp_current", metrics_now["kp"])
-    if metrics_now.get("bz") is not None:
-        feats["bz_current"] = metrics_now["bz"]
-        if feats.get("bz_min") is None:
-            feats["bz_min"] = metrics_now["bz"]
-    if metrics_now.get("sw") is not None:
-        feats["sw_speed_current"] = metrics_now["sw"]
-        if feats.get("sw_speed_avg") is None:
-            feats["sw_speed_avg"] = metrics_now["sw"]
+        feats = fetch_daily_features_for(day) if SUPABASE_REST_URL else None
+        if feats:
+            kp = float(feats.get("kp_max") or 0.0)
+            sch_any = feats.get("sch_any_fundamental_avg_hz") or feats.get("sch_fundamental_avg_hz")
+            sch = float(sch_any or 7.83)
+        else:
+            logging.info("No marts.daily_features for target day; using mirror sources")
+            sch = fetch_schumann_from_repo_csv(MEDIA_REPO_PATH) or 7.83
+            kp = fetch_kp_index()
 
-    logging.info(
-        "Space weather metrics resolved | Kp=%s (%s) Bz=%s (%s) SW=%s (%s)",
-        metrics_now.get("kp"),
-        metric_sources.get("kp") or "n/a",
-        metrics_now.get("bz"),
-        metric_sources.get("bz") or "n/a",
-        metrics_now.get("sw"),
-        metric_sources.get("sw") or "n/a",
-    )
-    missing = [k for k, v in metrics_now.items() if v is None]
-    if missing:
-        logging.warning("Missing space weather metrics: %s", ", ".join(sorted(missing)))
+        overrides = {"kp": args.kp, "bz": args.bz, "sw": args.sw}
+        metrics_now, metric_sources = resolve_space_weather_metrics(feats, overrides=overrides)
+        feats = feats or {}
+        if metrics_now.get("kp") is not None:
+            feats.setdefault("kp_current", metrics_now["kp"])
+        if metrics_now.get("bz") is not None:
+            feats["bz_current"] = metrics_now["bz"]
+            if feats.get("bz_min") is None:
+                feats["bz_min"] = metrics_now["bz"]
+        if metrics_now.get("sw") is not None:
+            feats["sw_speed_current"] = metrics_now["sw"]
+            if feats.get("sw_speed_avg") is None:
+                feats["sw_speed_avg"] = metrics_now["sw"]
 
-    # Compute energy/mood/tip early so `tip` is available
-    energy, mood, tip = generate_daily_forecast(sch, kp)
+        logging.info(
+            "Space weather metrics resolved | Kp=%s (%s) Bz=%s (%s) SW=%s (%s)",
+            metrics_now.get("kp"),
+            metric_sources.get("kp") or "n/a",
+            metrics_now.get("bz"),
+            metric_sources.get("bz") or "n/a",
+            metrics_now.get("sw"),
+            metric_sources.get("sw") or "n/a",
+        )
+        missing = [k for k, v in metrics_now.items() if v is None]
+        if missing:
+            logging.warning("Missing space weather metrics: %s", ", ".join(sorted(missing)))
 
-    post = fetch_post_for(day, "default") if SUPABASE_REST_URL else None
-    if not post and SUPABASE_REST_URL:
-        latest = fetch_latest_day_from_supabase()
-        if latest and latest != day:
-            logging.warning("No post for %s; falling back to latest %s", day.isoformat(), latest.isoformat())
-            post = fetch_post_for(latest, "default")
+        # Compute energy/mood/tip early so `tip` is available
+        energy, mood, tip = generate_daily_forecast(sch, kp)
+
+        post = fetch_post_for(day, "default") if SUPABASE_REST_URL else None
+        if not post and SUPABASE_REST_URL:
+            latest = fetch_latest_day_from_supabase()
+            if latest and latest != day:
+                logging.warning("No post for %s; falling back to latest %s", day.isoformat(), latest.isoformat())
+                post = fetch_post_for(latest, "default")
     # Align day with the post we actually used (for header date on tall cards)
     if post and isinstance(post.get("day"), str):
         try:
@@ -1953,7 +1979,7 @@ def main(args: Optional[argparse.Namespace] = None):
             pass
 
     # Try loading media EarthScope card JSON for sections/metrics if Supabase post is missing or outdated
-    media_card = load_earthscope_card()
+    media_card = None if primary else load_earthscope_card()
     media_card_day = _card_day_iso(media_card)
     use_media_card = bool(isinstance(media_card, dict) and media_card_day and media_card_day == day.isoformat())
     if media_card and not use_media_card:
@@ -2074,8 +2100,9 @@ def main(args: Optional[argparse.Namespace] = None):
         fa, fp = generate_daily_forecast(sch, kp)[1], " - " + generate_daily_forecast(sch, kp)[2]
         affects_txt = affects_txt or fa
         playbook_txt = playbook_txt or fp
-    affects_txt = _trim_public_affects(affects_txt)
-    playbook_txt = _format_public_playbook(playbook_txt)
+    if not primary:
+        affects_txt = _trim_public_affects(affects_txt)
+        playbook_txt = _format_public_playbook(playbook_txt)
 
     # Quick Tip placement
     if tip:
@@ -2097,7 +2124,8 @@ def main(args: Optional[argparse.Namespace] = None):
             if sx.get("aurora_window"):
                 pulse_like["aurora_window"] = str(sx.get("aurora_window"))
     if metrics_now.get("kp") is not None:
-        stats_feats.setdefault("kp_max", stats_feats.get("kp_max") or metrics_now["kp"])
+        if not primary:
+            stats_feats.setdefault("kp_max", stats_feats.get("kp_max") or metrics_now["kp"])
         stats_feats.setdefault("kp_current", metrics_now["kp"])
     if metrics_now.get("bz") is not None:
         stats_feats["bz_current"] = metrics_now["bz"]
@@ -2128,7 +2156,7 @@ def main(args: Optional[argparse.Namespace] = None):
             energy = _energy_from_tone_and_bands(tone2, kb2)
 
     base_feats = stats_feats
-    stats_im   = render_stats_card_from_features(day, base_feats, energy, kind="tall", pulse=pulse_like)
+    stats_im   = render_stats_card_from_features(day, base_feats, energy, kind="tall", pulse=pulse_like, observed_context=bool(primary))
     if isinstance(caption_text, (dict, list)):
         caption_text = json.dumps(caption_text, ensure_ascii=False)
     if hasattr(caption_text, "strip"):
@@ -2138,7 +2166,7 @@ def main(args: Optional[argparse.Namespace] = None):
     affects_txt  = strip_hashtags_and_emojis(_safe_text(affects_txt))
     playbook_txt = strip_hashtags_and_emojis(_safe_text(playbook_txt))
 
-    caption_im = render_card(energy, caption_text, sch, kp, kind="square")
+    caption_im = render_card(energy, caption_text, sch, kp, kind="square", observed_context=bool(primary))
     fallback_title = _earthscope_hook_title(affects_txt, tone=str(tone_val or ""), energy=energy)
     post_title = post.get("title") if isinstance(post, dict) else ""
     story_hook = ""
@@ -2148,7 +2176,7 @@ def main(args: Optional[argparse.Namespace] = None):
             story_hook = story.get("hook") or ""
     affects_title = _public_card_title(post_title, fallback=fallback_title, preferred_hook=story_hook)
     affects_im = render_text_card(affects_title, affects_txt, energy, kind="tall")
-    play_im    = render_text_card("Care notes", playbook_txt, energy, kind="tall")
+    play_im    = render_text_card("Optional actions" if primary else "Care notes", playbook_txt, energy, kind="tall")
 
     if args.mode == "stats":
         save_stats_card(stats_im, outdir=args.outdir)
@@ -2161,19 +2189,26 @@ def main(args: Optional[argparse.Namespace] = None):
                 sha1 = git_commit_push(repo_paths)
                 logging.info("Pushed images commit %s", sha1)
             except Exception as e:
+                if primary:
+                    raise
                 logging.error(f"git push (images) failed: {e}")
 
-        ts_iso = utcnow_iso()
-        payload = build_payload(ts_iso, kp, None, sch, "")
-        if not args.dry_run:
-            write_json_csv(payload)
-            try:
-                sha2 = git_commit_push([JSON_PATH_REPO, CSV_PATH_REPO])
-                logging.info("Pushed data commit %s", sha2)
-            except Exception as e:
-                logging.error(f"git push (data) failed: {e}")
-        else:
-            logging.info("Dry run: skipped writing JSON/CSV and git push")
+        # Primary publishes its qualified EarthScope JSON in the workflow. Do
+        # not invent a legacy current-Kp/latest timestamp from a daily maximum.
+        if not primary:
+            ts_iso = utcnow_iso()
+            payload = build_payload(ts_iso, kp, None, sch, "")
+            if not args.dry_run:
+                write_json_csv(payload)
+                try:
+                    sha2 = git_commit_push([JSON_PATH_REPO, CSV_PATH_REPO])
+                    logging.info("Pushed data commit %s", sha2)
+                except Exception as e:
+                    if primary:
+                        raise
+                    logging.error(f"git push (data) failed: {e}")
+            else:
+                logging.info("Dry run: skipped writing JSON/CSV and git push")
 
     logging.info("✅ Done. Mode=%s", args.mode)
 

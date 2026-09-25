@@ -171,7 +171,13 @@ def upload_images(image_dir, environ, *, sleep=time.sleep, log=print):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image-dir", type=Path, required=True)
+    parser.add_argument("--revision", help="Immutable daily-run media revision (SHA-256)")
     args = parser.parse_args()
+    if args.revision:
+        if not re.fullmatch(r"[0-9a-f]{64}", args.revision):
+            parser.error("revision must be a SHA-256")
+        global OBJECT_PATH_BASE
+        OBJECT_PATH_BASE = "/storage/v1/object/space-visuals/social/earthscope/by-run/" + args.revision
     return upload_images(args.image_dir, os.environ)
 
 

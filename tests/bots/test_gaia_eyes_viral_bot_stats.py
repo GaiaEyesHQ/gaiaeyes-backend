@@ -36,6 +36,50 @@ def _row_for_label(rows: list[StatRow], label: str) -> StatRow:
     raise AssertionError(f"Missing row for {label}")
 
 
+def test_primary_stats_keep_day_extrema_station_mean_and_zero_event_scope():
+    feats = _merge_post_metrics_into_features({}, {
+        "kp_max_24h": 4.33, "kp_now": 4.3, "bz_min": -12.98,
+        "solar_wind_kms": 379, "schumann_value_hz": 7.71,
+        "flares_24h": 0, "cmes_24h": 1,
+    })
+    feats["solar_wind_label"] = "SW speed (observed)"
+    rows = build_stats_rows(feats, "Cumiana", observed_context=True)
+    assert {r.label: r.display for r in rows} == {
+        "Kp (UTC-day max)": "4.33", "Bz (UTC-day min)": "-13.0 nT",
+        "SW speed (observed)": "379 km/s", "Schumann (mean)": "7.71 Hz",
+        "Flares (UTC day)": "0", "CMEs (UTC day)": "1",
+    }
+    feats.update(flares_count=None, cmes_count=None, sch_any_fundamental_avg_hz=None)
+    missing = build_stats_rows(feats, "Cumiana", observed_context=True)
+    assert _row_for_label(missing, "Schumann (mean)").display == "—"
+    assert not any(r.label.startswith(("Flares", "CMEs")) for r in missing)
+    legacy = build_stats_rows({"flares_count": 0, "cmes_count": 1}, "Cumiana")
+    assert not any(r.label == "Flares" for r in legacy)
+    assert _row_for_label(legacy, "CMEs").display == "1"
+    assert _row_for_label(legacy, "Schumann (Cumiana)").display == "—"
+
+
+def test_primary_cards_use_neutral_context_and_provenance_instead_of_legacy_cta(monkeypatch):
+    texts = []
+    original = gaia_eyes_viral_bot.ImageDraw.ImageDraw.text
+    def capture(self, xy, text, *args, **kwargs):
+        texts.append(text)
+        return original(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(gaia_eyes_viral_bot.ImageDraw.ImageDraw, "text", capture)
+    monkeypatch.setattr(gaia_eyes_viral_bot, "select_earthscope_cta",
+                        lambda *a, **kw: pytest.fail("Primary renderer must not append a legacy CTA"))
+    gaia_eyes_viral_bot.render_card("Observed context", "Supplied factual context.", 7.71, 4.33, observed_context=True)
+    gaia_eyes_viral_bot.render_stats_card_from_features(
+        dt.date(2026, 9, 24), {"kp_max": 4.33, "bz_min": -12.98,
+            "sch_any_fundamental_avg_hz": 7.71, "flares_count": 0, "cmes_count": 1},
+        energy="Observed context", kind="tall", observed_context=True)
+    rendered = " ".join(texts)
+    assert "Observed context" in texts and "How it may feel" not in texts
+    assert "Cumiana" not in rendered and "Tomsk" not in rendered
+    assert "calendar-day observations" in rendered
+    assert "same-day station means" in rendered
+
+
 def test_stats_card_uses_health_forward_title_and_plain_url_footer():
     assert STATS_CARD_TITLE == "SIGNAL WATCH"
     assert STATS_CARD_FOOTER == "gaiaeyes.com/app"

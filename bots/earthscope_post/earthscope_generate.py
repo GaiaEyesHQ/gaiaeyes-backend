@@ -721,13 +721,16 @@ def _stable_choice(
     usable = [opt for opt in options if str(opt or "").strip()]
     if not usable:
         return ""
-    banned = {_first_sentence(x).strip().lower() for x in (banned_openers or []) if str(x or "").strip()}
+    # Callers supply newest-first history. Keep each opener's most recent use
+    # so exhausting a small fallback pool does not choose yesterday again.
+    recent = [_first_sentence(x).strip().lower() for x in (banned_openers or []) if str(x or "").strip()]
+    banned = set(recent)
     seed = int(hashlib.sha256(seed_text.encode("utf-8")).hexdigest(), 16)
     for offset in range(len(usable)):
         candidate = usable[(seed + offset) % len(usable)]
         if _first_sentence(candidate).strip().lower() not in banned:
             return candidate
-    return usable[seed % len(usable)]
+    return max(usable, key=lambda candidate: recent.index(_first_sentence(candidate).strip().lower()))
 
 
 def _fallback_caption_for_tone(tone: str, ctx: Dict[str, Any]) -> str:

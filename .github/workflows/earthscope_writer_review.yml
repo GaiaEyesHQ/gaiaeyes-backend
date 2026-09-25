@@ -1,0 +1,88 @@
+name: EarthScope Writer — Identity or Draft Review
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [identity, review]
+        default: identity
+        required: true
+      review_authorization_id:
+        description: Required only for a separately authorized current-day hosted review
+        type: string
+        required: false
+      date:
+        description: Optional YYYY-MM-DD; must be current in UTC and America/Chicago
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: gaia-eyes-daily-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  qualification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EARTHSCOPE_DRAFT_PREPARER_DSN: ${{ secrets.EARTHSCOPE_DRAFT_PREPARER_DSN }}
+      DATABASE_URL: ${{ secrets.EARTHSCOPE_DRAFT_PREPARER_DSN }}
+      EARTHSCOPE_DRAFT_DB_CA_PEM: ${{ secrets.EARTHSCOPE_DRAFT_DB_CA_PEM }}
+      PGSSLROOTCERT: ${{ runner.temp }}/earthscope-db-ca.pem
+      EARTHSCOPE_DRAFT_WORKER_ID: ${{ vars.EARTHSCOPE_DRAFT_WORKER_ID }}
+      EARTHSCOPE_LOCAL_CAPTION_PROFILE: structured_authored_caption_v2_policy_assembly_v1
+      EARTHSCOPE_LOCAL_VALIDATOR_ID: gaia-two-stage-policy-assembly-v1+compact-machine-v1
+      GAIA_TIMEZONE: America/Chicago
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Prepare certificate and dependencies
+        run: |
+          python -m pip install 'psycopg[binary]==3.2.12' 'psycopg_pool==3.2.3' 'pydantic==2.8.2' 'pydantic-settings==2.4.0' 'requests==2.32.4'
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          value = os.environ.get('EARTHSCOPE_DRAFT_DB_CA_PEM', '')
+          if '-----BEGIN CERTIFICATE-----' not in value:
+              raise SystemExit('Dedicated preparer CA certificate is missing')
+          path = Path(os.environ['PGSSLROOTCERT'])
+          path.write_text(value)
+          path.chmod(0o600)
+          PY
+      - name: Prove actual GitHub preparer identity
+        run: python scripts/earthscope_preparer_identity.py --receipt artifacts/preparer-identity.json
+      - name: Current-day draft-only exchange
+        if: ${{ inputs.mode == 'review' }}
+        env:
+          REQUESTED_DAY: ${{ inputs.date }}
+          REVIEW_AUTHORIZATION_ID: ${{ inputs.review_authorization_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, re
+          from datetime import date, datetime, timezone
+          from pathlib import Path
+          from services.earthscope_local_primary import current_day
+          if not re.fullmatch(r'[A-Za-z0-9._-]{3,160}', os.getenv('REVIEW_AUTHORIZATION_ID', '')):
+              raise SystemExit('A separate review authorization reference is required')
+          now = datetime.now(timezone.utc)
+          day = date.fromisoformat(os.getenv('REQUESTED_DAY') or now.date().isoformat())
+          current_day(day, now)
+          Path('artifacts/review-authorization-id.txt').write_text(os.environ['REVIEW_AUTHORIZATION_ID'])
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('TARGET_DAY=' + day.isoformat() + '\n')
+          Path('artifacts/target-day.txt').write_text(day.isoformat())
+          PY
+          TARGET_DAY="$(cat artifacts/target-day.txt)"
+          python scripts/earthscope_local_primary.py --review-only --day "$TARGET_DAY" --wait-seconds 600 --receipt artifacts/review-receipt.json --post-output artifacts/earthscope_primary_post.json --daily-output artifacts/earthscope_daily.json
+      - name: Retain qualification receipts only
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: earthscope-writer-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14

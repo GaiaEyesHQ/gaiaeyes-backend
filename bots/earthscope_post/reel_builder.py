@@ -433,11 +433,11 @@ def reel_story_from_post(row: Optional[dict]) -> dict:
     }
 
 
-def visual_story_beats(story: dict) -> List[tuple[str, str]]:
+def visual_story_beats(story: dict, *, observed_context: bool = False) -> List[tuple[str, str]]:
     """Return the two public story beats rendered between hook and metrics."""
     return [
-        ("Why today", _safe_reel_text(story.get("signal"))),
-        ("What some may notice", _safe_reel_text(story.get("effects"))),
+        ("Observed signal" if observed_context else "Why today", _safe_reel_text(story.get("signal"))),
+        ("Uncertainty" if observed_context else "What some may notice", _safe_reel_text(story.get("effects"))),
     ]
 
 
@@ -546,7 +546,7 @@ def _overlay_wordmark(canvas: Image.Image) -> None:
     canvas.alpha_composite(logo, (690, 280))
 
 
-def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
+def build_hook_card(source: Path, out_path: Path, hook_text: str, *, observed_context: bool = False) -> Path:
     background = _cover_background(source, brightness=0.76)
 
     canvas = background.convert("RGBA")
@@ -564,7 +564,7 @@ def build_hook_card(source: Path, out_path: Path, hook_text: str) -> Path:
     top = max(570, (1920 - block_height) // 2 - 30)
 
     _overlay_wordmark(canvas)
-    draw.text((100, top - 92), "Your body today", font=label_font, fill=(84, 224, 225, 255))
+    draw.text((100, top - 92), "Observed context" if observed_context else "Your body today", font=label_font, fill=(84, 224, 225, 255))
     for index, line in enumerate(lines):
         draw.text((100, top + index * line_height), line, font=hook_font, fill=(255, 255, 255, 255))
 
@@ -964,8 +964,10 @@ def main():
     REEL_OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     platform = env_get("REEL_PLATFORM", "default")
     target_day = env_get("TARGET_DAY")
-    resolved_day = target_day or _latest_day_from_content(platform)
-    post_row = fetch_post_for_day(resolved_day, platform)
+    from services.earthscope_local_primary import load_primary_post
+    primary = load_primary_post()
+    resolved_day = primary["day"] if primary else target_day or _latest_day_from_content(platform)
+    post_row = primary or fetch_post_for_day(resolved_day, platform)
 
     # 1) Build two short public story beats from the stable payload, then finish on metrics.
     story_backgrounds = pick_story_backgrounds(IMAGES_DIR, 3)
@@ -981,10 +983,11 @@ def main():
         story_backgrounds[0],
         tmp_dir / "hook.jpg",
         story["hook"],
+        observed_context=bool(primary),
     )
     story_cards = [
         build_story_card(story_backgrounds[index + 1], tmp_dir / f"story_{index}.jpg", label, text)
-        for index, (label, text) in enumerate(visual_story_beats(story))
+        for index, (label, text) in enumerate(visual_story_beats(story, observed_context=bool(primary)))
     ]
     stats_path = IMAGES_DIR / "daily_stats.jpg"
     stats_card = stats_path if stats_path.exists() else story_backgrounds[-1]
@@ -1011,9 +1014,9 @@ def main():
     vo_wav.unlink(missing_ok=True)
     vo_ok = False
     if REEL_VOICE_ENABLED:
-        caption_text = resolve_caption(platform=platform, target_day=target_day)
+        caption_text = primary["caption"] if primary else resolve_caption(platform=platform, target_day=target_day)
         post_caption = " ".join((caption_text or "").split())
-        vo_text_raw = resolve_vo_text(platform=platform, target_day=target_day) or caption_text or ""
+        vo_text_raw = primary["metrics_json"]["sections"]["voiceover"] if primary else resolve_vo_text(platform=platform, target_day=target_day) or caption_text or ""
         if not vo_text_raw.strip():
             vo_text_raw = guess_vo_text(EARTHSCOPE_JSON)
         vo_text = strip_metric_tail(vo_text_raw) if STRIP_METRICS else vo_text_raw

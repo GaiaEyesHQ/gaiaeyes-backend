@@ -99,7 +99,11 @@ jobs:
                   with urllib.request.urlopen(req, timeout=20) as response:
                       payload = json.load(response)
                   published_ts = str(payload.get("timestamp_utc") or "").strip()
-                  if published_ts:
+                  if payload.get("day"):
+                      # A facts timestamp can fall on the preceding local day;
+                      # explicit content day governs the dated artifact.
+                      already_published_today = payload["day"] == now_local.date().isoformat()
+                  elif published_ts:
                       published_dt = datetime.fromisoformat(published_ts.replace("Z", "+00:00"))
                       already_published_today = published_dt.astimezone(tz).date() == now_local.date()
               except Exception as exc:  # noqa: BLE001
@@ -124,12 +128,24 @@ jobs:
   generate:
     name: Generate Earthscope → Supabase
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      target_day: ${{ steps.writer.outputs.target_day }}
+      writer_mode: ${{ steps.writer.outputs.writer_mode }}
+      media_revision: ${{ steps.writer.outputs.media_revision }}
+      post_sha256: ${{ steps.generate.outputs.post_sha256 }}
     needs: preflight
     if: ${{ needs.preflight.outputs.should_run == 'true' }}
     permissions:
       contents: write
       issues: write
     env:
+      EARTHSCOPE_WRITER_MODE: ${{ vars.EARTHSCOPE_WRITER_MODE || 'legacy' }}
+      EARTHSCOPE_LOCAL_ACCEPTANCE_ID: ${{ vars.EARTHSCOPE_LOCAL_ACCEPTANCE_ID }}
+      EARTHSCOPE_LOCAL_VALIDATOR_ID: ${{ vars.EARTHSCOPE_LOCAL_VALIDATOR_ID }}
+      EARTHSCOPE_LOCAL_CAPTION_PROFILE: ${{ vars.EARTHSCOPE_LOCAL_CAPTION_PROFILE }}
+      EARTHSCOPE_DRAFT_WORKER_ID: ${{ vars.EARTHSCOPE_DRAFT_WORKER_ID }}
+      EARTHSCOPE_DRAFT_PREPARER_DSN: ${{ secrets.EARTHSCOPE_DRAFT_PREPARER_DSN }}
       PYTHONPATH: ${{ github.workspace }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
@@ -160,26 +176,81 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+      - name: Resolve writer mode and content date
+        id: writer
+        env:
+          REQUESTED_DAY: ${{ github.event.inputs.date }}
+        run: |
+          python - <<'PYDATE'
+          import hashlib, os
+          from datetime import date, datetime
+          from zoneinfo import ZoneInfo
+          from services.earthscope_local_primary import writer_mode, activation
+          mode = writer_mode(os.environ)
+          if mode == 'local_primary':
+              activation(os.environ)
+          value = os.getenv('REQUESTED_DAY') or datetime.now(ZoneInfo(os.getenv('GAIA_TIMEZONE') or 'America/Chicago')).date().isoformat()
+          day = date.fromisoformat(value).isoformat()
+          revision = hashlib.sha256((os.environ['GITHUB_RUN_ID'] + ':' + os.environ['GITHUB_RUN_ATTEMPT'] + ':' + day).encode()).hexdigest()
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'target_day={day}\nwriter_mode={mode}\nmedia_revision={revision}\n')
+          PYDATE
       - name: Install deps
         working-directory: bots/earthscope_post
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install --upgrade openai supabase
-      - name: Run generator (earthscope_generate.py)
-        working-directory: bots/earthscope_post
+          if [ "${EARTHSCOPE_WRITER_MODE:-legacy}" = local_primary ]; then
+            # Reuse the existing repository pin; no new dependency/version.
+            pip install 'psycopg[binary]==3.2.12' 'psycopg_pool==3.2.3' 'pydantic==2.8.2' 'pydantic-settings==2.4.0'
+          fi
+      - name: Run selected writer
+        id: generate
+        env:
+          TARGET_DAY: ${{ steps.writer.outputs.target_day }}
+          EARTHSCOPE_DRAFT_DB_CA_PEM: ${{ secrets.EARTHSCOPE_DRAFT_DB_CA_PEM }}
+          PGSSLROOTCERT: ${{ runner.temp }}/earthscope-db-ca.pem
+          DATABASE_URL: ${{ secrets.EARTHSCOPE_DRAFT_PREPARER_DSN }}
         run: |
-          DATE_ARG=""
-          if [ -n "${{ github.event.inputs.date }}" ]; then DATE_ARG="--date ${{ github.event.inputs.date }}"; fi
-          python earthscope_generate.py $DATE_ARG --platform ${{ env.EARTHSCOPE_PLATFORM }}
+          set -euo pipefail
+          if [ "${EARTHSCOPE_WRITER_MODE:-legacy}" = local_primary ]; then
+            python - <<'PYCA'
+          import os
+          from pathlib import Path
+          value = os.environ.get('EARTHSCOPE_DRAFT_DB_CA_PEM', '')
+          if '-----BEGIN CERTIFICATE-----' not in value:
+              raise SystemExit('Dedicated preparer CA certificate is missing')
+          path = Path(os.environ['PGSSLROOTCERT'])
+          path.write_text(value)
+          path.chmod(0o600)
+          PYCA
+            python scripts/earthscope_preparer_identity.py --receipt artifacts/preparer-identity.json
+            python scripts/earthscope_local_primary.py --day "$TARGET_DAY" --wait-seconds 600               --receipt artifacts/local-primary-receipt.json               --post-output artifacts/earthscope_primary_post.json               --daily-output "$EARTHSCOPE_OUTPUT_JSON_PATH"
+          else
+            cd bots/earthscope_post
+            python earthscope_generate.py --date "$TARGET_DAY" --platform "$EARTHSCOPE_PLATFORM"
+          fi
+      - name: Retain local writer receipt
+        if: ${{ always() && env.EARTHSCOPE_WRITER_MODE == 'local_primary' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-primary-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/preparer-identity.json
+            artifacts/local-primary-receipt.json
+            artifacts/earthscope_primary_post.json
+          if-no-files-found: warn
       - name: Upload EarthScope daily JSON artifact
         uses: actions/upload-artifact@v4
         with:
           name: earthscope-daily-json-${{ github.run_id }}
-          path: ${{ env.EARTHSCOPE_OUTPUT_JSON_PATH }}
+          path: |
+            ${{ env.EARTHSCOPE_OUTPUT_JSON_PATH }}
+            artifacts/earthscope_primary_post.json
           if-no-files-found: error
       - name: Upload public EarthScope shadow artifact
-        if: ${{ env.EARTHSCOPE_PUBLIC_SHADOW == 'true' }}
+        if: ${{ env.EARTHSCOPE_PUBLIC_SHADOW == 'true' && env.EARTHSCOPE_WRITER_MODE == 'legacy' }}
         uses: actions/upload-artifact@v4
         with:
           name: public-earthscope-shadow-${{ github.run_id }}
@@ -194,8 +265,17 @@ jobs:
       contents: write
       issues: write
     outputs:
+      target_day: ${{ needs.generate.outputs.target_day }}
+      writer_mode: ${{ needs.generate.outputs.writer_mode }}
+      post_sha256: ${{ needs.generate.outputs.post_sha256 }}
+      media_revision: ${{ needs.generate.outputs.media_revision }}
       media_sha: ${{ steps.media_sha.outputs.sha }}
     env:
+      TARGET_DAY: ${{ needs.generate.outputs.target_day }}
+      EARTHSCOPE_WRITER_MODE: ${{ needs.generate.outputs.writer_mode }}
+      EARTHSCOPE_PRIMARY_POST_SHA256: ${{ needs.generate.outputs.post_sha256 }}
+      EARTHSCOPE_MEDIA_REVISION: ${{ needs.generate.outputs.media_revision }}
+      EARTHSCOPE_PRIMARY_POST_PATH: ${{ github.workspace }}/artifacts/earthscope-daily/earthscope_primary_post.json
       PYTHONPATH: ${{ github.workspace }}
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
@@ -266,8 +346,19 @@ jobs:
           LOGO_PATH: ${{ env.LOGO_PATH }}
         run: |
           python gaia_eyes_viral_bot.py
+      - name: Retain exact local-primary reel backgrounds and cards
+        if: ${{ env.EARTHSCOPE_WRITER_MODE == 'local_primary' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: earthscope-images-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.MEDIA_REPO_PATH }}/images/*.jpg
+          if-no-files-found: error
       - name: Upload rendered images to Supabase Storage (social/earthscope/latest)
         run: |
+          set -euo pipefail
+          if [ "${EARTHSCOPE_WRITER_MODE:-legacy}" = local_primary ]; then
+            python scripts/upload_earthscope_images.py --image-dir "${MEDIA_REPO_PATH}/images" --revision "$EARTHSCOPE_MEDIA_REVISION"
+          fi
           python scripts/upload_earthscope_images.py --image-dir "${MEDIA_REPO_PATH}/images"
       - name: Publish EarthScope daily JSON to media repo
         run: |
@@ -305,6 +396,11 @@ jobs:
       contents: write
       issues: write
     env:
+      TARGET_DAY: ${{ needs.render.outputs.target_day }}
+      EARTHSCOPE_WRITER_MODE: ${{ needs.render.outputs.writer_mode }}
+      EARTHSCOPE_PRIMARY_POST_SHA256: ${{ needs.render.outputs.post_sha256 }}
+      EARTHSCOPE_MEDIA_REVISION: ${{ needs.render.outputs.media_revision }}
+      EARTHSCOPE_PRIMARY_POST_PATH: ${{ github.workspace }}/artifacts/earthscope-daily/earthscope_primary_post.json
       PYTHONPATH: ${{ github.workspace }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -315,7 +411,7 @@ jobs:
       MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
       MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
       SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
-      MEDIA_CDN_BASE:   ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
+      MEDIA_CDN_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/${{ needs.render.outputs.writer_mode == 'local_primary' && format('by-run/{0}', needs.render.outputs.media_revision) || 'latest' }}
       META_GRAPH_VERSION: v24.0
       META_CREATE_RETRY_ATTEMPTS: "4"
       META_PUBLISH_RETRY_ATTEMPTS: "2"
@@ -327,6 +423,12 @@ jobs:
       ALLOW_PARTIAL_META_FAILURE: "true"
     steps:
       - uses: actions/checkout@v6
+      - name: Download exact local-primary post
+        if: ${{ env.EARTHSCOPE_WRITER_MODE == 'local_primary' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: earthscope-daily-json-${{ github.run_id }}
+          path: ${{ github.workspace }}/artifacts/earthscope-daily
       - name: Wait for CDN propagation
         run: sleep 60
       - name: Set up Python
@@ -340,6 +442,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install requests python-dotenv
       - name: Mirror default daily_post to IG platform
+        if: ${{ env.EARTHSCOPE_WRITER_MODE == 'legacy' }}
         env:
           REST_URL: ${{ env.SUPABASE_REST_URL }}
           SERVICE_KEY: ${{ env.SUPABASE_SERVICE_KEY }}
@@ -409,7 +512,11 @@ jobs:
         working-directory: bots/earthscope_post
         run: |
           set -e
-          # Try the unified subcommand first; fall back if repo still uses legacy name
+          if [ "${EARTHSCOPE_WRITER_MODE:-legacy}" = local_primary ]; then
+            python meta_poster.py post-carousel --platform fb --media-base "$MEDIA_CDN_BASE"
+            exit $?
+          fi
+          # Legacy compatibility only; local-primary never dispatches twice.
           if python meta_poster.py post-carousel --platform fb --media-base "${{ env.MEDIA_CDN_BASE }}"; then
             echo "Facebook carousel posted via --platform fb."
           else
@@ -463,12 +570,18 @@ jobs:
       contents: read
       issues: write
     env:
+      TARGET_DAY: ${{ needs.render.outputs.target_day }}
+      EARTHSCOPE_WRITER_MODE: ${{ needs.render.outputs.writer_mode }}
+      EARTHSCOPE_PRIMARY_POST_SHA256: ${{ needs.render.outputs.post_sha256 }}
+      EARTHSCOPE_MEDIA_REVISION: ${{ needs.render.outputs.media_revision }}
+      EARTHSCOPE_PRIMARY_POST_PATH: ${{ github.workspace }}/artifacts/earthscope-daily/earthscope_primary_post.json
       PYTHONPATH: ${{ github.workspace }}
+      GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE || 'America/Chicago' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      MEDIA_CDN_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
+      MEDIA_CDN_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/${{ needs.render.outputs.writer_mode == 'local_primary' && format('by-run/{0}', needs.render.outputs.media_revision) || 'latest' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       REEL_VOICE_ENABLED: "0" # Owner-selected music only; narration deferred.
       IG_USER_ID: ${{ secrets.IG_USER_ID }}
@@ -484,6 +597,12 @@ jobs:
       ALLOW_PARTIAL_META_FAILURE: "true"
     steps:
       - uses: actions/checkout@v6
+      - name: Download exact local-primary post
+        if: ${{ env.EARTHSCOPE_WRITER_MODE == 'local_primary' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: earthscope-daily-json-${{ github.run_id }}
+          path: ${{ github.workspace }}/artifacts/earthscope-daily
 
       - name: Install FFmpeg
         run: |
@@ -512,7 +631,14 @@ jobs:
           pip install --upgrade moviepy pydub soundfile numpy pillow requests openai
           pip install --upgrade supabase
 
+      - name: Download exact rendered local-primary images
+        if: ${{ env.EARTHSCOPE_WRITER_MODE == 'local_primary' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: earthscope-images-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/reel_media/images
       - name: Stage reel images from Supabase (latest)
+        if: ${{ env.EARTHSCOPE_WRITER_MODE == 'legacy' }}
         run: |
           set -euo pipefail
           BASE="${MEDIA_CDN_BASE}"
@@ -594,6 +720,10 @@ jobs:
           ts="$(date -u +'%Y%m%dT%H%M%SZ')"
           day="$(date -u +%F)"
           name="reel_${day:-${ts}}.mp4"
+          if [ "${EARTHSCOPE_WRITER_MODE:-legacy}" = local_primary ]; then
+            OBJECT_BASE="/storage/v1/object/space-visuals/social/earthscope/reels/by-run"
+            name="${EARTHSCOPE_MEDIA_REVISION}.mp4"
+          fi
           url="${SUPABASE_URL_TRIMMED}${OBJECT_BASE}/${name}"
 
           echo "[upload] PUT ${url}"
@@ -611,7 +741,7 @@ jobs:
           fi
 
           # also update latest.mp4 pointer for easy embedding
-          url_latest="${SUPABASE_URL_TRIMMED}${OBJECT_BASE}/latest.mp4"
+          url_latest="${SUPABASE_URL_TRIMMED}/storage/v1/object/space-visuals/social/earthscope/reels/latest/latest.mp4"
           code_latest=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
@@ -632,8 +762,8 @@ jobs:
         continue-on-error: true
         working-directory: bots/earthscope_post
         env:
-          REEL_URL: ${{ env.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4
-          REEL_COVER_URL: ${{ env.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_caption.jpg
+          REEL_URL: ${{ env.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/reels/${{ needs.render.outputs.writer_mode == 'local_primary' && format('by-run/{0}.mp4', needs.render.outputs.media_revision) || 'latest/latest.mp4' }}
+          REEL_COVER_URL: ${{ env.MEDIA_CDN_BASE }}/daily_caption.jpg
         run: |
           set -euo pipefail
           python meta_poster.py post-reel \
@@ -646,7 +776,7 @@ jobs:
         continue-on-error: true
         working-directory: bots/earthscope_post
         env:
-          REEL_URL: ${{ env.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4
+          REEL_URL: ${{ env.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/reels/${{ needs.render.outputs.writer_mode == 'local_primary' && format('by-run/{0}.mp4', needs.render.outputs.media_revision) || 'latest/latest.mp4' }}
         run: |
           set -euo pipefail
           python meta_poster.py post-reel \

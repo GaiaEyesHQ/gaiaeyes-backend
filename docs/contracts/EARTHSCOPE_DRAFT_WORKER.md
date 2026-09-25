@@ -1,6 +1,6 @@
 # EarthScope draft-worker delivery
 
-This is a default-off, draft-only bridge for `gaia-draft-worker-v1-r1`. It does not replace the daily OpenAI writer or authorize publication. `local_primary` is not implemented. Queue outcomes remain separate from `content.daily_posts`, renderers and social posting.
+This is a default-off, draft-only bridge for `gaia-draft-worker-v1-r1`. Its unchanged worker outcome never grants editorial or publication eligibility. G053 adds a separate [qualified local-primary consumer](EARTHSCOPE_LOCAL_PRIMARY.md) and daily workflow branch, defaulting to the existing legacy writer. The consumer requires independently recorded acceptance and explicit activation; its local implementation does not establish deployment, live transport or publication readiness.
 
 ## Worker HTTP contract
 
@@ -32,7 +32,7 @@ Production facts use UTC calendar days, matching the existing worker. `facts.day
 
 `scripts/earthscope_draft_shadow.py` is inactive unless `EARTHSCOPE_DRAFT_SHADOW_ENABLED=1`. It requires an explicitly configured `EARTHSCOPE_DRAFT_PREPARER_DSN` and worker ID; it never falls back to an application or unknown DSN. The [public-facts adapter](EARTHSCOPE_PUBLIC_FACTS.md) qualifies explicit projections from the active public writer's sources: daily space weather, timestamped Kp, same-day Schumann and filtered prior public copy. A local qualification ledger records normalized source projections, hashes, aggregate versus observation times, rejected inputs and field meanings. The packet and ledger are retained in the shadow receipt. No HTTP outlook route, unused JSON loader, private/user table, model or real-history import is called. Missing/stale optional inputs stay null; absence is never converted into calm/zero. See the parity matrix for intentional differences and unavailable API fallback fields.
 
-The separate `earthscope_draft_shadow.yml` workflow has only manual dispatch, with an `enabled` input defaulting to false. It prepares and waits up to 300 seconds, then uploads only a draft receipt. It does not invoke the existing generator, renderer or poster. The original daily workflow/generator are unchanged. The CLI permits 1–900 seconds, records timeout/outage explicitly and refuses to overwrite an existing local receipt.
+The separate `earthscope_draft_shadow.yml` workflow has only manual dispatch, with an `enabled` input defaulting to false. It prepares and waits up to 300 seconds, then uploads only a draft receipt. It does not invoke the existing generator, renderer or poster. The daily workflow now has a separate G053 local-primary branch; the shadow workflow does not activate it. The CLI permits 1–900 seconds, records timeout/outage explicitly and refuses to overwrite an existing local receipt.
 
 ## Database and deployment prerequisites
 

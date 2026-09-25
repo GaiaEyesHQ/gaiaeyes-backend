@@ -1107,6 +1107,12 @@ def derive_caption_and_hashtags(post: dict, target_platform: Optional[str] = Non
       metrics = None
   target = target_platform or post.get("platform") or "default"
   variant = _caption_variant_for_platform(metrics, target)
+  if isinstance(metrics, dict) and (metrics.get("writer_source") or {}).get("mode") == "local_primary":
+    if variant is None:
+      raise ValueError("primary platform copy missing")
+    caption, tags = variant
+    # The accepted package already owns its paragraph structure and CTA.
+    return caption + ("\n\n" + tags if tags else ""), tags
   writer_owned_facebook_caption = bool(
     variant and str(target).strip().lower() in ("fb", "facebook")
   )
@@ -1169,7 +1175,12 @@ def _caption_from_file(path: Optional[str]) -> Optional[str]:
   return text or None
 
 
+PRIMARY_DELIVERY = None
+
+
 def _result_exit_code(result: Dict[str, Any]) -> int:
+  if PRIMARY_DELIVERY is not None:
+    PRIMARY_DELIVERY.finish(result)
   if result.get("success"):
     return 0
   return 1
@@ -1202,7 +1213,25 @@ def main() -> None:
   caption_override = _caption_from_file(args.caption_file)
 
   day = dt.date.fromisoformat(args.date)
-  post, effective_platform, effective_day = _select_post_with_fallback(day, args.platform)
+  from services.earthscope_local_primary import load_primary_post
+  from services.earthscope_writer_contract import require
+  primary = load_primary_post()
+  if primary:
+    require(not caption_override, "primary_caption_override_forbidden")
+    post, effective_platform, effective_day = primary, args.platform, dt.date.fromisoformat(primary["day"])
+    global PRIMARY_DELIVERY, META_CREATE_RETRY_ATTEMPTS, META_PUBLISH_RETRY_ATTEMPTS, IG_REEL_CREATE_CYCLES
+    META_CREATE_RETRY_ATTEMPTS = META_PUBLISH_RETRY_ATTEMPTS = IG_REEL_CREATE_CYCLES = 1
+    require(args.cmd in {"post-carousel", "post-reel"} and args.platform in {"ig", "fb"}, "unsupported_primary_delivery")
+    revision = os.environ.get("EARTHSCOPE_MEDIA_REVISION", "")
+    require("/by-run/" + revision in (args.video_url if args.cmd == "post-reel" else _resolve_media_base()), "primary_media_mismatch")
+    if not args.dry_run:
+      from services.earthscope_delivery import DeliveryAttempt
+      PRIMARY_DELIVERY = DeliveryAttempt(primary, args.platform, args.cmd.removeprefix("post-"))
+      if not PRIMARY_DELIVERY.begin():
+        logging.info("Exact current-day delivery already confirmed; no Meta request made")
+        return
+  else:
+    post, effective_platform, effective_day = _select_post_with_fallback(day, args.platform)
   if args.cmd != "post-reel" or not caption_override:
     if not post:
       logging.error("No content.daily_posts available for day=%s (platform %s or default)", day, args.platform)

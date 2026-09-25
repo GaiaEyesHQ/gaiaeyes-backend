@@ -2,7 +2,10 @@
 
 Strategy corrected by Jennifer on 2026-09-06. **Build a scalable user-acquisition and engagement system while continuing to improve Gaia Eyes.** Grow the user base, learn what people value, support repeated use and develop the research/medical vision. Revenue and costs remain measured context; immediate profitability or a payer threshold is not the primary gate for development. The original audit's paid-user gate and revenue-led experiment sequence are superseded.
 
-**September 22 governing correction:** PMF work supports growth and product learning while development continues. The primary near-term outcome is a repeatable acquisition and engagement system that saves Jennifer time and helps free and Plus users receive continuing value. PMF work is not an approval test for whether Gaia Eyes deserves further development. The financial and production counts below retain their original evidence dates; this strategy update is not a fresh financial, analytics or provider-account audit.
+**September 24 governing correction (reaffirming September 22):** PMF work supports growth and product learning while development continues. The primary near-term outcome is a repeatable acquisition and engagement system that saves Jennifer time and helps free and Plus users receive continuing value. PMF work is not an approval test for whether Gaia Eyes deserves further development. The financial and production counts below retain their original evidence dates; this strategy update is not a fresh financial, analytics or provider-account audit.
+
+
+**September 24 growth-system evidence:** G053's [seven-day repetition audit](/Users/gennwu/Documents/Codex/2026-09-05/we/outputs/g053-writer-cutover-readiness/REPETITION_AUDIT.json) confirms repeated stored/retained-rendered copy and a September 23 provider-credit fallback. It does not measure audience rejection, platform reach, conversion or retention. The default-off local writer integration addresses dependable, varied acquisition content and founder workload while product/research work continues; revenue is not its acceptance gate. Actual delivered content and subsequent engagement must be measured separately.
 
 ## Governing growth context
 
