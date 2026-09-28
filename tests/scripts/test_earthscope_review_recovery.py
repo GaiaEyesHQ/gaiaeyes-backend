@@ -51,6 +51,16 @@ def test_workflow_version_uses_environment_and_script_parses():
     path=Path(__file__).resolve().parents[2]/'.github/workflows/earthscope_writer_review.yml'
     data=yaml.safe_load(path.read_text());step=next(s for s in data['jobs']['qualification']['steps'] if s.get('name')=='Current-day draft-only exchange')
     assert step['env']['REVIEW_VERSION']=='${{ inputs.review_version }}'
-    assert '--new-review-version --version "$REVIEW_JOB_VERSION"' in step['run']
+    assert '--new-review-version --version "$REVIEW_VERSION"' in step['run']
     assert '${{' not in step['run']
     subprocess.run(['bash','-n'],input=step['run'],text=True,check=True)
+
+
+def test_version_is_available_in_same_workflow_step():
+    import re
+    path=Path(__file__).resolve().parents[2]/'.github/workflows/earthscope_writer_review.yml'
+    data=yaml.safe_load(path.read_text());step=next(s for s in data['jobs']['qualification']['steps'] if s.get('name')=='Current-day draft-only exchange')
+    variable=re.search(r'--version "\$(\w+)"',step['run']).group(1)
+    assert variable in step['env'], 'GITHUB_ENV writes only apply to later steps'
+    value=subprocess.check_output(['bash','-uc',f'printf %s "${variable}"'],env={variable:'2'},text=True)
+    assert value=='2'

@@ -88,7 +88,7 @@ jobs:
           Path('artifacts/target-day.txt').write_text(day.isoformat())
           PY
           TARGET_DAY="$(cat artifacts/target-day.txt)"
-          python scripts/earthscope_local_primary.py --review-only --new-review-version --version "$REVIEW_JOB_VERSION" --day "$TARGET_DAY" --wait-seconds 600 --receipt artifacts/review-receipt.json --post-output artifacts/earthscope_primary_post.json --daily-output artifacts/earthscope_daily.json
+          python scripts/earthscope_local_primary.py --review-only --new-review-version --version "$REVIEW_VERSION" --day "$TARGET_DAY" --wait-seconds 600 --receipt artifacts/review-receipt.json --post-output artifacts/earthscope_primary_post.json --daily-output artifacts/earthscope_daily.json
       - name: Retain qualification receipts only
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
