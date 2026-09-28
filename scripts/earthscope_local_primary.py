@@ -26,7 +26,7 @@ from services.earthscope_writer_contract import DraftError, ID_RE, require, sha2
 from services.earthscope_local_primary import activation, current_day, publication_post, daily_json
 
 
-async def prepare_or_reuse(conn, day, version, worker_id, wait_seconds):
+async def prepare_or_reuse(conn, day, version, worker_id, wait_seconds, *, new_review_version=False):
     require(type(version) is int and 1 <= version <= 999999, "invalid_version")
     require(ID_RE.fullmatch(worker_id) is not None, "invalid_worker")
     require(type(wait_seconds) is int and 1 <= wait_seconds <= 900, "invalid_wait")
@@ -37,18 +37,23 @@ async def prepare_or_reuse(conn, day, version, worker_id, wait_seconds):
         row = await queue.one(conn, """select * from content.earthscope_writer_jobs
             where day=%s order by job_version desc limit 1 for update""", (day,))
         if row:
-            require(row["job_version"] == version and row["intended_worker_id"] == worker_id
+            require(row["intended_worker_id"] == worker_id
                     and row["input_classification"] == "dated_production_facts", "job_version_conflict")
-            return row
+            if row["job_version"] == version:
+                return row
+            # Only an explicitly selected review may advance a failed terminal
+            # version. Never replace an active or successfully returned job.
+            require(new_review_version and version == row["job_version"] + 1
+                    and row["status"] in {"failed", "expired"}, "job_version_conflict")
         now = await queue.now_at(conn)
         packet, _ = await qualified_public_facts(conn, day, now=now)
         return await queue.enqueue(conn, packet, version, worker_id,
                                    now + timedelta(seconds=wait_seconds), "dated_production_facts")
 
 
-async def await_post(conn, day, version, worker_id, wait_seconds, policy, tz_name):
+async def await_post(conn, day, version, worker_id, wait_seconds, policy, tz_name, *, new_review_version=False):
     current_day(day, await queue.now_at(conn), tz_name)
-    row = await prepare_or_reuse(conn, day, version, worker_id, wait_seconds)
+    row = await prepare_or_reuse(conn, day, version, worker_id, wait_seconds, new_review_version=new_review_version)
     await conn.commit()
     stop = time.monotonic() + wait_seconds
     while True:
@@ -63,7 +68,8 @@ async def await_post(conn, day, version, worker_id, wait_seconds, policy, tz_nam
         await asyncio.sleep(min(2, remaining))
 
 
-async def configured_post(day, version, wait_seconds, environ, *, review_only=False):
+async def configured_post(day, version, wait_seconds, environ, *, review_only=False, new_review_version=False):
+    require(not new_review_version or review_only, "new_version_requires_review_only")
     policy_env = environ if not review_only else {
         **environ, "EARTHSCOPE_WRITER_MODE": "local_primary",
         "EARTHSCOPE_LOCAL_ACCEPTANCE_ID": "review-only-not-accepted"}
@@ -78,7 +84,7 @@ async def configured_post(day, version, wait_seconds, environ, *, review_only=Fa
         await conn.commit()
         return await asyncio.wait_for(
             await_post(conn, day, version, worker, wait_seconds, policy,
-                       environ.get("GAIA_TIMEZONE") or "America/Chicago"), timeout=wait_seconds + 25)
+                       environ.get("GAIA_TIMEZONE") or "America/Chicago", new_review_version=new_review_version), timeout=wait_seconds + 25)
 
 
 def publish_once(post, environ, *, session=None):
@@ -120,10 +126,11 @@ def main():
     parser.add_argument("--post-output", type=Path, required=True)
     parser.add_argument("--daily-output", type=Path, required=True)
     parser.add_argument("--review-only", action="store_true", help="Real queue exchange and local artifacts only; no public-row write")
+    parser.add_argument("--new-review-version", action="store_true", help="Explicitly select the next version after a failed review; requires --review-only")
     args = parser.parse_args()
     result = {"mode": "local_primary", "day": args.day.isoformat(), "status": "failed", "production_consumption": False}
     try:
-        post = asyncio.run(configured_post(args.day, args.version, args.wait_seconds, os.environ, review_only=args.review_only))
+        post = asyncio.run(configured_post(args.day, args.version, args.wait_seconds, os.environ, review_only=args.review_only, new_review_version=args.new_review_version))
         # Retain the exact accepted transport result before the public write.
         write_receipt(args.post_output, post)
         result.update(post_sha256=sha256(post), writer_source=post["metrics_json"]["writer_source"])

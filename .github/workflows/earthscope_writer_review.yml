@@ -11,6 +11,11 @@ on:
         description: Required only for a separately authorized current-day hosted review
         type: string
         required: false
+      review_version:
+        description: Explicit next version only after a diagnosed failed review; active and returned jobs cannot be replaced
+        type: string
+        default: "1"
+        required: true
       date:
         description: Optional YYYY-MM-DD; must be current in UTC and America/Chicago
         type: string
@@ -60,6 +65,7 @@ jobs:
         env:
           REQUESTED_DAY: ${{ inputs.date }}
           REVIEW_AUTHORIZATION_ID: ${{ inputs.review_authorization_id }}
+          REVIEW_VERSION: ${{ inputs.review_version }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -69,16 +75,20 @@ jobs:
           from services.earthscope_local_primary import current_day
           if not re.fullmatch(r'[A-Za-z0-9._-]{3,160}', os.getenv('REVIEW_AUTHORIZATION_ID', '')):
               raise SystemExit('A separate review authorization reference is required')
+          version = os.getenv('REVIEW_VERSION', '1')
+          if not re.fullmatch(r'[1-9][0-9]{0,5}', version):
+              raise SystemExit('Review version must be 1 through 999999')
           now = datetime.now(timezone.utc)
           day = date.fromisoformat(os.getenv('REQUESTED_DAY') or now.date().isoformat())
           current_day(day, now)
           Path('artifacts/review-authorization-id.txt').write_text(os.environ['REVIEW_AUTHORIZATION_ID'])
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write('TARGET_DAY=' + day.isoformat() + '\n')
+              f.write('REVIEW_JOB_VERSION=' + version + '\n')
           Path('artifacts/target-day.txt').write_text(day.isoformat())
           PY
           TARGET_DAY="$(cat artifacts/target-day.txt)"
-          python scripts/earthscope_local_primary.py --review-only --day "$TARGET_DAY" --wait-seconds 600 --receipt artifacts/review-receipt.json --post-output artifacts/earthscope_primary_post.json --daily-output artifacts/earthscope_daily.json
+          python scripts/earthscope_local_primary.py --review-only --new-review-version --version "$REVIEW_JOB_VERSION" --day "$TARGET_DAY" --wait-seconds 600 --receipt artifacts/review-receipt.json --post-output artifacts/earthscope_primary_post.json --daily-output artifacts/earthscope_daily.json
       - name: Retain qualification receipts only
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
