@@ -19,6 +19,8 @@ jobs:
       - name: Qualify real isolated database failures
         env:
           PYTHONPATH: ${{ github.workspace }}
+          # Import-only setting; tests connect solely to their owned Unix socket.
+          DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
         run: |
           export GAIA_TEST_POSTGRES_BIN="$(pg_config --bindir)"
           test -x "$GAIA_TEST_POSTGRES_BIN/pg_ctl"
