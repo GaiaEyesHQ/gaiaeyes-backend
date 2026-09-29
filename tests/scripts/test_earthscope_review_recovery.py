@@ -64,3 +64,57 @@ def test_version_is_available_in_same_workflow_step():
     assert variable in step['env'], 'GITHUB_ENV writes only apply to later steps'
     value=subprocess.check_output(['bash','-uc',f'printf %s "${variable}"'],env={variable:'2'},text=True)
     assert value=='2'
+
+
+REJECTION = {"id": "editorial-review-9", "reason": "temporal_scope_broadening"}
+
+def returned_row():
+    outcome = {"status": "draft_review_ready", "draft": {"caption": "Original retained."}}
+    return {**ROW, "status": "returned", "outcome": outcome,
+            "outcome_sha256": runner.sha256(outcome), "acknowledgement_id": "prior-ack"}
+
+def test_exact_editorial_rejection_appends_without_mutating_original(monkeypatch):
+    row = returned_row(); before = copy.deepcopy(row)
+    decision = {**REJECTION, "outcome_sha256": row["outcome_sha256"]}
+    collect, enqueue = setup(monkeypatch, row)
+    result = asyncio.run(runner.prepare_or_reuse(Connection(), DAY, 2, 'review-worker', 600,
+        new_review_version=True, editorial_rejection=decision))
+    assert result == {"job_version": 2}
+    assert row == before
+    collect.assert_awaited_once(); enqueue.assert_awaited_once()
+
+@pytest.mark.parametrize("change", ["wrong_hash", "tampered_outcome", "no_ack", "active", "skip", "no_selection", "missing"])
+def test_editorial_rejection_requires_exact_terminal_identity(monkeypatch, change):
+    row = returned_row(); decision = {**REJECTION, "outcome_sha256": row["outcome_sha256"]}
+    version = 2; selected = True
+    if change == "wrong_hash": decision["outcome_sha256"] = "0" * 64
+    if change == "tampered_outcome": row["outcome"]["draft"]["caption"] = "Changed"
+    if change == "no_ack": row["acknowledgement_id"] = None
+    if change == "active": row["status"] = "claimed"
+    if change == "skip": version = 3
+    if change == "no_selection": selected = False
+    if change == "missing": row = None
+    collect, enqueue = setup(monkeypatch, row)
+    with pytest.raises(DraftError):
+        asyncio.run(runner.prepare_or_reuse(Connection(), DAY, version, 'review-worker', 600,
+            new_review_version=selected, editorial_rejection=decision))
+    collect.assert_not_awaited(); enqueue.assert_not_awaited()
+
+@pytest.mark.parametrize("case", ["production", "partial", "bad_id", "bad_hash", "bad_reason", "no_new_version"])
+def test_rejection_input_fails_closed_before_connection(case):
+    env = {"EARTHSCOPE_REVIEW_REJECTION_ID": "editorial-review-9",
+           "EARTHSCOPE_REVIEW_REJECTION_SHA256": "a" * 64,
+           "EARTHSCOPE_REVIEW_REJECTION_REASON": "temporal_scope_broadening"}
+    if case == "partial": env.pop("EARTHSCOPE_REVIEW_REJECTION_REASON")
+    if case == "bad_id": env["EARTHSCOPE_REVIEW_REJECTION_ID"] = "bad id"
+    if case == "bad_hash": env["EARTHSCOPE_REVIEW_REJECTION_SHA256"] = "not-a-hash"
+    if case == "bad_reason": env["EARTHSCOPE_REVIEW_REJECTION_REASON"] = "anything"
+    with pytest.raises(DraftError):
+        runner.review_rejection(env, review_only=case != "production", new_review_version=case != "no_new_version")
+
+def test_rejection_valid_input_and_ordinary_absence():
+    assert runner.review_rejection({}, review_only=False, new_review_version=False) is None
+    env = {"EARTHSCOPE_REVIEW_REJECTION_ID": "editorial-review-9",
+           "EARTHSCOPE_REVIEW_REJECTION_SHA256": "a" * 64,
+           "EARTHSCOPE_REVIEW_REJECTION_REASON": "temporal_scope_broadening"}
+    assert runner.review_rejection(env, review_only=True, new_review_version=True) == {**REJECTION, "outcome_sha256": "a" * 64}

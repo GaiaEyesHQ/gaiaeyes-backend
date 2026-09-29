@@ -22,11 +22,38 @@ import requests
 from app.db import earthscope_writer as queue
 from scripts.earthscope_draft_shadow import qualified_public_facts, write_receipt
 from scripts.earthscope_preparer_identity import connection_options
-from services.earthscope_writer_contract import DraftError, ID_RE, require, sha256
+from services.earthscope_writer_contract import DraftError, ID_RE, SHA_RE, require, sha256
 from services.earthscope_local_primary import activation, current_day, publication_post, daily_json
 
 
-async def prepare_or_reuse(conn, day, version, worker_id, wait_seconds, *, new_review_version=False):
+def review_rejection(environ, *, review_only, new_review_version):
+    """Explicit nonsecret editorial decision, never a transport-status rewrite."""
+    values = {key: environ.get(env, "") for key, env in (
+        ("id", "EARTHSCOPE_REVIEW_REJECTION_ID"),
+        ("outcome_sha256", "EARTHSCOPE_REVIEW_REJECTION_SHA256"),
+        ("reason", "EARTHSCOPE_REVIEW_REJECTION_REASON"))}
+    if not any(values.values()):
+        return None
+    require(review_only and new_review_version, "rejection_requires_review_only")
+    require(all(isinstance(value, str) for value in values.values())
+            and ID_RE.fullmatch(values["id"]) is not None
+            and SHA_RE.fullmatch(values["outcome_sha256"]) is not None
+            and values["reason"] in {"temporal_scope_broadening", "unsupported_claim", "editorial_quality"},
+            "invalid_editorial_rejection")
+    return values
+
+
+def returned_review_rejected(row, decision):
+    if not decision or row["status"] != "returned":
+        return False
+    outcome = row.get("outcome")
+    return bool(row.get("acknowledgement_id")
+                and isinstance(outcome, dict)
+                and outcome.get("status") == "draft_review_ready"
+                and decision["outcome_sha256"] == row.get("outcome_sha256") == sha256(outcome))
+
+
+async def prepare_or_reuse(conn, day, version, worker_id, wait_seconds, *, new_review_version=False, editorial_rejection=None):
     require(type(version) is int and 1 <= version <= 999999, "invalid_version")
     require(ID_RE.fullmatch(worker_id) is not None, "invalid_worker")
     require(type(wait_seconds) is int and 1 <= wait_seconds <= 900, "invalid_wait")
@@ -36,24 +63,26 @@ async def prepare_or_reuse(conn, day, version, worker_id, wait_seconds, *, new_r
         await conn.execute("select pg_advisory_xact_lock(hashtextextended(%s,0))", ("earthscope-primary:" + day.isoformat(),))
         row = await queue.one(conn, """select * from content.earthscope_writer_jobs
             where day=%s order by job_version desc limit 1 for update""", (day,))
+        require(row is not None or editorial_rejection is None, "rejected_review_missing")
         if row:
             require(row["intended_worker_id"] == worker_id
                     and row["input_classification"] == "dated_production_facts", "job_version_conflict")
             if row["job_version"] == version:
                 return row
-            # Only an explicitly selected review may advance a failed terminal
-            # version. Never replace an active or successfully returned job.
+            # Append a fresh version only after terminal failure or an exact
+            # editorial rejection. The prior row and acknowledgement stay intact.
             require(new_review_version and version == row["job_version"] + 1
-                    and row["status"] in {"failed", "expired"}, "job_version_conflict")
+                    and ((editorial_rejection is None and row["status"] in {"failed", "expired"})
+                         or returned_review_rejected(row, editorial_rejection)), "job_version_conflict")
         now = await queue.now_at(conn)
         packet, _ = await qualified_public_facts(conn, day, now=now)
         return await queue.enqueue(conn, packet, version, worker_id,
                                    now + timedelta(seconds=wait_seconds), "dated_production_facts")
 
 
-async def await_post(conn, day, version, worker_id, wait_seconds, policy, tz_name, *, new_review_version=False):
+async def await_post(conn, day, version, worker_id, wait_seconds, policy, tz_name, *, new_review_version=False, editorial_rejection=None):
     current_day(day, await queue.now_at(conn), tz_name)
-    row = await prepare_or_reuse(conn, day, version, worker_id, wait_seconds, new_review_version=new_review_version)
+    row = await prepare_or_reuse(conn, day, version, worker_id, wait_seconds, new_review_version=new_review_version, editorial_rejection=editorial_rejection)
     await conn.commit()
     stop = time.monotonic() + wait_seconds
     while True:
@@ -70,6 +99,7 @@ async def await_post(conn, day, version, worker_id, wait_seconds, policy, tz_nam
 
 async def configured_post(day, version, wait_seconds, environ, *, review_only=False, new_review_version=False):
     require(not new_review_version or review_only, "new_version_requires_review_only")
+    decision = review_rejection(environ, review_only=review_only, new_review_version=new_review_version)
     policy_env = environ if not review_only else {
         **environ, "EARTHSCOPE_WRITER_MODE": "local_primary",
         "EARTHSCOPE_LOCAL_ACCEPTANCE_ID": "review-only-not-accepted"}
@@ -84,7 +114,7 @@ async def configured_post(day, version, wait_seconds, environ, *, review_only=Fa
         await conn.commit()
         return await asyncio.wait_for(
             await_post(conn, day, version, worker, wait_seconds, policy,
-                       environ.get("GAIA_TIMEZONE") or "America/Chicago", new_review_version=new_review_version), timeout=wait_seconds + 25)
+                       environ.get("GAIA_TIMEZONE") or "America/Chicago", new_review_version=new_review_version, editorial_rejection=decision), timeout=wait_seconds + 25)
 
 
 def publish_once(post, environ, *, session=None):
@@ -126,10 +156,15 @@ def main():
     parser.add_argument("--post-output", type=Path, required=True)
     parser.add_argument("--daily-output", type=Path, required=True)
     parser.add_argument("--review-only", action="store_true", help="Real queue exchange and local artifacts only; no public-row write")
-    parser.add_argument("--new-review-version", action="store_true", help="Explicitly select the next version after a failed review; requires --review-only")
+    parser.add_argument("--new-review-version", action="store_true", help="Explicitly select the next version after terminal failure or exact editorial rejection; requires --review-only")
     args = parser.parse_args()
     result = {"mode": "local_primary", "day": args.day.isoformat(), "status": "failed", "production_consumption": False}
     try:
+        decision = review_rejection(os.environ, review_only=args.review_only, new_review_version=args.new_review_version)
+        if decision:
+            result["editorial_rejection"] = decision
+            # Persist intent before any connection/enqueue, including on interruption.
+            write_receipt(args.receipt, result)
         post = asyncio.run(configured_post(args.day, args.version, args.wait_seconds, os.environ, review_only=args.review_only, new_review_version=args.new_review_version))
         # Retain the exact accepted transport result before the public write.
         write_receipt(args.post_output, post)
