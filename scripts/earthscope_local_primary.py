@@ -164,7 +164,8 @@ def main():
         if decision:
             result["editorial_rejection"] = decision
             # Persist intent before any connection/enqueue, including on interruption.
-            write_receipt(args.receipt, result)
+            intent_path = args.receipt.with_name(args.receipt.stem + "-intent" + args.receipt.suffix)
+            write_receipt(intent_path, result)
         post = asyncio.run(configured_post(args.day, args.version, args.wait_seconds, os.environ, review_only=args.review_only, new_review_version=args.new_review_version))
         # Retain the exact accepted transport result before the public write.
         write_receipt(args.post_output, post)

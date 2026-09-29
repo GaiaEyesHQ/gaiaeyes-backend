@@ -118,3 +118,28 @@ def test_rejection_valid_input_and_ordinary_absence():
            "EARTHSCOPE_REVIEW_REJECTION_SHA256": "a" * 64,
            "EARTHSCOPE_REVIEW_REJECTION_REASON": "temporal_scope_broadening"}
     assert runner.review_rejection(env, review_only=True, new_review_version=True) == {**REJECTION, "outcome_sha256": "a" * 64}
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_main_rejection_intent_and_terminal_receipt_are_distinct(monkeypatch, tmp_path, fails):
+    import json
+    import sys
+    receipt = tmp_path / "review-receipt.json"
+    monkeypatch.setattr(sys, "argv", ["review", "--day", DAY.isoformat(),
+        "--receipt", str(receipt), "--post-output", str(tmp_path / "post.json"),
+        "--daily-output", str(tmp_path / "daily.json"), "--review-only", "--new-review-version"])
+    decision = {**REJECTION, "outcome_sha256": "a" * 64}
+    monkeypatch.setattr(runner, "review_rejection", lambda *a, **kw: decision)
+    intent = tmp_path / "review-receipt-intent.json"
+    async def configured(*args, **kwargs):
+        assert json.loads(intent.read_text())["editorial_rejection"] == decision
+        assert not receipt.exists()
+        if fails:
+            raise DraftError("selected_failure")
+        return {"metrics_json": {"writer_source": "local_primary"}}
+    monkeypatch.setattr(runner, "configured_post", configured)
+    monkeypatch.setattr(runner, "daily_json", lambda post: {"test_daily": True})
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    assert runner.main() == (1 if fails else 0)
+    assert json.loads(receipt.read_text())["status"] == ("selected_failure" if fails else "review_ready")
+    assert json.loads(intent.read_text())["status"] == "failed"
