@@ -41,7 +41,7 @@ def anyio_backend():
 
 @pytest.fixture(scope="module")
 def postgres():
-    binary = Path('/Users/gennwu/.codex/cache/gaia-migraine-postgres-17.11/prefix/bin')
+    binary = Path(os.environ.get('GAIA_TEST_POSTGRES_BIN', '/Users/gennwu/.codex/cache/gaia-migraine-postgres-17.11/prefix/bin'))
     if not (binary / 'pg_ctl').is_file():
         pytest.skip('Owned cached PostgreSQL runtime unavailable; no external DSN fallback')
     root = Path(tempfile.mkdtemp(prefix='gaia-g043-', dir='/tmp')).resolve()
