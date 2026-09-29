@@ -956,7 +956,9 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
 
 # ------------ Main orchestration ------------
 
-def main():
+def main(*, review_only=False):
+    if review_only and REEL_VOICE_ENABLED:
+        raise SystemExit("Media review requires narration disabled; no model calls permitted")
     if REEL_REQUIRE_VO and not REEL_VOICE_ENABLED:
         raise SystemExit("REEL_REQUIRE_VO=1 conflicts with REEL_VOICE_ENABLED=0")
     which_ffmpeg()
@@ -965,7 +967,9 @@ def main():
     platform = env_get("REEL_PLATFORM", "default")
     target_day = env_get("TARGET_DAY")
     from services.earthscope_local_primary import load_primary_post
-    primary = load_primary_post()
+    primary = load_primary_post(allow_review=review_only)
+    if review_only and not primary:
+        raise SystemExit("Media review requires an exact local-primary artifact")
     resolved_day = primary["day"] if primary else target_day or _latest_day_from_content(platform)
     post_row = primary or fetch_post_for_day(resolved_day, platform)
 
@@ -1130,4 +1134,7 @@ def main():
     return
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--review-only", action="store_true", help="Render the bound review artifact without narration or publication")
+    main(review_only=parser.parse_args().review_only)

@@ -12,10 +12,22 @@ on:
         type: string
         required: false
       review_version:
-        description: Explicit next version only after a diagnosed failed review; active and returned jobs cannot be replaced
+        description: Explicit next version after failed review or exact editorial rejection; active jobs cannot be replaced
         type: string
         default: "1"
         required: true
+      editorial_rejection_id:
+        description: Optional recorded editorial rejection ID for an exact returned draft
+        type: string
+        required: false
+      rejected_outcome_sha256:
+        description: Exact prior returned outcome hash; all rejection fields required together
+        type: string
+        required: false
+      editorial_rejection_reason:
+        description: temporal_scope_broadening, unsupported_claim, or editorial_quality
+        type: string
+        required: false
       date:
         description: Optional YYYY-MM-DD; must be current in UTC and America/Chicago
         type: string
@@ -66,6 +78,9 @@ jobs:
           REQUESTED_DAY: ${{ inputs.date }}
           REVIEW_AUTHORIZATION_ID: ${{ inputs.review_authorization_id }}
           REVIEW_VERSION: ${{ inputs.review_version }}
+          EARTHSCOPE_REVIEW_REJECTION_ID: ${{ inputs.editorial_rejection_id }}
+          EARTHSCOPE_REVIEW_REJECTION_SHA256: ${{ inputs.rejected_outcome_sha256 }}
+          EARTHSCOPE_REVIEW_REJECTION_REASON: ${{ inputs.editorial_rejection_reason }}
         run: |
           set -euo pipefail
           python - <<'PY'
