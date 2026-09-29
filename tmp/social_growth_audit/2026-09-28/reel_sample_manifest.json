@@ -1,0 +1,41 @@
+{
+  "attempts": [
+    "cv2 ok"
+  ],
+  "frames": [
+    {
+      "time_sec": 0.5,
+      "file": "tmp/social_growth_audit/2026-09-28/frames/frame_0_5s.jpg"
+    },
+    {
+      "time_sec": 2,
+      "file": "tmp/social_growth_audit/2026-09-28/frames/frame_2s.jpg"
+    },
+    {
+      "time_sec": 4,
+      "file": "tmp/social_growth_audit/2026-09-28/frames/frame_4s.jpg"
+    },
+    {
+      "time_sec": 6,
+      "file": "tmp/social_growth_audit/2026-09-28/frames/frame_6s.jpg"
+    },
+    {
+      "time_sec": 8,
+      "file": "tmp/social_growth_audit/2026-09-28/frames/frame_8s.jpg"
+    },
+    {
+      "time_sec": 10,
+      "file": "tmp/social_growth_audit/2026-09-28/frames/frame_10s.jpg"
+    },
+    {
+      "time_sec": 12,
+      "file": "tmp/social_growth_audit/2026-09-28/frames/frame_12s.jpg"
+    }
+  ],
+  "video": {
+    "fps": 30.0,
+    "frame_count": 389.0,
+    "duration": 12.966666666666667
+  },
+  "contact_sheet": "tmp/social_growth_audit/2026-09-28/reel_contact_sheet.jpg"
+}
