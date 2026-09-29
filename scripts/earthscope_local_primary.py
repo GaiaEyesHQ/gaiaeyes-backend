@@ -98,6 +98,7 @@ async def await_post(conn, day, version, worker_id, wait_seconds, policy, tz_nam
 
 
 async def configured_post(day, version, wait_seconds, environ, *, review_only=False, new_review_version=False):
+    require(type(wait_seconds) is int and 1 <= wait_seconds <= 600, "invalid_wait_seconds")
     require(not new_review_version or review_only, "new_version_requires_review_only")
     decision = review_rejection(environ, review_only=review_only, new_review_version=new_review_version)
     policy_env = environ if not review_only else {
