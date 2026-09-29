@@ -1,0 +1,114 @@
+name: EarthScope — Accepted Draft Media Review
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful draft-review run ID
+        required: true
+        type: string
+      artifact_id:
+        description: Exact retained draft-review artifact ID
+        required: true
+        type: string
+      outcome_sha256:
+        description: Editorially accepted outcome SHA256
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: earthscope-media-review
+  cancel-in-progress: false
+jobs:
+  media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      GAIA_TIMEZONE: America/Chicago
+      EARTHSCOPE_WRITER_MODE: local_primary
+      EARTHSCOPE_PRIMARY_POST_PATH: ${{ github.workspace }}/accepted/earthscope_primary_post.json
+      MEDIA_REPO_PATH: ${{ github.workspace }}/review-media
+      LOGO_PATH: ${{ github.workspace }}/bots/earthscope_post/GaiaEyesLogo.png
+      REEL_VOICE_ENABLED: "0"
+      REEL_REQUIRE_VO: "0"
+      REEL_OUT: ${{ github.workspace }}/review-output/reel.mp4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.artifact_id }}
+          run-id: ${{ inputs.source_run }}
+          github-token: ${{ github.token }}
+          path: accepted
+          merge-multiple: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install existing renderer dependencies
+        run: |
+          python -m pip install requests==2.32.4 python-dotenv==1.0.1 Pillow==10.4.0
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Bind accepted artifact and original current day
+        env:
+          ACCEPTED_OUTCOME_SHA256: ${{ inputs.outcome_sha256 }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          from services.earthscope_local_primary import load_primary_post
+          from services.earthscope_writer_contract import sha256
+          post = json.loads(Path(os.environ['EARTHSCOPE_PRIMARY_POST_PATH']).read_text())
+          receipt = json.loads(Path('accepted/review-receipt.json').read_text())
+          expected = os.environ['ACCEPTED_OUTCOME_SHA256']
+          assert re.fullmatch('[0-9a-f]{64}', expected)
+          assert receipt['status'] == 'review_ready' and receipt['production_consumption'] is False
+          assert receipt['publication'] == 'not_requested'
+          assert receipt['post_sha256'] == sha256(post)
+          assert post['metrics_json']['writer_source'] == receipt['writer_source']
+          assert receipt['writer_source']['outcome_sha256'] == expected
+          assert receipt['writer_source']['acceptance_id'] == 'review-only-not-accepted'
+          os.environ['TARGET_DAY'] = post['day']
+          os.environ['EARTHSCOPE_PRIMARY_POST_SHA256'] = receipt['post_sha256']
+          load_primary_post(allow_review=True)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('TARGET_DAY=' + post['day'] + '\n')
+              f.write('EARTHSCOPE_PRIMARY_POST_SHA256=' + receipt['post_sha256'] + '\n')
+          Path('review-output').mkdir()
+          Path('review-output/binding.json').write_text(json.dumps({
+              'day': post['day'], 'post_sha256': receipt['post_sha256'],
+              'outcome_sha256': expected, 'model_calls': 0, 'publication': False}, indent=2))
+          PY
+      - name: Read production background assets
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ secrets.MEDIA_REPO_OWNER }}/${{ secrets.MEDIA_REPO_NAME }}
+          token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+          path: review-media
+          persist-credentials: false
+      - name: Render exact draft cards and clean reel backgrounds
+        run: python bots/earthscope_post/gaia_eyes_viral_bot.py --dry-run
+      - name: Render music-only review reel
+        working-directory: bots/earthscope_post
+        env:
+          REEL_BED_URL: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/audio/beds/bed01.wav
+        run: python reel_builder.py --review-only
+      - name: Validate encoded video and audio
+        run: |
+          ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_type,codec_name,width,height -of json "$REEL_OUT" > review-output/probe.json
+          jq -e '(.streams | map(select(.codec_type == "video" and .width == 1080 and .height == 1920)) | length) == 1 and (.streams | map(select(.codec_type == "audio")) | length) == 1 and (.format.duration | tonumber) >= 3 and (.format.size | tonumber) > 0' review-output/probe.json
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: earthscope-media-review-${{ github.run_id }}
+          path: |
+            review-output/
+            review-media/images/
+            bots/earthscope_post/tmp_reel/hook.jpg
+            bots/earthscope_post/tmp_reel/story_*.jpg
+          retention-days: 14
+          if-no-files-found: error
