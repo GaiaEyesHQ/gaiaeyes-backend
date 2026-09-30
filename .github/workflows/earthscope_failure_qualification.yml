@@ -1,0 +1,39 @@
+name: EarthScope — Isolated Consumer Failure Qualification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  failure-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install existing test dependencies
+        run: python -m pip install pytest anyio 'psycopg[binary]==3.2.12' psycopg_pool==3.2.3 pydantic==2.8.2 pydantic-settings==2.4.0 requests==2.32.4 fastapi==0.115.0 httpx==0.27.2 'PyJWT[crypto]'
+      - name: Qualify real isolated database failures
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          # Import-only setting; tests connect solely to their owned Unix socket.
+          DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
+        run: |
+          export GAIA_TEST_POSTGRES_BIN="$(pg_config --bindir)"
+          test -x "$GAIA_TEST_POSTGRES_BIN/pg_ctl"
+          python -m pytest tests/scripts/test_earthscope_hosted_failure.py -q --junitxml=failure-qualification.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as E
+          suites = E.parse('failure-qualification.xml').getroot().findall('testsuite')
+          assert sum(int(s.attrib['tests']) for s in suites) == 2
+          assert all(int(s.attrib.get(k, 0)) == 0 for s in suites for k in ('failures', 'errors', 'skipped'))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: earthscope-failure-qualification-${{ github.run_id }}
+          path: failure-qualification.xml
+          if-no-files-found: error

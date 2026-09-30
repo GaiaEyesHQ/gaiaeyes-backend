@@ -1,0 +1,686 @@
+[
+  {
+    "id": 904,
+    "day": "2026-09-29",
+    "platform": "default",
+    "title": "Energy Jumpy But Tired?",
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.0 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+    "created_at": "2026-09-29T16:52:08.707987+00:00",
+    "updated_at": "2026-09-29T16:52:08.707987+00:00",
+    "hook": "Standard energy field\u2014consistency wins today",
+    "signal": "The field looks fairly middle-of-the-road today.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.0 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 2.0,
+    "bz_min": -2.99,
+    "schumann_value_hz": 7.75,
+    "solar_wind_kms": 286.0,
+    "cmes_24h": 2.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.0 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.0 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 905,
+    "day": "2026-09-29",
+    "platform": "ig",
+    "title": "Energy Jumpy But Tired?",
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.0 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+    "created_at": "2026-09-29T16:52:08.707987+00:00",
+    "updated_at": "2026-09-29T16:52:08.707987+00:00",
+    "hook": "Standard energy field\u2014consistency wins today",
+    "signal": "The field looks fairly middle-of-the-road today.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.0 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 2.0,
+    "bz_min": -2.99,
+    "schumann_value_hz": 7.75,
+    "solar_wind_kms": 286.0,
+    "cmes_24h": 2.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.0 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.0 nT \u2022 Schumann 7.75 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 902,
+    "day": "2026-09-28",
+    "platform": "default",
+    "title": "Mood Feeling Hard To Place?",
+    "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "created_at": "2026-09-28T18:34:19.078639+00:00",
+    "updated_at": "2026-09-28T18:34:19.078639+00:00",
+    "hook": "Mood Feeling Hard To Place?",
+    "signal": "Signals are sitting in a fairly ordinary range today.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 2.0,
+    "bz_min": -2.2,
+    "schumann_value_hz": 7.7,
+    "solar_wind_kms": 326.0,
+    "cmes_24h": 5.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 903,
+    "day": "2026-09-28",
+    "platform": "ig",
+    "title": "Mood Feeling Hard To Place?",
+    "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "created_at": "2026-09-28T18:34:19.078639+00:00",
+    "updated_at": "2026-09-28T18:34:19.078639+00:00",
+    "hook": "Mood Feeling Hard To Place?",
+    "signal": "Signals are sitting in a fairly ordinary range today.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 2.0,
+    "bz_min": -2.2,
+    "schumann_value_hz": 7.7,
+    "solar_wind_kms": 326.0,
+    "cmes_24h": 5.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 900,
+    "day": "2026-09-27",
+    "platform": "default",
+    "title": "Feeling Different Today?",
+    "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+    "created_at": "2026-09-27T15:37:39.233827+00:00",
+    "updated_at": "2026-09-27T15:37:39.233827+00:00",
+    "hook": "Feeling Different Today?",
+    "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+    "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+    "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+    "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "kp_max_24h": 4.0,
+    "bz_min": -3.85,
+    "schumann_value_hz": 7.73,
+    "solar_wind_kms": 399.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 901,
+    "day": "2026-09-27",
+    "platform": "ig",
+    "title": "Feeling Different Today?",
+    "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+    "created_at": "2026-09-27T15:37:39.233827+00:00",
+    "updated_at": "2026-09-27T15:37:39.233827+00:00",
+    "hook": "Feeling Different Today?",
+    "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+    "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+    "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+    "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "kp_max_24h": 4.0,
+    "bz_min": -3.85,
+    "schumann_value_hz": 7.73,
+    "solar_wind_kms": 399.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 898,
+    "day": "2026-09-26",
+    "platform": "default",
+    "title": "Feeling Different Today?",
+    "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+    "created_at": "2026-09-26T14:57:08.31608+00:00",
+    "updated_at": "2026-09-26T14:57:08.31608+00:00",
+    "hook": "Feeling Different Today?",
+    "signal": "The field has a choppier edge today.",
+    "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+    "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+    "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "kp_max_24h": 4.0,
+    "bz_min": -5.4,
+    "schumann_value_hz": 7.56,
+    "solar_wind_kms": 474.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 899,
+    "day": "2026-09-26",
+    "platform": "ig",
+    "title": "Feeling Different Today?",
+    "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+    "created_at": "2026-09-26T14:57:08.31608+00:00",
+    "updated_at": "2026-09-26T14:57:08.31608+00:00",
+    "hook": "Feeling Different Today?",
+    "signal": "The field has a choppier edge today.",
+    "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+    "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+    "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "kp_max_24h": 4.0,
+    "bz_min": -5.4,
+    "schumann_value_hz": 7.56,
+    "solar_wind_kms": 474.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 896,
+    "day": "2026-09-25",
+    "platform": "default",
+    "title": "Head Pressure Building?",
+    "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+    "created_at": "2026-09-25T15:47:27.903825+00:00",
+    "updated_at": "2026-09-25T15:47:27.903825+00:00",
+    "hook": "Head Pressure Building?",
+    "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+    "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+    "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+    "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "kp_max_24h": 4.0,
+    "bz_min": -8.0,
+    "schumann_value_hz": 7.74,
+    "solar_wind_kms": 457.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 897,
+    "day": "2026-09-25",
+    "platform": "ig",
+    "title": "Head Pressure Building?",
+    "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+    "created_at": "2026-09-25T15:47:27.903825+00:00",
+    "updated_at": "2026-09-25T15:47:27.903825+00:00",
+    "hook": "Head Pressure Building?",
+    "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+    "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+    "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+    "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "kp_max_24h": 4.0,
+    "bz_min": -8.0,
+    "schumann_value_hz": 7.74,
+    "solar_wind_kms": 457.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 894,
+    "day": "2026-09-24",
+    "platform": "default",
+    "title": "Restless For No Clear Reason?",
+    "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.3 \u2022 Bz -13.0 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "created_at": "2026-09-24T15:47:37.289759+00:00",
+    "updated_at": "2026-09-24T15:47:37.289759+00:00",
+    "hook": "Restless For No Clear Reason?",
+    "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+    "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+    "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+    "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.3 \u2022 Bz -13.0 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "kp_max_24h": 4.33,
+    "bz_min": -12.98,
+    "schumann_value_hz": 7.7,
+    "solar_wind_kms": 381.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.3 \u2022 Bz -13.0 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.3 \u2022 Bz -13.0 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 895,
+    "day": "2026-09-24",
+    "platform": "ig",
+    "title": "Restless For No Clear Reason?",
+    "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.3 \u2022 Bz -13.0 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "created_at": "2026-09-24T15:47:37.289759+00:00",
+    "updated_at": "2026-09-24T15:47:37.289759+00:00",
+    "hook": "Restless For No Clear Reason?",
+    "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+    "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+    "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+    "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.3 \u2022 Bz -13.0 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "tone": "unsettled",
+    "kp_max_24h": 4.33,
+    "bz_min": -12.98,
+    "schumann_value_hz": 7.7,
+    "solar_wind_kms": 381.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.3 \u2022 Bz -13.0 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.3 \u2022 Bz -13.0 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 892,
+    "day": "2026-09-23",
+    "platform": "default",
+    "title": "Tiny Symptoms Still Count",
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.0 \u2022 Bz -3.5 nT \u2022 Schumann 7.65 Hz (snapshot at write time)",
+    "created_at": "2026-09-23T15:24:41.02738+00:00",
+    "updated_at": "2026-09-23T15:24:41.02738+00:00",
+    "hook": "Standard energy field\u2014consistency wins today",
+    "signal": "The background looks steady enough to keep the day simple.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.0 \u2022 Bz -3.5 nT \u2022 Schumann 7.65 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 1.0,
+    "bz_min": -3.48,
+    "schumann_value_hz": 7.65,
+    "solar_wind_kms": 288.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.0 \u2022 Bz -3.5 nT \u2022 Schumann 7.65 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.0 \u2022 Bz -3.5 nT \u2022 Schumann 7.65 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 893,
+    "day": "2026-09-23",
+    "platform": "ig",
+    "title": "Tiny Symptoms Still Count",
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.0 \u2022 Bz -3.5 nT \u2022 Schumann 7.65 Hz (snapshot at write time)",
+    "created_at": "2026-09-23T15:24:41.02738+00:00",
+    "updated_at": "2026-09-23T15:24:41.02738+00:00",
+    "hook": "Standard energy field\u2014consistency wins today",
+    "signal": "The background looks steady enough to keep the day simple.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.0 \u2022 Bz -3.5 nT \u2022 Schumann 7.65 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 1.0,
+    "bz_min": -3.48,
+    "schumann_value_hz": 7.65,
+    "solar_wind_kms": 288.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.0 \u2022 Bz -3.5 nT \u2022 Schumann 7.65 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.0 \u2022 Bz -3.5 nT \u2022 Schumann 7.65 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 890,
+    "day": "2026-09-22",
+    "platform": "default",
+    "title": "Battery dipping early?",
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "created_at": "2026-09-22T15:29:17.055366+00:00",
+    "updated_at": "2026-09-22T15:29:17.055366+00:00",
+    "hook": "Standard energy field\u2014consistency wins today",
+    "signal": "The field looks fairly middle-of-the-road today.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 2.0,
+    "bz_min": -3.22,
+    "schumann_value_hz": 7.69,
+    "solar_wind_kms": 301.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 891,
+    "day": "2026-09-22",
+    "platform": "ig",
+    "title": "Battery dipping early?",
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "created_at": "2026-09-22T15:29:17.055366+00:00",
+    "updated_at": "2026-09-22T15:29:17.055366+00:00",
+    "hook": "Standard energy field\u2014consistency wins today",
+    "signal": "The field looks fairly middle-of-the-road today.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 2.0,
+    "bz_min": -3.22,
+    "schumann_value_hz": 7.69,
+    "solar_wind_kms": 301.0,
+    "cmes_24h": 0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 2.0 \u2022 Bz -3.2 nT \u2022 Schumann 7.69 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 887,
+    "day": "2026-09-21",
+    "platform": "default",
+    "title": "Feeling Different Today?",
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+    "created_at": "2026-09-21T16:57:35.927604+00:00",
+    "updated_at": "2026-09-21T19:30:14.690725+00:00",
+    "hook": "Standard energy field\u2014consistency wins today",
+    "signal": "The field looks fairly middle-of-the-road today.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 1.67,
+    "bz_min": -3.2,
+    "schumann_value_hz": 7.76,
+    "solar_wind_kms": 337.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  },
+  {
+    "id": 889,
+    "day": "2026-09-21",
+    "platform": "ig",
+    "title": "Feeling Different Today?",
+    "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+    "created_at": "2026-09-21T16:57:35.927604+00:00",
+    "updated_at": "2026-09-21T19:30:14.690725+00:00",
+    "hook": "Standard energy field\u2014consistency wins today",
+    "signal": "The field looks fairly middle-of-the-road today.",
+    "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+    "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+    "voiceover": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+    "tone": "neutral",
+    "kp_max_24h": 1.67,
+    "bz_min": -3.2,
+    "schumann_value_hz": 7.76,
+    "solar_wind_kms": 337.0,
+    "cmes_24h": 1.0,
+    "flares_24h": 0,
+    "social_variants": {
+      "ig": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      },
+      "default": {
+        "caption": "Standard energy field\u2014consistency wins today. \u2014 Kp 1.7 \u2022 Bz -3.2 nT \u2022 Schumann 7.76 Hz (snapshot at write time)",
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+      }
+    },
+    "duplicate_beats": false,
+    "missing_reel_story_keys": [],
+    "sources": {
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true,
+      "api.v1.space.forecast.outlook": true
+    }
+  }
+]
