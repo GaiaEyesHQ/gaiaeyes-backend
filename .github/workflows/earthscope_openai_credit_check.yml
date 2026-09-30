@@ -1,0 +1,41 @@
+name: EarthScope — OpenAI Credit Check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  credit-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify daily writer API access once
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          WRITER_MODEL: ${{ secrets.OPENAI_MODEL_PUBLIC_WRITER || vars.OPENAI_MODEL_PUBLIC_WRITER || secrets.OPENAI_MODEL_DEFAULT || vars.OPENAI_MODEL_DEFAULT || secrets.OPENAI_MODEL || vars.OPENAI_MODEL }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          key, model = os.environ.get("OPENAI_API_KEY"), os.environ.get("WRITER_MODEL")
+          if not key or not model:
+              raise SystemExit("Daily writer key or model is missing; no request sent")
+          payload = {"model": model, "messages": [{"role": "user", "content": "Reply OK."}], "max_completion_tokens": 128}
+          request = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=json.dumps(payload).encode(), headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}, method="POST")
+          try:
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  result = json.load(response)
+              receipt = {"status": "api_access_restored", "requests": 1, "publication": False, "usage": {k: result.get("usage", {}).get(k) for k in ("prompt_tokens", "completion_tokens", "total_tokens")}}
+          except urllib.error.HTTPError as error:
+              try:
+                  code = json.loads(error.read()).get("error", {}).get("code")
+              except Exception:
+                  code = None
+              allowed = {"credit_balance_exhausted", "insufficient_quota", "invalid_api_key", "model_not_found", "rate_limit_exceeded", "organization_spend_limit_exceeded", "project_spend_limit_exceeded"}
+              receipt = {"status": "api_request_failed", "http_status": error.code, "code": code if code in allowed else "other_provider_error", "requests": 1, "publication": False}
+          except Exception:
+              receipt = {"status": "transport_failed", "requests": 1, "publication": False}
+          print(json.dumps(receipt))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("Daily writer API check: " + json.dumps(receipt) + "\n")
+          if receipt["status"] != "api_access_restored":
+              raise SystemExit(1)
+          PY
