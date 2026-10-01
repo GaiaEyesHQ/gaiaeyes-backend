@@ -1,4 +1,10 @@
 import java.util.Properties
+import javax.inject.Inject
+import org.gradle.api.DefaultTask
+import org.gradle.api.configuration.BuildFeatures
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.TaskAction
 
 plugins {
     id("com.android.application")
@@ -35,6 +41,100 @@ val firebaseProjectId = runtimeValue("FIREBASE_PROJECT_ID")
 val firebaseApplicationId = runtimeValue("FIREBASE_APPLICATION_ID")
 val firebaseApiKey = runtimeValue("FIREBASE_API_KEY")
 val firebaseGcmSenderId = runtimeValue("FIREBASE_GCM_SENDER_ID")
+
+// Unsigned packaging is an explicit invocation choice, never a saved default.
+val unsignedCandidate = gradle.startParameter.projectProperties["gaiaUnsignedCandidate"]?.let {
+    it.toBooleanStrictOrNull()
+        ?: throw GradleException("gaiaUnsignedCandidate must be true or false.")
+} ?: false
+val releaseSigningEnabled = gradle.startParameter.projectProperties["gaiaReleaseSigning"]?.let {
+    it.toBooleanStrictOrNull()
+        ?: throw GradleException("gaiaReleaseSigning must be true or false.")
+} ?: false
+
+abstract class ReleaseBuildFeatures {
+    @get:Inject
+    abstract val buildFeatures: BuildFeatures
+}
+
+// Check scope/cache before resolving any private-file references or contents.
+if (releaseSigningEnabled) {
+    if (unsignedCandidate) {
+        throw GradleException("gaiaReleaseSigning and gaiaUnsignedCandidate cannot both be true.")
+    }
+    val allowedSigningTasks = setOf("bundleRelease", "assembleRelease", "validateReleaseSigning")
+    val requestedTasks = gradle.startParameter.taskNames
+    if (requestedTasks.isEmpty() || requestedTasks.any {
+            val task = it.removePrefix(":")
+            task !in allowedSigningTasks && task !in allowedSigningTasks.map { name -> "app:$name" }
+        }
+    ) {
+        throw GradleException(
+            "gaiaReleaseSigning is restricted to app bundleRelease, assembleRelease, or " +
+                "validateReleaseSigning invocations. Run Debug/test/help and other tasks separately.",
+        )
+    }
+    val configurationCache = objects.newInstance(ReleaseBuildFeatures::class.java)
+        .buildFeatures.configurationCache
+    if (configurationCache.active.get() || configurationCache.requested.orNull == true) {
+        throw GradleException(
+            "Release signing requires --no-configuration-cache. No private signing files were read.",
+        )
+    }
+}
+
+val releaseVersionCodeText = runtimeValue("ANDROID_VERSION_CODE")
+val releaseVersionName = runtimeValue("ANDROID_VERSION_NAME")
+val releaseVersionCode = releaseVersionCodeText.toIntOrNull()
+val releaseSigningProblems = mutableListOf<String>()
+if (!unsignedCandidate && !releaseSigningEnabled) {
+    releaseSigningProblems += "Signed release requires -PgaiaReleaseSigning=true --no-configuration-cache."
+}
+if (!unsignedCandidate || releaseVersionCodeText.isNotBlank()) {
+    if (!releaseVersionCodeText.matches(Regex("[0-9]+")) ||
+        releaseVersionCode == null || releaseVersionCode !in 1..2_100_000_000
+    ) {
+        releaseSigningProblems += "ANDROID_VERSION_CODE must be an explicit integer from 1 to 2100000000."
+    }
+}
+if (!unsignedCandidate && releaseVersionName.isBlank()) {
+    releaseSigningProblems += "ANDROID_VERSION_NAME is required."
+}
+
+fun releaseFile(setting: String): java.io.File? {
+    val path = runtimeValue(setting)
+    if (path.isBlank()) {
+        releaseSigningProblems += "$setting is required."
+        return null
+    }
+    return rootProject.file(path).takeIf { it.isFile && it.canRead() } ?: run {
+        releaseSigningProblems += "$setting must reference a readable existing file."
+        null
+    }
+}
+
+fun releasePassword(setting: String): String? {
+    val file = releaseFile(setting) ?: return null
+    val password = try {
+        providers.fileContents(layout.projectDirectory.file(file.absolutePath))
+            .asText.get().trimEnd('\r', '\n')
+    } catch (_: Exception) {
+        releaseSigningProblems += "$setting could not be read."
+        return null
+    }
+    if (password.isEmpty() || password.contains('\n') || password.contains('\r')) {
+        releaseSigningProblems += "$setting must contain one nonempty password line."
+        return null
+    }
+    return password
+}
+
+val uploadKeystore = if (releaseSigningEnabled) releaseFile("ANDROID_UPLOAD_KEYSTORE_FILE") else null
+val uploadKeyAlias = if (!releaseSigningEnabled) "" else runtimeValue("ANDROID_UPLOAD_KEY_ALIAS").also {
+    if (it.isBlank()) releaseSigningProblems += "ANDROID_UPLOAD_KEY_ALIAS is required."
+}
+val uploadStorePassword = if (releaseSigningEnabled) releasePassword("ANDROID_UPLOAD_STORE_PASSWORD_FILE") else null
+val uploadKeyPassword = if (releaseSigningEnabled) releasePassword("ANDROID_UPLOAD_KEY_PASSWORD_FILE") else null
 
 android {
     namespace = "com.gaiaeyes.app"
@@ -95,8 +195,20 @@ android {
         )
     }
 
+    signingConfigs {
+        if (releaseSigningEnabled && releaseSigningProblems.isEmpty()) {
+            create("playUpload") {
+                storeFile = uploadKeystore
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("playUpload")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -113,6 +225,16 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.outputs.forEach { output ->
+            // Missing/invalid signed-release inputs fail before compilation below.
+            output.versionCode.set(releaseVersionCode?.takeIf { it in 1..2_100_000_000 } ?: 1)
+            output.versionName.set(releaseVersionName.ifBlank { "0.1.0-dev" })
         }
     }
 }
@@ -158,28 +280,62 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
-val validateReleaseConfiguration by tasks.registering {
-    group = "verification"
-    description = "Fails release builds when secure account access is not configured."
-    notCompatibleWithConfigurationCache("Reads release configuration resolved by this build script")
+abstract class ValidateReleaseConfiguration : DefaultTask() {
+    @get:Input
+    abstract val missingConfigurationNames: ListProperty<String>
 
-    doLast {
-        if (
-            supabaseUrl.isBlank() ||
-            supabaseAnonKey.isBlank() ||
-            firebaseProjectId.isBlank() ||
-            firebaseApplicationId.isBlank() ||
-            firebaseApiKey.isBlank() ||
-            firebaseGcmSenderId.isBlank()
-        ) {
+    @TaskAction
+    fun validate() {
+        val missing = missingConfigurationNames.get()
+        if (missing.isNotEmpty()) {
             throw GradleException(
-                "Release account or notification configuration is missing. Set Supabase and Firebase " +
-                    "Android values outside Git before building.",
+                "Release account or notification configuration is missing: " +
+                    missing.joinToString(", ") +
+                    ". Set these Android values outside Git before building.",
             )
         }
     }
 }
 
+val validateReleaseConfiguration by tasks.registering(ValidateReleaseConfiguration::class) {
+    group = "verification"
+    description = "Fails release builds when secure account access is not configured."
+    missingConfigurationNames.set(
+        mapOf(
+            "SUPABASE_URL (or SUPABASE_REST_URL)" to supabaseUrl,
+            "SUPABASE_ANON_KEY" to supabaseAnonKey,
+            "FIREBASE_PROJECT_ID" to firebaseProjectId,
+            "FIREBASE_APPLICATION_ID" to firebaseApplicationId,
+            "FIREBASE_API_KEY" to firebaseApiKey,
+            "FIREBASE_GCM_SENDER_ID" to firebaseGcmSenderId,
+        ).filterValues { it.isBlank() }.keys.toList(),
+    )
+}
+
+abstract class ValidateReleaseSigning : DefaultTask() {
+    @get:Input
+    abstract val configurationProblems: ListProperty<String>
+
+    @TaskAction
+    fun validate() {
+        val problems = configurationProblems.get()
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                "Release signing/version configuration is incomplete:\n" +
+                    problems.joinToString("\n") +
+                    "\nUse the existing Play upload key and intended release version. " +
+                    "For unsigned local packaging only, explicitly pass -PgaiaUnsignedCandidate=true.",
+            )
+        }
+    }
+}
+
+val validateReleaseSigning by tasks.registering(ValidateReleaseSigning::class) {
+    group = "verification"
+    description = "Checks existing upload-key references and explicit release version inputs."
+    configurationProblems.set(releaseSigningProblems)
+}
+
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
-    dependsOn(validateReleaseConfiguration)
+    dependsOn(validateReleaseConfiguration, validateReleaseSigning)
 }
