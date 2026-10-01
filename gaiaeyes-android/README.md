@@ -148,7 +148,7 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   ./gradlew :app:testDebugUnitTest \
   --tests 'com.gaiaeyes.app.data.Billing*Test' \
   --tests 'com.gaiaeyes.app.core.network.BillingApiClientTest'
-ANDROID_HOME="/Users/gennwu/Library/Android/sdk" \
+ANDROID_HOME="$HOME/Library/Android/sdk" \
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   ./gradlew -p visual-harness :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.gaiaeyes.app.visualharness.BillingSettingsScreenTest
