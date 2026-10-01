@@ -38,6 +38,8 @@ Native Android foundation for Gaia Eyes.
 - Real unauthenticated `GET /health` check against the Gaia Eyes backend
 - Manual dependency wiring for Supabase auth, Room, DataStore, WorkManager,
   and Health Connect
+- Settings > Gaia Eyes Plus: RevenueCat Android purchase/restore, Play-localized
+  monthly/yearly prices, account-isolated membership refresh and explicit pending/error states
 
 HRV remains deferred: Health Connect RMSSD must not be written as Gaia Eyes'
 existing SDNN sample type. The Health Connect import is opt-in and the rest of
@@ -102,8 +104,70 @@ REVENUECAT_PLUS_YEARLY_PRODUCT_ID=
 ```
 
 Do not commit production keys, signing files, or a populated
-`local.properties`. The RevenueCat values are reserved placeholders until the
-Google Play products and Android RevenueCat app exist.
+`local.properties`. Billing uses these existing RevenueCat configuration names;
+no product identifiers or prices are supplied by the source. Configure the existing
+Android app and Play products, with the shared `plus` entitlement, before store QA.
+
+## Android Plus billing
+
+The native adapter uses RevenueCat `purchases:10.15.1` and the Supabase account UUID
+as its App User ID, including for a guest account. Settings recommends attaching a
+recovery email; it does not add a new purchase/account gate. Store operations and
+identity transitions are serialized. Signing out clears visible membership state
+immediately; an in-flight store callback cannot grant access to a replacement account.
+Transient auth errors preserve identity only while the same account is still present.
+
+Use the existing `REVENUECAT_PLUS_MONTHLY_PRODUCT_ID` and
+`REVENUECAT_PLUS_YEARLY_PRODUCT_ID` values. A value may identify a Play subscription
+or its exact `subscription:base-plan` pair. A subscription-only value must resolve
+to exactly one matching monthly/yearly base plan; ambiguous, unavailable or wrong-duration
+products are not offered. The UI displays the store's localized regular price.
+RevenueCat selects its eligible default offer, whose final price and renewal terms
+Google Play presents before confirmation. No offerings, prices or product IDs are invented.
+
+Missing SDK configuration leaves purchase and restore visibly unavailable. Missing
+products leave purchase unavailable but still allow an explicitly requested restore
+when the SDK is configured. The app never automatically calls restore. Users should
+restore while signed into their original Gaia Eyes account; RevenueCat's existing
+restore/transfer policy must be confirmed during platform acceptance.
+
+`GET /v1/billing/entitlements` supplies account membership status; SDK confirmation
+and backend membership are separate. A confirmed receipt with an unrefreshed backend
+shows syncing, and never writes a client-side entitlement. Refresh runs on account
+changes, when Plus settings resumes, after purchase/restore, and on explicit request.
+Unknown membership blocks a new purchase until refreshed. Existing membership leads
+to management of the existing subscription rather than a second purchase. This adds
+Android billing parity without changing free access, paid gating, prices, or the
+existing iOS/web checkout surfaces. MainActivity uses `singleTop` to support payment
+verification outside the app while retaining its deep-link routing.
+
+Focused offline verification (no SDK configuration, store or production requests):
+
+```sh
+JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+  ./gradlew :app:testDebugUnitTest \
+  --tests 'com.gaiaeyes.app.data.Billing*Test' \
+  --tests 'com.gaiaeyes.app.core.network.BillingApiClientTest'
+ANDROID_HOME="/Users/gennwu/Library/Android/sdk" \
+JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+  ./gradlew -p visual-harness :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.gaiaeyes.app.visualharness.BillingSettingsScreenTest
+```
+
+Before release, verify the existing Android SDK key/app/package, Play product/base-plan
+mapping and shared entitlement, webhook delivery, intended restore/transfer behavior,
+and signed internal-track tester access. Device/store checks still include purchase,
+cancellation, pending payment, approval/decline, restore, account switching, guest
+email attachment, cross-platform membership, renewal/expiry/refund and returning from
+external payment verification or auth/quick-log links. Synthetic tests establish source
+behavior, not purchase, physical-device or store acceptance. No release package is
+produced by the focused unit/UI checks above; the UI harness package is isolated.
+
+SDK references: [installation](https://www.revenuecat.com/docs/getting-started/installation/android),
+[identity](https://www.revenuecat.com/docs/customers/identifying-customers),
+[restore](https://www.revenuecat.com/docs/getting-started/restoring-purchases).
+
+## Release configuration
 
 Release builds fail before compilation when required account/Firebase client
 configuration is missing. The signing/version check below runs independently;

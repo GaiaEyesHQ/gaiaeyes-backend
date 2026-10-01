@@ -1,6 +1,17 @@
 package com.gaiaeyes.app.core.di
 
 import android.content.Context
+import android.app.Activity
+import com.gaiaeyes.app.BuildConfig
+import com.gaiaeyes.app.data.BillingConfig
+import com.gaiaeyes.app.data.BillingController
+import com.gaiaeyes.app.data.PlusPlan
+import com.gaiaeyes.app.data.RevenueCatBillingStore
+import com.gaiaeyes.app.data.readBillingForAccount
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.gaiaeyes.app.core.auth.AuthRepository
 import com.gaiaeyes.app.core.network.GaiaApiClient
 import com.gaiaeyes.app.core.notifications.NotificationNavigationCoordinator
@@ -44,6 +55,34 @@ class AppContainer(
         supabaseUrl = supabaseUrl,
         supabaseAnonKey = supabaseAnonKey,
     )
+    private val billingScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val billingConfig = BillingConfig(
+        BuildConfig.REVENUECAT_ANDROID_API_KEY,
+        mapOf(
+            PlusPlan.MONTHLY to BuildConfig.REVENUECAT_PLUS_MONTHLY_PRODUCT_ID,
+            PlusPlan.YEARLY to BuildConfig.REVENUECAT_PLUS_YEARLY_PRODUCT_ID,
+        ),
+    )
+    private val billingStore = RevenueCatBillingStore(context, billingConfig)
+    val billingController = BillingController(
+        config = billingConfig,
+        store = billingStore,
+        scope = billingScope,
+        currentAccountId = authRepository::currentAccountId,
+        readBackend = { account ->
+            readBillingForAccount(account, authRepository::currentAccountId, authRepository::accessToken,
+                authRepository::refreshAccessToken, apiClient::billingEntitlements)
+        },
+    )
+
+    init {
+        billingScope.launch { authRepository.authState.collect(billingController::authChanged) }
+    }
+
+    fun purchasePlus(activity: Activity, productId: String) {
+        billingController.purchase(productId) { billingStore.purchase(activity, productId) }
+    }
+
     val healthRepository: HealthRepository = HealthRepository(healthService = apiClient)
     val healthConnectRepository = HealthConnectRepository(
         context = context.applicationContext,

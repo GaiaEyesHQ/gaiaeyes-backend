@@ -240,6 +240,7 @@ androidComponents {
 }
 
 dependencies {
+    implementation("com.revenuecat.purchases:purchases:10.15.1")
     val composeBom = platform("androidx.compose:compose-bom:2026.04.01")
 
     implementation(composeBom)
