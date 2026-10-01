@@ -105,9 +105,84 @@ Do not commit production keys, signing files, or a populated
 `local.properties`. The RevenueCat values are reserved placeholders until the
 Google Play products and Android RevenueCat app exist.
 
-Release builds fail before compilation when the Supabase URL or public anon
-key is missing. This prevents publishing a build that cannot start secure
-account access.
+Release builds fail before compilation when required account/Firebase client
+configuration is missing. The signing/version check below runs independently;
+unsigned candidates retain the account/Firebase check.
+
+## Release signing and version inputs
+
+Use the **existing** upload key for the Play app `com.gaiaeyes.app`. No task
+creates or resets a key, changes Play settings, or chooses a release version.
+Provide these names through environment variables or ignored `local.properties`
+(environment variables take precedence, including an explicitly empty value):
+
+| Input | Required value |
+| --- | --- |
+| `ANDROID_VERSION_CODE` | Intended Play build code, an integer from 1 to 2100000000; confirm it is unused and greater than prior uploaded codes. |
+| `ANDROID_VERSION_NAME` | Intended nonempty user-visible release version. |
+| `ANDROID_UPLOAD_KEYSTORE_FILE` | Path to the existing upload keystore. |
+| `ANDROID_UPLOAD_KEY_ALIAS` | Existing key alias in that keystore. |
+| `ANDROID_UPLOAD_STORE_PASSWORD_FILE` | Path to a private UTF-8 file containing the keystore password. |
+| `ANDROID_UPLOAD_KEY_PASSWORD_FILE` | Path to a private UTF-8 file containing the key password. |
+
+Keep the keystore and password files outside Git. File references can be absolute
+or relative to `gaiaeyes-android/`. Passwords are read as one nonempty line; a
+trailing CR/LF is removed and spaces are preserved. Do not paste passwords into
+commands, tracked files, reports, or logs. The validation task records only
+configuration problem descriptions, not password values. Gradle/Android still
+need the password values internally when signing. Private-file loading requires
+the explicit command-line flag `-PgaiaReleaseSigning=true` and is restricted to
+`bundleRelease`, `assembleRelease`, or `validateReleaseSigning` (optionally
+qualified with `:app:`). Run other tasks separately. Configuration caching must
+be disabled: the build checks Gradle's effective cache state and fails **before
+reading private files** if caching is requested or active. Saved signing flags
+cannot opt in. Ordinary Debug/test/help invocations never load these files or
+create the upload signing configuration, even when references are configured.
+
+Check the supplied inputs without compiling or signing:
+
+```sh
+./gradlew -PgaiaReleaseSigning=true --no-configuration-cache :app:validateReleaseSigning
+```
+
+Build with those same inputs after the selected version and upload identity have
+been confirmed:
+
+```sh
+./gradlew -PgaiaReleaseSigning=true --no-configuration-cache :app:bundleRelease :app:assembleRelease
+```
+
+The release variant uses the supplied version and `playUpload` signing config;
+Debug keeps its existing development version and debug signing. Missing inputs,
+unreadable files, empty password files, and invalid build codes fail the release
+check. This configuration check does **not** authenticate a keystore, verify its
+alias/password, compare its certificate with Play, or query prior Play versions;
+the actual signing and Play acceptance steps remain required. The explicit
+preflight above reads the password files to check their shape and configure
+signing, but does not compile, sign, or open the keystore contents. A release
+invocation without either explicit signing mode or unsigned mode fails its guard.
+
+For deliberately **unsigned local candidates**, opt in on that invocation:
+
+```sh
+./gradlew -PgaiaUnsignedCandidate=true :app:bundleRelease :app:assembleRelease
+```
+
+This bypasses upload-key loading/signing only. With no version inputs, it retains
+the existing `0.1.0-dev`/code 1; explicitly supplied build codes must still be valid.
+Only command-line `-PgaiaUnsignedCandidate=true` enables this mode; saved Gradle
+properties, environment-backed project properties, and system properties cannot.
+It never loads password files, even when signing references are saved locally.
+Combining it with `-PgaiaReleaseSigning=true` is rejected before private-file access.
+Outputs use the usual `app/build/outputs/bundle/release/` and
+`app/build/outputs/apk/release/` directories, so retain any accepted package before
+another build. Label the AAB as unsigned when copying it for review; the APK is
+named `app-release-unsigned.apk`. Neither is a signed distribution candidate.
+
+See Android's [app signing](https://developer.android.com/studio/publish/app-signing)
+and [versioning](https://developer.android.com/studio/publish/versioning) guidance.
+
+## Account and location QA
 
 For magic-link testing, add `gaiaeyes://auth/callback` to the Supabase Auth
 redirect allowlist. The Android app handles that callback without retaining the
