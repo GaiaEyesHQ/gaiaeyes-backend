@@ -10,12 +10,15 @@ class ExploreRepository(
     private val cache: ExploreCacheStore,
     private val accessToken: suspend () -> String,
     private val currentAccountId: () -> String?,
+    private val trackAccountOperation: suspend (String) -> Unit = {},
 ) {
     suspend fun cached(accountId: String): ExploreSnapshot? = cache.read(accountId)?.let {
         ExploreSnapshot(it.payload, ExploreSource.CACHE, it.savedAtEpochMillis, it.payload.sourceErrors.keys.toList())
     }
 
     suspend fun refresh(accountId: String): ExploreSnapshot = supervisorScope {
+        // Track the parent scope: token acquisition finishes before sibling requests and cache writes.
+        trackAccountOperation(accountId)
         fun checkAccount() {
             if (currentAccountId() != accountId) throw CancellationException("Explore account changed")
         }

@@ -22,6 +22,7 @@ import kotlinx.serialization.json.Json
  */
 class EncryptedSessionManager(
     context: Context,
+    private val beforeDelete: () -> Unit = {},
 ) : SessionManager {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
     private val json = Json {
@@ -63,7 +64,8 @@ class EncryptedSessionManager(
     }
 
     override suspend fun deleteSession() {
-        preferences.edit().remove(SESSION_KEY).apply()
+        beforeDelete()
+        check(preferences.edit().remove(SESSION_KEY).commit()) { "Could not clear the local session" }
     }
 
     private fun encryptionKey(): SecretKey {

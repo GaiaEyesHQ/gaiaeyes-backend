@@ -24,6 +24,8 @@ class HealthSampleDrainWorker(
         val app = applicationContext as? GaiaEyesApplication ?: return Result.failure()
         val accountId = app.container.authRepository.currentAccountId()
             ?: return Result.success()
+        if (app.container.authRepository.accountOperations?.isBlocked(accountId) == true) return Result.success()
+
         val disposition = try {
             healthSampleDrainDisposition(
                 hasAccount = true,
