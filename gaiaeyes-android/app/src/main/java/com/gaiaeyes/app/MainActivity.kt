@@ -37,6 +37,8 @@ class MainActivity : ComponentActivity() {
                     patternsRepository = container.patternsRepository,
                     profileRepository = container.profileRepository,
                     quickLogCoordinator = container.quickLogCoordinator,
+                    billingController = container.billingController,
+                    onPurchasePlus = { container.purchasePlus(this@MainActivity, it) },
                 )
             }
         }

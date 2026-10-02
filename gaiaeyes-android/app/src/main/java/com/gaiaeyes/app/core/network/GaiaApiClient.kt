@@ -53,6 +53,16 @@ class GaiaApiClient(
         return response.body()
     }
 
+    suspend fun billingEntitlements(accessToken: String): BillingEntitlementsResponse {
+        require(accessToken.isNotBlank()) { "An authenticated session is required for membership data" }
+        val response = httpClient.get("/v1/billing/entitlements") {
+            header(HttpHeaders.Authorization, "Bearer $accessToken")
+        }
+        if (response.status == HttpStatusCode.Unauthorized) throw ApiUnauthorizedException()
+        check(response.status.isSuccess()) { "Membership data is unavailable" }
+        return response.body()
+    }
+
     suspend fun dashboardGauges(accessToken: String): DashboardGaugesResponse {
         require(accessToken.isNotBlank()) {
             "An authenticated session is required for dashboard data"

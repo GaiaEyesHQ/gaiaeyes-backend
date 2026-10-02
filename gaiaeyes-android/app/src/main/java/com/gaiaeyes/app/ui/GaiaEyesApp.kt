@@ -108,6 +108,7 @@ import com.gaiaeyes.app.data.HealthConnectStatus
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.HomeContextSource
 import com.gaiaeyes.app.data.JournalRepository
+import com.gaiaeyes.app.data.BillingController
 import com.gaiaeyes.app.data.NotificationRepository
 import com.gaiaeyes.app.data.LocalWeatherSnapshot
 import com.gaiaeyes.app.data.OutlookRepository
@@ -145,6 +146,8 @@ fun GaiaEyesApp(
     profileRepository: ProfileRepository,
     quickLogCoordinator: QuickLogCoordinator,
     modifier: Modifier = Modifier,
+    billingController: BillingController? = null,
+    onPurchasePlus: (String) -> Unit = {},
 ) {
     val viewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.Factory(
@@ -372,6 +375,11 @@ fun GaiaEyesApp(
                     showAllDrivers = false
                     exploreDetail = null
                     viewModel.signOut()
+                },
+                billingContent = {
+                    billingController?.let {
+                        BillingSettingsCard(it, authState.isAnonymous, onPurchasePlus)
+                    }
                 },
                 modifier = modifier,
             )
@@ -1349,6 +1357,7 @@ private fun SettingsScreen(
     onDismissMessage: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    billingContent: @Composable () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
@@ -1380,6 +1389,8 @@ private fun SettingsScreen(
                 modifier = Modifier.padding(top = 6.dp),
             )
 
+            Spacer(modifier = Modifier.height(18.dp))
+            billingContent()
             Spacer(modifier = Modifier.height(18.dp))
             SettingsSectionCard(title = "Account") {
                 if (account.isAnonymous) {
