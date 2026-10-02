@@ -28,6 +28,8 @@ class JournalDrainWorker(
             return Result.success()
         }
 
+        if (app.container.authRepository.accountOperations?.isBlocked(accountId) == true) return Result.success()
+
         val disposition = try {
             val result = app.container.journalRepository.drain(accountId)
             journalDrainDisposition(

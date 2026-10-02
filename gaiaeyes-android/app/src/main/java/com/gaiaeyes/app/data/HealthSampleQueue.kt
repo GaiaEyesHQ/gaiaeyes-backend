@@ -54,7 +54,8 @@ class HealthSampleQueue(
 
     suspend fun clear(accountId: String) = mutex.withLock {
         withContext(Dispatchers.IO) {
-            accountDirectory(accountId).deleteRecursively()
+            val directory = accountDirectory(accountId)
+            check(!directory.exists() || directory.deleteRecursively()) { "Could not clear queued health samples" }
         }
     }
 

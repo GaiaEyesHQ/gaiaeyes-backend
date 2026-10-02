@@ -3,6 +3,10 @@ package com.gaiaeyes.app.core.di
 import android.content.Context
 import android.app.Activity
 import com.gaiaeyes.app.BuildConfig
+import com.gaiaeyes.app.data.AccountDeletionController
+import com.gaiaeyes.app.data.AccountDeletionPreferences
+import com.gaiaeyes.app.data.AccountOperationGate
+import com.gaiaeyes.app.data.clearAccountLocalData
 import com.gaiaeyes.app.data.BillingConfig
 import com.gaiaeyes.app.data.BillingController
 import com.gaiaeyes.app.data.PlusPlan
@@ -50,10 +54,14 @@ class AppContainer(
     val notificationNavigationCoordinator = NotificationNavigationCoordinator()
     val deviceLocationRepository = DeviceLocationRepository(context.applicationContext)
 
+    private val deletionRecords = AccountDeletionPreferences(context.applicationContext)
+    private val accountOperations = AccountOperationGate(deletionRecords)
+
     val authRepository = AuthRepository(
         context = context,
         supabaseUrl = supabaseUrl,
         supabaseAnonKey = supabaseAnonKey,
+        accountOperations = accountOperations,
     )
     private val billingScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val billingConfig = BillingConfig(
@@ -80,6 +88,8 @@ class AppContainer(
     }
 
     fun purchasePlus(activity: Activity, productId: String) {
+        val account = authRepository.currentAccountId() ?: return
+        if (accountOperations.isBlocked(account)) return
         billingController.purchase(productId) { billingStore.purchase(activity, productId) }
     }
 
@@ -113,6 +123,7 @@ class AppContainer(
         cache = ExploreCache(context.applicationContext),
         accessToken = authRepository::accessToken,
         currentAccountId = authRepository::currentAccountId,
+        trackAccountOperation = authRepository::trackAccountOperation,
     )
     val patternsRepository = PatternsRepository(
         authRepository = authRepository,
@@ -141,4 +152,47 @@ class AppContainer(
         authRepository = authRepository,
         apiClient = apiClient,
     )
+
+    val accountDeletionController = AccountDeletionController(
+        scope = billingScope,
+        currentAccountId = authRepository::currentAccountId,
+        tokenForAccount = authRepository::tokenForAccountDeletion,
+        preflight = apiClient::accountDeletionPreflight,
+        delete = apiClient::deleteAccount,
+        gate = accountOperations,
+        records = deletionRecords,
+        clearLocalData = { account ->
+            clearAccountLocalData(account, listOf(
+                dashboardRepository::clear, bodyRepository::clear, homeContextRepository::clear,
+                exploreRepository::clear, journalRepository::clear, healthConnectRepository::clear,
+                outlookRepository::clear, patternsRepository::clear,
+                { id ->
+                    val preferences = context.getSharedPreferences("gaiaeyes_guide", Context.MODE_PRIVATE)
+                    val editor = preferences.edit()
+                    preferences.all.keys.filter { it.startsWith("$id:") }.forEach(editor::remove)
+                    check(editor.commit()) { "Could not clear local Guide answers" }
+                },
+            ))
+            if (authRepository.currentAccountId() == account) {
+                notificationRepository.forgetLocalToken()
+                quickLogCoordinator.pending.value?.let { quickLogCoordinator.consume(it.id) }
+                notificationNavigationCoordinator.pending.value?.let { notificationNavigationCoordinator.consume(it.id) }
+            }
+        },
+        clearSession = { account ->
+            if (authRepository.currentAccountId() == account) {
+                quickLogCoordinator.pending.value?.let { quickLogCoordinator.consume(it.id) }
+                notificationNavigationCoordinator.pending.value?.let { notificationNavigationCoordinator.consume(it.id) }
+            }
+            authRepository.clearLocalSessionForDeletion(account)
+        },
+    )
+
+    init {
+        billingScope.launch {
+            authRepository.authState.collect {
+                accountDeletionController.authChanged(authRepository.currentAccountId())
+            }
+        }
+    }
 }

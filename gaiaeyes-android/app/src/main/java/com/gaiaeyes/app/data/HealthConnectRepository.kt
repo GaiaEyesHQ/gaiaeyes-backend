@@ -64,6 +64,7 @@ class HealthConnectRepository(
     }
 
     suspend fun importRecent(accountId: String, days: Long = IMPORT_DAYS): HealthConnectImportResult {
+        authRepository.trackAccountOperation(accountId)
         check(status() == HealthConnectStatus.READY) {
             "Connect Health Connect before importing health data"
         }
@@ -99,29 +100,35 @@ class HealthConnectRepository(
         )
     }
 
-    suspend fun drain(accountId: String): HealthSampleDrainResult = drainMutex.withLock {
-        var delivered = 0
-        for (batch in queue.read(accountId)) {
-            try {
-                apiClient.uploadHealthSamples(
-                    accessToken = authRepository.accessToken(),
-                    samples = batch.samples,
-                )
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (unauthorized: ApiUnauthorizedException) {
-                authRepository.signOut()
-                throw unauthorized
-            } catch (_: Throwable) {
-                break
+    suspend fun drain(accountId: String): HealthSampleDrainResult {
+        authRepository.trackAccountOperation(accountId)
+        return drainMutex.withLock {
+            var delivered = 0
+            for (batch in queue.read(accountId)) {
+                try {
+                    authRepository.requireActiveAccount(accountId)
+                    val token = authRepository.accessToken()
+                    authRepository.requireActiveAccount(accountId)
+                    apiClient.uploadHealthSamples(
+                        accessToken = token,
+                        samples = batch.samples,
+                    )
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (unauthorized: ApiUnauthorizedException) {
+                    authRepository.signOut()
+                    throw unauthorized
+                } catch (_: Throwable) {
+                    break
+                }
+                queue.remove(accountId, batch.id)
+                delivered += 1
             }
-            queue.remove(accountId, batch.id)
-            delivered += 1
+            HealthSampleDrainResult(
+                deliveredCount = delivered,
+                pendingCount = queue.read(accountId).size,
+            )
         }
-        HealthSampleDrainResult(
-            deliveredCount = delivered,
-            pendingCount = queue.read(accountId).size,
-        )
     }
 
     suspend fun pendingCount(accountId: String): Int = queue.read(accountId).size
