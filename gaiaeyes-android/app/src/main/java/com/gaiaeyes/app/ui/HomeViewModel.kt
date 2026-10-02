@@ -1198,6 +1198,11 @@ class HomeViewModel(
                 _uiState.value.authMessage
             },
         )
+        if (authState == AuthState.SignedOut && previousAccount != null &&
+            authRepository.accountOperations?.isBlocked(previousAccount) == true) {
+            // Local recovery exit keeps disk queues paused, but must not carry drafts into a new account.
+            _uiState.value = HomeUiState(authState = AuthState.SignedOut)
+        }
     }
 
     private fun maybeHandleQuickLog(request: QuickLogRequest?) {

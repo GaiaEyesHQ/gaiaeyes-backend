@@ -293,6 +293,7 @@ fun GaiaEyesApp(
             onConfirm = { accountDeletionController.confirm() },
             onRetry = { accountDeletionController.open() },
             onRetryCleanup = { accountDeletionController.retryCleanup() },
+            onSignOutLocally = { accountDeletionController.signOutLocally() },
             onClose = accountDeletionController::cancel,
             modifier = modifier,
         )

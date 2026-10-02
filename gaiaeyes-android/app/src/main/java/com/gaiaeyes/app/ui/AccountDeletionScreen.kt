@@ -20,12 +20,13 @@ internal fun AccountDeletionScreen(
     onConfirm: () -> Unit,
     onRetry: () -> Unit,
     onRetryCleanup: () -> Unit,
+    onSignOutLocally: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var acknowledged by rememberSaveable(state.accountId, state.phase) { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
-    val canClose = !state.syncPaused && state.phase != AccountDeletionPhase.DELETING
+    val canClose = !state.syncPaused && state.phase !in listOf(AccountDeletionPhase.DELETING, AccountDeletionPhase.SIGNING_OUT)
     BackHandler { if (canClose) onClose() }
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
@@ -76,6 +77,10 @@ internal fun AccountDeletionScreen(
                     Text("The service confirmed account deletion. Cached account data and queued entries on this device were cleared, and the local session was removed.")
                     Text("Any store subscription must still be managed separately. This does not confirm deletion from backups or other providers.")
                 }
+                AccountDeletionPhase.SIGNING_OUT -> {
+                    CircularProgressIndicator()
+                    Text("Signing out on this device. This account’s deletion status and paused uploads will be kept.")
+                }
                 AccountDeletionPhase.CLOSED -> Unit
             }
             if (canClose) {
@@ -84,6 +89,11 @@ internal fun AccountDeletionScreen(
                 }
             } else if (state.phase == AccountDeletionPhase.CONFIRM) {
                 TextButton(onClick = onClose) { Text("Back to deletion status") }
+            }
+            if (state.phase in listOf(AccountDeletionPhase.UNCONFIRMED, AccountDeletionPhase.CLEANUP_REQUIRED)) {
+                Text("You can sign out on this device and use another account. This account’s uploads stay paused and its deletion status is kept. Signing out does not retry deletion or finish local data cleanup.")
+                if (state.localExitFailed) Text("Local sign-out could not finish. Try again; the deletion status is still kept.")
+                TextButton(onClick = onSignOutLocally) { Text("Sign out and use another account") }
             }
             if (state.phase in listOf(AccountDeletionPhase.UNAVAILABLE, AccountDeletionPhase.UNCONFIRMED, AccountDeletionPhase.CLEANUP_REQUIRED)) {
                 Text("Support: help@gaiaeyes.com")

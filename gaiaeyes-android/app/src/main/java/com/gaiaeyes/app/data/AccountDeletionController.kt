@@ -11,12 +11,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
-enum class AccountDeletionPhase { CLOSED, CHECKING, CONFIRM, DELETING, UNAVAILABLE, UNCONFIRMED, CLEANUP_REQUIRED, COMPLETE }
+enum class AccountDeletionPhase { CLOSED, CHECKING, CONFIRM, DELETING, UNAVAILABLE, UNCONFIRMED, CLEANUP_REQUIRED, SIGNING_OUT, COMPLETE }
 
 data class AccountDeletionState(
     val accountId: String? = null,
     val phase: AccountDeletionPhase = AccountDeletionPhase.CLOSED,
     val syncPaused: Boolean = false,
+    val localExitFailed: Boolean = false,
 )
 
 /** No automatic destructive retry: every remote attempt follows a fresh preflight and confirmation. */
@@ -98,7 +99,7 @@ class AccountDeletionController(
     }
 
     fun cancel() {
-        if (_state.value.phase == AccountDeletionPhase.DELETING) return
+        if (_state.value.phase in listOf(AccountDeletionPhase.DELETING, AccountDeletionPhase.SIGNING_OUT)) return
         preparing?.cancel()
         epoch++ // invalidates even a non-cooperative late preflight
         val account = currentAccountId()
@@ -164,6 +165,40 @@ class AccountDeletionController(
                 throw cancelled
             } catch (_: Exception) {
                 if (canReportCleanup(account, generation)) _state.value = recoveryState(account)
+            }
+        }
+        return deleting
+    }
+
+    /** Leave a failed deletion without clearing its durable pause or claiming deletion succeeded. */
+    fun signOutLocally(): Job? {
+        if (deleting?.isActive == true || preparing?.isActive == true) return null
+        if (_state.value.phase !in listOf(AccountDeletionPhase.UNCONFIRMED, AccountDeletionPhase.CLEANUP_REQUIRED)) return null
+        val account = _state.value.accountId ?: return null
+        val generation = epoch
+        if (!canReportCleanup(account, generation)) return null
+        _state.value = AccountDeletionState(account, AccountDeletionPhase.SIGNING_OUT, true)
+        deleting = scope.launch {
+            try {
+                gate.pauseAndCancel(account)
+                // If the earlier confirmation marker failed to persist, save it before leaving.
+                if (account in confirmedAccounts && records.read(account) !in
+                    listOf(AccountDeletionRecord.CONFIRMED, AccountDeletionRecord.COMPLETE)) {
+                    records.write(account, AccountDeletionRecord.CONFIRMED)
+                }
+                currentCoroutineContext().ensureActive()
+                if (!canReportCleanup(account, generation)) return@launch
+                clearingSessionFor = account
+                if (currentAccountId() == account) clearSession(account)
+                check(currentAccountId() != account) { "Local sign-out did not finish" }
+                if (epoch == generation && currentAccountId() == null) _state.value = AccountDeletionState()
+            } catch (cancelled: CancellationException) {
+                if (canReportCleanup(account, generation)) _state.value = recoveryState(account).copy(localExitFailed = true)
+                throw cancelled
+            } catch (_: Exception) {
+                if (canReportCleanup(account, generation)) _state.value = recoveryState(account).copy(localExitFailed = true)
+            } finally {
+                clearingSessionFor = null
             }
         }
         return deleting

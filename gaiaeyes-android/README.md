@@ -295,7 +295,10 @@ Focused synthetic verification (no live accounts or credentials):
   --tests 'com.gaiaeyes.app.data.AccountOperationGateTest' \
   --tests 'com.gaiaeyes.app.core.network.AccountDeletionApiTest' \
   --tests 'com.gaiaeyes.app.data.AccountDeletionExploreTest' \
+  --tests 'com.gaiaeyes.app.data.AccountDeletionExitTest' \
   :app:compileDebugKotlin
 ```
 
-Thirty new cases cover cancellation before/after dispatch, account changes, partial or invalid responses, durable state failures, cleanup-only retry, account-scoped cancellation and late Explore work. These are JVM synthetic checks; no signed package, store upload, real-account deletion or device acceptance was performed. Existing signing/billing acceptance suites were not rerun.
+Thirty original cases cover cancellation before/after dispatch, account changes, partial or invalid responses, durable state failures, cleanup-only retry, account-scoped cancellation and late Explore work. These are JVM synthetic checks; no signed package, store upload, real-account deletion or device acceptance was performed. Existing signing/billing acceptance suites were not rerun.
+
+Unconfirmed deletion and failed local cleanup offer **Sign out and use another account**. This removes only the current local session; it does not retry DELETE, claim success, clear the old account's pending data or resume its uploads. The old durable pause and cleanup confirmation are retained. Confirmation held only in memory must be persisted before exit; if local persistence/session removal fails, the recovery screen reports the failure and offers an explicit local retry. A replacement account remains usable and protected from a late exit callback. Local draft input and pending navigation are cleared when leaving the blocked account. Eight additional regression cases cover expired-session exit, replacement-account use, retained old-account pause/cleanup evidence, failed/cancelled local exit and local retry. Only these eight new cases and affected source compilation were run for this correction; the original 30-case evidence is retained.

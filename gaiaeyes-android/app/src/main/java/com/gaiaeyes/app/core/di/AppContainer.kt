@@ -179,7 +179,13 @@ class AppContainer(
                 notificationNavigationCoordinator.pending.value?.let { notificationNavigationCoordinator.consume(it.id) }
             }
         },
-        clearSession = authRepository::clearLocalSessionForDeletion,
+        clearSession = { account ->
+            if (authRepository.currentAccountId() == account) {
+                quickLogCoordinator.pending.value?.let { quickLogCoordinator.consume(it.id) }
+                notificationNavigationCoordinator.pending.value?.let { notificationNavigationCoordinator.consume(it.id) }
+            }
+            authRepository.clearLocalSessionForDeletion(account)
+        },
     )
 
     init {
