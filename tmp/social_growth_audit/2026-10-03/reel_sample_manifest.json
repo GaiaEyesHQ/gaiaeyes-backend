@@ -1,0 +1,35 @@
+{
+  "duration": 12.966667,
+  "width": 1080,
+  "height": 1920,
+  "frames": [
+    {
+      "time": 0.5,
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-10-03/frames/frame_0_5s.jpg"
+    },
+    {
+      "time": 2.5,
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-10-03/frames/frame_2_5s.jpg"
+    },
+    {
+      "time": 4.5,
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-10-03/frames/frame_4_5s.jpg"
+    },
+    {
+      "time": 6.5,
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-10-03/frames/frame_6_5s.jpg"
+    },
+    {
+      "time": 8.5,
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-10-03/frames/frame_8_5s.jpg"
+    },
+    {
+      "time": 10.5,
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-10-03/frames/frame_10_5s.jpg"
+    },
+    {
+      "time": 12,
+      "path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-10-03/frames/frame_12s.jpg"
+    }
+  ]
+}

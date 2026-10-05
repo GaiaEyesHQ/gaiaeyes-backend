@@ -1,0 +1,3272 @@
+[
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nStorm-level geomagnetic conditions are ongoing with supportive solar wind and field orientation. No fresh solar flare or eruption activity noted.\n\nLow energy may show up as early fatigue and shorter focus runs. Pushing too long can leave you flat, while brief resets can bring back a bit of clarity. Late afternoon can feel heavier if the signal stays active.\n\n- Break tasks into short sprints with pauses\n- Step outside for a few minutes of daylight\n- Sip water through the day\n- Cut extra tabs, pings, and noise\n- Keep wind-down simple and unhurried",
+    "caption": "Energy hard to hold? A strong space storm is active now, so some of us may tire early and feel light and sound louder. Work in short sprints with small pauses, and step outside for a bit of daylight to reset.",
+    "cards": null,
+    "created_at": "2026-10-04T15:45:21.53156+00:00",
+    "day": "2026-10-04",
+    "hashtags": "#GaiaEyes #SpaceWeather #GeomagneticStorm #Aurora #Energy #BrainFog #ChronicIllness #Focus #Wellbeing",
+    "id": 916,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "strong southward",
+        "kp": "storm",
+        "sw": "elevated"
+      },
+      "bz_min": -19.61,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.79,
+        "f2": 15.43,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 5.0,
+      "schumann_value_hz": 7.79,
+      "sections": {
+        "affects": "Low energy may show up as early fatigue and shorter focus runs. Pushing too long can leave you flat, while brief resets can bring back a bit of clarity. Late afternoon can feel heavier if the signal stays active.",
+        "caption": "Energy hard to hold? A strong space storm is active now, so some of us may tire early and feel light and sound louder. Work in short sprints with small pauses, and step outside for a bit of daylight to reset.",
+        "playbook": "- Break tasks into short sprints with pauses\n- Step outside for a few minutes of daylight\n- Sip water through the day\n- Cut extra tabs, pings, and noise\n- Keep wind-down simple and unhurried",
+        "reel_story": {
+          "effects": "Early fade and shorter focus runs",
+          "hook": "Energy hard to hold?",
+          "pattern": "Use 5-10 minute bursts, then daylight reset",
+          "signal": "Strong geomagnetic storm sustained by steady solar wind",
+          "voiceover": "Energy hard to hold? Some people may hit a wall sooner today, with lights and everyday sounds feeling a notch too loud and focus runs cutting shorter than planned. If you notice your drive slipping earlier than normal, that\u2019s consistent with what we\u2019re tracking\u2014nothing \u201cwrong,\u201d just a day to handle energy with a bit more intention."
+        },
+        "snapshot": "Storm-level geomagnetic conditions are ongoing with supportive solar wind and field orientation. No fresh solar flare or eruption activity noted.",
+        "voiceover": "Energy hard to hold? Some people may hit a wall sooner today, with lights and everyday sounds feeling a notch too loud and focus runs cutting shorter than planned. If you notice your drive slipping earlier than normal, that\u2019s consistent with what we\u2019re tracking\u2014nothing \u201cwrong,\u201d just a day to handle energy with a bit more intention."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Energy hard to hold? A strong space storm is active now, so some of us may tire early and feel light and sound louder. Work in short sprints with small pauses, and step outside for a bit of daylight to reset.",
+          "hashtags": "#GaiaEyes #SpaceWeather #GeomagneticStorm #Aurora #Energy #BrainFog #ChronicIllness #Focus #Wellbeing"
+        },
+        "fb": {
+          "caption": "Energy hard to hold? Some people may hit a wall sooner today, with lights and everyday sounds feeling a notch too loud and focus runs cutting shorter than planned. If you notice your drive slipping earlier than normal, that\u2019s consistent with what we\u2019re tracking\u2014nothing \u201cwrong,\u201d just a day to handle energy with a bit more intention.\n\nA strong geomagnetic storm is underway, powered by steady solar wind and a magnetic setup that keeps feeding it. No fresh flares or eruptions are in the mix\u2014this is the ongoing storm doing the work. Practical plan: batch tasks into clear bursts, then step outside for a few minutes of daylight to reset your head and eyes. Trim extra pings and tabs so your attention doesn\u2019t leak, keep water nearby, and slow the evening routine so your system can downshift. Late afternoon may feel heavier if the signal keeps up, so front\u2011load what matters.\n\nGaia Eyes watches how geomagnetic shifts line up with human stamina and focus. Noticing the early fade today?",
+          "hashtags": "#GaiaEyes #SpaceWeather #GeomagneticStorm #HumanWeather #Focus #EnergyCare #ListenIn #NervousSystem"
+        },
+        "ig": {
+          "caption": "Energy hard to hold? A strong space storm is active now, so some of us may tire early and feel light and sound louder. Work in short sprints with small pauses, and step outside for a bit of daylight to reset.",
+          "hashtags": "#GaiaEyes #SpaceWeather #GeomagneticStorm #Aurora #Energy #BrainFog #ChronicIllness #Focus #Wellbeing"
+        }
+      },
+      "solar_wind_kms": 521.0,
+      "space_json": {
+        "aurora_headline": "G1 aurora possible",
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 5.0,
+        "kp_now": 4.7
+      },
+      "tone": "stormy",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "stormy"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "stormy"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "stormy"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "stormy"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-10-04",
+        "facts": {
+          "aurora_headline": "G1 aurora possible",
+          "aurora_window": "Next 72h",
+          "bz_min": -19.61,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 5.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.79,
+          "severe_summary": null,
+          "solar_wind_kms": 521.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "likely_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily",
+            "contextual_impacts"
+          ],
+          "max_urgency": "high",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "strong southward",
+            "kp": "storm",
+            "sw": "elevated"
+          },
+          "driver_bits": [
+            "southward field orientation",
+            "faster solar wind"
+          ],
+          "tone": "stormy"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Energy hard to hold?",
+    "updated_at": "2026-10-04T15:45:21.53156+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nStorm-level geomagnetic conditions are ongoing with supportive solar wind and field orientation. No fresh solar flare or eruption activity noted.\n\nLow energy may show up as early fatigue and shorter focus runs. Pushing too long can leave you flat, while brief resets can bring back a bit of clarity. Late afternoon can feel heavier if the signal stays active.\n\n- Break tasks into short sprints with pauses\n- Step outside for a few minutes of daylight\n- Sip water through the day\n- Cut extra tabs, pings, and noise\n- Keep wind-down simple and unhurried",
+    "caption": "Energy hard to hold? A strong space storm is active now, so some of us may tire early and feel light and sound louder. Work in short sprints with small pauses, and step outside for a bit of daylight to reset.",
+    "cards": null,
+    "created_at": "2026-10-04T15:45:21.53156+00:00",
+    "day": "2026-10-04",
+    "hashtags": "#GaiaEyes #SpaceWeather #GeomagneticStorm #Aurora #Energy #BrainFog #ChronicIllness #Focus #Wellbeing",
+    "id": 917,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "strong southward",
+        "kp": "storm",
+        "sw": "elevated"
+      },
+      "bz_min": -19.61,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.79,
+        "f2": 15.43,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 5.0,
+      "schumann_value_hz": 7.79,
+      "sections": {
+        "affects": "Low energy may show up as early fatigue and shorter focus runs. Pushing too long can leave you flat, while brief resets can bring back a bit of clarity. Late afternoon can feel heavier if the signal stays active.",
+        "caption": "Energy hard to hold? A strong space storm is active now, so some of us may tire early and feel light and sound louder. Work in short sprints with small pauses, and step outside for a bit of daylight to reset.",
+        "playbook": "- Break tasks into short sprints with pauses\n- Step outside for a few minutes of daylight\n- Sip water through the day\n- Cut extra tabs, pings, and noise\n- Keep wind-down simple and unhurried",
+        "reel_story": {
+          "effects": "Early fade and shorter focus runs",
+          "hook": "Energy hard to hold?",
+          "pattern": "Use 5-10 minute bursts, then daylight reset",
+          "signal": "Strong geomagnetic storm sustained by steady solar wind",
+          "voiceover": "Energy hard to hold? Some people may hit a wall sooner today, with lights and everyday sounds feeling a notch too loud and focus runs cutting shorter than planned. If you notice your drive slipping earlier than normal, that\u2019s consistent with what we\u2019re tracking\u2014nothing \u201cwrong,\u201d just a day to handle energy with a bit more intention."
+        },
+        "snapshot": "Storm-level geomagnetic conditions are ongoing with supportive solar wind and field orientation. No fresh solar flare or eruption activity noted.",
+        "voiceover": "Energy hard to hold? Some people may hit a wall sooner today, with lights and everyday sounds feeling a notch too loud and focus runs cutting shorter than planned. If you notice your drive slipping earlier than normal, that\u2019s consistent with what we\u2019re tracking\u2014nothing \u201cwrong,\u201d just a day to handle energy with a bit more intention."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Energy hard to hold? A strong space storm is active now, so some of us may tire early and feel light and sound louder. Work in short sprints with small pauses, and step outside for a bit of daylight to reset.",
+          "hashtags": "#GaiaEyes #SpaceWeather #GeomagneticStorm #Aurora #Energy #BrainFog #ChronicIllness #Focus #Wellbeing"
+        },
+        "fb": {
+          "caption": "Energy hard to hold? Some people may hit a wall sooner today, with lights and everyday sounds feeling a notch too loud and focus runs cutting shorter than planned. If you notice your drive slipping earlier than normal, that\u2019s consistent with what we\u2019re tracking\u2014nothing \u201cwrong,\u201d just a day to handle energy with a bit more intention.\n\nA strong geomagnetic storm is underway, powered by steady solar wind and a magnetic setup that keeps feeding it. No fresh flares or eruptions are in the mix\u2014this is the ongoing storm doing the work. Practical plan: batch tasks into clear bursts, then step outside for a few minutes of daylight to reset your head and eyes. Trim extra pings and tabs so your attention doesn\u2019t leak, keep water nearby, and slow the evening routine so your system can downshift. Late afternoon may feel heavier if the signal keeps up, so front\u2011load what matters.\n\nGaia Eyes watches how geomagnetic shifts line up with human stamina and focus. Noticing the early fade today?",
+          "hashtags": "#GaiaEyes #SpaceWeather #GeomagneticStorm #HumanWeather #Focus #EnergyCare #ListenIn #NervousSystem"
+        },
+        "ig": {
+          "caption": "Energy hard to hold? A strong space storm is active now, so some of us may tire early and feel light and sound louder. Work in short sprints with small pauses, and step outside for a bit of daylight to reset.",
+          "hashtags": "#GaiaEyes #SpaceWeather #GeomagneticStorm #Aurora #Energy #BrainFog #ChronicIllness #Focus #Wellbeing"
+        }
+      },
+      "solar_wind_kms": 521.0,
+      "space_json": {
+        "aurora_headline": "G1 aurora possible",
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 5.0,
+        "kp_now": 4.7
+      },
+      "tone": "stormy",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "stormy"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "stormy"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "stormy"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "stormy"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-10-04",
+        "facts": {
+          "aurora_headline": "G1 aurora possible",
+          "aurora_window": "Next 72h",
+          "bz_min": -19.61,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 5.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.79,
+          "severe_summary": null,
+          "solar_wind_kms": 521.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "likely_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily",
+            "contextual_impacts"
+          ],
+          "max_urgency": "high",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "strong southward",
+            "kp": "storm",
+            "sw": "elevated"
+          },
+          "driver_bits": [
+            "southward field orientation",
+            "faster solar wind"
+          ],
+          "tone": "stormy"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Energy hard to hold?",
+    "updated_at": "2026-10-04T15:45:21.53156+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic conditions are quiet overall. The magnetic field has leaned southward at times, which can add a mild unsettled feel. Solar wind is running at typical speeds. No solar flares or CMEs were reported, and the baseline resonance is near its usual level.\n\nHead pressure and sinus fullness can be more noticeable for some. Light and screen glare may feel harsher than usual, which can add to the sense of pressure. Noise sensitivity can stack with this pattern, making busy spaces feel like too much.\n\n- Lower screen brightness and reduce glare\n- Short slow-breathing breaks with eyes closed\n- Steady hydration and easy, unhurried movement\n- Check local pressure and humidity swings\n- Keep fragrances and loud spaces to a minimum",
+    "caption": "Sinus pressure louder today? The day feels a little wobbly, not a storm\u2014so dim bright screens, close your eyes for short slow-breathing breaks, and space out the big tasks.",
+    "cards": null,
+    "created_at": "2026-10-03T15:08:54.209074+00:00",
+    "day": "2026-10-03",
+    "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #SinusPressure #MigrainePatterns #Sensitivity #NervousSystem #DailyRhythms",
+    "id": 914,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -6.67,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.75,
+        "f2": 15.09,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.67,
+      "schumann_value_hz": 7.75,
+      "sections": {
+        "affects": "Head pressure and sinus fullness can be more noticeable for some. Light and screen glare may feel harsher than usual, which can add to the sense of pressure. Noise sensitivity can stack with this pattern, making busy spaces feel like too much.",
+        "caption": "Sinus pressure louder today? The day feels a little wobbly, not a storm\u2014so dim bright screens, close your eyes for short slow-breathing breaks, and space out the big tasks.",
+        "playbook": "- Lower screen brightness and reduce glare\n- Short slow-breathing breaks with eyes closed\n- Steady hydration and easy, unhurried movement\n- Check local pressure and humidity swings\n- Keep fragrances and loud spaces to a minimum",
+        "reel_story": {
+          "effects": "Sinus fullness with stronger screen glare",
+          "hook": "Sinus pressure louder today?",
+          "pattern": "Screen-free, eyes-closed breathing pauses help",
+          "signal": "Quiet day; brief southward tilt adds unsettled",
+          "voiceover": "Sinus pressure louder today? If your head feels puffy behind the eyes and bright screens poke at it, you\u2019re not imagining it. Some people may notice sinus fullness and a sharper reaction to glare, with busy rooms tipping into too-much sound. It\u2019s a little wobbly, not a storm, so you can still move through the day\u2014just with a softer edge."
+        },
+        "snapshot": "Geomagnetic conditions are quiet overall. The magnetic field has leaned southward at times, which can add a mild unsettled feel. Solar wind is running at typical speeds. No solar flares or CMEs were reported, and the baseline resonance is near its usual level.",
+        "voiceover": "Sinus pressure louder today? If your head feels puffy behind the eyes and bright screens poke at it, you\u2019re not imagining it. Some people may notice sinus fullness and a sharper reaction to glare, with busy rooms tipping into too-much sound. It\u2019s a little wobbly, not a storm, so you can still move through the day\u2014just with a softer edge."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Sinus pressure louder today? The day feels a little wobbly, not a storm\u2014so dim bright screens, close your eyes for short slow-breathing breaks, and space out the big tasks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #SinusPressure #MigrainePatterns #Sensitivity #NervousSystem #DailyRhythms"
+        },
+        "fb": {
+          "caption": "Sinus pressure louder today? If your head feels puffy behind the eyes and bright screens poke at it, you\u2019re not imagining it. Some people may notice sinus fullness and a sharper reaction to glare, with busy rooms tipping into too-much sound. It\u2019s a little wobbly, not a storm, so you can still move through the day\u2014just with a softer edge.\n\nSpace weather is quiet overall. The magnetic field has tilted south at times, which can add a faintly unsettled tone even with typical solar wind and no notable flares or CME activity; baseline resonance looks usual. Try one anchor ritual: a screen-free, eyes\u2011closed breathing pause whenever the pressure swells. Slowing your breath and dimming visual input can ease that glare-linked squeeze and help you reset before the next task. We compare gentle field shifts with how bodies report in, so let us know if the noise-and-light combo is part of your pattern today.",
+          "hashtags": "#GaiaEyes #SinusPressure #HeadPressure #LightSensitivity #NoiseSensitivity #Geomagnetic #SelfCare #Breathing"
+        },
+        "ig": {
+          "caption": "Sinus pressure louder today? The day feels a little wobbly, not a storm\u2014so dim bright screens, close your eyes for short slow-breathing breaks, and space out the big tasks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #SinusPressure #MigrainePatterns #Sensitivity #NervousSystem #DailyRhythms"
+        }
+      },
+      "solar_wind_kms": 278.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.67,
+        "kp_now": 1.0
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-10-03",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -6.67,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.67,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.75,
+          "severe_summary": null,
+          "solar_wind_kms": 278.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Sinus pressure louder today?",
+    "updated_at": "2026-10-03T15:08:54.209074+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic conditions are quiet overall. The magnetic field has leaned southward at times, which can add a mild unsettled feel. Solar wind is running at typical speeds. No solar flares or CMEs were reported, and the baseline resonance is near its usual level.\n\nHead pressure and sinus fullness can be more noticeable for some. Light and screen glare may feel harsher than usual, which can add to the sense of pressure. Noise sensitivity can stack with this pattern, making busy spaces feel like too much.\n\n- Lower screen brightness and reduce glare\n- Short slow-breathing breaks with eyes closed\n- Steady hydration and easy, unhurried movement\n- Check local pressure and humidity swings\n- Keep fragrances and loud spaces to a minimum",
+    "caption": "Sinus pressure louder today? The day feels a little wobbly, not a storm\u2014so dim bright screens, close your eyes for short slow-breathing breaks, and space out the big tasks.",
+    "cards": null,
+    "created_at": "2026-10-03T15:08:54.209074+00:00",
+    "day": "2026-10-03",
+    "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #SinusPressure #MigrainePatterns #Sensitivity #NervousSystem #DailyRhythms",
+    "id": 915,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -6.67,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.75,
+        "f2": 15.09,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.67,
+      "schumann_value_hz": 7.75,
+      "sections": {
+        "affects": "Head pressure and sinus fullness can be more noticeable for some. Light and screen glare may feel harsher than usual, which can add to the sense of pressure. Noise sensitivity can stack with this pattern, making busy spaces feel like too much.",
+        "caption": "Sinus pressure louder today? The day feels a little wobbly, not a storm\u2014so dim bright screens, close your eyes for short slow-breathing breaks, and space out the big tasks.",
+        "playbook": "- Lower screen brightness and reduce glare\n- Short slow-breathing breaks with eyes closed\n- Steady hydration and easy, unhurried movement\n- Check local pressure and humidity swings\n- Keep fragrances and loud spaces to a minimum",
+        "reel_story": {
+          "effects": "Sinus fullness with stronger screen glare",
+          "hook": "Sinus pressure louder today?",
+          "pattern": "Screen-free, eyes-closed breathing pauses help",
+          "signal": "Quiet day; brief southward tilt adds unsettled",
+          "voiceover": "Sinus pressure louder today? If your head feels puffy behind the eyes and bright screens poke at it, you\u2019re not imagining it. Some people may notice sinus fullness and a sharper reaction to glare, with busy rooms tipping into too-much sound. It\u2019s a little wobbly, not a storm, so you can still move through the day\u2014just with a softer edge."
+        },
+        "snapshot": "Geomagnetic conditions are quiet overall. The magnetic field has leaned southward at times, which can add a mild unsettled feel. Solar wind is running at typical speeds. No solar flares or CMEs were reported, and the baseline resonance is near its usual level.",
+        "voiceover": "Sinus pressure louder today? If your head feels puffy behind the eyes and bright screens poke at it, you\u2019re not imagining it. Some people may notice sinus fullness and a sharper reaction to glare, with busy rooms tipping into too-much sound. It\u2019s a little wobbly, not a storm, so you can still move through the day\u2014just with a softer edge."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Sinus pressure louder today? The day feels a little wobbly, not a storm\u2014so dim bright screens, close your eyes for short slow-breathing breaks, and space out the big tasks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #SinusPressure #MigrainePatterns #Sensitivity #NervousSystem #DailyRhythms"
+        },
+        "fb": {
+          "caption": "Sinus pressure louder today? If your head feels puffy behind the eyes and bright screens poke at it, you\u2019re not imagining it. Some people may notice sinus fullness and a sharper reaction to glare, with busy rooms tipping into too-much sound. It\u2019s a little wobbly, not a storm, so you can still move through the day\u2014just with a softer edge.\n\nSpace weather is quiet overall. The magnetic field has tilted south at times, which can add a faintly unsettled tone even with typical solar wind and no notable flares or CME activity; baseline resonance looks usual. Try one anchor ritual: a screen-free, eyes\u2011closed breathing pause whenever the pressure swells. Slowing your breath and dimming visual input can ease that glare-linked squeeze and help you reset before the next task. We compare gentle field shifts with how bodies report in, so let us know if the noise-and-light combo is part of your pattern today.",
+          "hashtags": "#GaiaEyes #SinusPressure #HeadPressure #LightSensitivity #NoiseSensitivity #Geomagnetic #SelfCare #Breathing"
+        },
+        "ig": {
+          "caption": "Sinus pressure louder today? The day feels a little wobbly, not a storm\u2014so dim bright screens, close your eyes for short slow-breathing breaks, and space out the big tasks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #HeadPressure #SinusPressure #MigrainePatterns #Sensitivity #NervousSystem #DailyRhythms"
+        }
+      },
+      "solar_wind_kms": 278.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.67,
+        "kp_now": 1.0
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-10-03",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -6.67,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.67,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.75,
+          "severe_summary": null,
+          "solar_wind_kms": 278.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Sinus pressure louder today?",
+    "updated_at": "2026-10-03T15:08:54.209074+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace weather reads calm and uneventful. Solar wind flows in a normal range. No solar flares or CMEs have been noted. The resonance baseline sits close to typical levels.\n\nA wired/tired feel may pop up in pockets, then fade when you lower input. Quiet conditions tend to reward slow breaths, light movement, and steady meals. Expect the body to find a calmer gear when you don\u2019t stack stress.\n\n- Keep caffeine earlier and modest\n- Take a brief outdoor walk without rushing\n- Do three minutes of slow breathing\n- Choose one or two must-dos, then stop\n- Check local air quality and wind",
+    "caption": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals.",
+    "cards": null,
+    "created_at": "2026-10-02T16:37:30.728181+00:00",
+    "day": "2026-10-02",
+    "hashtags": "#GaiaEyes #SpaceWeather #WiredTired #AnxiousBody #SelfCare #Breathwork #Pacing #Recovery #AQI",
+    "id": 912,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -3.98,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.61,
+        "f2": 14.95,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 1.0,
+      "schumann_value_hz": 7.61,
+      "sections": {
+        "affects": "A wired/tired feel may pop up in pockets, then fade when you lower input. Quiet conditions tend to reward slow breaths, light movement, and steady meals. Expect the body to find a calmer gear when you don\u2019t stack stress.",
+        "caption": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals.",
+        "playbook": "- Keep caffeine earlier and modest\n- Take a brief outdoor walk without rushing\n- Do three minutes of slow breathing\n- Choose one or two must-dos, then stop\n- Check local air quality and wind",
+        "reel_story": {
+          "effects": "Wired/tired pockets ease with less extra input",
+          "hook": "Body buzzing for no clear reason?",
+          "pattern": "Brief unhurried walk and slow breathing help",
+          "signal": "Calm space weather, steady solar wind today",
+          "voiceover": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals."
+        },
+        "snapshot": "Space weather reads calm and uneventful. Solar wind flows in a normal range. No solar flares or CMEs have been noted. The resonance baseline sits close to typical levels.",
+        "voiceover": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals.",
+          "hashtags": "#GaiaEyes #SpaceWeather #WiredTired #AnxiousBody #SelfCare #Breathwork #Pacing #Recovery #AQI"
+        },
+        "ig": {
+          "caption": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals.",
+          "hashtags": "#GaiaEyes #SpaceWeather #WiredTired #AnxiousBody #SelfCare #Breathwork #Pacing #Recovery #AQI"
+        }
+      },
+      "solar_wind_kms": 280.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 1.0,
+        "kp_now": 0.7
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-10-02",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -3.98,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 1.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.61,
+          "severe_summary": null,
+          "solar_wind_kms": 280.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Body buzzing for no clear reason?",
+    "updated_at": "2026-10-02T16:37:30.728181+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace weather reads calm and uneventful. Solar wind flows in a normal range. No solar flares or CMEs have been noted. The resonance baseline sits close to typical levels.\n\nA wired/tired feel may pop up in pockets, then fade when you lower input. Quiet conditions tend to reward slow breaths, light movement, and steady meals. Expect the body to find a calmer gear when you don\u2019t stack stress.\n\n- Keep caffeine earlier and modest\n- Take a brief outdoor walk without rushing\n- Do three minutes of slow breathing\n- Choose one or two must-dos, then stop\n- Check local air quality and wind",
+    "caption": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals.",
+    "cards": null,
+    "created_at": "2026-10-02T16:37:30.728181+00:00",
+    "day": "2026-10-02",
+    "hashtags": "#GaiaEyes #SpaceWeather #WiredTired #AnxiousBody #SelfCare #Breathwork #Pacing #Recovery #AQI",
+    "id": 913,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -3.98,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.61,
+        "f2": 14.95,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 1.0,
+      "schumann_value_hz": 7.61,
+      "sections": {
+        "affects": "A wired/tired feel may pop up in pockets, then fade when you lower input. Quiet conditions tend to reward slow breaths, light movement, and steady meals. Expect the body to find a calmer gear when you don\u2019t stack stress.",
+        "caption": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals.",
+        "playbook": "- Keep caffeine earlier and modest\n- Take a brief outdoor walk without rushing\n- Do three minutes of slow breathing\n- Choose one or two must-dos, then stop\n- Check local air quality and wind",
+        "reel_story": {
+          "effects": "Wired/tired pockets ease with less extra input",
+          "hook": "Body buzzing for no clear reason?",
+          "pattern": "Brief unhurried walk and slow breathing help",
+          "signal": "Calm space weather, steady solar wind today",
+          "voiceover": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals."
+        },
+        "snapshot": "Space weather reads calm and uneventful. Solar wind flows in a normal range. No solar flares or CMEs have been noted. The resonance baseline sits close to typical levels.",
+        "voiceover": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals.",
+          "hashtags": "#GaiaEyes #SpaceWeather #WiredTired #AnxiousBody #SelfCare #Breathwork #Pacing #Recovery #AQI"
+        },
+        "ig": {
+          "caption": "Body buzzing for no clear reason? The sky is steady, more like a quiet morning than a storm, so there\u2019s room to recoup, and little wired/tired pockets often ease when you cut extra input. Keep caffeine earlier and modest, take a brief unhurried walk, and use slow breathing with steady meals.",
+          "hashtags": "#GaiaEyes #SpaceWeather #WiredTired #AnxiousBody #SelfCare #Breathwork #Pacing #Recovery #AQI"
+        }
+      },
+      "solar_wind_kms": 280.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 1.0,
+        "kp_now": 0.7
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-10-02",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -3.98,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 1.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.61,
+          "severe_summary": null,
+          "solar_wind_kms": 280.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Body buzzing for no clear reason?",
+    "updated_at": "2026-10-02T16:37:30.728181+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nThe geomagnetic read is calm and consistent. Solar wind looks ordinary, and no eruptions are on the board. The resonance baseline sits near its usual mark. It\u2019s a low-drama background overall.\n\nIrritability and restlessness may soften for some as the outside load stays low. Emotional swings can shorten and feel less sticky when the backdrop is even. People who carry stress from earlier in the week may still need time to settle.\n\n- Keep plans light and unrushed\n- Get a bit of daylight and easy movement\n- Limit hot takes and quick reactions\n- Check local air and weather if mood feels edgy",
+    "caption": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest.",
+    "cards": null,
+    "created_at": "2026-10-01T17:23:25.741845+00:00",
+    "day": "2026-10-01",
+    "hashtags": "#GaiaEyes #SpaceWeather #MoodHealth #RestlessMind #AnxietySupport #Pacing #SelfCare #Wellbeing #BrainFog",
+    "id": 910,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -3.94,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.7,
+        "f2": 15.16,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 1.0,
+      "schumann_value_hz": 7.7,
+      "sections": {
+        "affects": "Irritability and restlessness may soften for some as the outside load stays low. Emotional swings can shorten and feel less sticky when the backdrop is even. People who carry stress from earlier in the week may still need time to settle.",
+        "caption": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest.",
+        "playbook": "- Keep plans light and unrushed\n- Get a bit of daylight and easy movement\n- Limit hot takes and quick reactions\n- Check local air and weather if mood feels edgy",
+        "reel_story": {
+          "effects": "Mood may feel steadier and less jumpy",
+          "hook": "Mood hard to place?",
+          "pattern": "Short walks and 10-minute daylight breaks",
+          "signal": "Quiet space weather today, low outside load",
+          "voiceover": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest."
+        },
+        "snapshot": "The geomagnetic read is calm and consistent. Solar wind looks ordinary, and no eruptions are on the board. The resonance baseline sits near its usual mark. It\u2019s a low-drama background overall.",
+        "voiceover": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest.",
+          "hashtags": "#GaiaEyes #SpaceWeather #MoodHealth #RestlessMind #AnxietySupport #Pacing #SelfCare #Wellbeing #BrainFog"
+        },
+        "ig": {
+          "caption": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest.",
+          "hashtags": "#GaiaEyes #SpaceWeather #MoodHealth #RestlessMind #AnxietySupport #Pacing #SelfCare #Wellbeing #BrainFog"
+        }
+      },
+      "solar_wind_kms": 299.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 1.0,
+        "kp_now": 1.0
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-10-01",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -3.94,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 1.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.7,
+          "severe_summary": null,
+          "solar_wind_kms": 299.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Mood hard to place?",
+    "updated_at": "2026-10-01T17:23:25.741845+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nThe geomagnetic read is calm and consistent. Solar wind looks ordinary, and no eruptions are on the board. The resonance baseline sits near its usual mark. It\u2019s a low-drama background overall.\n\nIrritability and restlessness may soften for some as the outside load stays low. Emotional swings can shorten and feel less sticky when the backdrop is even. People who carry stress from earlier in the week may still need time to settle.\n\n- Keep plans light and unrushed\n- Get a bit of daylight and easy movement\n- Limit hot takes and quick reactions\n- Check local air and weather if mood feels edgy",
+    "caption": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest.",
+    "cards": null,
+    "created_at": "2026-10-01T17:23:25.741845+00:00",
+    "day": "2026-10-01",
+    "hashtags": "#GaiaEyes #SpaceWeather #MoodHealth #RestlessMind #AnxietySupport #Pacing #SelfCare #Wellbeing #BrainFog",
+    "id": 911,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -3.94,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.7,
+        "f2": 15.16,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 1.0,
+      "schumann_value_hz": 7.7,
+      "sections": {
+        "affects": "Irritability and restlessness may soften for some as the outside load stays low. Emotional swings can shorten and feel less sticky when the backdrop is even. People who carry stress from earlier in the week may still need time to settle.",
+        "caption": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest.",
+        "playbook": "- Keep plans light and unrushed\n- Get a bit of daylight and easy movement\n- Limit hot takes and quick reactions\n- Check local air and weather if mood feels edgy",
+        "reel_story": {
+          "effects": "Mood may feel steadier and less jumpy",
+          "hook": "Mood hard to place?",
+          "pattern": "Short walks and 10-minute daylight breaks",
+          "signal": "Quiet space weather today, low outside load",
+          "voiceover": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest."
+        },
+        "snapshot": "The geomagnetic read is calm and consistent. Solar wind looks ordinary, and no eruptions are on the board. The resonance baseline sits near its usual mark. It\u2019s a low-drama background overall.",
+        "voiceover": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest.",
+          "hashtags": "#GaiaEyes #SpaceWeather #MoodHealth #RestlessMind #AnxietySupport #Pacing #SelfCare #Wellbeing #BrainFog"
+        },
+        "ig": {
+          "caption": "Mood hard to place? The sky feels quiet and steady today, so edges may soften and mood swings may pass faster. Keep plans light, get some daylight and easy movement, and leave a little time to rest.",
+          "hashtags": "#GaiaEyes #SpaceWeather #MoodHealth #RestlessMind #AnxietySupport #Pacing #SelfCare #Wellbeing #BrainFog"
+        }
+      },
+      "solar_wind_kms": 299.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 1.0,
+        "kp_now": 1.0
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-10-01",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -3.94,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 1.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.7,
+          "severe_summary": null,
+          "solar_wind_kms": 299.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Mood hard to place?",
+    "updated_at": "2026-10-01T17:23:25.741845+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic activity is in the quiet range. Solar wind sits in a normal band. No recent flares or CME reports. Schumann readings are close to baseline.\n\nSome people who are headache\u2011prone may notice fewer triggers when signals are this steady. The background throb can ease, and light or noise may feel a touch less harsh. Carryover from earlier in the week can linger, so ease up rather than pushing hard.\n\n- Keep hydration up through the day\n- Get outside light without glare\n- Take brief screen breaks\n- Keep meals consistent and simple\n- Watch local weather and air quality",
+    "caption": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks.",
+    "cards": null,
+    "created_at": "2026-09-30T16:50:22.88944+00:00",
+    "day": "2026-09-30",
+    "hashtags": "#GaiaEyes #SpaceWeather #Headache #Migraine #SensorySensitivity #SelfCare #ChronicIllness #HealthPatterns #Wellbeing",
+    "id": 908,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -1.98,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.72,
+        "f2": 15.07,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 1.33,
+      "schumann_value_hz": 7.72,
+      "sections": {
+        "affects": "Some people who are headache\u2011prone may notice fewer triggers when signals are this steady. The background throb can ease, and light or noise may feel a touch less harsh. Carryover from earlier in the week can linger, so ease up rather than pushing hard.",
+        "caption": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks.",
+        "playbook": "- Keep hydration up through the day\n- Get outside light without glare\n- Take brief screen breaks\n- Keep meals consistent and simple\n- Watch local weather and air quality",
+        "reel_story": {
+          "effects": "Background throb may ease; light feels softer",
+          "hook": "Headache threshold lower today?",
+          "pattern": "Sip water, gentle daylight, short paced breaks",
+          "signal": "Space weather is quiet and steady today",
+          "voiceover": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks."
+        },
+        "snapshot": "Geomagnetic activity is in the quiet range. Solar wind sits in a normal band. No recent flares or CME reports. Schumann readings are close to baseline.",
+        "voiceover": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Headache #Migraine #SensorySensitivity #SelfCare #ChronicIllness #HealthPatterns #Wellbeing"
+        },
+        "ig": {
+          "caption": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Headache #Migraine #SensorySensitivity #SelfCare #ChronicIllness #HealthPatterns #Wellbeing"
+        }
+      },
+      "solar_wind_kms": 304.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 1.33,
+        "kp_now": 1.0
+      },
+      "tone": "calm",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "calm"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "calm"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "calm"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-30",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -1.98,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 1.33,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.72,
+          "severe_summary": null,
+          "solar_wind_kms": 304.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "quiet",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "calm"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Headache threshold lower today?",
+    "updated_at": "2026-09-30T16:50:22.88944+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic activity is in the quiet range. Solar wind sits in a normal band. No recent flares or CME reports. Schumann readings are close to baseline.\n\nSome people who are headache\u2011prone may notice fewer triggers when signals are this steady. The background throb can ease, and light or noise may feel a touch less harsh. Carryover from earlier in the week can linger, so ease up rather than pushing hard.\n\n- Keep hydration up through the day\n- Get outside light without glare\n- Take brief screen breaks\n- Keep meals consistent and simple\n- Watch local weather and air quality",
+    "caption": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks.",
+    "cards": null,
+    "created_at": "2026-09-30T16:50:22.88944+00:00",
+    "day": "2026-09-30",
+    "hashtags": "#GaiaEyes #SpaceWeather #Headache #Migraine #SensorySensitivity #SelfCare #ChronicIllness #HealthPatterns #Wellbeing",
+    "id": 909,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -1.98,
+      "cmes_24h": 0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.72,
+        "f2": 15.07,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 1.33,
+      "schumann_value_hz": 7.72,
+      "sections": {
+        "affects": "Some people who are headache\u2011prone may notice fewer triggers when signals are this steady. The background throb can ease, and light or noise may feel a touch less harsh. Carryover from earlier in the week can linger, so ease up rather than pushing hard.",
+        "caption": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks.",
+        "playbook": "- Keep hydration up through the day\n- Get outside light without glare\n- Take brief screen breaks\n- Keep meals consistent and simple\n- Watch local weather and air quality",
+        "reel_story": {
+          "effects": "Background throb may ease; light feels softer",
+          "hook": "Headache threshold lower today?",
+          "pattern": "Sip water, gentle daylight, short paced breaks",
+          "signal": "Space weather is quiet and steady today",
+          "voiceover": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks."
+        },
+        "snapshot": "Geomagnetic activity is in the quiet range. Solar wind sits in a normal band. No recent flares or CME reports. Schumann readings are close to baseline.",
+        "voiceover": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Headache #Migraine #SensorySensitivity #SelfCare #ChronicIllness #HealthPatterns #Wellbeing"
+        },
+        "ig": {
+          "caption": "Headache threshold lower today? The sky is calm and steady, so the background throb may ease and light or noise can feel a bit softer\u2014some room to recoup. Keep it easy: sip water often, get gentle daylight without glare, and pace tasks with short breaks.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Headache #Migraine #SensorySensitivity #SelfCare #ChronicIllness #HealthPatterns #Wellbeing"
+        }
+      },
+      "solar_wind_kms": 304.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 1.33,
+        "kp_now": 1.0
+      },
+      "tone": "calm",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "calm"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "calm"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "calm"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-30",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -1.98,
+          "cmes_24h": 0.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 1.33,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.72,
+          "severe_summary": null,
+          "solar_wind_kms": 304.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "quiet",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "southward field orientation"
+          ],
+          "tone": "calm"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Headache threshold lower today?",
+    "updated_at": "2026-09-30T16:50:22.88944+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic activity is quiet with a slightly southward magnetic field and a normal solar wind pace. No solar flares were reported. A few recent solar eruptions were observed with no evidence they are aimed at Earth. The Schumann baseline sits close to its usual range.\n\nThis quieter stretch may make it easier to settle and feel more steady for some people. You might notice more predictable energy and clearer moments as the day goes on. If you\u2019re still carrying stress from recent ups and downs, that can take time to ease, and that\u2019s normal.\n\n- Keep today simple and unrushed\n- Get a little daylight and easy movement\n- Hydrate and keep caffeine earlier\n- Leave a buffer between tasks\n- Wind down screens and lights earlier tonight",
+    "caption": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight.",
+    "cards": null,
+    "created_at": "2026-09-29T16:52:08.707987+00:00",
+    "day": "2026-09-29",
+    "hashtags": "#GaiaEyes #SpaceWeather #Schumann #NervousSystem #ChronicIllness #Headache #Migraine #Pacing #Recovery",
+    "id": 904,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -2.99,
+      "cmes_24h": 3.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.78,
+        "f2": 15.19,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.0,
+      "schumann_value_hz": 7.78,
+      "sections": {
+        "affects": "This quieter stretch may make it easier to settle and feel more steady for some people. You might notice more predictable energy and clearer moments as the day goes on. If you\u2019re still carrying stress from recent ups and downs, that can take time to ease, and that\u2019s normal.",
+        "caption": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight.",
+        "playbook": "- Keep today simple and unrushed\n- Get a little daylight and easy movement\n- Hydrate and keep caffeine earlier\n- Leave a buffer between tasks\n- Wind down screens and lights earlier tonight",
+        "reel_story": {
+          "effects": "Your body may feel steadier and clearer",
+          "hook": "Today\u2019s feel: a quiet breather",
+          "pattern": "Keep it simple and unrushed; save evening energy",
+          "signal": "Space weather is calm and steady today",
+          "voiceover": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight."
+        },
+        "snapshot": "Geomagnetic activity is quiet with a slightly southward magnetic field and a normal solar wind pace. No solar flares were reported. A few recent solar eruptions were observed with no evidence they are aimed at Earth. The Schumann baseline sits close to its usual range.",
+        "voiceover": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #NervousSystem #ChronicIllness #Headache #Migraine #Pacing #Recovery"
+        },
+        "ig": {
+          "caption": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #NervousSystem #ChronicIllness #Headache #Migraine #Pacing #Recovery"
+        }
+      },
+      "solar_wind_kms": 279.7,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 1.3,
+        "kp_now": 1.3
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-29",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -2.99,
+          "cmes_24h": 3.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.78,
+          "severe_summary": null,
+          "solar_wind_kms": 279.7
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Finally, a little breathing room?",
+    "updated_at": "2026-09-30T01:33:26.290443+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nGeomagnetic activity is quiet with a slightly southward magnetic field and a normal solar wind pace. No solar flares were reported. A few recent solar eruptions were observed with no evidence they are aimed at Earth. The Schumann baseline sits close to its usual range.\n\nThis quieter stretch may make it easier to settle and feel more steady for some people. You might notice more predictable energy and clearer moments as the day goes on. If you\u2019re still carrying stress from recent ups and downs, that can take time to ease, and that\u2019s normal.\n\n- Keep today simple and unrushed\n- Get a little daylight and easy movement\n- Hydrate and keep caffeine earlier\n- Leave a buffer between tasks\n- Wind down screens and lights earlier tonight",
+    "caption": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight.",
+    "cards": null,
+    "created_at": "2026-09-29T16:52:08.707987+00:00",
+    "day": "2026-09-29",
+    "hashtags": "#GaiaEyes #SpaceWeather #Schumann #NervousSystem #ChronicIllness #Headache #Migraine #Pacing #Recovery",
+    "id": 905,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -2.99,
+      "cmes_24h": 3.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.78,
+        "f2": 15.19,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.0,
+      "schumann_value_hz": 7.78,
+      "sections": {
+        "affects": "This quieter stretch may make it easier to settle and feel more steady for some people. You might notice more predictable energy and clearer moments as the day goes on. If you\u2019re still carrying stress from recent ups and downs, that can take time to ease, and that\u2019s normal.",
+        "caption": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight.",
+        "playbook": "- Keep today simple and unrushed\n- Get a little daylight and easy movement\n- Hydrate and keep caffeine earlier\n- Leave a buffer between tasks\n- Wind down screens and lights earlier tonight",
+        "reel_story": {
+          "effects": "Your body may feel steadier and clearer",
+          "hook": "Today\u2019s feel: a quiet breather",
+          "pattern": "Keep it simple and unrushed; save evening energy",
+          "signal": "Space weather is calm and steady today",
+          "voiceover": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight."
+        },
+        "snapshot": "Geomagnetic activity is quiet with a slightly southward magnetic field and a normal solar wind pace. No solar flares were reported. A few recent solar eruptions were observed with no evidence they are aimed at Earth. The Schumann baseline sits close to its usual range.",
+        "voiceover": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight."
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #NervousSystem #ChronicIllness #Headache #Migraine #Pacing #Recovery"
+        },
+        "ig": {
+          "caption": "Today\u2019s feel: a quiet breather. Signals are steady, so there\u2019s room to recoup and feel more sure on your feet. Keep it simple and unrushed\u2014get a little daylight and easy movement, and save some gas for tonight.",
+          "hashtags": "#GaiaEyes #SpaceWeather #Schumann #NervousSystem #ChronicIllness #Headache #Migraine #Pacing #Recovery"
+        }
+      },
+      "solar_wind_kms": 279.7,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 1.3,
+        "kp_now": 1.3
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-29",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -2.99,
+          "cmes_24h": 3.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.78,
+          "severe_summary": null,
+          "solar_wind_kms": 279.7
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Finally, a little breathing room?",
+    "updated_at": "2026-09-30T01:35:43.858696+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace Weather Snapshot\nSignals are sitting in a fairly ordinary range today. Small steady choices matter most. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.\n\n- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.\n\n- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+    "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "cards": null,
+    "created_at": "2026-09-28T18:34:19.078639+00:00",
+    "day": "2026-09-28",
+    "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    "id": 902,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -2.2,
+      "cmes_24h": 5.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.7,
+        "f2": 14.89,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.0,
+      "schumann_value_hz": 7.7,
+      "sections": {
+        "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+        "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+        "reel_story": {
+          "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+          "hook": "Mood Feeling Hard To Place?",
+          "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+          "signal": "Signals are sitting in a fairly ordinary range today.",
+          "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)"
+        },
+        "snapshot": "Space Weather Snapshot\nSignals are sitting in a fairly ordinary range today. Small steady choices matter most. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+        "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)"
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        },
+        "ig": {
+          "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        }
+      },
+      "solar_wind_kms": 326.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.0,
+        "kp_now": 0.7
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-28",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -2.2,
+          "cmes_24h": 5.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.7,
+          "severe_summary": null,
+          "solar_wind_kms": 326.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Mood Feeling Hard To Place?",
+    "updated_at": "2026-09-28T18:34:19.078639+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace Weather Snapshot\nSignals are sitting in a fairly ordinary range today. Small steady choices matter most. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.\n\n- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.\n\n- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+    "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+    "cards": null,
+    "created_at": "2026-09-28T18:34:19.078639+00:00",
+    "day": "2026-09-28",
+    "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    "id": 903,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "quiet",
+        "sw": "normal"
+      },
+      "bz_min": -2.2,
+      "cmes_24h": 5.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.7,
+        "f2": 14.89,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 2.0,
+      "schumann_value_hz": 7.7,
+      "sections": {
+        "affects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.\n- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.\n- Sleep: Keep evening light warm and low so the calmer rhythm carries through.\n- Pattern note: Gaia Eyes often sees steadier recovery patterns on days like this.",
+        "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+        "playbook": "- Use the steadier stretch for one or two focused tasks\n- Keep light movement and natural light in the day to reinforce rhythm\n- Hydrate and keep caffeine earlier so sleep stays easier later",
+        "reel_story": {
+          "effects": "- Focus/energy: Steadier conditions make longer focus stretches easier to use.",
+          "hook": "Mood Feeling Hard To Place?",
+          "pattern": "- Autonomic/HRV: A quieter field can make recovery work feel more cooperative.",
+          "signal": "Signals are sitting in a fairly ordinary range today.",
+          "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)"
+        },
+        "snapshot": "Space Weather Snapshot\nSignals are sitting in a fairly ordinary range today. Small steady choices matter most. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+        "voiceover": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)"
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        },
+        "ig": {
+          "caption": "Ordinary signal mix today\u2014small steady choices do the work. \u2014 Kp 2.0 \u2022 Bz -2.2 nT \u2022 Schumann 7.70 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        }
+      },
+      "solar_wind_kms": 326.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 2.0,
+        "kp_now": 0.7
+      },
+      "tone": "neutral",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "Use the steadier stretch for one or two focused tasks",
+              "priority": 1,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Keep light movement and natural light in the day to reinforce rhythm",
+              "priority": 2,
+              "reason": "neutral"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Hydrate and keep caffeine earlier so sleep stays easier later",
+              "priority": 3,
+              "reason": "neutral"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-28",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -2.2,
+          "cmes_24h": 5.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 2.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.7,
+          "severe_summary": null,
+          "solar_wind_kms": 326.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "observe_only",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "notable",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "quiet",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "neutral"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Mood Feeling Hard To Place?",
+    "updated_at": "2026-09-28T18:34:19.078639+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace Weather Snapshot\nThings are looking lively in the field today, so expect some fluctuations. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.\n\n- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.\n\n- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+    "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+    "cards": null,
+    "created_at": "2026-09-27T15:37:39.233827+00:00",
+    "day": "2026-09-27",
+    "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    "id": 900,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "active",
+        "sw": "normal"
+      },
+      "bz_min": -3.85,
+      "cmes_24h": 1.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.73,
+        "f2": 14.73,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 4.0,
+      "schumann_value_hz": 7.73,
+      "sections": {
+        "affects": "- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.",
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+        "playbook": "- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+        "reel_story": {
+          "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+          "hook": "Feeling Different Today?",
+          "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+          "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+          "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)"
+        },
+        "snapshot": "Space Weather Snapshot\nThings are looking lively in the field today, so expect some fluctuations. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+        "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)"
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        },
+        "ig": {
+          "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        }
+      },
+      "solar_wind_kms": 399.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 4.0,
+        "kp_now": 1.3
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-27",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -3.85,
+          "cmes_24h": 1.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 4.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.73,
+          "severe_summary": null,
+          "solar_wind_kms": 399.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "active",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-27T15:37:39.233827+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace Weather Snapshot\nThings are looking lively in the field today, so expect some fluctuations. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.\n\n- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.\n\n- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+    "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+    "cards": null,
+    "created_at": "2026-09-27T15:37:39.233827+00:00",
+    "day": "2026-09-27",
+    "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    "id": 901,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "active",
+        "sw": "normal"
+      },
+      "bz_min": -3.85,
+      "cmes_24h": 1.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.73,
+        "f2": 14.73,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 4.0,
+      "schumann_value_hz": 7.73,
+      "sections": {
+        "affects": "- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.",
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+        "playbook": "- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+        "reel_story": {
+          "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+          "hook": "Feeling Different Today?",
+          "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+          "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+          "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)"
+        },
+        "snapshot": "Space Weather Snapshot\nThings are looking lively in the field today, so expect some fluctuations. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+        "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)"
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        },
+        "ig": {
+          "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -3.9 nT \u2022 Schumann 7.73 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        }
+      },
+      "solar_wind_kms": 399.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 4.0,
+        "kp_now": 1.3
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-27",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -3.85,
+          "cmes_24h": 1.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 4.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.73,
+          "severe_summary": null,
+          "solar_wind_kms": 399.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "active",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-27T15:37:39.233827+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace Weather Snapshot\nThe field has a choppier edge today. Keep your pacing flexible. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.\n\n- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.\n\n- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+    "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+    "cards": null,
+    "created_at": "2026-09-26T14:57:08.31608+00:00",
+    "day": "2026-09-26",
+    "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    "id": 898,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "active",
+        "sw": "normal"
+      },
+      "bz_min": -5.4,
+      "cmes_24h": 1.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.56,
+        "f2": 14.77,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 4.0,
+      "schumann_value_hz": 7.56,
+      "sections": {
+        "affects": "- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.",
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+        "playbook": "- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+        "reel_story": {
+          "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+          "hook": "Feeling Different Today?",
+          "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+          "signal": "The field has a choppier edge today.",
+          "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)"
+        },
+        "snapshot": "Space Weather Snapshot\nThe field has a choppier edge today. Keep your pacing flexible. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+        "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)"
+      },
+      "social_variants": {
+        "default": {
+          "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        },
+        "ig": {
+          "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        }
+      },
+      "solar_wind_kms": 474.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 4.0,
+        "kp_now": 2.7
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-26",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -5.4,
+          "cmes_24h": 1.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 4.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.56,
+          "severe_summary": null,
+          "solar_wind_kms": 474.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "active",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-26T14:57:08.31608+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace Weather Snapshot\nThe field has a choppier edge today. Keep your pacing flexible. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.\n\n- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.\n\n- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+    "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+    "cards": null,
+    "created_at": "2026-09-26T14:57:08.31608+00:00",
+    "day": "2026-09-26",
+    "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    "id": 899,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "slightly southward",
+        "kp": "active",
+        "sw": "normal"
+      },
+      "bz_min": -5.4,
+      "cmes_24h": 1.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.56,
+        "f2": 14.77,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 4.0,
+      "schumann_value_hz": 7.56,
+      "sections": {
+        "affects": "- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.",
+        "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+        "playbook": "- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+        "reel_story": {
+          "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+          "hook": "Feeling Different Today?",
+          "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+          "signal": "The field has a choppier edge today.",
+          "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)"
+        },
+        "snapshot": "Space Weather Snapshot\nThe field has a choppier edge today. Keep your pacing flexible. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+        "voiceover": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)"
+      },
+      "social_variants": {
+        "default": {
+          "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        },
+        "ig": {
+          "caption": "A few bumps in the road\u2014keep a slow and steady pace today. \u2014 Kp 4.0 \u2022 Bz -5.4 nT \u2022 Schumann 7.56 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        }
+      },
+      "solar_wind_kms": 474.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 4.0,
+        "kp_now": 2.7
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-26",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -5.4,
+          "cmes_24h": 1.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 4.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.56,
+          "severe_summary": null,
+          "solar_wind_kms": 474.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "slightly southward",
+            "kp": "active",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Feeling Different Today?",
+    "updated_at": "2026-09-26T14:57:08.31608+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace Weather Snapshot\nThings are looking lively in the field today, so expect some fluctuations. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.\n\n- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.\n\n- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+    "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+    "cards": null,
+    "created_at": "2026-09-25T15:47:27.903825+00:00",
+    "day": "2026-09-25",
+    "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    "id": 896,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "southward",
+        "kp": "active",
+        "sw": "normal"
+      },
+      "bz_min": -8.0,
+      "cmes_24h": 1.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.74,
+        "f2": 14.98,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 4.0,
+      "schumann_value_hz": 7.74,
+      "sections": {
+        "affects": "- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.",
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+        "playbook": "- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+        "reel_story": {
+          "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+          "hook": "Head Pressure Building?",
+          "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+          "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+          "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)"
+        },
+        "snapshot": "Space Weather Snapshot\nThings are looking lively in the field today, so expect some fluctuations. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+        "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)"
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        },
+        "ig": {
+          "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        }
+      },
+      "solar_wind_kms": 457.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 4.0,
+        "kp_now": 3.7
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-25",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -8.0,
+          "cmes_24h": 1.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 4.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.74,
+          "severe_summary": null,
+          "solar_wind_kms": 457.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "southward",
+            "kp": "active",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "default",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Head Pressure Building?",
+    "updated_at": "2026-09-25T15:47:27.903825+00:00",
+    "user_id": null
+  },
+  {
+    "body_markdown": "Gaia Eyes \u2014 Daily EarthScope\n\nSpace Weather Snapshot\nThings are looking lively in the field today, so expect some fluctuations. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.\n\n- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.\n\n- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+    "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+    "cards": null,
+    "created_at": "2026-09-25T15:47:27.903825+00:00",
+    "day": "2026-09-25",
+    "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    "id": 897,
+    "lead": null,
+    "metrics_json": {
+      "bands": {
+        "bz": "southward",
+        "kp": "active",
+        "sw": "normal"
+      },
+      "bz_min": -8.0,
+      "cmes_24h": 1.0,
+      "flares_24h": 0,
+      "harmonics": {
+        "f1": 7.74,
+        "f2": 14.98,
+        "h3": null,
+        "h4": null
+      },
+      "kp_max_24h": 4.0,
+      "schumann_value_hz": 7.74,
+      "sections": {
+        "affects": "- Focus/energy: Expect more variability and shorter clean focus stretches.\n- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.\n- Sleep: Protect the evening routine and keep late stimulation lighter.\n- Pattern note: If you run sensitive, pace flares instead of forcing through them.",
+        "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+        "playbook": "- 5\u201310 min paced breathing or brief HRV biofeedback\n- Hydration + electrolytes; short daylight exposure; move easy\n- Protect sleep with a simple evening routine and softer screens\n- If you run sensitive, keep load lighter and use short reset breaks",
+        "reel_story": {
+          "effects": "- Focus/energy: Expect more variability and shorter clean focus stretches.",
+          "hook": "Head Pressure Building?",
+          "pattern": "- Autonomic/HRV: Active space weather can overlap with a less settled baseline for some.",
+          "signal": "Things are looking lively in the field today, so expect some fluctuations.",
+          "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)"
+        },
+        "snapshot": "Space Weather Snapshot\nThings are looking lively in the field today, so expect some fluctuations. Drivers: recent CME after-effects, southward field orientation. Schumann resonance has been lively enough to notice for some sensitive systems. Keep a steady rhythm and make regulation easier than recovery.",
+        "voiceover": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)"
+      },
+      "social_variants": {
+        "default": {
+          "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        },
+        "ig": {
+          "caption": "Uneven signal day\u2014leave extra room between the big things. \u2014 Kp 4.0 \u2022 Bz -8.0 nT \u2022 Schumann 7.74 Hz (snapshot at write time)",
+          "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
+        }
+      },
+      "solar_wind_kms": 457.0,
+      "space_json": {
+        "aurora_headline": null,
+        "aurora_window": "Next 72h",
+        "bz_now": null,
+        "kp_now": 2.0,
+        "sw_now": null
+      },
+      "space_outlook": {
+        "aurora_headline": "Confined to polar regions",
+        "aurora_window": "Next 72h",
+        "kp_max_24h": 4.0,
+        "kp_now": 3.7
+      },
+      "tone": "unsettled",
+      "voice_semantic": {
+        "actions": {
+          "primary": [
+            {
+              "key": "public_action_1",
+              "label": "5\u201310 min paced breathing or brief HRV biofeedback",
+              "priority": 1,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_2",
+              "label": "Hydration + electrolytes; short daylight exposure; move easy",
+              "priority": 2,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_3",
+              "label": "Protect sleep with a simple evening routine and softer screens",
+              "priority": 3,
+              "reason": "unsettled"
+            },
+            {
+              "key": "public_action_4",
+              "label": "If you run sensitive, keep load lighter and use short reset breaks",
+              "priority": 4,
+              "reason": "unsettled"
+            }
+          ],
+          "secondary": []
+        },
+        "date": "2026-09-25",
+        "facts": {
+          "aurora_headline": null,
+          "aurora_window": "Next 72h",
+          "bz_min": -8.0,
+          "cmes_24h": 1.0,
+          "first_person": true,
+          "flares_24h": 0.0,
+          "kp_max_24h": 4.0,
+          "kp_now": 2.0,
+          "quakes_count": null,
+          "schumann_note": "Schumann f0 from tomsk,cumiana; harmonics averaged across available stations.",
+          "schumann_value_hz": 7.74,
+          "severe_summary": null,
+          "solar_wind_kms": 457.0
+        },
+        "guardrails": {
+          "avoid_causal_language": true,
+          "avoid_fear_language": true,
+          "claim_strength": "may_notice",
+          "confidence_overall": "high",
+          "evidence_basis": [
+            "space_weather_daily",
+            "resonance_daily"
+          ],
+          "max_urgency": "watch",
+          "medical_disclaimer_level": "light"
+        },
+        "interpretation": {
+          "bands": {
+            "bz": "southward",
+            "kp": "active",
+            "sw": "normal"
+          },
+          "driver_bits": [
+            "recent CME after-effects",
+            "southward field orientation"
+          ],
+          "tone": "unsettled"
+        },
+        "kind": "earthscope_public_post",
+        "render_hints": {
+          "humor_ok": true,
+          "metaphor_ok": true,
+          "persona_strength": "light",
+          "preferred_detail_sections": [
+            "caption",
+            "snapshot",
+            "affects",
+            "playbook"
+          ],
+          "preferred_summary_length": "medium"
+        },
+        "schema_version": "1.0",
+        "user_context": {
+          "audience": "public",
+          "channel": "social_public"
+        }
+      }
+    },
+    "overview": null,
+    "platform": "ig",
+    "sources_json": {
+      "api.v1.space.forecast.outlook": true,
+      "marts.schumann_daily": true,
+      "marts.space_weather_daily": true
+    },
+    "title": "Head Pressure Building?",
+    "updated_at": "2026-09-25T15:47:27.903825+00:00",
+    "user_id": null
+  }
+]

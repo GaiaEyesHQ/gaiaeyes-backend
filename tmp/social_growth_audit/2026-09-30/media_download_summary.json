@@ -1,0 +1,42 @@
+[
+  {
+    "name": "daily_caption.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "last_modified": "Wed, 30 Sep 2026 16:51:48 GMT",
+    "bytes": 170822,
+    "local_path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-09-30/media/daily_caption.jpg"
+  },
+  {
+    "name": "daily_stats.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "last_modified": "Wed, 30 Sep 2026 16:51:48 GMT",
+    "bytes": 152478,
+    "local_path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-09-30/media/daily_stats.jpg"
+  },
+  {
+    "name": "daily_affects.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "last_modified": "Wed, 30 Sep 2026 16:51:49 GMT",
+    "bytes": 273803,
+    "local_path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-09-30/media/daily_affects.jpg"
+  },
+  {
+    "name": "daily_playbook.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "last_modified": "Wed, 30 Sep 2026 16:51:49 GMT",
+    "bytes": 184314,
+    "local_path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-09-30/media/daily_playbook.jpg"
+  },
+  {
+    "name": "latest.mp4",
+    "status": 200,
+    "content_type": "video/mp4",
+    "last_modified": "Wed, 30 Sep 2026 16:53:18 GMT",
+    "bytes": 966746,
+    "local_path": "/Users/gennwu/Documents/GitHub/gaiaeyes-backend/tmp/social_growth_audit/2026-09-30/media/latest.mp4"
+  }
+]
