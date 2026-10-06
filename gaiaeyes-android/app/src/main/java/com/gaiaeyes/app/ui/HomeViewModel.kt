@@ -1034,6 +1034,13 @@ class HomeViewModel(
         }
     }
 
+    fun clearDeletedAccountState() {
+        if (authRepository.currentAccountId() != null) return
+        handleAuthState(AuthState.SignedOut)
+        // Also remove remembered email, onboarding choices and draft input after deletion.
+        _uiState.value = HomeUiState(authState = AuthState.SignedOut)
+    }
+
     private fun handleAuthState(authState: AuthState) {
         val previousAccount = (_uiState.value.authState as? AuthState.SignedIn)?.accountId
         if (authState is AuthState.SignedIn && previousAccount != null && previousAccount != authState.accountId) {
@@ -1191,6 +1198,11 @@ class HomeViewModel(
                 _uiState.value.authMessage
             },
         )
+        if (authState == AuthState.SignedOut && previousAccount != null &&
+            authRepository.accountOperations?.isBlocked(previousAccount) == true) {
+            // Local recovery exit keeps disk queues paused, but must not carry drafts into a new account.
+            _uiState.value = HomeUiState(authState = AuthState.SignedOut)
+        }
     }
 
     private fun maybeHandleQuickLog(request: QuickLogRequest?) {

@@ -58,6 +58,10 @@ class NotificationRepository(
         preferences.edit().remove(TOKEN_KEY).apply()
     }
 
+    fun forgetLocalToken() {
+        check(preferences.edit().remove(TOKEN_KEY).commit()) { "Could not clear local notification registration" }
+    }
+
     private suspend fun firebaseToken(): String = suspendCancellableCoroutine { continuation ->
         FirebaseMessaging.getInstance().token
             .addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }

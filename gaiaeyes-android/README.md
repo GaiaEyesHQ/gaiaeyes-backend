@@ -148,7 +148,7 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   ./gradlew :app:testDebugUnitTest \
   --tests 'com.gaiaeyes.app.data.Billing*Test' \
   --tests 'com.gaiaeyes.app.core.network.BillingApiClientTest'
-ANDROID_HOME="/Users/gennwu/Library/Android/sdk" \
+ANDROID_HOME="$HOME/Library/Android/sdk" \
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   ./gradlew -p visual-harness :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.gaiaeyes.app.visualharness.BillingSettingsScreenTest
@@ -276,3 +276,29 @@ the next device-location refresh.
    **Explore > Local Weather**, then confirm both surfaces show the new ZIP.
 5. Disable current-location updates and save a manual ZIP. Reopen the app and
    confirm local conditions continue to load from that saved fallback.
+
+## Account deletion
+
+October 1 source implementation uses the existing authenticated backend contract: `GET /v1/profile/account/preflight` followed by `DELETE /v1/profile/account`. Settings and onboarding/setup screens expose the action for registered and guest accounts. Preflight must identify the current account and report both deletion capabilities ready. A separate permanent-deletion confirmation is required for every remote attempt.
+
+Before DELETE, the client durably pauses the account, cancels and joins registered account operations, and checks the account again after token acquisition. Journal/Health Connect queues and background drains reject paused accounts; Explore registers its entire refresh scope so sibling responses cannot recreate its cache. DELETE uses a dedicated transport with redirect/connection retry disabled and a one-shot body. Failed, interrupted, mismatched or malformed responses remain unconfirmed; sync stays paused across process restarts. The app does not silently retry or resume uploads.
+
+Only a matching successful response permits cleanup of that account's dashboard, body, home context, Explore, patterns, outlook, journal queue, Health Connect queue and Guide poll answers. Local notification registration, pending navigation/quick log and session clearing are conditional on that account still being current. Session deletion uses the SDK local-clear method, with identity checked again at encrypted storage deletion and a checked persistence result. Completed deletion clears remembered UI input. An account switch must never sign out or remove caches for the replacement account. Cleanup errors retain the confirmation and offer local cleanup retry without another DELETE. A minimal account-hash status marker remains on-device to prevent stale uploads after interrupted cleanup or session restoration.
+
+The backend commits account-linked database deletion before deleting the Auth user. An error can therefore follow partial deletion. A client cancellation cannot prove rollback of a request already received by the server or prevent another device from writing. Hosted coverage and concurrency must be qualified separately; source success is not proof of erasure from every provider, object store, log or backup. Store subscriptions and Health Connect's original records are not removed by this flow. Public web deletion-request access, store declarations, physical-device/SDK behavior and hosted acceptance remain separate release dependencies. No new website/member-hub surface was published; this change supplies Android parity with the existing iOS/backend contract.
+
+Focused synthetic verification (no live accounts or credentials):
+
+```sh
+./gradlew --offline --no-daemon --no-configuration-cache :app:testDebugUnitTest \
+  --tests 'com.gaiaeyes.app.data.AccountDeletionControllerTest' \
+  --tests 'com.gaiaeyes.app.data.AccountOperationGateTest' \
+  --tests 'com.gaiaeyes.app.core.network.AccountDeletionApiTest' \
+  --tests 'com.gaiaeyes.app.data.AccountDeletionExploreTest' \
+  --tests 'com.gaiaeyes.app.data.AccountDeletionExitTest' \
+  :app:compileDebugKotlin
+```
+
+Thirty original cases cover cancellation before/after dispatch, account changes, partial or invalid responses, durable state failures, cleanup-only retry, account-scoped cancellation and late Explore work. These are JVM synthetic checks; no signed package, store upload, real-account deletion or device acceptance was performed. Existing signing/billing acceptance suites were not rerun.
+
+Unconfirmed deletion and failed local cleanup offer **Sign out and use another account**. This removes only the current local session; it does not retry DELETE, claim success, clear the old account's pending data or resume its uploads. The old durable pause and cleanup confirmation are retained. Confirmation held only in memory must be persisted before exit; if local persistence/session removal fails, the recovery screen reports the failure and offers an explicit local retry. A replacement account remains usable and protected from a late exit callback. Local draft input and pending navigation are cleared when leaving the blocked account. Eight additional regression cases cover expired-session exit, replacement-account use, retained old-account pause/cleanup evidence, failed/cancelled local exit and local retry. Only these eight new cases and affected source compilation were run for this correction; the original 30-case evidence is retained.

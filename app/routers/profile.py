@@ -62,6 +62,10 @@ _TRACKED_STAT_KEYS = {
 _DEFAULT_TRACKED_STAT_KEYS = ["resting_hr", "respiratory", "hrv", "spo2", "steps"]
 _MAX_FAVORITE_SYMPTOM_CODES = 6
 _ACCOUNT_DELETE_SCHEMAS = ["raw", "app", "content", "marts", "gaia"]
+_ACCOUNT_DELETE_UNCONFIRMED = (
+    "Account deletion could not be confirmed. Some data may already have been removed. "
+    "Contact support before trying again."
+)
 _ONBOARDING_STEPS = {
     "welcome",
     "account",
@@ -225,31 +229,29 @@ async def _delete_supabase_auth_user(user_id: str) -> None:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.delete(endpoint, headers=headers)
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Supabase auth deletion failed: {exc}") from exc
+    except httpx.HTTPError:
+        # This call follows the database commit. Do not expose provider exceptions
+        # or imply that a transport failure rolled back the preceding deletions.
+        logger.warning("Account auth deletion unconfirmed: transport failure")
+        raise HTTPException(status_code=502, detail=_ACCOUNT_DELETE_UNCONFIRMED) from None
 
-    if response.status_code in {200, 204, 404}:
+    if response.status_code in {200, 204}:
         return
 
-    detail = ""
-    try:
-        payload = response.json()
-        if isinstance(payload, dict):
-            detail = str(
-                payload.get("msg")
-                or payload.get("error_description")
-                or payload.get("error")
-                or payload.get("message")
-                or ""
-            )
-    except Exception:
-        detail = ""
-    if not detail:
-        detail = response.text[:240]
-    raise HTTPException(
-        status_code=502,
-        detail=f"Supabase auth deletion failed ({response.status_code}): {detail or 'unknown error'}",
-    )
+    if response.status_code == 404:
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = None
+        # A missing route/proxy page is not proof that this Auth user is absent.
+        # Accept only the Auth API's explicit machine-readable absent-user code.
+        if isinstance(payload, dict) and payload.get("error_code") == "user_not_found":
+            return
+
+    # Provider bodies can contain personal data or operational details. Keep only
+    # the status in server diagnostics and a stable, partial-outcome-safe message.
+    logger.warning("Account auth deletion unconfirmed: provider status=%s", response.status_code)
+    raise HTTPException(status_code=502, detail=_ACCOUNT_DELETE_UNCONFIRMED)
 
 
 def _supabase_admin_delete_issues() -> List[str]:

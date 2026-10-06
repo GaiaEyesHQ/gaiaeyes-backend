@@ -108,6 +108,9 @@ import com.gaiaeyes.app.data.HealthConnectStatus
 import com.gaiaeyes.app.data.HomeContextRepository
 import com.gaiaeyes.app.data.HomeContextSource
 import com.gaiaeyes.app.data.JournalRepository
+import com.gaiaeyes.app.data.AccountDeletionController
+import com.gaiaeyes.app.data.AccountDeletionPhase
+import com.gaiaeyes.app.data.AccountDeletionState
 import com.gaiaeyes.app.data.BillingController
 import com.gaiaeyes.app.data.NotificationRepository
 import com.gaiaeyes.app.data.LocalWeatherSnapshot
@@ -147,6 +150,7 @@ fun GaiaEyesApp(
     quickLogCoordinator: QuickLogCoordinator,
     modifier: Modifier = Modifier,
     billingController: BillingController? = null,
+    accountDeletionController: AccountDeletionController? = null,
     onPurchasePlus: (String) -> Unit = {},
 ) {
     val viewModel: HomeViewModel = viewModel(
@@ -168,6 +172,11 @@ fun GaiaEyesApp(
         ),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val deletionState = accountDeletionController?.state?.collectAsStateWithLifecycle()?.value ?: AccountDeletionState()
+    val openDeletion: (() -> Unit)? = accountDeletionController?.let { controller -> { controller.open(); Unit } }
+    LaunchedEffect(deletionState.phase) {
+        if (deletionState.phase == AccountDeletionPhase.COMPLETE) viewModel.clearDeletedAccountState()
+    }
     val savedMigraineSummary by viewModel.savedMigraineSummary.collectAsStateWithLifecycle()
     val migraineFollowUpState by viewModel.migraineFollowUp.state.collectAsStateWithLifecycle()
     val migraineMedicineState by viewModel.migraineMedicine.state.collectAsStateWithLifecycle()
@@ -275,6 +284,22 @@ fun GaiaEyesApp(
         notificationNavigationCoordinator.consume(request.id)
     }
 
+    if (accountDeletionController != null && deletionState.phase != AccountDeletionPhase.CLOSED &&
+        (deletionState.accountId == authRepository.currentAccountId() ||
+            (authRepository.currentAccountId() == null && deletionState.phase == AccountDeletionPhase.CLEANUP_REQUIRED))) {
+        AccountDeletionScreen(
+            state = deletionState,
+            accountLabel = (uiState.authState as? AuthState.SignedIn)?.email ?: "This Gaia Eyes account",
+            onConfirm = { accountDeletionController.confirm() },
+            onRetry = { accountDeletionController.open() },
+            onRetryCleanup = { accountDeletionController.retryCleanup() },
+            onSignOutLocally = { accountDeletionController.signOutLocally() },
+            onClose = accountDeletionController::cancel,
+            modifier = modifier,
+        )
+        return
+    }
+
     when (val authState = uiState.authState) {
         AuthState.Initializing -> LoadingScreen(modifier)
         AuthState.Unavailable -> ConfigurationScreen(
@@ -299,12 +324,13 @@ fun GaiaEyesApp(
             modifier = modifier,
         )
         is AuthState.SignedIn -> if (uiState.onboardingStatus == OnboardingStatus.CHECKING) {
-            LoadingScreen(modifier)
+            LoadingScreen(modifier, openDeletion)
         } else if (uiState.onboardingStatus == OnboardingStatus.ERROR) {
             SetupUnavailableScreen(
                 message = uiState.onboardingMessage,
                 onRetry = viewModel::refresh,
                 onSignOut = viewModel::signOut,
+                onDeleteAccount = openDeletion,
                 modifier = modifier,
             )
         } else if (uiState.onboardingStatus == OnboardingStatus.REQUIRED) {
@@ -324,6 +350,7 @@ fun GaiaEyesApp(
                 },
                 onRetry = viewModel::refresh,
                 onSignOut = viewModel::signOut,
+                onDeleteAccount = openDeletion,
                 modifier = modifier,
             )
         } else if (showGuide) {
@@ -376,6 +403,7 @@ fun GaiaEyesApp(
                     exploreDetail = null
                     viewModel.signOut()
                 },
+                onDeleteAccount = openDeletion,
                 billingContent = {
                     billingController?.let {
                         BillingSettingsCard(it, authState.isAnonymous, onPurchasePlus)
@@ -505,6 +533,7 @@ private fun SetupUnavailableScreen(
     message: String?,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
+    onDeleteAccount: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     ScreenFrame(modifier = modifier) {
@@ -518,6 +547,7 @@ private fun SetupUnavailableScreen(
             OnboardingInfoCard(
                 "Your account and existing data are safe. Check your connection, then try loading setup again.",
             )
+            onDeleteAccount?.let { action -> TextButton(onClick = action) { Text("Delete account") } }
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = onRetry,
@@ -548,6 +578,7 @@ private fun OnboardingScreen(
     onConnectHealth: () -> Unit,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
+    onDeleteAccount: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(enabled = uiState.onboardingStep != OnboardingStep.WELCOME, onBack = onBack)
@@ -562,6 +593,7 @@ private fun OnboardingScreen(
                     }
                 },
             )
+            onDeleteAccount?.let { action -> TextButton(onClick = action) { Text("Delete account") } }
             Spacer(Modifier.height(24.dp))
             Text(
                 text = "Step $stepNumber of ${OnboardingStep.entries.size}",
@@ -897,7 +929,7 @@ private fun OnboardingInfoCard(text: String) {
 }
 
 @Composable
-private fun LoadingScreen(modifier: Modifier = Modifier) {
+private fun LoadingScreen(modifier: Modifier = Modifier, onDeleteAccount: (() -> Unit)? = null) {
     ScreenFrame(modifier = modifier) {
         Column(
             modifier = Modifier
@@ -906,6 +938,7 @@ private fun LoadingScreen(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
+            onDeleteAccount?.let { action -> TextButton(onClick = action) { Text("Delete account") } }
             GaiaMark()
             CircularProgressIndicator(color = GaiaBlue)
             Text(
@@ -1356,6 +1389,7 @@ private fun SettingsScreen(
     onNotificationSensitivity: (String) -> Unit,
     onDismissMessage: () -> Unit,
     onSignOut: () -> Unit,
+    onDeleteAccount: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     billingContent: @Composable () -> Unit = {},
 ) {
@@ -1458,6 +1492,9 @@ private fun SettingsScreen(
                     ) {
                         Text(if (uiState.isSigningOut) "Signing out…" else "Sign out")
                     }
+                }
+                onDeleteAccount?.let { action ->
+                    TextButton(onClick = action, enabled = !uiState.isSigningOut) { Text("Delete account") }
                 }
             }
 

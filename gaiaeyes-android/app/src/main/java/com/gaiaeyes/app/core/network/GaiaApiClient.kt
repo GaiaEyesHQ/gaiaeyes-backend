@@ -38,7 +38,11 @@ class GaiaApiClient(
     apiBase: String,
     private val httpClient: HttpClient = defaultHttpClient(apiBase),
     migraineHttpClient: HttpClient? = null,
+    accountDeletionHttpClient: HttpClient? = null,
 ) : HealthService {
+    private val accountDeletionClient by lazy {
+        accountDeletionHttpClient ?: defaultHttpClient(apiBase, singleAttempt = true)
+    }
     // Separate transport policy leaves the existing journal queue/client unchanged.
     // Created only if this currently unexposed structured contract is used.
     private val migraineClient by lazy {
@@ -51,6 +55,29 @@ class GaiaApiClient(
             "Backend returned ${response.status.value}"
         }
         return response.body()
+    }
+
+    suspend fun accountDeletionPreflight(accessToken: String): AccountDeletionPreflight {
+        val response = accountDeletionClient.get("/v1/profile/account/preflight") {
+            header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
+        }
+        check(response.status == HttpStatusCode.OK) { "Account deletion check is unavailable" }
+        val envelope = response.body<AccountDeletionPreflightEnvelope>()
+        check(envelope.ok && envelope.data != null) { "Account deletion check is unavailable" }
+        return requireNotNull(envelope.data)
+    }
+
+    suspend fun deleteAccount(accessToken: String): AccountDeletionResult {
+        val response = accountDeletionClient.delete("/v1/profile/account") {
+            header(HttpHeaders.Authorization, "Bearer ${requiredToken(accessToken)}")
+            // A one-shot body prevents transport retries, including HTTP 503 + Retry-After.
+            setBody(AccountDeletionRequestBody())
+            timeout { requestTimeoutMillis = 60_000; socketTimeoutMillis = 60_000 }
+        }
+        check(response.status == HttpStatusCode.OK) { "Account deletion was not confirmed" }
+        val envelope = response.body<AccountDeletionEnvelope>()
+        check(envelope.ok && envelope.data != null) { "Account deletion was not confirmed" }
+        return requireNotNull(envelope.data)
     }
 
     suspend fun billingEntitlements(accessToken: String): BillingEntitlementsResponse {
@@ -699,4 +726,10 @@ internal class MigraineRequestBody(private val bytes: ByteArray) : OutgoingConte
     override val contentType = ContentType.Application.Json
     override val contentLength = bytes.size.toLong()
     override fun readFrom() = ByteReadChannel(bytes)
+}
+
+internal class AccountDeletionRequestBody : OutgoingContent.ReadChannelContent() {
+    override val contentType = ContentType.Application.Json
+    override val contentLength = 2L
+    override fun readFrom() = ByteReadChannel("{}")
 }

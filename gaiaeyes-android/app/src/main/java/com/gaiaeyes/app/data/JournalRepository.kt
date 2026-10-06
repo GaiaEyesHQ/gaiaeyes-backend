@@ -12,6 +12,7 @@ import com.gaiaeyes.app.core.network.SymptomEventRequest
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -46,6 +47,7 @@ class JournalRepository(
         timestampUtc: String = Instant.now().toString(),
         sourceTag: String? = null,
     ): JournalWriteResult {
+        authRepository.trackAccountOperation(accountId)
         val request = SymptomEventRequest(
             symptomCode = symptomCode,
             timestampUtc = timestampUtc.cleaned() ?: Instant.now().toString(),
@@ -74,6 +76,7 @@ class JournalRepository(
         intensity: Int,
         note: String?,
     ): JournalWriteResult {
+        authRepository.trackAccountOperation(accountId)
         val request = ExposureEventRequest(
             exposureKey = exposureKey,
             intensity = intensity.coerceIn(1, 3),
@@ -103,6 +106,7 @@ class JournalRepository(
         moodLevel: String,
         note: String?,
     ): JournalWriteResult {
+        authRepository.trackAccountOperation(accountId)
         val completedAt = Instant.now().toString()
         val request = DailyCheckInRequest(
             promptId = status.prompt?.id?.takeIf(String::isNotBlank),
@@ -133,36 +137,42 @@ class JournalRepository(
 
     suspend fun pendingCount(accountId: String): Int = queue.read(accountId).size
 
-    suspend fun drain(accountId: String): JournalWriteResult = drainMutex.withLock {
-        var delivered = 0
-        for (item in queue.read(accountId)) {
-            val succeeded = runCatching {
-                authenticatedRequest {
-                    val token = authRepository.accessToken()
-                    when (item.kind) {
-                        JournalWriteKind.SYMPTOM ->
-                            apiClient.createSymptom(token, requireNotNull(item.symptom))
-                        JournalWriteKind.EXPOSURE ->
-                            apiClient.createExposure(token, requireNotNull(item.exposure))
-                        JournalWriteKind.DAILY_CHECK_IN ->
-                            apiClient.submitDailyCheckIn(token, requireNotNull(item.dailyCheckIn))
+    suspend fun drain(accountId: String): JournalWriteResult {
+        authRepository.trackAccountOperation(accountId)
+        return drainMutex.withLock {
+            var delivered = 0
+            for (item in queue.read(accountId)) {
+                val succeeded = runCatching {
+                    authenticatedRequest {
+                        authRepository.requireActiveAccount(accountId)
+                        val token = authRepository.accessToken()
+                        authRepository.requireActiveAccount(accountId)
+                        when (item.kind) {
+                            JournalWriteKind.SYMPTOM ->
+                                apiClient.createSymptom(token, requireNotNull(item.symptom))
+                            JournalWriteKind.EXPOSURE ->
+                                apiClient.createExposure(token, requireNotNull(item.exposure))
+                            JournalWriteKind.DAILY_CHECK_IN ->
+                                apiClient.submitDailyCheckIn(token, requireNotNull(item.dailyCheckIn))
+                        }
                     }
-                }
-            }.fold(
-                onSuccess = { true },
-                onFailure = { error ->
-                    if (error is ApiUnauthorizedException) throw error
-                    false
-                },
+                }.fold(
+                    onSuccess = { true },
+                    onFailure = { error ->
+                        if (error is CancellationException) throw error
+                        if (error is ApiUnauthorizedException) throw error
+                        false
+                    },
+                )
+                if (!succeeded) break
+                queue.remove(accountId, item.id)
+                delivered += 1
+            }
+            JournalWriteResult(
+                deliveredCount = delivered,
+                pendingCount = queue.read(accountId).size,
             )
-            if (!succeeded) break
-            queue.remove(accountId, item.id)
-            delivered += 1
         }
-        JournalWriteResult(
-            deliveredCount = delivered,
-            pendingCount = queue.read(accountId).size,
-        )
     }
 
     suspend fun clear(accountId: String) {
