@@ -3,6 +3,7 @@ import types
 import os
 import json
 from pathlib import Path
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -695,13 +696,13 @@ def test_facebook_caption_profile_is_longer_than_instagram():
     assert "question is optional" in fb["caption_instruction"]
 
 
-def test_caption_uses_approved_hook_when_same_lane_drift_conflicts():
+def test_caption_preserves_direction_when_same_lane_title_conflicts():
     caption = _caption_with_approved_hook(
         "Tiny aches getting quieter today? The sky feels calm, so there is room to recoup.",
         "Tiny aches getting louder?",
     )
 
-    assert caption == "Tiny aches getting louder? The sky feels calm, so there is room to recoup."
+    assert caption == "Tiny aches getting quieter today? The sky feels calm, so there is room to recoup."
 
 
 def test_clean_llm_title_rejects_forced_squirrel_metaphor():
@@ -709,7 +710,7 @@ def test_clean_llm_title_rejects_forced_squirrel_metaphor():
     assert _clean_llm_title("Over-Caffeinated Squirrel Energy", set()) is None
 
 
-def test_social_variants_align_default_caption_to_approved_title(monkeypatch):
+def test_social_variants_do_not_reverse_caption_direction(monkeypatch):
     monkeypatch.setattr(earthscope_generate, "EARTHSCOPE_FORCE_RULES", True)
 
     variants = _build_social_caption_variants(
@@ -720,8 +721,140 @@ def test_social_variants_align_default_caption_to_approved_title(monkeypatch):
         sections={},
     )
 
-    assert variants["default"]["caption"].startswith("Tiny aches getting louder?")
-    assert variants["ig"]["caption"].startswith("Tiny aches getting louder?")
+    assert variants["default"]["caption"].startswith("Tiny aches getting quieter today?")
+    assert variants["ig"]["caption"].startswith("Tiny aches getting quieter today?")
+
+
+def test_october_seventh_fallback_preserves_accepted_opener_even_if_recent():
+    opener = "Background aches may ease today."
+    title = _fallback_social_title(
+        {"day": "2026-10-07", "kp_max_24h": 1.33, "bz_min": -4.28, "solar_wind_kms": 353},
+        "Pain Feeling Extra Loud?",
+        {opener.lower()},
+        hook_text=f"{opener} The day feels calm and even. Keep movement gentle.",
+    )
+    assert title == opener
+
+
+@pytest.mark.parametrize("caption", [
+    "Pain is easing and you may want to keep your own pace today. The signals look quiet.",
+    "Pain sensitivity is something to note while the signals are elevated today. Check your own pattern.",
+    "Your own notes are useful when the signals point in different directions. Keep checking in.",
+    "We do not have enough current information to describe the signals today. Keep your own notes.",
+])
+def test_overlong_fallback_does_not_invent_symptom_direction(caption):
+    assert _fallback_social_title({}, "Pain Feeling Extra Loud?", hook_text=caption) == "How Does Your Body Feel Today?"
+
+
+def test_unknown_fallback_does_not_infer_calm_or_symptoms():
+    assert _fallback_social_title({}, "Pain Feeling Extra Loud?") == "How Does Your Body Feel Today?"
+
+
+def test_title_modal_may_is_not_a_date():
+    assert _clean_llm_title("Background aches may ease today.", set())
+    assert _clean_llm_title("Sleep May Finally Unclench", set())
+    for title in ("May 3 Outlook", "Early May Check-In", "May Day Check-In", "Oct Check-In"):
+        assert _clean_llm_title(title, set()) is None
+
+
+@pytest.mark.parametrize("caption,title", [
+    ("Pain getting louder? The signals are elevated.", "Pain getting quieter?"),
+    ("Pain getting quieter? The signals are quiet.", "Pain getting louder?"),
+    ("Pain still getting worse? The signals are elevated.", "Pain getting quieter?"),
+    ("Pain still easing? The signals are quiet.", "Pain getting louder?"),
+])
+def test_title_alignment_cannot_reverse_either_direction(caption, title):
+    assert _caption_with_approved_hook(caption, title) == caption
+
+
+def test_title_alignment_still_accepts_compatible_hooks():
+    assert _caption_with_approved_hook(
+        "Pain getting louder? The signals are elevated.", "Pain feeling louder today?",
+    ) == "Pain feeling louder today? The signals are elevated."
+
+
+@pytest.mark.parametrize("caption,needs_bridge", [
+    ("Pain feeling extra loud? Today might turn the volume down a notch.", True),
+    ("Feeling odd and can’t place it? The day looks steady with room to recover.", True),
+    ("Tiny aches getting quieter? The signals look quiet and steady.", False),
+    ("Brain fog clearing? The signals look quiet and steady.", False),
+    ("Headaches backing off? The signals look quiet and steady.", False),
+    ("Pain still feeling loud? Today’s signals look quiet and steady, even if you’re not feeling better yet.", False),
+    ("Pain feeling loud? Although the signals look quiet, your experience may differ.", False),
+    ("Sinus pressure louder today? Quiet space conditions make local pressure or pollen worth checking.", False),
+    ("Feeling wired? The signals we watch are elevated today; notice your own pattern.", False),
+    ("Feeling odd? Today's signals are mixed, so there isn't one clear story.", False),
+    ("Feeling off? We do not have enough current signal data to connect those dots.", False),
+])
+def test_opening_transition_keeps_conditional_symptoms_and_observation_uncertainty(caption, needs_bridge):
+    assert earthscope_generate._opening_needs_bridge(caption) is needs_bridge
+
+
+def test_opening_repair_preserves_everything_after_sentence_two():
+    tail = " Third sentence stays exactly.\n\nKeep this paragraph and punctuation—yes.\n\n#GaiaEyes #SelfCare"
+    caption = "Pain feeling extra loud? Today might turn the volume down a notch." + tail
+    bridge = "Today’s signals look quiet and steady, even if you’re not feeling better yet."
+    reference = "Pain still feeling loud? " + bridge + " Unrelated seed advice."
+    repaired = earthscope_generate._preserve_opening_transition(caption, reference)
+    assert repaired == "Pain feeling extra loud? " + bridge + tail
+    assert earthscope_generate._preserve_opening_transition(caption, "No usable second sentence.") is None
+
+
+def test_full_rewrite_validator_rejects_unexplained_quiet_day_transition():
+    candidate = _rewrite_with("Space conditions are quiet.")
+    candidate["caption"] = "Pain feeling extra loud? The day looks calm and steady."
+    assert _validate_rewrite(candidate) is None
+    candidate["caption"] = "Pain still feeling loud? The signals look quiet, even if you are not feeling better yet."
+    assert _validate_rewrite(candidate) is not None
+
+
+@pytest.mark.parametrize("model_title,expected", [
+    ("Pain feeling extra loud?", None),
+    ("Background aches may ease today.", "Background aches may ease today."),
+])
+def test_title_model_cannot_override_finished_caption_direction(monkeypatch, model_title, expected):
+    captured = {}
+    def fake_chat(_client, **kwargs):
+        captured.update(kwargs)
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=types.SimpleNamespace(content=model_title))])
+    monkeypatch.setattr(earthscope_generate, "_chat_create_compat", fake_chat)
+    monkeypatch.setattr(earthscope_generate, "_recent_titles", lambda *_: set())
+    monkeypatch.setattr(earthscope_generate, "_writer_model", lambda: "test-model")
+    final = {"caption": "Background aches may ease today. The signals look quiet.", "snapshot": "Quiet signals.", "affects": "Your experience may differ."}
+    assert earthscope_generate._llm_title_from_context(object(), {}, final) == expected
+    assert json.loads(captured["messages"][1]["content"])["sections_excerpt"] == final
+
+
+def test_main_supplies_live_caption_even_when_section_mutation_changes_cache_key(monkeypatch):
+    class TitleReached(BaseException):
+        pass
+    captured = {}
+    final_caption = "Background aches may ease today. The signals look quiet."
+    monkeypatch.setattr(sys, "argv", ["earthscope_generate", "--date", "2026-10-07"])
+    for name in ("fetch_space_weather_from_marts", "fetch_schumann_from_marts", "_fetch_space_outlook_context"):
+        monkeypatch.setattr(earthscope_generate, name, lambda *_: {})
+    for name in ("_recent_platform_openers", "_recent_platform_captions", "_recent_signal_history"):
+        monkeypatch.setattr(earthscope_generate, name, lambda *_, **__: [])
+    monkeypatch.setattr(earthscope_generate, "fetch_kp_now_from_marts", lambda *_: None)
+    monkeypatch.setattr(earthscope_generate, "openai_client", lambda: object())
+    monkeypatch.setattr(earthscope_generate, "_REWRITE_CACHE", {})
+    def long_sections(ctx):
+        captured["old_key"] = earthscope_generate._rewrite_cache_key(ctx)[0]
+        earthscope_generate._REWRITE_CACHE[captured["old_key"]] = {"caption": "Old draft."}
+        return "Quiet signals.", "Your experience may differ.", "- Keep your own pace", "#GaiaEyes"
+    def inspect_title(_client, ctx, rewrite):
+        captured["current_key"] = earthscope_generate._rewrite_cache_key(ctx)[0]
+        captured["rewrite"] = rewrite
+        raise TitleReached()
+    monkeypatch.setattr(earthscope_generate, "generate_long_sections", long_sections)
+    monkeypatch.setattr(earthscope_generate, "generate_short_caption", lambda *_, **__: (final_caption, "#GaiaEyes"))
+    monkeypatch.setattr(earthscope_generate, "_llm_title_from_context", inspect_title)
+    with pytest.raises(TitleReached):
+        earthscope_generate.main()
+    assert captured["old_key"] != captured["current_key"]
+    assert captured["rewrite"]["caption"] == final_caption
+    assert captured["rewrite"]["snapshot"] == "Quiet signals."
+    assert captured["rewrite"]["affects"] == "Your experience may differ."
 
 
 def test_public_generation_uses_one_canonical_platform():
@@ -1054,6 +1187,82 @@ def test_facebook_caption_retries_when_model_changes_shared_hook(monkeypatch):
     assert calls[1]["messages"][-1]["content"].endswith("Sinus pressure louder today?")
     assert result is not None
     assert result["caption"].startswith("Sinus pressure louder today?")
+
+
+def test_facebook_repairs_only_second_sentence_from_accepted_spine(monkeypatch):
+    tail = " Third sentence keeps its voice.\n\nKeep the useful pacing note and question?"
+    caption = "Pain feeling extra loud? Today might turn the volume down a notch." + tail
+    bridge = "Today’s signals look quiet and steady, even if you’re not feeling better yet."
+    captured = {}
+    def fake_chat(_client, **kwargs):
+        captured.update(kwargs)
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=types.SimpleNamespace(
+            content=json.dumps({"caption": caption, "hashtags": "#GaiaEyes #SelfCare"}),
+        ))])
+    monkeypatch.setattr(earthscope_generate, "_chat_create_compat", fake_chat)
+    result = _rewrite_facebook_caption_from_spine(
+        object(), ctx={}, title="Pain feeling extra loud?",
+        default_caption="Pain still feeling loud? " + bridge,
+        default_hashtags="#GaiaEyes", sections={},
+    )
+    assert result["caption"] == "Pain feeling extra loud? " + bridge + tail
+    assert result["hashtags"] == "#GaiaEyes #SelfCare"
+    assert earthscope_generate.OPENING_TRANSITION_GUIDANCE in captured["messages"][0]["content"]
+    assert _voiceover_caption_from_variants({"fb": result}, "Short caption") == result["caption"]
+
+
+def test_facebook_declines_unrepairable_transition_after_bounded_retries(monkeypatch):
+    calls = []
+    def fake_chat(_client, **kwargs):
+        calls.append(kwargs)
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=types.SimpleNamespace(
+            content=json.dumps({"caption": "Pain feeling extra loud? Today might turn the volume down a notch.", "hashtags": "#GaiaEyes"}),
+        ))])
+    monkeypatch.setattr(earthscope_generate, "_chat_create_compat", fake_chat)
+    result = _rewrite_facebook_caption_from_spine(
+        object(), ctx={}, title="Pain feeling extra loud?",
+        default_caption="Pain still feeling loud?", default_hashtags="#GaiaEyes", sections={},
+    )
+    assert result is None
+    assert len(calls) == 3
+
+
+def test_minimal_caption_rejects_unexplained_transition_before_acceptance(monkeypatch):
+    captured = {}
+    def fake_chat(_client, **kwargs):
+        captured.update(kwargs)
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=types.SimpleNamespace(
+            content=json.dumps({"caption": "Feeling odd and can’t place it? The day looks steady with room to recover."}),
+        ))])
+    monkeypatch.setattr(earthscope_generate, "openai_client", lambda: object())
+    monkeypatch.setattr(earthscope_generate, "EARTHSCOPE_FORCE_RULES", False)
+    monkeypatch.setattr(earthscope_generate, "_hybrid_rewrite_enabled", lambda: True)
+    monkeypatch.setattr(earthscope_generate, "_chat_create_compat", fake_chat)
+    result, runtime = earthscope_generate._rewrite_shadow_caption_minimal(
+        seed_caption="How does your body feel today? Take your own pace.",
+        hashtags="#GaiaEyes", ctx={}, sections={},
+    )
+    assert result is None
+    assert runtime["rewrite_used"] is False
+    assert earthscope_generate.OPENING_TRANSITION_GUIDANCE in captured["messages"][0]["content"]
+
+
+def test_facebook_polishing_cannot_reintroduce_the_quiet_day_jump(monkeypatch):
+    accepted = "Pain still feeling loud? Today’s signals look quiet, even if you’re not feeling better yet."
+    tail = " Third sentence.\n\nKeep this paragraph."
+    monkeypatch.setattr(earthscope_generate, "EARTHSCOPE_FORCE_RULES", False)
+    monkeypatch.setattr(earthscope_generate, "_hybrid_rewrite_enabled", lambda: True)
+    monkeypatch.setattr(earthscope_generate, "openai_client", lambda: object())
+    monkeypatch.setattr(earthscope_generate, "_platform_variant_context", lambda ctx, _: ctx)
+    monkeypatch.setattr(earthscope_generate, "_rewrite_facebook_caption_from_spine", lambda *_, **__: {"caption": accepted + tail, "hashtags": "#GaiaEyes"})
+    monkeypatch.setattr(earthscope_generate, "_polish_public_caption", lambda *_, **__: "Pain feeling extra loud? Today might turn the volume down a notch." + tail)
+    variants = _build_social_caption_variants(
+        {}, title="Pain still feeling loud?", default_caption=accepted,
+        default_hashtags="#GaiaEyes", sections={},
+    )
+    assert variants["default"]["caption"] == accepted
+    assert variants["ig"]["caption"] == accepted
+    assert variants["fb"]["caption"] == "Pain feeling extra loud? " + accepted.split("? ", 1)[1] + tail
 
 
 def test_social_variants_expand_spine_instead_of_starting_second_interpretation(monkeypatch):

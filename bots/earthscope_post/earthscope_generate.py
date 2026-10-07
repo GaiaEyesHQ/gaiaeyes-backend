@@ -893,6 +893,67 @@ def _hook_lane_for_text(text: str) -> Optional[str]:
     return None
 
 
+OPENING_TRANSITION_GUIDANCE = (
+    "Treat the first two sentences as one connected opening. Preserve the caption's direction and uncertainty. "
+    "A symptom question on a quiet day is allowed, but explicitly bridge to the quiet signals with language like "
+    "'still' or 'even if you are not feeling better yet'; do not jump from louder symptoms to promised relief. "
+    "Quiet, elevated, mixed, and unknown describe the supplied observations, not everyone's health outcome. "
+    "Missing observations are not evidence of calm. Do not invent earlier activity or symptom carryover without history. "
+)
+
+
+def _hook_direction(text: str) -> Optional[str]:
+    """Recognize explicit direction changes, not a reader's conditional symptoms."""
+    conditional = bool(re.search(r"\b(still|even if|if you|lingering)\b", text, re.I))
+    easing = bool(re.search(r"\b(quieter|steadier|eas(?:e|es|ing)|easier|soften(?:ing)?|less pain|pain-free|clearing|lifting|backing off)\b", text, re.I))
+    louder = bool(re.search(r"\b(louder|worse|worsen(?:ing)?|building|more painful)\b", text, re.I))
+    # 'Still loud' describes an existing symptom; 'still getting worse' has a direction.
+    louder = louder or (not conditional and bool(re.search(r"\bloud\b", text, re.I)))
+    if easing == louder:
+        return None
+    return "easing" if easing else "louder"
+
+
+def _hooks_reverse_direction(first: str, second: str) -> bool:
+    a, b = _hook_direction(first), _hook_direction(second)
+    return bool(a and b and a != b)
+
+
+def _opening_needs_bridge(caption: str) -> bool:
+    """Catch the observed symptom/quiet-day jump without banning symptom hooks."""
+    sentences = _split_text_sentences(caption)
+    if len(sentences) < 2:
+        return False
+    hook, bridge = sentences[:2]
+    if _hook_direction(hook) == "easing":
+        return False
+    symptom_hook = hook.endswith("?") and bool(re.search(
+        r"\b(pain|aches?|headache|migraine|pressure|wired|buzz\w*|odd|off|fog\w*|restless|hard to place)\b",
+        hook, re.I,
+    ))
+    quiet_or_relief = bool(re.search(
+        r"\b(calm|quiet\w*|steady|settled|ease|easing|recover\w*|recoup|relief)\b|turn.{0,24}volume down",
+        bridge, re.I,
+    ))
+    explicit_bridge = bool(re.search(
+        r"\b(still|even if|even when|although|despite|yet|does not|doesn't|doesn’t|do not|don't|don’t)\b",
+        f"{hook} {bridge}", re.I,
+    )) or bool(re.search(r"\b(check\w*|compar\w*)\b.*\blocal\b|\blocal\b.*\bcheck\w*\b", bridge, re.I))
+    return symptom_hook and quiet_or_relief and not explicit_bridge
+
+
+def _preserve_opening_transition(caption: str, reference: str) -> Optional[str]:
+    """Repair only sentence two from the accepted spine; preserve the remaining copy."""
+    if not _opening_needs_bridge(caption):
+        return caption
+    pair = re.match(r"^(.*?[.!?])(\s+)(.*?[.!?])(?=\s|$)", caption, re.S)
+    reference_parts = _split_text_sentences(reference)
+    if not pair or len(reference_parts) < 2:
+        return None
+    repaired = caption[:pair.start(3)] + reference_parts[1] + caption[pair.end(3):]
+    return repaired if not _opening_needs_bridge(repaired) else None
+
+
 def _caption_with_approved_hook(caption: str, title: str) -> str:
     """Keep the final title hook as the shared opener when it fits the same lane."""
     clean_caption = _sanitize_caption(caption)
@@ -913,9 +974,12 @@ def _caption_with_approved_hook(caption: str, title: str) -> str:
         return clean_caption
     if caption_hook.endswith("?") != title_hook.endswith("?"):
         return clean_caption
+    if _hooks_reverse_direction(caption_hook, title_hook):
+        return clean_caption
 
     rest = clean_caption[len(caption_hook):].lstrip()
-    return f"{title_hook} {rest}".strip()
+    aligned = f"{title_hook} {rest}".strip()
+    return clean_caption if _opening_needs_bridge(aligned) else aligned
 
 
 def _recent_hook_lanes(ctx: Dict[str, Any]) -> List[str]:
@@ -1209,7 +1273,7 @@ def _clean_llm_title(title: str, recent_titles: Optional[set] = None) -> Optiona
     if re.search(r"\d|#|[\U00010000-\U0010ffff]", cleaned):
         _dbg(f"title: rejected forbidden token='{cleaned}'")
         return None
-    if re.search(r"\b(jan|feb|mar|apr|may|jun|june|jul|aug|sep|oct|nov|dec)\b", lowered):
+    if re.search(r"\b(jan|feb|mar|apr|jun|june|jul|aug|sep|oct|nov|dec)\b|\b(?:early|late|mid|in|during) may\b|\bmay (?:day|first|second|third)\b", lowered):
         _dbg(f"title: rejected date word='{cleaned}'")
         return None
     words = cleaned.split()
@@ -1228,16 +1292,17 @@ def _fallback_social_title(
     recent_titles: Optional[set] = None,
     hook_text: str = "",
 ) -> str:
+    # The accepted caption is stronger evidence than an unrelated title or topic bank.
+    caption_hook = _first_sentence(hook_text)
+    accepted_hook = _clean_llm_title(caption_hook, set()) if caption_hook else None
+    if accepted_hook:
+        return accepted_hook
+    if hook_text or not any(ctx.get(key) is not None for key in ("kp_max_24h", "bz_min", "solar_wind_kms")):
+        return "How Does Your Body Feel Today?"
     if _clean_llm_title(default_title, recent_titles):
         return default_title
 
     tone = _tone_from_ctx(ctx)
-    hook_lane = _hook_lane_for_text(_first_sentence(hook_text) or hook_text)
-    if hook_lane:
-        recent_lower = {str(item or "").strip().lower() for item in (recent_titles or set()) if str(item or "").strip()}
-        for candidate in HOOK_LANES.get(hook_lane, {}).get("examples", []):
-            if _clean_llm_title(candidate, recent_lower):
-                return candidate
 
     pools = {
         "calm": [
@@ -1281,7 +1346,7 @@ def _fallback_social_title(
     return "Feeling Different Today?"
 
 
-# --- LLM-based title generator using cached rewrite ---
+# --- LLM-based title generator using the finished content spine ---
 @_writer_stage("title")
 def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rewrite: Optional[Dict[str,str]]) -> Optional[str]:
     """Ask the LLM for a short social hook title based on tone + pulse + sections. No numbers, no emojis.
@@ -1315,6 +1380,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "Avoid these fallback labels and vague metaphors: Clear Runway, Quiet Skies, Steady Field, Magnetic Calm, Active Geomagnetics, Geomagnetic Storm Watch, Space Weather Update, Track The Body Pattern, Track The Overlap, Mood Sleep Pressure Check, Wearable Trends Need Context, Check The Body Pattern, Sensitive Systems Take Note, Is Your Body Running Loud, Head Pressure Asking For Space. "
         "Match hook_lane_brief.preferred_form. Rotate among questions, direct statements, a 'Today's feel:' label, and conversational observations. Good shapes: 'Brain Fog Comes In Waves', 'Today's Feel: Wiped Out', 'Crawling Back Into Bed Sounds Good', 'Body Buzzing Today?' "
         "Questions are allowed only when the phrase is actually a question. Imperatives/statements should not end with a question mark. "
+        + OPENING_TRANSITION_GUIDANCE +
         "Output ONLY the title text with no quotes."
     )
     usr = {
@@ -1339,8 +1405,15 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
             max_completion_tokens=24,
             messages=[{"role":"system","content":sys},{"role":"user","content":json.dumps(usr, ensure_ascii=False)}],
         )
-        title = _chat_text(resp).strip()
-        return _clean_llm_title(title, recent_set)
+        title = _clean_llm_title(_chat_text(resp).strip(), recent_set)
+        caption = _sanitize_caption(str(sections.get("caption") or ""))
+        caption_hook = _first_sentence(caption)
+        if title and caption_hook:
+            candidate = f"{title} {caption[len(caption_hook):].lstrip()}"
+            if _hooks_reverse_direction(caption_hook, title) or _opening_needs_bridge(candidate):
+                _dbg("title: rejected opening direction/transition conflict")
+                return None
+        return title
     except Exception as e:
         _dbg(f"title: OpenAI call failed: {_writer_error_details(e)}")
         return None
@@ -1807,6 +1880,9 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
         if _contains_digits(obj[k]):
             _dbg(f"validate: digits found in {k}")
             return None
+    if _opening_needs_bridge(obj["caption"]):
+        _dbg("validate: symptom hook needs a quiet-day bridge")
+        return None
     combined = " ".join(obj.get(k, "") for k in ["caption", "snapshot", "affects", "playbook"]).lower()
     blocked_copy_patterns = [
         (r"\bblocs\b", "typo blocs"),
@@ -3240,8 +3316,9 @@ def _rewrite_facebook_caption_from_spine(
         "The title is the approved emotional hook. The caption must begin with required_exact_hook word for word so the "
         "gallery, Facebook caption, voiceover, and reel make the same opening promise. The editorial read of the day is "
         "already selected in the content spine. Preserve its dominant felt-effect lane, intensity, symptom scope, and "
-        "practical advice. If older spine wording conflicts with the title, resolve the explanation around the approved "
-        "title while keeping the environmental facts honest. Do not reinterpret the signals, choose a different "
+        "practical advice. The finished caption is the source of meaning; do not bend its direction to fit a title. "
+        + OPENING_TRANSITION_GUIDANCE +
+        "Do not reinterpret the signals, choose a different "
         "hook lane, introduce new symptoms, or make the day sound calmer or more active than the spine. "
         "Preserve the spine's meaning, not its sentences. Rewrite stock wording from the spine instead of expanding or "
         "echoing phrases such as 'room to recoup,' 'chance to recover,' 'light buzz,' 'small buzz,' 'mild headwind,' "
@@ -3295,6 +3372,7 @@ def _rewrite_facebook_caption_from_spine(
                 {
                     "role": "user",
                     "content": (
+                        OPENING_TRANSITION_GUIDANCE +
                         "Regenerate the full JSON response. Your caption must start with this exact text, including "
                         f"punctuation: {required_hook}"
                     ),
@@ -3324,6 +3402,10 @@ def _rewrite_facebook_caption_from_spine(
                 continue
             if required_hook and not _sanitize_caption(caption).lower().startswith(required_hook.lower()):
                 _dbg(f"facebook_spine: exact-hook retry attempt={attempt + 1}")
+                continue
+            caption = _preserve_opening_transition(caption, default_caption)
+            if not caption:
+                _dbg(f"facebook_spine: opening-transition retry attempt={attempt + 1}")
                 continue
             hashtags = obj.get("hashtags")
             return {
@@ -3374,6 +3456,7 @@ def _build_social_caption_variants(
         fb_caption = _scrub_banned_phrases(
             _polish_public_caption(str(fb_out["caption"]), fb_ctx, preserve_paragraphs=True)
         )
+        fb_caption = _preserve_opening_transition(fb_caption, aligned_default_caption)
         if fb_caption:
             variants["fb"] = {
                 "caption": fb_caption,
@@ -3843,6 +3926,7 @@ def _rewrite_shadow_caption_minimal(
         "Do not mention clinicians or professional audiences. Do not open with HRV, heart-rate variability, a recovery score or metric, parasympathetic, autonomic, or wearable jargon. Plain phrases such as 'room to recover' or 'time to recoup' are welcome on quiet days. Lead with everyday feeling words instead. If HRV or Schumann must appear, define it in a short final Plain English note. Write around a 3rd-grade reading level: short words, short sentences, and no science lecture voice. "
         "Do not copy phrases directly from the context bullets. "
         "No emojis. A natural opening question is allowed when it fits. No fear language. No deterministic medical claims. "
+        + OPENING_TRANSITION_GUIDANCE +
         "Avoid the words 'window', 'windows', and 'wind-down'. Use rhythm, stretch, period, setup, bedtime, or evening routine instead. "
         "Use natural everyday grammar: when two feelings happen together, use 'and' instead of a contrast word like 'but' unless there is a real contrast. "
         "Say 'slow breaths' or 'slow breathing', not 'slow breath'. "
@@ -3896,7 +3980,7 @@ def _rewrite_shadow_caption_minimal(
         if not isinstance(obj, dict):
             return None, runtime
         caption = _sanitize_caption(str(obj.get("caption") or ""))
-        if not caption:
+        if not caption or _opening_needs_bridge(caption):
             return None, runtime
         runtime["rewrite_used"] = True
         runtime["caption_path"] = "minimal_caption_rewrite"
@@ -4276,12 +4360,12 @@ def main():
     }
     public_voice_payload, public_voice_render = _public_voice_bundle(ctx)
 
-    # Title via LLM (uses cached rewrite), with safe heuristic fallback
+    # Title uses the accepted live caption, not a cache key changed by added sections.
     client = openai_client()
     llm_title = None
     if client:
         try:
-            llm_title = _llm_title_from_context(client, ctx, _REWRITE_CACHE.get(_rewrite_cache_key(ctx)[0]))
+            llm_title = _llm_title_from_context(client, ctx, sections_struct)
         except Exception:
             llm_title = None
     if llm_title:
