@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
+import json
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -21,7 +23,7 @@ RECENT_ACTIVITY_DAYS = max(1, int(os.getenv("GAIA_GAUGE_RECENT_ACTIVITY_DAYS", "
 DEFAULT_WORKERS = min(8, max(1, int(os.getenv("GAIA_GAUGE_WORKERS", "4"))))
 
 
-def _fetch_user_ids() -> Set[str]:
+def _fetch_user_ids(failures: list[str]) -> Set[str]:
     user_ids: Set[str] = set()
     try:
         rows = pg.fetch(
@@ -34,7 +36,8 @@ def _fetch_user_ids() -> Set[str]:
         )
         user_ids.update([r["user_id"] for r in rows if r.get("user_id")])
     except Exception as exc:
-        logger.warning("[gauges] app.user_locations fetch failed: %s", exc)
+        failures.append("app.user_locations")
+        logger.warning("[gauges] eligibility_source_failed source=app.user_locations error_type=%s", type(exc).__name__)
 
     try:
         rows = pg.fetch(
@@ -46,7 +49,8 @@ def _fetch_user_ids() -> Set[str]:
         )
         user_ids.update([r["user_id"] for r in rows if r.get("user_id")])
     except Exception as exc:
-        logger.warning("[gauges] entitlements fetch failed: %s", exc)
+        failures.append("public.app_user_entitlements_active")
+        logger.warning("[gauges] eligibility_source_failed source=public.app_user_entitlements_active error_type=%s", type(exc).__name__)
 
     try:
         rows = pg.fetch(
@@ -59,7 +63,8 @@ def _fetch_user_ids() -> Set[str]:
         )
         user_ids.update([r["user_id"] for r in rows if r.get("user_id")])
     except Exception as exc:
-        logger.warning("[gauges] recent HealthKit users fetch failed: %s", exc)
+        failures.append("gaia.samples")
+        logger.warning("[gauges] eligibility_source_failed source=gaia.samples error_type=%s", type(exc).__name__)
 
     try:
         rows = pg.fetch(
@@ -72,7 +77,8 @@ def _fetch_user_ids() -> Set[str]:
         )
         user_ids.update([r["user_id"] for r in rows if r.get("user_id")])
     except Exception as exc:
-        logger.warning("[gauges] recent analytics users fetch failed: %s", exc)
+        failures.append("raw.app_analytics_events")
+        logger.warning("[gauges] eligibility_source_failed source=raw.app_analytics_events error_type=%s", type(exc).__name__)
 
     return user_ids
 
@@ -81,14 +87,17 @@ def _verify_outputs(
     expected: Set[Tuple[str, date]],
     refreshed: Set[Tuple[str, date]],
     started_at: datetime,
+    evaluations: dict[Tuple[str, date], dict],
+    summary: dict,
 ) -> list[str]:
+    summary.update(outputs_found=0, oldest_output_changed_at=None, latest_output_changed_at=None)
     if not expected:
         return []
     user_ids = sorted({user_id for user_id, _ in expected})
     days = [day for _, day in expected]
     rows = pg.fetch(
         """
-        select user_id, day, updated_at
+        select user_id, day, updated_at, inputs_hash
           from marts.user_gauges_day
          where user_id = any(%s::uuid[])
            and day between %s::date and %s::date
@@ -99,21 +108,35 @@ def _verify_outputs(
     )
     found = {(str(row["user_id"]), row["day"]): row for row in rows}
     errors: list[str] = []
+    changed_at: list[datetime] = []
     for key in sorted(expected, key=lambda item: (item[0], item[1])):
+        evaluation = evaluations.get(key, {})
+        if not evaluation.get("inputs_hash") or not evaluation.get("evaluated_at"):
+            errors.append("not_evaluated")
         row = found.get(key)
         if row is None:
-            errors.append(f"missing:{key[0]}:{key[1].isoformat()}")
+            errors.append("missing_output")
             continue
-        if key not in refreshed:
-            continue
+        if evaluation.get("inputs_hash") and row.get("inputs_hash") != evaluation["inputs_hash"]:
+            # The old fingerprint still persisted after an actual input change.
+            # A different third hash can be a concurrent writer; report that
+            # separately instead of declaring an unrelated timestamp stale.
+            if evaluation.get("output_existed") and row.get("inputs_hash") == evaluation.get("previous_inputs_hash"):
+                errors.append("changed_inputs_pending")
+            else:
+                errors.append("input_hash_mismatch")
         updated_at = row.get("updated_at")
         if not isinstance(updated_at, datetime):
-            errors.append(f"missing_updated_at:{key[0]}:{key[1].isoformat()}")
+            errors.append("missing_updated_at")
             continue
         if updated_at.tzinfo is None:
             updated_at = updated_at.replace(tzinfo=timezone.utc)
-        if updated_at < started_at - timedelta(seconds=5):
-            errors.append(f"stale_updated_at:{key[0]}:{key[1].isoformat()}")
+        changed_at.append(updated_at)
+        if key in refreshed and updated_at < started_at - timedelta(seconds=5):
+            errors.append("stale_updated_at")
+    summary["outputs_found"] = len(expected.intersection(found))
+    summary["oldest_output_changed_at"] = min(changed_at).isoformat() if changed_at else None
+    summary["latest_output_changed_at"] = max(changed_at).isoformat() if changed_at else None
     return errors
 
 
@@ -130,26 +153,20 @@ def _score_chunk(
     items: list[Tuple[str, date]],
     *,
     force: bool,
-) -> list[Tuple[Tuple[str, date], dict | None, str | None]]:
-    results: list[Tuple[Tuple[str, date], dict | None, str | None]] = []
+) -> list[Tuple[Tuple[str, date], dict | None, str | None, dict]]:
+    results: list[Tuple[Tuple[str, date], dict | None, str | None, dict]] = []
     # Keep one connection per worker so concurrency remains bounded and each
     # user avoids repeated TLS/pool handshakes across the score's small queries.
     with pg.connection_scope():
         for uid, target_day in items:
             key = (uid, target_day)
+            diagnostics: dict = {}
             try:
-                result = score_user_day(uid, target_day, force=force)
-                results.append((key, result, None))
-                logger.info(
-                    "[gauges] user=%s day=%s ok=%s skipped=%s",
-                    uid,
-                    target_day,
-                    result.get("ok"),
-                    result.get("skipped"),
-                )
+                result = score_user_day(uid, target_day, force=force, diagnostics=diagnostics)
+                results.append((key, result, None, diagnostics))
             except Exception as exc:
-                results.append((key, None, str(exc)))
-                logger.exception("[gauges] user=%s failed: %s", uid, exc)
+                results.append((key, None, type(exc).__name__, diagnostics))
+                logger.error("[gauges] score_failed error_type=%s", type(exc).__name__)
     return results
 
 
@@ -165,15 +182,18 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Recompute even if inputs_hash matches.")
     args = parser.parse_args()
 
+    started_at = datetime.now(timezone.utc)
+    eligibility_failures: list[str] = []
     if args.user_id:
         user_ids = {args.user_id}
     else:
-        user_ids = _fetch_user_ids()
+        user_ids = _fetch_user_ids(eligibility_failures)
 
-    started_at = datetime.now(timezone.utc)
     expected: Set[Tuple[str, date]] = set()
     refreshed: Set[Tuple[str, date]] = set()
     failures: list[str] = []
+    evaluations: dict[Tuple[str, date], dict] = {}
+    unchanged_inputs = 0
 
     # Use the same resolved zone as the scorer's raw-input intervals. Capture
     # once so notification preferences or a midnight-crossing batch cannot
@@ -198,25 +218,60 @@ def main() -> None:
 
     if items:
         chunks = [items[index::worker_count] for index in range(worker_count)]
-        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="gauge") as executor:
-            chunk_results = executor.map(lambda chunk: _score_chunk(chunk, force=args.force), chunks)
-            for results in chunk_results:
-                for (uid, target_day), result, error in results:
-                    if error is not None:
-                        failures.append(f"exception:{uid}:{target_day.isoformat()}")
-                    elif not result or not result.get("ok"):
-                        failures.append(f"not_ok:{uid}:{target_day.isoformat()}")
-                    elif not result.get("skipped"):
-                        refreshed.add((uid, target_day))
+        try:
+            with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="gauge") as executor:
+                chunk_results = executor.map(lambda chunk: _score_chunk(chunk, force=args.force), chunks)
+                for results in chunk_results:
+                    for key, result, error, diagnostics in results:
+                        if diagnostics:
+                            evaluations[key] = diagnostics
+                        if error is not None:
+                            failures.append("score_exception")
+                        elif not result or not result.get("ok"):
+                            failures.append("score_not_ok")
+                        elif not result.get("skipped"):
+                            refreshed.add(key)
+                        elif result.get("skip_reason") == "unchanged_inputs":
+                            unchanged_inputs += 1
+                        else:
+                            failures.append("unexplained_skip")
+        except Exception as exc:
+            failures.append("worker_failed")
+            logger.error("[gauges] worker_failed error_type=%s", type(exc).__name__)
 
+    evaluation_times = [item["evaluated_at"] for item in evaluations.values() if item.get("evaluated_at")]
+    summary = {
+        "scope": "selected_users" if args.user_id or args.limit else "all_eligible_users",
+        "day": target_day.isoformat(),
+        "scoring_timezone": DEFAULT_TIMEZONE,
+        "started_at": started_at.isoformat(),
+        "eligible_users": len(user_ids) if not args.user_id else None,
+        "expected_outputs": len(expected),
+        "evaluated": len(evaluation_times),
+        "first_evaluated_at": min(evaluation_times).isoformat() if evaluation_times else None,
+        "last_evaluated_at": max(evaluation_times).isoformat() if evaluation_times else None,
+        "refreshed": len(refreshed),
+        "unchanged_inputs": unchanged_inputs,
+        "eligibility_source_failures": eligibility_failures,
+        "verification_completed": False,
+    }
     try:
-        failures.extend(_verify_outputs(expected, refreshed, started_at))
+        failures.extend(_verify_outputs(expected, refreshed, started_at, evaluations, summary))
+        summary["verification_completed"] = True
     except Exception as exc:
         failures.append("verification_failed")
-        logger.exception("[gauges] output verification failed: %s", exc)
+        logger.error("[gauges] output verification failed error_type=%s", type(exc).__name__)
 
-    if failures:
-        logger.error("[gauges] failed count=%d details=%s", len(failures), failures)
+    summary["completed_at"] = datetime.now(timezone.utc).isoformat()
+    summary["failures"] = dict(Counter(failures))
+    summary["status"] = "fail" if failures or eligibility_failures else "pass"
+    logger.log(
+        logging.ERROR if summary["status"] == "fail" else logging.INFO,
+        "[gauges] evaluation_summary=%s",
+        json.dumps(summary, sort_keys=True),
+    )
+    if failures or eligibility_failures:
+        logger.error("[gauges] failed counts=%s eligibility_source_failures=%d", dict(Counter(failures)), len(eligibility_failures))
         raise SystemExit(1)
     logger.info("[gauges] done users=%d refreshed=%d", len(expected), len(refreshed))
 

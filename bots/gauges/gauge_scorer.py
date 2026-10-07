@@ -1885,6 +1885,7 @@ def score_user_day(
     local_payload: Optional[Dict[str, Any]] = None,
     force: bool = False,
     require_corrected_symptoms: bool = False,
+    diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     definition, version = load_definition_base()
     day = _coerce_day(day)
@@ -1959,8 +1960,17 @@ def score_user_day(
         user_id,
         day,
     )
+    # Private, in-memory batch verification evidence, including when a later
+    # write fails. Never log fingerprints or add them to the public result.
+    if diagnostics is not None:
+        diagnostics.update(
+            inputs_hash=inputs_hash,
+            previous_inputs_hash=existing.get("inputs_hash") if existing else None,
+            output_existed=bool(existing),
+            evaluated_at=datetime.now(timezone.utc),
+        )
     if existing and existing.get("inputs_hash") == inputs_hash and not force:
-        return {"ok": True, "skipped": True, "user_id": user_id, "day": _iso_day(day)}
+        return {"ok": True, "skipped": True, "skip_reason": "unchanged_inputs", "user_id": user_id, "day": _iso_day(day)}
 
     payload: Dict[str, Any] = {
         "user_id": user_id,

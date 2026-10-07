@@ -6,6 +6,27 @@ from datetime import datetime, timedelta, timezone
 from scripts import post_launch_monitor as monitor
 
 
+def test_smoke_success_explicitly_discloses_missing_gauge_and_analytics_coverage(monkeypatch, capsys, tmp_path):
+    results = [monitor.CheckResult('backend_health', 'pass', 'healthy'),
+               monitor.CheckResult('analytics_summary', 'skip', 'credential unavailable')]
+    monkeypatch.setattr(monitor, 'run_checks', lambda: results)
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')
+    summary = tmp_path / 'summary.md'
+    monkeypatch.setenv('GITHUB_STEP_SUMMARY', str(summary))
+    assert monitor.main() == 0  # Existing optional-check exit policy is preserved.
+    output = capsys.readouterr().out
+    assert 'checks_run=1/2 skipped=analytics_summary' in output
+    assert 'gauge_freshness=not_checked' in output
+    assert '::warning title=Monitor coverage::' in output
+    assert 'gauge_freshness=not_checked' in summary.read_text()
+
+
+def test_coverage_disclosure_preserves_failure_exit_status(monkeypatch):
+    monkeypatch.setattr(monitor, 'run_checks', lambda: [monitor.CheckResult('backend_health', 'fail', 'failed')])
+    monkeypatch.delenv('GITHUB_STEP_SUMMARY', raising=False)
+    assert monitor.main() == 1
+
+
 def _healthy_payload(**queue_overrides):
     queue = {
         "enabled": True,

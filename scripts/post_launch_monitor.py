@@ -394,6 +394,7 @@ def write_github_summary(results: list[CheckResult]) -> None:
         "",
         f"- Base URL: `{BASE_URL}`",
         f"- Run at: `{datetime.utcnow().isoformat(timespec='seconds')}Z`",
+        f"- Coverage: {_coverage_detail(results)}",
         "",
         "| Check | Status | Detail |",
         "| --- | --- | --- |",
@@ -405,10 +406,22 @@ def write_github_summary(results: list[CheckResult]) -> None:
         handle.write("\n".join(lines) + "\n")
 
 
+def _coverage_detail(results: list[CheckResult]) -> str:
+    skipped = sorted(result.name for result in results if result.status == "skip")
+    return (
+        f"checks_run={sum(result.status != 'skip' for result in results)}/{len(results)} "
+        f"skipped={','.join(skipped) or 'none'}; "
+        "gauge_freshness=not_checked (inspect the completed critical cron evaluation_summary)"
+    )
+
+
 def main() -> int:
     results = run_checks()
     for result in results:
         print(f"{_status_icon(result.status)} {result.name}: {result.detail}")
+    print(f"COVERAGE {_coverage_detail(results)}")
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        print(f"::warning title=Monitor coverage::{_coverage_detail(results)}")
     write_github_summary(results)
     return 1 if any(result.status == "fail" for result in results) else 0
 
