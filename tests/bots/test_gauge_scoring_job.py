@@ -49,10 +49,11 @@ def _dispatch(monkeypatch, instant, *, args=(), outcomes=None):
         if 'app.user_notification_preferences' in sql:
             return [{'user_id': uid, 'time_zone': zone} for uid, zone in PREFERENCES.items()]
         if 'marts.user_gauges_day' in sql:
-            return [{'user_id': uid, 'day': params[1], 'updated_at': Clock.fromtimestamp(instant.timestamp(), timezone.utc)} for uid in params[0]]
+            return [{'user_id': uid, 'day': params[1], 'updated_at': Clock.fromtimestamp(instant.timestamp(), timezone.utc), 'inputs_hash': 'synthetic-hash'} for uid in params[0]]
         return []
 
-    def score(uid, day, *, force=False):
+    def score(uid, day, *, force=False, diagnostics=None):
+        diagnostics.update(inputs_hash="synthetic-hash", previous_inputs_hash="synthetic-hash", output_existed=True, evaluated_at=instant)
         calls.append((uid, day, gauge_scorer._local_day_bounds(day), force))
         result = (outcomes or {}).get(uid, {'ok': True, 'skipped': False})
         if isinstance(result, Exception):
@@ -61,9 +62,9 @@ def _dispatch(monkeypatch, instant, *, args=(), outcomes=None):
 
     actual_verify = gauge_scoring_job._verify_outputs
 
-    def verify(expected, refreshed, started_at):
+    def verify(expected, refreshed, started_at, evaluations, summary):
         verification.append((set(expected), set(refreshed), started_at))
-        return actual_verify(expected, refreshed, started_at)
+        return actual_verify(expected, refreshed, started_at, evaluations, summary)
 
     monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', fetch)
     monkeypatch.setattr(gauge_scoring_job, 'score_user_day', score)
@@ -83,7 +84,7 @@ def test_actual_batch_uses_one_scoring_day_for_all_preferences(monkeypatch, capl
     clock, queries, calls, verification = _dispatch(monkeypatch, now)
     with caplog.at_level(logging.INFO):
         gauge_scoring_job.main()
-    assert clock.calls == 1
+    assert clock.calls == 2
     assert {uid for uid, *_ in calls} == set(PREFERENCES)
     assert {day for _, day, *_ in calls} == {date.fromisoformat(expected)}
     assert all(start <= now < end for _, _, (start, end), _ in calls)
@@ -100,7 +101,7 @@ def test_explicit_historical_day_user_limit_and_force_are_preserved(monkeypatch)
     clock, _, calls, _ = _dispatch(monkeypatch, datetime(2026, 9, 11, 4, tzinfo=timezone.utc),
                                   args=['--day', '2026-03-08', '--limit', '2', '--force'])
     gauge_scoring_job.main()
-    assert clock.calls == 1
+    assert clock.calls == 2
     assert {uid for uid, *_ in calls} == set(sorted(PREFERENCES)[:2])
     assert all(day == date(2026, 3, 8) and force for _, day, _, force in calls)
     assert all((end-start) == timedelta(hours=23) for _, _, (start, end), _ in calls)
@@ -108,7 +109,7 @@ def test_explicit_historical_day_user_limit_and_force_are_preserved(monkeypatch)
 
 def test_batch_success_skip_failure_and_exception_accounting(monkeypatch, caplog):
     now = datetime(2026, 9, 11, 4, 3, 44, tzinfo=timezone.utc)
-    outcomes = {'chicago': {'ok': True, 'skipped': True}, 'utc': {'ok': False},
+    outcomes = {'chicago': {'ok': True, 'skipped': True, 'skip_reason': 'unchanged_inputs'}, 'utc': {'ok': False},
                 'tokyo': RuntimeError('synthetic score failure')}
     _, _, calls, verification = _dispatch(monkeypatch, now, outcomes=outcomes)
     with pytest.raises(SystemExit) as error, caplog.at_level(logging.ERROR):
@@ -118,7 +119,8 @@ def test_batch_success_skip_failure_and_exception_accounting(monkeypatch, caplog
     assert expected == {(uid, date(2026, 9, 10)) for uid in PREFERENCES}
     assert refreshed == {(uid, date(2026, 9, 10)) for uid in PREFERENCES.keys() - outcomes.keys()}
     assert started_at == now
-    assert 'exception:tokyo:2026-09-10' in caplog.text and 'not_ok:utc:2026-09-10' in caplog.text
+    assert 'score_exception' in caplog.text and 'score_not_ok' in caplog.text
+    assert 'tokyo' not in caplog.text and 'utc' not in caplog.text
     assert 'missing_updated_at' not in caplog.text and 'verification_failed' not in caplog.text
 
 
@@ -132,11 +134,11 @@ def test_single_user_override_bypasses_eligibility_queries(monkeypatch):
 
 def test_empty_batch_does_not_open_a_worker_connection(monkeypatch):
     clock, queries, calls, verification = _dispatch(monkeypatch, datetime(2026,9,11,4,tzinfo=timezone.utc))
-    monkeypatch.setattr(gauge_scoring_job, '_fetch_user_ids', lambda: set())
+    monkeypatch.setattr(gauge_scoring_job, '_fetch_user_ids', lambda failures: set())
     scope = Mock(side_effect=AssertionError('Empty batch must not connect'))
     monkeypatch.setattr(gauge_scoring_job.pg, 'connection_scope', scope)
     gauge_scoring_job.main()
-    assert clock.calls == 1 and not calls and not queries
+    assert clock.calls == 2 and not calls and not queries
     assert verification[0][0:2] == (set(), set())
     scope.assert_not_called()
 
@@ -144,9 +146,15 @@ def test_empty_batch_does_not_open_a_worker_connection(monkeypatch):
 def test_output_verification_accepts_old_skips_but_rejects_stale_refresh_and_missing(monkeypatch):
     now = datetime(2026, 9, 11, 4, tzinfo=timezone.utc); day = date(2026, 9, 10)
     monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', lambda *a: [
-        {'user_id': uid, 'day': day, 'updated_at': now-timedelta(hours=1)} for uid in ['skip', 'refresh']])
-    assert gauge_scoring_job._verify_outputs({(uid, day) for uid in ['skip', 'refresh', 'missing']},
-        {('refresh', day)}, now) == ['missing:missing:2026-09-10', 'stale_updated_at:refresh:2026-09-10']
+        {'user_id': uid, 'day': day, 'updated_at': now-timedelta(hours=1), 'inputs_hash': 'same'}
+        for uid in ['skip', 'refresh']])
+    expected = {(uid, day) for uid in ['skip', 'refresh', 'missing']}
+    evaluations = {key: {'inputs_hash': 'same', 'evaluated_at': now} for key in expected}
+    summary = {}
+    assert gauge_scoring_job._verify_outputs(expected, {('refresh', day)}, now,
+        evaluations, summary) == ['missing_output', 'stale_updated_at']
+    assert summary['outputs_found'] == 2
+    assert summary['oldest_output_changed_at'] == (now-timedelta(hours=1)).isoformat()
 
 
 @pytest.mark.parametrize('configured, resolved, expected_day, expected_start', [
@@ -165,14 +173,14 @@ class Clock(datetime):
     @classmethod
     def now(cls,tz=None): return datetime(2026,9,11,4,3,44,tzinfo=timezone.utc).astimezone(tz)
 job.datetime=Clock
-job._fetch_user_ids=lambda: {'synthetic-user'}
+job._fetch_user_ids=lambda failures: {'synthetic-user'}
 job.pg.connection_scope=nullcontext
 job.pg.fetch=lambda *a,**k: (_ for _ in ()).throw(AssertionError('No database query allowed'))
 job._verify_outputs=lambda *a: []
 calls=[]
-def score(uid,day,force=False):
+def score(uid,day,force=False,diagnostics=None):
     calls.append({'day':day.isoformat(),'bounds':[d.isoformat() for d in scorer._local_day_bounds(day)]})
-    return {'ok':True,'skipped':True}
+    return {'ok':True,'skipped':True,'skip_reason':'unchanged_inputs'}
 job.score_user_day=score
 sys.argv=['gauge_scoring_job.py']
 job.main()
@@ -198,7 +206,7 @@ def test_fetch_user_ids_includes_recent_healthkit_and_app_users(monkeypatch) -> 
     )
     monkeypatch.setattr(gauge_scoring_job.pg, "fetch", lambda *args, **kwargs: next(responses))
 
-    assert gauge_scoring_job._fetch_user_ids() == {"healthkit-user", "recent-app-user"}
+    assert gauge_scoring_job._fetch_user_ids([]) == {"healthkit-user", "recent-app-user"}
 
 
 def test_main_uses_one_connection_scope_per_bounded_worker(monkeypatch) -> None:
@@ -217,12 +225,12 @@ def test_main_uses_one_connection_scope_per_bounded_worker(monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["gauge_scoring_job.py"])
     monkeypatch.setattr(gauge_scoring_job.pg, "connection_scope", connection_scope)
     monkeypatch.setattr(gauge_scoring_job, "DEFAULT_WORKERS", 2)
-    monkeypatch.setattr(gauge_scoring_job, "_fetch_user_ids", lambda: {f"user-{i}" for i in range(5)})
+    monkeypatch.setattr(gauge_scoring_job, "_fetch_user_ids", lambda failures: {f"user-{i}" for i in range(5)})
     monkeypatch.setattr(gauge_scoring_job, "_verify_outputs", lambda *args: [])
     monkeypatch.setattr(
         gauge_scoring_job,
         "score_user_day",
-        lambda user_id, day, force=False: scored.append(user_id) or {"ok": True, "skipped": True},
+        lambda user_id, day, force=False, diagnostics=None: scored.append(user_id) or {"ok": True, "skipped": True, "skip_reason": "unchanged_inputs"},
     )
 
     gauge_scoring_job.main()
@@ -230,3 +238,147 @@ def test_main_uses_one_connection_scope_per_bounded_worker(monkeypatch) -> None:
     assert entered == ["entered", "entered"]
     assert exited == ["exited", "exited"]
     assert sorted(scored) == [f"user-{i}" for i in range(5)]
+
+
+def _summary(caplog):
+    return json.loads(next(record.message.split('evaluation_summary=', 1)[1]
+                          for record in caplog.records if 'evaluation_summary=' in record.message))
+
+
+def test_summary_distinguishes_evaluation_from_old_unchanged_output(monkeypatch, caplog):
+    now = datetime(2026, 10, 7, 15, tzinfo=timezone.utc)
+    outcomes = {uid: {'ok': True, 'skipped': True, 'skip_reason': 'unchanged_inputs'} for uid in PREFERENCES}
+    _dispatch(monkeypatch, now, outcomes=outcomes)
+    original = gauge_scoring_job.pg.fetch
+
+    def fetch(sql, *params):
+        rows = original(sql, *params)
+        if 'marts.user_gauges_day' in sql:
+            for row in rows:
+                row['updated_at'] -= timedelta(hours=9)
+        return rows
+
+    monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', fetch)
+    with caplog.at_level(logging.INFO):
+        gauge_scoring_job.main()
+    summary = _summary(caplog)
+    assert summary['status'] == 'pass' and summary['verification_completed']
+    assert summary['evaluated'] == summary['unchanged_inputs'] == summary['outputs_found'] == len(PREFERENCES)
+    assert summary['refreshed'] == 0 and summary['failures'] == {}
+    assert summary['last_evaluated_at'] == now.isoformat()
+    assert summary['latest_output_changed_at'] == (now - timedelta(hours=9)).isoformat()
+    assert 'synthetic-hash' not in caplog.text and 'user=' not in caplog.text
+    assert 'chicago' not in caplog.text
+
+
+@pytest.mark.parametrize('source', ['app.user_locations', 'public.app_user_entitlements_active',
+                                  'gaia.samples', 'raw.app_analytics_events'])
+def test_incomplete_eligibility_is_a_failure_even_when_other_users_succeed(monkeypatch, caplog, source):
+    _dispatch(monkeypatch, datetime(2026, 10, 7, 15, tzinfo=timezone.utc))
+    original = gauge_scoring_job.pg.fetch
+
+    def fetch(sql, *params):
+        if source in sql:
+            raise RuntimeError('PRIVATE_IDENTIFIER_AND_HEALTH_PAYLOAD')
+        return original(sql, *params)
+
+    monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', fetch)
+    with caplog.at_level(logging.INFO), pytest.raises(SystemExit) as error:
+        gauge_scoring_job.main()
+    summary = _summary(caplog)
+    assert error.value.code == 1 and summary['status'] == 'fail'
+    assert summary['eligibility_source_failures'] == [source]
+    assert summary['verification_completed']
+    assert 'PRIVATE_IDENTIFIER_AND_HEALTH_PAYLOAD' not in caplog.text
+
+
+@pytest.mark.parametrize('stored_hash, reason', [('previous', 'changed_inputs_pending'),
+                                               ('concurrent', 'input_hash_mismatch')])
+def test_hash_verification_detects_unprocessed_change_even_with_recent_timestamp(monkeypatch, stored_hash, reason):
+    now = datetime(2026, 10, 7, 15, tzinfo=timezone.utc)
+    day = date(2026, 10, 7); key = ('synthetic-user', day)
+    monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', lambda *args: [
+        {'user_id': key[0], 'day': day, 'updated_at': now, 'inputs_hash': stored_hash}])
+    evaluations = {key: {'inputs_hash': 'changed', 'previous_inputs_hash': 'previous',
+                         'output_existed': True, 'evaluated_at': now}}
+    assert gauge_scoring_job._verify_outputs({key}, {key}, now, evaluations, {}) == [reason]
+
+
+def test_missing_output_is_a_failure_even_when_scorer_reports_unchanged(monkeypatch, caplog):
+    _dispatch(monkeypatch, datetime(2026, 10, 7, 15, tzinfo=timezone.utc),
+              args=['--user-id', 'chicago'],
+              outcomes={'chicago': {'ok': True, 'skipped': True, 'skip_reason': 'unchanged_inputs'}})
+    monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', lambda *args: [])
+    with caplog.at_level(logging.INFO), pytest.raises(SystemExit):
+        gauge_scoring_job.main()
+    summary = _summary(caplog)
+    assert summary['failures'] == {'missing_output': 1}
+    assert summary['scope'] == 'selected_users' and summary['eligible_users'] is None
+    assert summary['outputs_found'] == 0
+
+
+def test_all_eligibility_sources_failed_cannot_pass_as_empty_batch(monkeypatch, caplog):
+    _dispatch(monkeypatch, datetime(2026, 10, 7, 15, tzinfo=timezone.utc))
+    monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', Mock(side_effect=RuntimeError('private payload')))
+    with caplog.at_level(logging.INFO), pytest.raises(SystemExit):
+        gauge_scoring_job.main()
+    summary = _summary(caplog)
+    assert summary['expected_outputs'] == summary['evaluated'] == 0
+    assert len(summary['eligibility_source_failures']) == 4 and summary['status'] == 'fail'
+
+
+@pytest.mark.parametrize('failure', ['verification', 'worker'])
+def test_infrastructure_failure_emits_incomplete_private_summary(monkeypatch, caplog, failure):
+    _dispatch(monkeypatch, datetime(2026, 10, 7, 15, tzinfo=timezone.utc), args=['--user-id', 'chicago'])
+    if failure == 'verification':
+        monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', Mock(side_effect=RuntimeError('private payload')))
+    else:
+        monkeypatch.setattr(gauge_scoring_job.pg, 'connection_scope', Mock(side_effect=RuntimeError('private payload')))
+    with caplog.at_level(logging.INFO), pytest.raises(SystemExit):
+        gauge_scoring_job.main()
+    summary = _summary(caplog)
+    assert summary['status'] == 'fail'
+    assert summary['failures'][f'{failure}_failed'] == 1
+    assert summary['verification_completed'] is (failure != 'verification')
+    assert 'private payload' not in caplog.text and 'user=' not in caplog.text
+
+
+def test_unexplained_skip_is_not_reported_as_unchanged(monkeypatch, caplog):
+    _dispatch(monkeypatch, datetime(2026, 10, 7, 15, tzinfo=timezone.utc), args=['--user-id', 'chicago'],
+              outcomes={'chicago': {'ok': True, 'skipped': True}})
+    with caplog.at_level(logging.INFO), pytest.raises(SystemExit):
+        gauge_scoring_job.main()
+    assert _summary(caplog)['failures'] == {'unexplained_skip': 1}
+    assert _summary(caplog)['unchanged_inputs'] == 0
+
+
+def test_failed_changed_input_write_reports_pending_without_printing_inputs(monkeypatch, caplog):
+    now = datetime(2026, 10, 7, 15, tzinfo=timezone.utc)
+    _dispatch(monkeypatch, now, args=['--user-id', 'chicago'])
+
+    def score(uid, day, *, force=False, diagnostics=None):
+        diagnostics.update(inputs_hash='private-new-hash', previous_inputs_hash='private-old-hash',
+                           output_existed=True, evaluated_at=now)
+        raise RuntimeError('PRIVATE HEALTH DATA IN DATABASE ERROR')
+
+    monkeypatch.setattr(gauge_scoring_job, 'score_user_day', score)
+    monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', lambda *args: [
+        {'user_id': 'chicago', 'day': date(2026, 10, 7),
+         'updated_at': gauge_scoring_job.datetime.fromtimestamp(now.timestamp() - 3600, timezone.utc),
+         'inputs_hash': 'private-old-hash'}])
+    with caplog.at_level(logging.INFO), pytest.raises(SystemExit):
+        gauge_scoring_job.main()
+    summary = _summary(caplog)
+    assert summary['evaluated'] == 1 and summary['refreshed'] == 0
+    assert summary['failures'] == {'score_exception': 1, 'changed_inputs_pending': 1}
+    assert 'PRIVATE HEALTH' not in caplog.text
+    assert 'private-new-hash' not in caplog.text and 'private-old-hash' not in caplog.text
+    assert 'chicago' not in caplog.text
+
+
+def test_existing_output_without_evaluation_evidence_cannot_pass(monkeypatch):
+    now = datetime(2026, 10, 7, 15, tzinfo=timezone.utc)
+    key = ('synthetic', date(2026, 10, 7))
+    monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', lambda *args: [
+        {'user_id': key[0], 'day': key[1], 'updated_at': now, 'inputs_hash': 'same'}])
+    assert gauge_scoring_job._verify_outputs({key}, set(), now, {}, {}) == ['not_evaluated']

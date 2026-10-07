@@ -108,13 +108,36 @@ def test_actual_unchanged_input_hash_skips_without_forcing_another_write(monkeyp
     monkeypatch.setattr(scorer, 'upsert_row', write)
     day = date(2026, 3, 8)
     assert not scorer.score_user_day(USER, day)['skipped']
-    assert scorer.score_user_day(USER, day)['skipped']
+    diagnostic = {}
+    result = scorer.score_user_day(USER, day, diagnostics=diagnostic)
+    assert result['skipped'] and result['skip_reason'] == 'unchanged_inputs'
+    assert diagnostic['inputs_hash'] == diagnostic['previous_inputs_hash'] == stored['inputs_hash']
+    assert diagnostic['evaluated_at'] >= stored['updated_at']
+    assert diagnostic['output_existed']
+    assert 'inputs_hash' not in result and 'evaluated_at' not in result
     assert len(writes) == 1 and len(reads) == 2
     assert all(params == (USER, day) for _, params in reads)
     assert len(stored['inputs_hash']) == 64
     # Historical string and date callers retain the same key and fingerprint.
     assert scorer.score_user_day(USER, day.isoformat())['skipped']
     assert len(writes) == 1
+
+    # A newer timestamp outside the canonical snapshot is not a scoring change.
+    scorer.fetch_daily_features.return_value = {'unrelated_updated_at': '2099-01-01T00:00:00Z'}
+    assert scorer.score_user_day(USER, day)['skipped']
+    assert len(writes) == 1
+
+    # A real canonical input change is retained for verification even if writing
+    # fails; no successful rewrite or changed timestamp may be fabricated.
+    scorer.fetch_local_payload.return_value = {'synthetic': 'changed'}
+    monkeypatch.setattr(scorer, 'upsert_row', Mock(side_effect=RuntimeError('synthetic write failure')))
+    failed_diagnostic = {}
+    with pytest.raises(RuntimeError, match='synthetic write failure'):
+        scorer.score_user_day(USER, day, diagnostics=failed_diagnostic)
+    assert failed_diagnostic['previous_inputs_hash'] == stored['inputs_hash']
+    assert failed_diagnostic['inputs_hash'] != stored['inputs_hash']
+    assert failed_diagnostic['evaluated_at'] >= diagnostic['evaluated_at']
+    assert len(writes) == 1 and stored['updated_at'] == writes[0]['updated_at']
 
 
 @pytest.mark.parametrize('failed_source', ['raw.user_symptom_events_effective', 'raw.user_symptom_episodes'])
