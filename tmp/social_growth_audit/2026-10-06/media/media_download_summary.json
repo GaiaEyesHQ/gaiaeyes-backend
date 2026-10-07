@@ -1,0 +1,42 @@
+[
+  {
+    "name": "daily_caption.jpg",
+    "url_path": "social/earthscope/latest/daily_caption.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "last_modified": "Tue, 06 Oct 2026 17:11:28 GMT",
+    "bytes": 145145
+  },
+  {
+    "name": "daily_stats.jpg",
+    "url_path": "social/earthscope/latest/daily_stats.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "last_modified": "Tue, 06 Oct 2026 17:11:28 GMT",
+    "bytes": 149934
+  },
+  {
+    "name": "daily_affects.jpg",
+    "url_path": "social/earthscope/latest/daily_affects.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "last_modified": "Tue, 06 Oct 2026 17:11:28 GMT",
+    "bytes": 235679
+  },
+  {
+    "name": "daily_playbook.jpg",
+    "url_path": "social/earthscope/latest/daily_playbook.jpg",
+    "status": 200,
+    "content_type": "image/jpeg",
+    "last_modified": "Tue, 06 Oct 2026 17:11:28 GMT",
+    "bytes": 188515
+  },
+  {
+    "name": "latest.mp4",
+    "url_path": "social/earthscope/reels/latest/latest.mp4",
+    "status": 200,
+    "content_type": "video/mp4",
+    "last_modified": "Tue, 06 Oct 2026 17:14:09 GMT",
+    "bytes": 970753
+  }
+]

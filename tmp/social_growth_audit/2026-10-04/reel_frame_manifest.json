@@ -1,0 +1,40 @@
+{
+  "duration_seconds" : 12.967000000000001,
+  "frames" : [
+    {
+      "actual_seconds" : 0.5,
+      "path" : "\/Users\/gennwu\/Documents\/GitHub\/gaiaeyes-backend\/tmp\/social_growth_audit\/2026-10-04\/frames\/frame_00_5s_jpg",
+      "requested_seconds" : 0.5
+    },
+    {
+      "actual_seconds" : 2.5,
+      "path" : "\/Users\/gennwu\/Documents\/GitHub\/gaiaeyes-backend\/tmp\/social_growth_audit\/2026-10-04\/frames\/frame_02_5s_jpg",
+      "requested_seconds" : 2.5
+    },
+    {
+      "actual_seconds" : 4.5,
+      "path" : "\/Users\/gennwu\/Documents\/GitHub\/gaiaeyes-backend\/tmp\/social_growth_audit\/2026-10-04\/frames\/frame_04_5s_jpg",
+      "requested_seconds" : 4.5
+    },
+    {
+      "actual_seconds" : 6.5,
+      "path" : "\/Users\/gennwu\/Documents\/GitHub\/gaiaeyes-backend\/tmp\/social_growth_audit\/2026-10-04\/frames\/frame_06_5s_jpg",
+      "requested_seconds" : 6.5
+    },
+    {
+      "actual_seconds" : 8.5,
+      "path" : "\/Users\/gennwu\/Documents\/GitHub\/gaiaeyes-backend\/tmp\/social_growth_audit\/2026-10-04\/frames\/frame_08_5s_jpg",
+      "requested_seconds" : 8.5
+    },
+    {
+      "actual_seconds" : 10.5,
+      "path" : "\/Users\/gennwu\/Documents\/GitHub\/gaiaeyes-backend\/tmp\/social_growth_audit\/2026-10-04\/frames\/frame_10_5s_jpg",
+      "requested_seconds" : 10.5
+    },
+    {
+      "actual_seconds" : 12,
+      "path" : "\/Users\/gennwu\/Documents\/GitHub\/gaiaeyes-backend\/tmp\/social_growth_audit\/2026-10-04\/frames\/frame_12_0s_jpg",
+      "requested_seconds" : 12
+    }
+  ]
+}
