@@ -760,6 +760,8 @@ def test_title_modal_may_is_not_a_date():
 @pytest.mark.parametrize("caption,title", [
     ("Pain getting louder? The signals are elevated.", "Pain getting quieter?"),
     ("Pain getting quieter? The signals are quiet.", "Pain getting louder?"),
+    ("Pain still getting worse? The signals are elevated.", "Pain getting quieter?"),
+    ("Pain still easing? The signals are quiet.", "Pain getting louder?"),
 ])
 def test_title_alignment_cannot_reverse_either_direction(caption, title):
     assert _caption_with_approved_hook(caption, title) == caption
@@ -775,6 +777,8 @@ def test_title_alignment_still_accepts_compatible_hooks():
     ("Pain feeling extra loud? Today might turn the volume down a notch.", True),
     ("Feeling odd and can’t place it? The day looks steady with room to recover.", True),
     ("Tiny aches getting quieter? The signals look quiet and steady.", False),
+    ("Brain fog clearing? The signals look quiet and steady.", False),
+    ("Headaches backing off? The signals look quiet and steady.", False),
     ("Pain still feeling loud? Today’s signals look quiet and steady, even if you’re not feeling better yet.", False),
     ("Pain feeling loud? Although the signals look quiet, your experience may differ.", False),
     ("Sinus pressure louder today? Quiet space conditions make local pressure or pollen worth checking.", False),

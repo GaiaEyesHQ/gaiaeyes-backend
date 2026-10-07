@@ -904,10 +904,11 @@ OPENING_TRANSITION_GUIDANCE = (
 
 def _hook_direction(text: str) -> Optional[str]:
     """Recognize explicit direction changes, not a reader's conditional symptoms."""
-    if re.search(r"\b(still|even if|if you|lingering)\b", text, re.I):
-        return None
-    easing = bool(re.search(r"\b(quieter|steadier|eas(?:e|es|ing)|easier|soften(?:ing)?|less pain|pain-free)\b", text, re.I))
-    louder = bool(re.search(r"\b(loud(?:er)?|worse|worsen(?:ing)?|building|more painful)\b", text, re.I))
+    conditional = bool(re.search(r"\b(still|even if|if you|lingering)\b", text, re.I))
+    easing = bool(re.search(r"\b(quieter|steadier|eas(?:e|es|ing)|easier|soften(?:ing)?|less pain|pain-free|clearing|lifting|backing off)\b", text, re.I))
+    louder = bool(re.search(r"\b(louder|worse|worsen(?:ing)?|building|more painful)\b", text, re.I))
+    # 'Still loud' describes an existing symptom; 'still getting worse' has a direction.
+    louder = louder or (not conditional and bool(re.search(r"\bloud\b", text, re.I)))
     if easing == louder:
         return None
     return "easing" if easing else "louder"
