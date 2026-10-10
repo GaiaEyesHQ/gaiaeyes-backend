@@ -79,4 +79,4 @@ jobs:
         env:
           GAIA_TEST_POSTGRES_DSN: >-
             postgresql://gaia_test:local_test_only@127.0.0.1:5432/gaia_refresh_test?sslmode=disable
-        run: python -m pytest -q tests/integration/test_refresh_postgres.py
+        run: python -m pytest -q tests/integration/test_refresh_postgres.py tests/integration/test_schumann_query.py
