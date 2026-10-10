@@ -31,6 +31,7 @@ from services.forecast_outlook import ensure_space_forecast_daily, serialize_spa
 from services.geomagnetic_context import build_ulf_payload
 from services.time.moon import lunar_overlay_windows, moon_context_for_day
 from services.space_weather_current import fetch_current_space_weather
+from services.schumann_daily import LATEST_SCHUMANN_SQL
 from app.utils.auth import require_admin
 
 DEFAULT_TIMEZONE = "America/Chicago"
@@ -853,15 +854,8 @@ async def _fetch_latest_ulf_context(conn) -> Dict[str, Any]:
 async def _fetch_schumann_row(conn, day_local: date) -> Dict[str, Any]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
-            """
-            select station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz, f3_avg_hz, f4_avg_hz
-            from marts.schumann_daily
-            where station_id in ('tomsk','cumiana') and day <= %s
-            order by day desc,
-                     case when station_id='tomsk' then 0 when station_id='cumiana' then 1 else 2 end
-            limit 1
-            """,
-            (day_local,),
+            LATEST_SCHUMANN_SQL,
+            {"day": day_local},
         )
         row = await cur.fetchone() or {}
     return {
