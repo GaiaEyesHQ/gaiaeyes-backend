@@ -62,6 +62,10 @@ jobs:
           python -m pytest -q \
             tests/api/test_refresh_reliability.py \
             tests/api/test_dashboard_signal_context.py \
+            tests/api/test_dashboard_signal_bar_bounds.py \
+            tests/services/test_signal_bar.py \
+            tests/services/test_driver_normalize_v2.py \
+            tests/services/test_driver_normalizer.py \
             tests/api/test_dashboard_cache.py \
             tests/bots/test_signal_resolver.py \
             tests/api/test_features_today.py \

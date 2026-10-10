@@ -31,7 +31,7 @@ from bots.gauges.gauge_scorer import (
     fetch_user_tags,
 )
 from bots.gauges.local_payload import get_local_payload
-from bots.gauges.signal_resolver import resolve_signals
+from bots.gauges.signal_resolver import resolve_signals, _fetch_space_snapshot as fetch_signal_space_snapshot
 from services.db import pg
 from services.drivers.all_drivers import build_exposure_driver_rows, build_ulf_driver_row
 from services.drivers.driver_normalize import normalize_environmental_drivers
@@ -50,7 +50,10 @@ from services.patterns.personal_relevance import (
 )
 from services.personalization.health_context import build_personalization_profile
 from services.drivers.driver_normalize import merge_signal_bar_driver_candidates
-from services.signal_bar import build_signal_bar, refresh_signal_bar_space
+from services.signal_bar import (
+    build_signal_bar, refresh_signal_bar_space,
+    _fetch_schumann_snapshot as fetch_signal_schumann_snapshot,
+)
 
 
 router = APIRouter(prefix="/v1", tags=["dashboard"])
@@ -668,37 +671,75 @@ _signal_context_jobs_lock = threading.Lock()
 class _SignalContextJob:
     future: Future | None = None
     local_payload: Dict[str, Any] = field(default_factory=dict)
+    active_states: list[Dict[str, Any]] = field(default_factory=list)
+    signal_bar: Dict[str, Any] = field(default_factory=dict)
 
 
-_signal_context_jobs: dict[tuple[Any, Any], _SignalContextJob] = {}
+_signal_context_jobs: dict[tuple[Any, ...], _SignalContextJob] = {}
 
 
-def _run_signal_context(user_id, day, definition, job):
+def _run_signal_context(user_id, day, definition, include_signal_bar, job):
     started = time.perf_counter()
     stage = "local_payload"
     stage_started = started
+    space = None
+    schumann = None
+
+    def snapshot_bar():
+        # Explicit snapshots make composition pure, including missing-data cases.
+        bar = build_signal_bar(
+            day=day, active_states=job.active_states, local_payload=job.local_payload,
+            space_snapshot=space, schumann_snapshot=schumann,
+        )
+        with _signal_context_jobs_lock:
+            job.signal_bar = bar
+
+    def result():
+        with _signal_context_jobs_lock:
+            value = (job.active_states, job.local_payload)
+            return copy.deepcopy((*value, job.signal_bar) if include_signal_bar else value)
+
+    def run_stage(name, callback, default):
+        nonlocal stage, stage_started
+        stage = name
+        stage_started = time.perf_counter()
+        try:
+            value = callback()
+            logger.info("[dashboard] signal stage=%s elapsed_ms=%.1f outcome=completed",
+                        stage, (time.perf_counter() - stage_started) * 1000)
+            return value
+        except Exception as exc:
+            logger.warning("[dashboard] signal stage=%s elapsed_ms=%.1f outcome=failed error_type=%s",
+                           stage, (time.perf_counter() - stage_started) * 1000, type(exc).__name__)
+            return default
+
     try:
-        # Per-operation limits also apply after a caller stops waiting. They do
-        # not constitute a total deadline for this sequence or its HTTP calls.
         with pg.operation_timeouts(connect_timeout=2, statement_timeout_ms=5000):
-            local_payload = get_local_payload(user_id, day) or {}
+            local_payload = run_stage("local_payload", lambda: get_local_payload(user_id, day), {}) or {}
             with _signal_context_jobs_lock:
                 job.local_payload = copy.deepcopy(local_payload)
-            logger.info("[dashboard] signal stage=%s elapsed_ms=%.1f outcome=completed",
-                        stage, (time.perf_counter() - stage_started) * 1000)
-            stage = "resolve_signals"
-            stage_started = time.perf_counter()
-            active_states = resolve_signals(
-                user_id, day, local_payload=local_payload, definition=definition or None,
+            if include_signal_bar:
+                snapshot_bar()
+                space = run_stage("space_snapshot", lambda: fetch_signal_space_snapshot(day), None)
+                snapshot_bar()
+                schumann = run_stage("schumann_live", fetch_signal_schumann_snapshot, None)
+                snapshot_bar()
+            kwargs = {"space_snapshot": space} if include_signal_bar else {}
+            active_states = run_stage(
+                "resolve_signals",
+                lambda: resolve_signals(
+                    user_id, day, local_payload=local_payload, definition=definition or None, **kwargs,
+                ), [],
             )
-            logger.info("[dashboard] signal stage=%s elapsed_ms=%.1f outcome=completed",
-                        stage, (time.perf_counter() - stage_started) * 1000)
-            return active_states if isinstance(active_states, list) else [], local_payload
+            with _signal_context_jobs_lock:
+                job.active_states = copy.deepcopy(active_states) if isinstance(active_states, list) else []
+            if include_signal_bar:
+                snapshot_bar()
+            return result()
     except Exception as exc:
         logger.warning("[dashboard] signal stage=%s elapsed_ms=%.1f outcome=failed error_type=%s",
                        stage, (time.perf_counter() - stage_started) * 1000, type(exc).__name__)
-        with _signal_context_jobs_lock:
-            return [], copy.deepcopy(job.local_payload)
+        return result()
     finally:
         logger.info("[dashboard] signal worker elapsed_ms=%.1f",
                     (time.perf_counter() - started) * 1000)
@@ -733,10 +774,29 @@ async def _resolve_signal_context(
     user_id: str,
     day: date,
     definition: Dict[str, Any],
-) -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
-    job = _submit_signal_job((user_id, day), _run_signal_context, user_id, day, definition)
+    *,
+    include_signal_bar: bool = False,
+):
+    def fallback(job=None):
+        with _signal_context_jobs_lock:
+            active = copy.deepcopy(job.active_states) if job else []
+            local = copy.deepcopy(job.local_payload) if job else {}
+            bar = copy.deepcopy(job.signal_bar) if job else {}
+        if not include_signal_bar:
+            return active, local
+        if not bar:
+            bar = build_signal_bar(
+                day=day, active_states=active, local_payload=local,
+                space_snapshot=None, schumann_snapshot=None,
+            )
+        return active, local, bar
+
+    job = _submit_signal_job(
+        (user_id, day, include_signal_bar), _run_signal_context,
+        user_id, day, definition, include_signal_bar,
+    )
     if job is None:
-        return [], {}
+        return fallback()
 
     # Shield only the future. Cancellation/timeout returns promptly while the
     # still-running worker remains counted against the process-wide limit.
@@ -745,12 +805,13 @@ async def _resolve_signal_context(
         result = await asyncio.wait_for(
             asyncio.shield(future), timeout=_SIGNAL_CONTEXT_TIMEOUT_SECONDS,
         )
+        if include_signal_bar and not result[2]:
+            return fallback(job)
         return copy.deepcopy(result)
     except asyncio.TimeoutError:
         logger.warning("[dashboard] signal context wait timed out timeout=%ss; worker remains bounded",
                        _SIGNAL_CONTEXT_TIMEOUT_SECONDS)
-        with _signal_context_jobs_lock:
-            return [], copy.deepcopy(job.local_payload)
+        return fallback(job)
 
 
 def _coerce_day(value: Optional[date]) -> date:
@@ -1023,7 +1084,9 @@ async def _build_dashboard_payload(
     out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
     mark_step("gauge_delta")
 
-    active_states, local_payload = await _resolve_signal_context(user_id, day, definition)
+    active_states, local_payload, signal_bar_payload = await _resolve_signal_context(
+        user_id, day, definition, include_signal_bar=True,
+    )
     mark_step("signal_context")
     (
         user_tags,
@@ -1053,11 +1116,6 @@ async def _build_dashboard_payload(
         local_payload=local_payload,
         alerts_json=out.get("alerts"),
         limit=6,
-    )
-    signal_bar_payload = build_signal_bar(
-        day=day,
-        active_states=active_states,
-        local_payload=local_payload,
     )
     drivers = merge_signal_bar_driver_candidates(drivers, signal_bar_payload)
     profile = build_personalization_profile(user_tags)

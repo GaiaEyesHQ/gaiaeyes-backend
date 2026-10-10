@@ -18,6 +18,193 @@ except ModuleNotFoundError as exc:  # pragma: no cover - optional DB deps are ab
 
 @unittest.skipIf(_IMPORT_ERROR is not None, f"Signal bar tests require optional dependencies: {_IMPORT_ERROR}")
 class SignalBarTests(unittest.TestCase):
+    def test_explicit_missing_snapshots_never_fetch_or_imply_quiet(self) -> None:
+        for snapshot in (None, {}):
+            with self.subTest(snapshot=snapshot), patch.object(
+                signal_bar.signal_resolver,
+                "_fetch_space_snapshot",
+                side_effect=AssertionError("unexpected space fetch"),
+            ), patch.object(
+                signal_bar,
+                "_fetch_schumann_snapshot",
+                side_effect=AssertionError("unexpected Schumann fetch"),
+            ):
+                payload = signal_bar.build_signal_bar(
+                    day=date(2026, 3, 26),
+                    active_states=[],
+                    local_payload={},
+                    space_snapshot=snapshot,
+                    schumann_snapshot=snapshot,
+                )
+
+            self.assertEqual(payload["items"], [])
+            self.assertEqual(payload["unavailable_items"], ["kp", "solar_wind", "schumann", "pressure"])
+            self.assertEqual(payload["availability"], "unavailable")
+            self.assertIsNone(payload["updated_at"])
+
+    def test_partial_snapshot_omits_only_missing_pills_and_keeps_legacy_states(self) -> None:
+        payload = signal_bar.build_signal_bar(
+            day=date(2026, 3, 26),
+            active_states=[{"signal_key": "schumann.variability_24h", "state": "elevated"}],
+            local_payload={},
+            space_snapshot={"kp_now": 0.0},
+            schumann_snapshot=None,
+        )
+
+        self.assertEqual([item["key"] for item in payload["items"]], ["kp", "schumann"])
+        self.assertEqual(payload["unavailable_items"], ["solar_wind", "pressure"])
+        self.assertEqual(payload["availability"], "partial")
+        self.assertEqual([item["state"] for item in payload["items"]], ["quiet", "elevated"])
+        self.assertTrue(all(item["state"] in {"quiet", "watch", "elevated", "strong"} for item in payload["items"]))
+
+    def test_supplied_snapshots_compose_without_fetching_and_keep_source_times(self) -> None:
+        space = {
+            "kp_now": 0.0,
+            "kp_max": 6.0,
+            "sw_speed_now_kms": 420.0,
+            "sw_speed_avg": 750.0,
+            "space_now_ts": datetime(2026, 3, 20, 12, 0, tzinfo=timezone.utc),
+        }
+        schumann = {"state": "quiet", "label": "Calm", "updated_at": "2026-03-20T11:00:00Z"}
+        with patch.object(
+            signal_bar.signal_resolver,
+            "_fetch_space_snapshot",
+            side_effect=AssertionError("unexpected space fetch"),
+        ), patch.object(
+            signal_bar,
+            "_fetch_schumann_snapshot",
+            side_effect=AssertionError("unexpected Schumann fetch"),
+        ):
+            payload = signal_bar.build_signal_bar(
+                day=date(2026, 3, 26),
+                active_states=[],
+                local_payload={"weather": {"baro_delta_12h_hpa": 0.0}},
+                space_snapshot=space,
+                schumann_snapshot=schumann,
+            )
+
+        items = {item["key"]: item for item in payload["items"]}
+        self.assertEqual(items["kp"]["value"], "0.0")
+        self.assertEqual(items["solar_wind"]["value"], "420 km/s")
+        self.assertEqual(items["pressure"]["value"], "+0.0")
+        self.assertEqual(items["schumann"]["value"], "Calm")
+        self.assertEqual(items["kp"]["updated_at"], "2026-03-20T12:00:00+00:00")
+        self.assertEqual(items["schumann"]["updated_at"], "2026-03-20T11:00:00Z")
+        self.assertTrue(all(item["state"] == "quiet" for item in payload["items"]))
+        self.assertTrue(all(item["availability"] == "available" for item in payload["items"]))
+        self.assertEqual(payload["availability"], "available")
+        self.assertEqual(payload["unavailable_items"], [])
+        self.assertIsInstance(space["space_now_ts"], datetime)
+        self.assertEqual(schumann, {"state": "quiet", "label": "Calm", "updated_at": "2026-03-20T11:00:00Z"})
+
+    def test_omitted_snapshots_retain_fetch_behavior(self) -> None:
+        day = date(2026, 3, 26)
+        with patch.object(signal_bar.signal_resolver, "_fetch_space_snapshot", return_value={}) as space_fetch, patch.object(
+            signal_bar, "_fetch_schumann_snapshot", return_value=None,
+        ) as schumann_fetch:
+            signal_bar.build_signal_bar(day=day, active_states=[], local_payload={})
+
+        space_fetch.assert_called_once_with(day)
+        schumann_fetch.assert_called_once_with()
+
+    def test_space_composition_is_pure_and_uses_measured_daily_fallbacks(self) -> None:
+        with patch.object(
+            signal_bar.signal_resolver, "_fetch_space_snapshot", side_effect=AssertionError("unexpected fetch"),
+        ):
+            payload = signal_bar._compose_space_signal_snapshot({"kp_max": 4.5, "sw_speed_avg": 720.0})
+
+        items = {item["key"]: item for item in payload["items"]}
+        self.assertEqual(items["kp"]["value"], "4.5")
+        self.assertEqual(items["kp"]["state"], "elevated")
+        self.assertEqual(items["solar_wind"]["value"], "720 km/s")
+        self.assertEqual(items["solar_wind"]["state"], "strong")
+        self.assertEqual(payload["availability"], "available")
+        self.assertEqual(payload["unavailable_items"], [])
+
+    def test_nonfinite_space_measurements_are_unavailable(self) -> None:
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value):
+                payload = signal_bar._compose_space_signal_snapshot({"kp_now": value, "sw_speed_now_kms": value})
+                self.assertEqual(payload["items"], [])
+                self.assertEqual(payload["unavailable_items"], ["kp", "solar_wind"])
+                self.assertEqual(payload["availability"], "unavailable")
+
+    def test_inactive_schumann_trigger_and_pressure_trend_are_not_measurements(self) -> None:
+        payload = signal_bar.build_signal_bar(
+            day=date(2026, 3, 26),
+            active_states=[{"signal_key": "schumann.variability_24h", "state": "quiet"}],
+            local_payload={"weather": {"pressure_trend": "steady"}},
+            space_snapshot=None,
+            schumann_snapshot=None,
+        )
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(payload["unavailable_items"], ["kp", "solar_wind", "schumann", "pressure"])
+        self.assertEqual(payload["availability"], "unavailable")
+
+    def test_pressure_zero_delta_is_not_replaced_by_fallback(self) -> None:
+        payload = signal_bar.build_signal_bar(
+            day=date(2026, 3, 26),
+            active_states=[],
+            local_payload={"weather": {"baro_delta_12h_hpa": 0.0, "pressure_delta_12h": -12.0}},
+            space_snapshot=None,
+            schumann_snapshot=None,
+        )
+        pressure = next(item for item in payload["items"] if item["key"] == "pressure")
+        self.assertEqual(pressure["state"], "quiet")
+        self.assertEqual(pressure["value"], "+0.0")
+
+    def test_active_pressure_trigger_survives_missing_local_metrics(self) -> None:
+        payload = signal_bar.build_signal_bar(
+            day=date(2026, 3, 26),
+            active_states=[{"signal_key": "earthweather.pressure_drop_3h", "state": "high"}],
+            local_payload={},
+            space_snapshot=None,
+            schumann_snapshot=None,
+        )
+        pressure = next(item for item in payload["items"] if item["key"] == "pressure")
+        self.assertEqual(pressure["state"], "strong")
+        self.assertEqual(pressure["value"], "—")
+        self.assertEqual(payload["unavailable_items"], ["kp", "solar_wind", "schumann"])
+        self.assertEqual(payload["availability"], "partial")
+
+    def test_refresh_signal_bar_space_updates_availability_when_metrics_return(self) -> None:
+        missing = signal_bar.build_signal_bar(
+            day=date(2026, 3, 26), active_states=[], local_payload={},
+            space_snapshot=None, schumann_snapshot=None,
+        )
+        with patch.object(signal_bar.signal_resolver, "_fetch_space_snapshot", return_value={"kp_now": 1.0}):
+            refreshed = signal_bar.refresh_signal_bar_space(missing, day=date(2026, 3, 26))
+
+        self.assertEqual([item["key"] for item in refreshed["items"]], ["kp"])
+        self.assertEqual(refreshed["unavailable_items"], ["solar_wind", "schumann", "pressure"])
+        self.assertEqual(refreshed["availability"], "partial")
+        self.assertEqual(missing["availability"], "unavailable")
+        self.assertEqual(missing["unavailable_items"], ["kp", "solar_wind", "schumann", "pressure"])
+
+    def test_refresh_signal_bar_space_restores_order_and_missing_metadata(self) -> None:
+        partial = signal_bar.build_signal_bar(
+            day=date(2026, 3, 26), active_states=[],
+            local_payload={"weather": {"baro_delta_12h_hpa": 0.0}},
+            space_snapshot=None,
+            schumann_snapshot={"state": "quiet", "label": "Calm"},
+        )
+        for snapshot, expected_keys, expected_missing in (
+            ({"kp_now": 1.0}, ["kp", "schumann", "pressure"], ["solar_wind"]),
+            ({"kp_now": 1.0, "sw_speed_now_kms": 400.0}, ["kp", "solar_wind", "schumann", "pressure"], []),
+        ):
+            with self.subTest(snapshot=snapshot), patch.object(
+                signal_bar.signal_resolver, "_fetch_space_snapshot", return_value=snapshot,
+            ):
+                refreshed = signal_bar.refresh_signal_bar_space(partial, day=date(2026, 3, 26))
+
+            self.assertEqual([item["key"] for item in refreshed["items"]], expected_keys)
+            self.assertEqual(refreshed["unavailable_items"], expected_missing)
+            self.assertEqual(refreshed["availability"], "partial" if expected_missing else "available")
+            self.assertEqual(refreshed["items"][-2:], partial["items"])
+
+        self.assertEqual(partial["unavailable_items"], ["kp", "solar_wind"])
+        self.assertEqual([item["key"] for item in partial["items"]], ["schumann", "pressure"])
+
     def test_refresh_signal_bar_space_replaces_only_volatile_space_values(self) -> None:
         stale = {
             "updated_at": "2026-08-04T01:00:00Z",
@@ -189,7 +376,7 @@ class SignalBarTests(unittest.TestCase):
             },
         )
 
-    def test_build_signal_bar_keeps_quiet_defaults_when_no_trigger_is_active(self) -> None:
+    def test_build_signal_bar_keeps_measured_quiet_but_missing_schumann_is_unavailable(self) -> None:
         local_payload = {
             "asof": "2026-03-26T12:00:00Z",
             "weather": {
@@ -217,8 +404,9 @@ class SignalBarTests(unittest.TestCase):
         items = {item["key"]: item for item in payload["items"]}
         self.assertEqual(items["kp"]["state"], "quiet")
         self.assertEqual(items["solar_wind"]["state"], "quiet")
-        self.assertEqual(items["schumann"]["state"], "quiet")
-        self.assertEqual(items["schumann"]["value"], "Quiet")
+        self.assertNotIn("schumann", items)
+        self.assertEqual(payload["unavailable_items"], ["schumann"])
+        self.assertEqual(payload["availability"], "partial")
         self.assertEqual(items["pressure"]["state"], "quiet")
         self.assertEqual(items["pressure"]["value"], "1016 →")
 

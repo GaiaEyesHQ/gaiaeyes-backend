@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import copy
+import math
 from datetime import date, datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
 from bots.gauges import signal_resolver
 from services.db import pg
 
+
+_UNSET = object()
+_SIGNAL_ORDER = {"kp": 0, "solar_wind": 1, "schumann": 2, "pressure": 3}
 
 _STATE_RANK = {
     "quiet": 0,
@@ -27,9 +31,18 @@ def _safe_float(value: Any) -> Optional[float]:
             return None
         if isinstance(value, str) and not value.strip():
             return None
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except Exception:
         return None
+
+
+def _first_float(values: Mapping[str, Any], *keys: str) -> Optional[float]:
+    for key in keys:
+        value = _safe_float(values.get(key))
+        if value is not None:
+            return value
+    return None
 
 
 def _coerce_iso(value: Any) -> Optional[str]:
@@ -70,8 +83,8 @@ def _normalize_bar_state(raw_state: Any) -> Optional[str]:
 
 
 def _pick_stronger_state(*states: Optional[str]) -> str:
-    picked = "quiet"
-    picked_rank = _STATE_RANK[picked]
+    picked = "unavailable"
+    picked_rank = -1
     for state in states:
         normalized = _normalize_bar_state(state)
         if normalized is None:
@@ -142,9 +155,9 @@ def _pressure_state(
     *,
     active_states: Sequence[Mapping[str, Any]],
 ) -> str:
-    delta_12h = _safe_float(weather.get("baro_delta_12h_hpa") or weather.get("pressure_delta_12h"))
-    delta_24h = _safe_float(weather.get("baro_delta_24h_hpa") or weather.get("pressure_delta_24h_hpa"))
-    delta_3h = _safe_float(weather.get("baro_delta_3h_hpa") or weather.get("pressure_delta_3h_hpa"))
+    delta_12h = _first_float(weather, "baro_delta_12h_hpa", "pressure_delta_12h")
+    delta_24h = _first_float(weather, "baro_delta_24h_hpa", "pressure_delta_24h_hpa")
+    delta_3h = _first_float(weather, "baro_delta_3h_hpa", "pressure_delta_3h_hpa")
     pressure_drop_state = _signal_state(active_states, "earthweather.pressure_drop_3h")
     pressure_24h_state = _signal_state(active_states, "earthweather.pressure_swing_24h_big")
 
@@ -168,6 +181,9 @@ def _pressure_state(
     if delta_12h is not None and abs(delta_12h) >= 6.0:
         return "watch"
 
+    if all(value is None for value in (delta_12h, delta_24h, delta_3h, _safe_float(weather.get("pressure_hpa")))):
+        return "unavailable"
+
     return "quiet"
 
 
@@ -180,9 +196,9 @@ def _pressure_arrow(weather: Mapping[str, Any]) -> str:
     if raw in {"steady", "stable"}:
         return "→"
 
-    delta = _safe_float(weather.get("baro_delta_12h_hpa") or weather.get("baro_delta_24h_hpa") or weather.get("pressure_delta_24h_hpa"))
+    delta = _first_float(weather, "baro_delta_12h_hpa", "baro_delta_24h_hpa", "pressure_delta_24h_hpa")
     if delta is None:
-        return "→"
+        return ""
     if delta >= 0.5:
         return "↑"
     if delta <= -0.5:
@@ -193,9 +209,12 @@ def _pressure_arrow(weather: Mapping[str, Any]) -> str:
 def _format_pressure_value(weather: Mapping[str, Any]) -> str:
     pressure_hpa = _safe_float(weather.get("pressure_hpa"))
     if pressure_hpa is not None:
-        return f"{int(round(pressure_hpa))} {_pressure_arrow(weather)}"
+        return f"{int(round(pressure_hpa))} {_pressure_arrow(weather)}".strip()
 
-    delta = _safe_float(weather.get("baro_delta_12h_hpa") or weather.get("baro_delta_24h_hpa") or weather.get("pressure_delta_24h_hpa"))
+    delta = _first_float(
+        weather, "baro_delta_12h_hpa", "pressure_delta_12h", "baro_delta_24h_hpa",
+        "pressure_delta_24h_hpa", "baro_delta_3h_hpa", "pressure_delta_3h_hpa",
+    )
     if delta is not None:
         return f"{delta:+.1f}"
 
@@ -204,7 +223,7 @@ def _format_pressure_value(weather: Mapping[str, Any]) -> str:
 
 def _kp_state(kp_value: Optional[float]) -> str:
     if kp_value is None:
-        return "quiet"
+        return "unavailable"
     if kp_value >= 6.0:
         return "strong"
     if kp_value >= 4.0:
@@ -214,7 +233,7 @@ def _kp_state(kp_value: Optional[float]) -> str:
 
 def _solar_wind_state(speed: Optional[float]) -> str:
     if speed is None:
-        return "quiet"
+        return "unavailable"
     if speed >= 700.0:
         return "strong"
     if speed >= 500.0:
@@ -228,11 +247,31 @@ def _state_label(state: str) -> str:
         "watch": "Watch",
         "elevated": "Elevated",
         "strong": "Strong",
-    }.get(state, "Quiet")
+    }.get(state, "—")
+
+
+def _available_signal_items(
+    items: Sequence[dict[str, Any]], *, unavailable_items: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Keep the legacy item-state enum while making missing signals explicit."""
+    available = [item for item in items if item.get("state") in _STATE_RANK]
+    unavailable = list(unavailable_items) + [
+        str(item["key"]) for item in items if item.get("state") not in _STATE_RANK
+    ]
+    return {
+        "items": available,
+        "unavailable_items": unavailable,
+        "availability": "partial" if available and unavailable else "available" if available else "unavailable",
+    }
 
 
 def _build_space_signal_snapshot(day: date) -> dict[str, Any]:
-    space = signal_resolver._fetch_space_snapshot(day) or {}
+    return _compose_space_signal_snapshot(signal_resolver._fetch_space_snapshot(day))
+
+
+def _compose_space_signal_snapshot(space: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Compose display values from a known snapshot without fetching missing data."""
+    space = space or {}
 
     kp_now = _safe_float(space.get("kp_now"))
     kp_max = _safe_float(space.get("kp_max"))
@@ -253,13 +292,14 @@ def _build_space_signal_snapshot(day: date) -> dict[str, Any]:
             "sw_density_now_cm3": _safe_float(space.get("sw_density_now_cm3")),
             "updated_at": space_updated_at,
         },
-        "items": [
+        **_available_signal_items([
             {
                 "key": "kp",
                 "label": "KP",
                 "value": "—" if kp_value is None else f"{kp_value:.1f}",
                 "numeric_value": kp_value,
                 "state": _kp_state(kp_value),
+                "availability": "available" if kp_value is not None else "unavailable",
                 "driver_key": "kp",
                 "detail_target": "driver",
                 "updated_at": space_updated_at,
@@ -270,11 +310,12 @@ def _build_space_signal_snapshot(day: date) -> dict[str, Any]:
                 "value": "—" if sw_value is None else f"{int(round(sw_value))} km/s",
                 "numeric_value": sw_value,
                 "state": _solar_wind_state(sw_value),
+                "availability": "available" if sw_value is not None else "unavailable",
                 "driver_key": "solar_wind",
                 "detail_target": "driver",
                 "updated_at": space_updated_at,
             },
-        ],
+        ]),
     }
 
 
@@ -325,7 +366,12 @@ def refresh_signal_bar_space(
     for key in ("kp", "solar_wind"):
         if key not in replaced and key in replacements:
             items.append(copy.deepcopy(dict(replacements[key])))
+    items.sort(key=lambda item: _SIGNAL_ORDER.get(str(item.get("key") or ""), len(_SIGNAL_ORDER)))
     out["items"] = items
+    if "unavailable_items" in out:
+        unavailable = [key for key in out["unavailable_items"] if key not in replacements]
+        out["unavailable_items"] = unavailable
+        out["availability"] = "partial" if items and unavailable else "available" if items else "unavailable"
 
     if current.get("updated_at"):
         out["updated_at"] = current["updated_at"]
@@ -337,14 +383,26 @@ def build_signal_bar(
     day: date,
     active_states: Sequence[Mapping[str, Any]] | None,
     local_payload: Mapping[str, Any] | None,
+    space_snapshot: Mapping[str, Any] | None | object = _UNSET,
+    schumann_snapshot: Mapping[str, Any] | None | object = _UNSET,
 ) -> dict[str, Any]:
+    """Build pills; omitted snapshots fetch, while explicit None means unavailable."""
     normalized_active = [item for item in list(active_states or []) if isinstance(item, Mapping)]
     payload = signal_resolver._normalize_local_payload(dict(local_payload or {}))
     weather = dict(payload.get("weather") or {})
-    space_signal = _build_space_signal_snapshot(day)
+    space_signal = (
+        _build_space_signal_snapshot(day)
+        if space_snapshot is _UNSET
+        else _compose_space_signal_snapshot(space_snapshot if isinstance(space_snapshot, Mapping) else None)
+    )
 
-    schumann_live = _fetch_schumann_snapshot()
+    schumann_live = _fetch_schumann_snapshot() if schumann_snapshot is _UNSET else schumann_snapshot
+    if not isinstance(schumann_live, Mapping):
+        schumann_live = None
     schumann_trigger_state = _signal_state(normalized_active, "schumann.variability_24h")
+    # An inactive trigger is not a substitute for a measured live amplitude.
+    if _normalize_bar_state(schumann_trigger_state) == "quiet":
+        schumann_trigger_state = None
     schumann_state = _pick_stronger_state(
         schumann_live.get("state") if schumann_live else None,
         schumann_trigger_state,
@@ -362,6 +420,7 @@ def build_signal_bar(
         break
 
     pressure_updated_at = _coerce_iso(payload.get("asof") or payload.get("as_of"))
+    pressure_state = _pressure_state(weather, active_states=normalized_active)
     space_updated_at = space_signal.get("updated_at")
 
     items = [
@@ -371,6 +430,7 @@ def build_signal_bar(
             "label": "SR",
             "value": schumann_value,
             "state": schumann_state,
+            "availability": "unavailable" if schumann_state == "unavailable" else "available",
             "driver_key": "schumann",
             "detail_target": "schumann",
             "updated_at": schumann_updated_at,
@@ -379,7 +439,8 @@ def build_signal_bar(
             "key": "pressure",
             "label": "hPa",
             "value": _format_pressure_value(weather),
-            "state": _pressure_state(weather, active_states=normalized_active),
+            "state": pressure_state,
+            "availability": "unavailable" if pressure_state == "unavailable" else "available",
             "driver_key": "pressure",
             "detail_target": "local_conditions",
             "updated_at": pressure_updated_at,
@@ -389,5 +450,6 @@ def build_signal_bar(
     return {
         "updated_at": space_updated_at or pressure_updated_at or schumann_updated_at,
         "space": space_signal["space"],
-        "items": items,
+        **_available_signal_items(items, unavailable_items=space_signal["unavailable_items"]),
     }
+

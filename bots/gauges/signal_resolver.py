@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +17,17 @@ from services.space_weather_current import fetch_current_space_weather
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
+
+_UNSET_SNAPSHOT = object()
+
+
+def _timed_signal_source(label, callback):
+    started = time.perf_counter()
+    try:
+        return callback()
+    finally:
+        logger.info("[signals] source=%s elapsed_ms=%.1f", label, (time.perf_counter() - started) * 1000)
+
 
 _SYNODIC_DAYS = 29.53058867
 _SOLAR_WIND_WATCH_KMS = 550.0
@@ -68,7 +80,7 @@ def _fetch_space_snapshot(day: date) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     row = None
     try:
-        row = pg.fetchrow(
+        row = _timed_signal_source("space_daily_db", lambda: pg.fetchrow(
             """
             select day, kp_now, kp_max, bz_now, bz_min,
                    sw_speed_now_kms, sw_speed_avg, sw_density_now_cm3,
@@ -78,7 +90,7 @@ def _fetch_space_snapshot(day: date) -> Dict[str, Any]:
              limit 1
             """,
             day,
-        )
+        ))
     except Exception:
         row = None
 
@@ -86,7 +98,7 @@ def _fetch_space_snapshot(day: date) -> Dict[str, Any]:
         out.update(row)
 
     try:
-        latest = pg.fetchrow(
+        latest = _timed_signal_source("space_latest_db", lambda: pg.fetchrow(
             """
             select ts_utc, kp_index, bz_nt, sw_speed_kms
               from ext.space_weather
@@ -94,7 +106,7 @@ def _fetch_space_snapshot(day: date) -> Dict[str, Any]:
              order by ts_utc desc
              limit 1
             """
-        )
+        ))
     except Exception:
         latest = None
 
@@ -107,7 +119,7 @@ def _fetch_space_snapshot(day: date) -> Dict[str, Any]:
             out["sw_speed_now_kms"] = latest.get("sw_speed_kms")
         out["space_now_ts"] = latest.get("ts_utc")
 
-    live = fetch_current_space_weather()
+    live = _timed_signal_source("noaa_current", fetch_current_space_weather)
     live_ts = live.get("updated_at")
     if live.get("sw_speed_now_kms") is not None:
         out["sw_speed_now_kms"] = live["sw_speed_now_kms"]
@@ -269,6 +281,7 @@ def resolve_signals(
     *,
     local_payload: Optional[Dict[str, Any]] = None,
     definition: Optional[Dict[str, Any]] = None,
+    space_snapshot: Any = _UNSET_SNAPSHOT,
 ) -> List[Dict[str, Any]]:
     definition = definition or load_definition_base()[0]
     day = _coerce_day(day)
@@ -456,7 +469,7 @@ def resolve_signals(
         )
 
     # Space weather: KP + Bz
-    space = _fetch_space_snapshot(day)
+    space = (_fetch_space_snapshot(day) if space_snapshot is _UNSET_SNAPSHOT else space_snapshot) or {}
     kp_now = _safe_float(space.get("kp_now"))
     kp_max = _safe_float(space.get("kp_max"))
     kp_val = kp_now if kp_now is not None else kp_max
@@ -542,7 +555,7 @@ def resolve_signals(
             )
 
     # Schumann variability (24h stddev) using rolling 30d z-score / percentile thresholds
-    stddev_24h = _fetch_schumann_stddev_24h()
+    stddev_24h = _timed_signal_source("schumann_variability", _fetch_schumann_stddev_24h)
     sch_def = sig_defs.get("schumann.variability_24h") or {}
     params = sch_def.get("activation_params") or {}
     lookback_days = int(params.get("lookback_days") or 30)
@@ -555,7 +568,7 @@ def resolve_signals(
     n_points = 0
 
     if stddev_24h is not None:
-        series = _fetch_schumann_daily_stddev_series(lookback_days)
+        series = _timed_signal_source("schumann_history", lambda: _fetch_schumann_daily_stddev_series(lookback_days))
         vals = [float(r["stddev_day"]) for r in series if r.get("stddev_day") is not None]
         n_points = len(vals)
 
