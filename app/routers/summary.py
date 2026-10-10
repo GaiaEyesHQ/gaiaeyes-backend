@@ -201,6 +201,10 @@ _mart_execution_lock = asyncio.Lock()
 _MART_ADVISORY_LOCK = (1195460929, 1)
 _MART_REFRESH_STATEMENT_TIMEOUT_MS = 5000
 _MART_REFRESH_TIMEOUT_SECONDS = 15.0
+# Background work is serialized and owns one pool slot. Preserve the previous
+# DB statement allowance for real multi-day histories without slowing reads.
+_BACKGROUND_MART_REFRESH_STATEMENT_TIMEOUT_MS = 60000
+_BACKGROUND_MART_REFRESH_TIMEOUT_SECONDS = 90.0
 
 
 class MartRefreshBusy(RuntimeError):
@@ -282,16 +286,29 @@ async def _execute_mart_refresh(
     lock is transaction-scoped (safe for transaction-pooling PgBouncer), acquired
     without waiting, and shared by all API processes using this code. Other cron
     writers do not take this lock; PostgreSQL lock/statement limits still apply.
+    Supplying conn selects the short interactive budget; otherwise this helper
+    owns one background connection and uses the longer, finite write budget.
     """
+    background = conn is None
+    statement_timeout_ms = (
+        _BACKGROUND_MART_REFRESH_STATEMENT_TIMEOUT_MS if background
+        else _MART_REFRESH_STATEMENT_TIMEOUT_MS
+    )
+    timeout_seconds = (
+        _BACKGROUND_MART_REFRESH_TIMEOUT_SECONDS if background
+        else _MART_REFRESH_TIMEOUT_SECONDS
+    )
     if _mart_execution_lock.locked():
         raise MartRefreshBusy("mart refresh already running")
     async with _mart_execution_lock:
+        started = perf_counter()
+
         async def _refresh(connection):
             try:
                 async with connection.cursor() as cur:
                     await cur.execute(
                         "select set_config('statement_timeout', %s, true)",
-                        (str(_MART_REFRESH_STATEMENT_TIMEOUT_MS),),
+                        (str(statement_timeout_ms),),
                     )
                     await cur.execute("select set_config('lock_timeout', '1000', true)")
                     await cur.execute(
@@ -325,11 +342,16 @@ async def _execute_mart_refresh(
                 raise
 
         if conn is not None:
-            await asyncio.wait_for(_refresh(conn), _MART_REFRESH_TIMEOUT_SECONDS)
+            await asyncio.wait_for(_refresh(conn), timeout_seconds)
         else:
             pool = await get_pool()
             async with _pool_connection(pool) as refresh_conn:
-                await asyncio.wait_for(_refresh(refresh_conn), _MART_REFRESH_TIMEOUT_SECONDS)
+                await asyncio.wait_for(_refresh(refresh_conn), timeout_seconds)
+        logger.info(
+            "[MART] refresh committed mode=%s user=%s day=%s elapsed_ms=%s",
+            "background" if background else "interactive", user_id, day_local,
+            int((perf_counter() - started) * 1000),
+        )
 
 
 async def mart_refresh(user_id: str, day_local: date, tz_name: str = DEFAULT_TIMEZONE) -> bool:
@@ -616,7 +638,7 @@ async def _fetch_mart_row(conn, user_id: str, day_local: date) -> Optional[Dict[
         row = await cur.fetchone()
     elapsed_ms = int((perf_counter() - started) * 1000)
     logger.info(
-        "[MART] refresh completed (elapsed=%sms) user=%s day=%s",
+        "[MART] read completed (elapsed=%sms) user=%s day=%s",
         elapsed_ms,
         user_id,
         day_local,
@@ -2067,7 +2089,8 @@ async def _fallback_from_cache(
 
 
 async def _maybe_schedule_background_refresh(
-    user_id: Optional[str], day_local: Optional[date], *, force: bool = False
+    user_id: Optional[str], day_local: Optional[date], *, force: bool = False,
+    tz_name: str = DEFAULT_TIMEZONE,
 ) -> bool:
     if not user_id or not day_local:
         return False
@@ -2081,7 +2104,7 @@ async def _maybe_schedule_background_refresh(
             if last and now - last < _BACKGROUND_REFRESH_INTERVAL_SECONDS:
                 return False
 
-    scheduled = await mart_refresh(user_id, day_local)
+    scheduled = await mart_refresh(user_id, day_local, tz_name)
     if scheduled:
         async with _background_refresh_lock:
             _background_refresh_registry[user_id] = now
@@ -2406,22 +2429,20 @@ async def features_today(
             refresh_reason = "stale_cache"
             refresh_forced = True
 
-    refresh_day = _coerce_day(diag_info.get("day_used"))
-    requested_day = _coerce_day(diag_info.get("day"))
-    if diag_info.get("cache_rehydrated") and requested_day:
-        refresh_day = requested_day
-    if not refresh_day:
-        refresh_day = requested_day or datetime.now(tzinfo).date()
+    # A fallback row's day is not the day this endpoint needs to rebuild.
+    refresh_day = (
+        forced_refresh_day or _coerce_day(diag_info.get("day"))
+        or datetime.now(tzinfo).date()
+    )
 
     refresh_attempted = False
     refresh_scheduled = False
     if user_id:
         refresh_attempted = True
-        schedule_pressure_reason = pressure_reason or _db_pressure_reason()
-        if not forced_refresh_completed and not schedule_pressure_reason:
+        if not forced_refresh_completed:
             try:
                 refresh_scheduled = await _maybe_schedule_background_refresh(
-                    user_id, refresh_day, force=refresh_forced
+                    user_id, refresh_day, force=refresh_forced, tz_name=tz_name
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.warning(
@@ -2430,11 +2451,6 @@ async def features_today(
                     exc,
                 )
                 refresh_scheduled = False
-        elif schedule_pressure_reason:
-            _diag_trace(
-                diag_info,
-                f"background refresh skipped reason={schedule_pressure_reason} day={refresh_day}",
-            )
 
     diag_info["refresh_attempted"] = refresh_attempted
     diag_info["refresh_scheduled"] = refresh_scheduled
