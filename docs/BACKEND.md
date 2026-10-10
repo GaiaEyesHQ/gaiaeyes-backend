@@ -180,3 +180,21 @@ patch does not diagnose the production Schumann query plan/lock waits, change
 entitlement decisions, alter SQL/schema, or guarantee a fully enriched response
 within six seconds. Investigate those separately using approved read-only
 production diagnostics if residual latency persists.
+
+Dashboard signal-bar I/O now runs within that same bounded optional worker,
+including live space and Schumann snapshots. The response thread composes only
+from explicit snapshots and never performs fallback DB/HTTP fetches. Completed
+local and bar snapshots are retained at each stage; an unfinished resolver does
+not discard them. Signal resolution reuses the same space snapshot, while its
+Schumann variability/history reads remain separate because they measure a
+different quantity. Source timings separate daily/latest space DB reads, NOAA,
+live Schumann, and variability/history work without logging payloads.
+
+Missing measurements are omitted from the legacy items array and listed in
+additive unavailable_items/availability metadata, rather than emitting Quiet or
+an unsupported state enum. Measured calm values remain quiet. Existing iOS
+clients decode only quiet/watch/elevated/strong and may insert their own
+calm-colored placeholders when all items are absent; correcting that UI requires
+a coordinated client release. Source timestamps and existing dashboard freshness
+metadata are retained; no new freshness threshold or claim of live data is
+introduced. The six-second request wait still does not promise full enrichment.

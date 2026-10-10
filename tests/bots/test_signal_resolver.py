@@ -94,3 +94,20 @@ class SignalResolverTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_explicit_space_snapshot_is_reused_without_another_fetch():
+    from bots.gauges import signal_resolver as resolver
+
+    for snapshot in ({}, {"sw_speed_now_kms": 600}):
+        with patch.object(resolver, "_fetch_space_snapshot", side_effect=AssertionError("duplicate space fetch")), patch.object(
+            resolver, "_fetch_schumann_stddev_24h", return_value=None
+        ), patch.object(resolver, "_full_moon_days_to", return_value=99):
+            result = resolver.resolve_signals(
+                "synthetic-user", date(2026, 10, 10), local_payload={},
+                definition={"signal_definitions": []}, space_snapshot=snapshot,
+            )
+        wind = [row for row in result if row["signal_key"] == "spaceweather.sw_speed"]
+        assert bool(wind) == bool(snapshot)
+        if wind:
+            assert wind[0]["value"] == 600
