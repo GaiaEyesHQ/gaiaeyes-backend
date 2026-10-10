@@ -1952,7 +1952,7 @@ def score_user_day(
 
     existing = pg.fetchrow(
         """
-        select inputs_hash
+        select inputs_hash, updated_at
           from marts.user_gauges_day
          where user_id = %s and day = %s
          limit 1
@@ -1970,6 +1970,11 @@ def score_user_day(
             evaluated_at=datetime.now(timezone.utc),
         )
     if existing and existing.get("inputs_hash") == inputs_hash and not force:
+        if diagnostics is not None:
+            diagnostics.update(
+                verified_output_inputs_hash=existing["inputs_hash"],
+                verified_output_updated_at=existing.get("updated_at"),
+            )
         return {"ok": True, "skipped": True, "skip_reason": "unchanged_inputs", "user_id": user_id, "day": _iso_day(day)}
 
     payload: Dict[str, Any] = {
@@ -1990,7 +1995,21 @@ def score_user_day(
         "updated_at": datetime.now(timezone.utc),
     }
 
-    upsert_row("marts", "user_gauges_day", payload, ["user_id", "day"])
+    if diagnostics is None:
+        upsert_row("marts", "user_gauges_day", payload, ["user_id", "day"])
+    else:
+        # RETURNING proves this evaluation's output was stored by the same
+        # statement, without a read-back that another writer can race. The
+        # PgClient call returns after commit (or the scoped autocommit write).
+        persisted = upsert_row(
+            "marts", "user_gauges_day", payload, ["user_id", "day"],
+            returning=["inputs_hash", "updated_at"],
+        )
+        if persisted and persisted.get("inputs_hash") == inputs_hash:
+            diagnostics.update(
+                verified_output_inputs_hash=persisted["inputs_hash"],
+                verified_output_updated_at=persisted.get("updated_at"),
+            )
     try:
         _upsert_gauge_delta(user_id, day, {**gauges, "health_status": health_status})
     except Exception as exc:

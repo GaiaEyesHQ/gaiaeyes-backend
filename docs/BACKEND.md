@@ -119,3 +119,27 @@
 - Updated: `/v1/space/forecast/outlook` now includes real‑time `kp/bz/solar_wind` “now” fields from `marts.space_weather_daily`, returns `bulletins`/SWPC text when available, and carries `forecast_daily` rows from `marts.space_forecast_daily_latest`.
 - Updated: `/v1/features/today` and `/v1/space/series` now surface lunar context directly so iOS and WordPress can annotate existing trend charts instead of introducing a parallel chart API.
 - Deprecated: legacy root endpoints `/gdacs`, `/brief`, `/kp_schumann` in favor of `/v1/hazards/*` namespace.
+
+## Refresh pressure controls
+
+- Forced `/v1/features/today` refreshes reuse the request's existing connection; they never borrow a second pool slot. A busy refresh is skipped so normal feature collection/fallback can continue.
+- API mart refreshes commit all three stages together. Errors/cancellation roll back and propagate; forced-refresh debounce records only success. Each statement is limited to 5 seconds, lock waits to 1 second, and the async work unit has a 15-second timeout (cancellation cleanup can extend observed wall time).
+- A non-waiting transaction advisory lock serializes API mart refreshes across processes. It works with transaction-mode PgBouncer and is released at commit/rollback. Cron writers and other SQL callers do not participate automatically; this is not a global database workload cap.
+- All API background mart/gauge refreshes use one worker per process. Pending requests coalesce by user/day, preserve historical dates, and retain one trailing refresh for samples arriving during execution or the 120-second successful debounce window. Pending unique-key memory is not capped; tasks and active refresh concurrency are bounded.
+- After the configured pressure-retry cycle (default four attempts, 20 seconds between retries), failed keys remain dirty on a 300-second cooldown and yield to other ready work. Queue state is process-local and in-memory: process restarts can lose pending work. Persisted samples remain safe; a durable refresh outbox is separate work.
+- The background gauge scorer uses 5-second connect/statement operation limits. Cancellation waits for its Python thread to finish before releasing worker ownership, because cancelling an await cannot stop a running thread.
+- Current local-health polling uses scoped database connect/statement limits, without retaining connections across provider requests. See `LOCAL_CURRENT_DB_CONNECT_TIMEOUT_SECONDS` and `LOCAL_CURRENT_DB_STATEMENT_TIMEOUT_MS`. These are per-operation bounds, not a hard 60-second per-ZIP deadline: synchronous calls still block that process's event loop, and sequential operations can accumulate. The existing cron supervisor bounds the whole local-current subprocess separately.
+
+Before production rollout, exercise concurrent historical uploads and current reads in a staging Postgres/PgBouncer environment, including statement cancellation and recovery. Observe pool waiting/used counts, refresh retry backlog, deadlocks, query latency, gauge supersession counts and local-current duration. These safeguards address confirmed code hazards; they do not establish the cause of a particular production outage.
+
+### Repeatable refresh verification
+
+`.github/workflows/backend-refresh-reliability.yml` runs the focused refresh, gauge, connection, and polling regression suite on Python 3.11. A separate step provisions a disposable PostgreSQL 17 service and runs `tests/integration/test_refresh_postgres.py`.
+
+To run the real-database tests locally, set `GAIA_TEST_POSTGRES_DSN` to an explicit numeric loopback PostgreSQL URL with permission to create a database, then run:
+
+```bash
+python -m pytest -q tests/integration/test_refresh_postgres.py
+```
+
+The fixture creates and drops a uniquely named test database and refuses remote hosts. Its synthetic SQL functions verify atomic rollback, advisory-lock contention, cancellation/timeout cleanup, pool connection reuse, scoped query limits, and concurrent historical work/current reads. These are real PostgreSQL mechanics tests, not production SQL performance or PgBouncer integration tests. Without the explicit opt-in variable, they skip.

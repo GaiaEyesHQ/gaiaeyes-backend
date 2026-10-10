@@ -45,6 +45,12 @@ LOCAL_CURRENT_TIMEOUT_SECONDS = _bounded_env_int(
     15,
     180,
 )
+LOCAL_CURRENT_DB_CONNECT_TIMEOUT_SECONDS = _bounded_env_int(
+    "LOCAL_CURRENT_DB_CONNECT_TIMEOUT_SECONDS", 5, 1, 30
+)
+LOCAL_CURRENT_DB_STATEMENT_TIMEOUT_MS = _bounded_env_int(
+    "LOCAL_CURRENT_DB_STATEMENT_TIMEOUT_MS", 5000, 100, 30000
+)
 LOCAL_CURRENT_MAX_PARTIAL_FAILURES = _bounded_env_int(
     "LOCAL_CURRENT_MAX_PARTIAL_FAILURES",
     3,
@@ -260,6 +266,18 @@ async def _refresh_current_location(
 
 
 async def run(mode: str = "both") -> dict[str, int]:
+    if mode == "current":
+        # Synchronous database calls cannot be interrupted by asyncio.wait_for.
+        # Bound each operation without keeping connections across provider I/O.
+        with pg.operation_timeouts(
+            connect_timeout=LOCAL_CURRENT_DB_CONNECT_TIMEOUT_SECONDS,
+            statement_timeout_ms=LOCAL_CURRENT_DB_STATEMENT_TIMEOUT_MS,
+        ):
+            return await _run(mode)
+    return await _run(mode)
+
+
+async def _run(mode: str) -> dict[str, int]:
     if mode not in {"current", "forecast", "both"}:
         raise ValueError(f"unsupported local poll mode: {mode}")
 

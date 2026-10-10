@@ -100,11 +100,12 @@ def test_actual_unchanged_input_hash_skips_without_forcing_another_write(monkeyp
     def fetchrow(sql, *params):
         if 'to_regclass' in sql: return {'available': True}
         reads.append((sql, params))
-        return {'inputs_hash': stored['inputs_hash']} if stored else None
+        return {'inputs_hash': stored['inputs_hash'], 'updated_at': stored['updated_at']} if stored else None
     monkeypatch.setattr(scorer.pg, 'fetchrow', fetchrow)
     writes = []
-    def write(schema, table, payload, keys):
+    def write(schema, table, payload, keys, **kwargs):
         writes.append(copy.deepcopy(payload)); stored.update(payload)
+        return {key: payload[key] for key in kwargs.get('returning', [])}
     monkeypatch.setattr(scorer, 'upsert_row', write)
     day = date(2026, 3, 8)
     assert not scorer.score_user_day(USER, day)['skipped']
@@ -114,6 +115,8 @@ def test_actual_unchanged_input_hash_skips_without_forcing_another_write(monkeyp
     assert diagnostic['inputs_hash'] == diagnostic['previous_inputs_hash'] == stored['inputs_hash']
     assert diagnostic['evaluated_at'] >= stored['updated_at']
     assert diagnostic['output_existed']
+    assert diagnostic['verified_output_inputs_hash'] == stored['inputs_hash']
+    assert diagnostic['verified_output_updated_at'] == stored['updated_at']
     assert 'inputs_hash' not in result and 'evaluated_at' not in result
     assert len(writes) == 1 and len(reads) == 2
     assert all(params == (USER, day) for _, params in reads)
@@ -138,6 +141,82 @@ def test_actual_unchanged_input_hash_skips_without_forcing_another_write(monkeyp
     assert failed_diagnostic['inputs_hash'] != stored['inputs_hash']
     assert failed_diagnostic['evaluated_at'] >= diagnostic['evaluated_at']
     assert len(writes) == 1 and stored['updated_at'] == writes[0]['updated_at']
+    assert 'verified_output_inputs_hash' not in failed_diagnostic
+    assert 'verified_output_updated_at' not in failed_diagnostic
+
+
+@pytest.mark.parametrize('returned', ['matching', 'different', 'missing'])
+def test_actual_scorer_records_only_its_atomic_returned_output(monkeypatch, returned):
+    _isolate_other_inputs(monkeypatch)
+    monkeypatch.setattr(scorer, 'fetch_symptom_summary', lambda *args: {})
+    monkeypatch.setattr(scorer, 'fetch_exposure_summary', lambda *args, **kwargs: {})
+    existing_read = Mock(return_value=None)
+    monkeypatch.setattr(scorer.pg, 'fetchrow', existing_read)
+    server_updated_at = datetime(2026, 10, 7, 15, tzinfo=timezone.utc)
+    writes = []
+
+    def write(schema, table, payload, keys, *, returning):
+        writes.append((schema, table, payload, keys, returning))
+        if returned == 'missing':
+            return None
+        return {
+            'inputs_hash': payload['inputs_hash'] if returned == 'matching' else 'different',
+            'updated_at': server_updated_at,
+        }
+
+    monkeypatch.setattr(scorer, 'upsert_row', write)
+    diagnostic = {}
+    result = scorer.score_user_day(USER, date(2026, 10, 7), diagnostics=diagnostic)
+    assert result['ok'] and not result['skipped']
+    assert len(writes) == 1 and existing_read.call_count == 1
+    assert writes[0][-1] == ['inputs_hash', 'updated_at']
+    if returned == 'matching':
+        assert diagnostic['verified_output_inputs_hash'] == diagnostic['inputs_hash']
+        assert diagnostic['verified_output_updated_at'] == server_updated_at
+    else:
+        assert 'verified_output_inputs_hash' not in diagnostic
+        assert 'verified_output_updated_at' not in diagnostic
+    assert 'inputs_hash' not in result and 'verified_output_updated_at' not in result
+
+
+def test_concurrent_overwrite_after_actual_upsert_keeps_own_output_proof(monkeypatch):
+    from bots.gauges import db_utils, gauge_scoring_job
+
+    _isolate_other_inputs(monkeypatch)
+    monkeypatch.setattr(scorer, 'fetch_symptom_summary', lambda *args: {})
+    monkeypatch.setattr(scorer, 'fetch_exposure_summary', lambda *args, **kwargs: {})
+    monkeypatch.setattr(scorer, 'upsert_row', db_utils.upsert_row)
+    columns = ['user_id', 'day', 'inputs_hash', 'updated_at']
+    monkeypatch.setattr(db_utils, 'table_columns', lambda *args: columns)
+    day = date(2026, 10, 7)
+    started_at = datetime.now(timezone.utc)
+    persisted = {}
+    queries = []
+
+    def fetchrow(sql, *params):
+        queries.append(sql)
+        if sql.lstrip().startswith('select inputs_hash'):
+            return None
+        assert sql.startswith('insert into marts.user_gauges_day')
+        assert sql.endswith(' returning inputs_hash, updated_at')
+        own_row = dict(zip(columns, params))
+        # A second writer commits before batch verification. RETURNING must
+        # still give the first scorer's output, not a racy read-back of this.
+        persisted.update(own_row, inputs_hash='concurrent-newer-snapshot',
+                         updated_at=own_row['updated_at'] + timedelta(seconds=1))
+        return {'inputs_hash': own_row['inputs_hash'], 'updated_at': own_row['updated_at']}
+
+    monkeypatch.setattr(scorer.pg, 'fetchrow', fetchrow)
+    monkeypatch.setattr(scorer.pg, 'fetch', lambda *args: [persisted])
+    diagnostics = {}
+    result = scorer.score_user_day(USER, day, diagnostics=diagnostics)
+    summary = {}
+    key = (USER, day)
+    assert result['ok'] and not result['skipped']
+    assert gauge_scoring_job._verify_outputs({key}, {key}, started_at, {key: diagnostics}, summary) == []
+    assert summary['outputs_superseded'] == 1
+    assert summary['outputs_matching_evaluation'] == 0
+    assert len(queries) == 2
 
 
 @pytest.mark.parametrize('failed_source', ['raw.user_symptom_events_effective', 'raw.user_symptom_episodes'])

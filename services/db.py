@@ -33,13 +33,34 @@ class PgClient:
             f"gaia_pg_connection_{id(self)}",
             default=None,
         )
+        self._operation_timeout_settings: ContextVar[tuple[int, int] | None] = ContextVar(
+            f"gaia_pg_operation_timeouts_{id(self)}",
+            default=None,
+        )
+
+    @contextmanager
+    def operation_timeouts(
+        self, *, connect_timeout: int, statement_timeout_ms: int
+    ) -> Iterator[None]:
+        """Bound new connections and queries without retaining a connection."""
+        settings = (int(connect_timeout), int(statement_timeout_ms))
+        if min(settings) <= 0:
+            raise ValueError("database operation timeouts must be positive")
+        token = self._operation_timeout_settings.set(settings)
+        try:
+            yield
+        finally:
+            self._operation_timeout_settings.reset(token)
 
     def _connect(self, *, autocommit: bool = False) -> psycopg.Connection:
+        timeouts = self._operation_timeout_settings.get()
+        timeout_options = {"connect_timeout": timeouts[0]} if timeouts else {}
         return psycopg.connect(
             self._dsn,
             row_factory=dict_row,
             autocommit=autocommit,
             prepare_threshold=None,
+            **timeout_options,
         )
 
     @contextmanager
@@ -61,11 +82,23 @@ class PgClient:
     @contextmanager
     def _connection(self) -> Iterator[psycopg.Connection]:
         scoped = self._scoped_connection.get()
+        timeouts = self._operation_timeout_settings.get()
         if scoped is not None:
-            yield scoped
+            if timeouts is None:
+                yield scoped
+            else:
+                # Keep SET LOCAL and the operation on one backend even when
+                # this autocommit connection uses a transaction pooler.
+                with scoped.transaction():
+                    scoped.execute(f"SET LOCAL statement_timeout = {timeouts[1]}")
+                    yield scoped
             return
 
         with self._connect() as conn:
+            if timeouts is not None:
+                # This starts the same transaction as the following operation;
+                # commit/rollback clears the setting before connection close.
+                conn.execute(f"SET LOCAL statement_timeout = {timeouts[1]}")
             yield conn
 
     def fetchrow(self, query: str, *params: Any) -> dict | None:

@@ -382,3 +382,82 @@ def test_existing_output_without_evaluation_evidence_cannot_pass(monkeypatch):
     monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', lambda *args: [
         {'user_id': key[0], 'day': key[1], 'updated_at': now, 'inputs_hash': 'same'}])
     assert gauge_scoring_job._verify_outputs({key}, set(), now, {}, {}) == ['not_evaluated']
+
+
+def _verify_overwritten_output(monkeypatch, *, stored_hash='newer', offset=1,
+                               proof_hash='evaluated', proof_timestamp=True, refreshed=True,
+                               proof_offset=0):
+    now = datetime(2026, 10, 7, 15, tzinfo=timezone.utc)
+    key = ('synthetic-user', date(2026, 10, 7))
+    row = {'user_id': key[0], 'day': key[1], 'inputs_hash': stored_hash,
+           'updated_at': now + timedelta(seconds=offset)}
+    fetch = Mock(return_value=[row])
+    monkeypatch.setattr(gauge_scoring_job.pg, 'fetch', fetch)
+    monkeypatch.setattr(gauge_scoring_job, 'score_user_day',
+                        Mock(side_effect=AssertionError('Verification must not rescore or write')))
+    evaluation = {'inputs_hash': 'evaluated', 'previous_inputs_hash': 'previous',
+                  'output_existed': True, 'evaluated_at': now,
+                  'verified_output_inputs_hash': proof_hash,
+                  'verified_output_updated_at': now + timedelta(seconds=proof_offset) if proof_timestamp else None}
+    summary = {}
+    errors = gauge_scoring_job._verify_outputs(
+        {key}, {key} if refreshed else set(), now, {key: evaluation}, summary)
+    fetch.assert_called_once()
+    gauge_scoring_job.score_user_day.assert_not_called()
+    return errors, summary
+
+
+def test_later_writer_is_distinguished_from_exact_evaluation_without_rescoring(monkeypatch):
+    errors, summary = _verify_overwritten_output(monkeypatch)
+    assert errors == []
+    assert summary['outputs_found'] == summary['outputs_superseded'] == 1
+    assert summary['outputs_matching_evaluation'] == 0
+
+
+def test_exact_evaluation_remains_separate_from_superseded_outputs(monkeypatch):
+    errors, summary = _verify_overwritten_output(monkeypatch, stored_hash='evaluated', offset=0)
+    assert errors == []
+    assert summary['outputs_found'] == summary['outputs_matching_evaluation'] == 1
+    assert summary['outputs_superseded'] == 0
+
+
+@pytest.mark.parametrize('offset', [0, -1, -3600])
+def test_equal_or_older_different_hash_never_counts_as_superseded(monkeypatch, offset):
+    errors, summary = _verify_overwritten_output(monkeypatch, offset=offset)
+    assert 'input_hash_mismatch' in errors
+    if offset == -3600:
+        assert 'stale_updated_at' in errors
+    assert summary['outputs_superseded'] == 0
+
+
+@pytest.mark.parametrize('proof_hash, proof_timestamp', [(None, True), ('wrong', True), ('evaluated', False)])
+def test_new_timestamp_without_matching_output_proof_cannot_mask_mismatch(monkeypatch, proof_hash, proof_timestamp):
+    errors, summary = _verify_overwritten_output(
+        monkeypatch, proof_hash=proof_hash, proof_timestamp=proof_timestamp)
+    assert errors == ['input_hash_mismatch']
+    assert summary['outputs_superseded'] == 0
+
+
+def test_previous_hash_reversion_remains_pending_even_after_verified_write(monkeypatch):
+    errors, summary = _verify_overwritten_output(monkeypatch, stored_hash='previous')
+    assert errors == ['changed_inputs_pending']
+    assert summary['outputs_superseded'] == 0
+
+
+def test_missing_hash_never_counts_as_superseded(monkeypatch):
+    errors, summary = _verify_overwritten_output(monkeypatch, stored_hash=None)
+    assert errors == ['input_hash_mismatch']
+    assert summary['outputs_superseded'] == 0
+
+
+def test_output_observed_on_unchanged_skip_can_be_superseded(monkeypatch):
+    errors, summary = _verify_overwritten_output(monkeypatch, refreshed=False, proof_offset=-7200)
+    assert errors == []
+    assert summary['outputs_superseded'] == 1
+
+
+def test_later_but_still_stale_writer_cannot_supersede_old_unchanged_skip(monkeypatch):
+    errors, summary = _verify_overwritten_output(
+        monkeypatch, refreshed=False, proof_offset=-7200, offset=-3600)
+    assert errors == ['input_hash_mismatch']
+    assert summary['outputs_superseded'] == 0

@@ -73,6 +73,12 @@ _ingest_active_writes = 0
 _ingest_active_lock = asyncio.Lock()
 _recent_refresh_requests: Dict[Tuple[str, date], float] = {}
 _recent_refresh_lock = asyncio.Lock()
+# One connection-free dirty-key queue and one worker per process, shared by historical
+# imports and current-day cache refreshes. Coalesce repeated user/day requests.
+_pending_refresh_requests: Dict[Tuple[str, date], Tuple[str, float]] = {}
+_refresh_queue_changed = asyncio.Event()
+_refresh_worker_task: Optional[asyncio.Task] = None
+_active_refresh_key: Optional[Tuple[str, date]] = None
 _DELAYED_REFRESH_DELAY_SECONDS = max(0.5, _env_float("GAIA_INGEST_REFRESH_DELAY_SECONDS", 5.0))
 _DELAYED_REFRESH_DEBOUNCE_SECONDS = 120.0
 _DELAYED_REFRESH_PRESSURE_RETRY_SECONDS = max(
@@ -83,6 +89,7 @@ _DELAYED_REFRESH_MAX_PRESSURE_RETRIES = max(
     0,
     _env_int("GAIA_INGEST_REFRESH_MAX_PRESSURE_RETRIES", 3),
 )
+_REFRESH_FAILURE_COOLDOWN_SECONDS = 300.0
 _POOL_ACQUIRE_TIMEOUT_SECONDS = 1.0
 
 # Legacy compatibility for tests expecting direct access to the refresh registry
@@ -99,11 +106,32 @@ async def _execute_refresh(
 
     def _score_gauges() -> Dict[str, Any]:
         from bots.gauges.gauge_scorer import score_user_day
+        from services.db import pg
 
-        return score_user_day(user_id, day_local, force=False)
+        # This worker must not be wedged by the synchronous scorer's SQL. The
+        # scope bounds each operation without retaining an idle DB connection.
+        with pg.operation_timeouts(connect_timeout=5, statement_timeout_ms=5000):
+            return score_user_day(user_id, day_local, force=False)
 
     try:
-        result = await asyncio.to_thread(_score_gauges)
+        scoring_task = asyncio.create_task(asyncio.to_thread(_score_gauges))
+        try:
+            result = await asyncio.shield(scoring_task)
+        except asyncio.CancelledError:
+            # Python cannot stop a running thread. Keep this worker's ownership
+            # until it exits so cancellation cannot start an overlapping scorer.
+            while not scoring_task.done():
+                try:
+                    await asyncio.shield(scoring_task)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not scoring_task.cancelled():
+                scoring_task.exception()  # Retrieve an error during cancellation.
+            raise
+        if not result.get("ok"):
+            raise RuntimeError("gauge refresh did not complete successfully")
         logger.info(
             "[MART] gauge refresh user=%s day=%s ok=%s skipped=%s",
             user_id,
@@ -118,6 +146,7 @@ async def _execute_refresh(
             day_local,
             exc,
         )
+        raise
 
 
 def _pool_connection(pool, timeout: float = _POOL_ACQUIRE_TIMEOUT_SECONDS):
@@ -842,6 +871,92 @@ async def samples_batch(
     }
 
 
+async def _drain_refresh_requests() -> None:
+    global _refresh_worker_task, _active_refresh_key
+    try:
+        while True:
+            async with _recent_refresh_lock:
+                if not _pending_refresh_requests:
+                    _refresh_worker_task = None
+                    return
+                key = min(_pending_refresh_requests, key=lambda k: _pending_refresh_requests[k][1])
+                tz_name, ready_at = _pending_refresh_requests[key]
+                wait_seconds = ready_at - asyncio.get_running_loop().time()
+                if wait_seconds > 0:
+                    _refresh_queue_changed.clear()
+                else:
+                    _pending_refresh_requests.pop(key)
+                    _active_refresh_key = key
+            if wait_seconds > 0:
+                # A newer, ready key can wake the worker rather than waiting
+                # behind an unrelated user's successful debounce interval.
+                try:
+                    await asyncio.wait_for(_refresh_queue_changed.wait(), wait_seconds)
+                except asyncio.TimeoutError:
+                    pass
+                continue
+            user_id, day_local = key
+            completed = False
+            try:
+                for attempt in range(_DELAYED_REFRESH_MAX_PRESSURE_RETRIES + 1):
+                    delay = (
+                        0 if attempt == 0 else _DELAYED_REFRESH_PRESSURE_RETRY_SECONDS
+                    )
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    pressure_reason = _summary_module._db_pressure_reason()
+                    if pressure_reason:
+                        logger.warning(
+                            "[MART] refresh deferred user=%s day=%s reason=%s attempt=%s",
+                            user_id, day_local, pressure_reason, attempt,
+                        )
+                        continue
+                    try:
+                        # Includes gauge scoring: only one API background chain
+                        # per process may use DB connections at a time.
+                        await _execute_refresh(user_id, day_local, tz_name)
+                    except _summary_module.MartRefreshBusy:
+                        continue
+                    except Exception as exc:
+                        logger.warning(
+                            "[MART] refresh failed user=%s day=%s attempt=%s error=%s",
+                            user_id, day_local, attempt, exc,
+                        )
+                        continue
+                    completed = True
+                    break
+            finally:
+                async with _recent_refresh_lock:
+                    _active_refresh_key = None
+                    if completed:
+                        now = asyncio.get_running_loop().time()
+                        _recent_refresh_requests[key] = now
+                        # Expire successful debounce metadata; pending dirty keys
+                        # are preserved until successfully processed.
+                        expired = [
+                            k for k, stamp in _recent_refresh_requests.items()
+                            if now - stamp >= _DELAYED_REFRESH_DEBOUNCE_SECONDS
+                        ]
+                        for old in expired:
+                            _recent_refresh_requests.pop(old, None)
+                    else:
+                        _recent_refresh_requests.pop(key, None)
+                        # Keep dirty dates through outages, but yield to other
+                        # keys and wait before another bounded attempt cycle.
+                        _pending_refresh_requests.setdefault(
+                            key, (tz_name, asyncio.get_running_loop().time()
+                                  + _REFRESH_FAILURE_COOLDOWN_SECONDS),
+                        )
+                        logger.warning(
+                            "[MART] refresh incomplete user=%s day=%s; retained for retry",
+                            user_id, day_local,
+                        )
+    finally:
+        async with _recent_refresh_lock:
+            if _refresh_worker_task is asyncio.current_task():
+                _refresh_worker_task = None
+
+
 async def _maybe_schedule_refresh(
     user_id: str,
     day_local: date,
@@ -850,62 +965,28 @@ async def _maybe_schedule_refresh(
     *,
     pressure_attempt: int = 0,
 ) -> bool:
+    global _refresh_worker_task
     if REFRESH_DISABLED or not user_id or inserted <= 0:
         return False
 
-    loop = asyncio.get_running_loop()
-    now = loop.time()
-    refresh_key = (user_id, day_local)
+    key = (user_id, day_local)
+    now = asyncio.get_running_loop().time()
     async with _recent_refresh_lock:
-        last = _recent_refresh_requests.get(refresh_key)
-        if last and now - last < _DELAYED_REFRESH_DEBOUNCE_SECONDS:
-            logger.debug(
-                "[MART] delayed refresh skipped user=%s day=%s (debounce %.0fs)",
-                user_id,
-                day_local,
-                _DELAYED_REFRESH_DEBOUNCE_SECONDS,
-            )
+        if key in _pending_refresh_requests:
+            _, ready_at = _pending_refresh_requests[key]
+            _pending_refresh_requests[key] = (tz_name, ready_at)
+            if _refresh_worker_task is None or _refresh_worker_task.done():
+                _refresh_worker_task = _refresh_task_factory(_drain_refresh_requests())
             return False
-        _recent_refresh_requests[refresh_key] = now
-
-    delay = _DELAYED_REFRESH_DELAY_SECONDS
-    if pressure_attempt > 0:
-        delay = _DELAYED_REFRESH_PRESSURE_RETRY_SECONDS
-    if getenv("PYTEST_CURRENT_TEST"):
-        delay = 0.0
-
-    async def _runner() -> None:
-        try:
-            if delay > 0:
-                await asyncio.sleep(delay)
-            pressure_reason = _summary_module._db_pressure_reason()
-            if pressure_reason:
-                logger.warning(
-                    "[MART] delayed refresh skipped user=%s day=%s reason=%s",
-                    user_id,
-                    day_local,
-                    pressure_reason,
-                )
-                if pressure_attempt < _DELAYED_REFRESH_MAX_PRESSURE_RETRIES:
-                    async with _recent_refresh_lock:
-                        _recent_refresh_requests.pop(refresh_key, None)
-                    await _maybe_schedule_refresh(
-                        user_id,
-                        day_local,
-                        inserted,
-                        tz_name,
-                        pressure_attempt=pressure_attempt + 1,
-                    )
-                return
-            await _execute_refresh(user_id, day_local, tz_name)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.warning(
-                "[MART] delayed refresh failed user=%s day=%s error=%s",
-                user_id,
-                day_local,
-                exc,
-            )
-
-    _refresh_task_factory(_runner())
-    logger.info("[MART] scheduled refresh (delayed) user=%s day=%s inserted=%d", user_id, day_local, inserted)
+        last = _recent_refresh_requests.get(key)
+        # A request arriving during execution queues one trailing refresh so
+        # newly committed samples are not swallowed by an in-flight debounce.
+        ready_at = now + _DELAYED_REFRESH_DELAY_SECONDS
+        if key != _active_refresh_key and last is not None:
+            ready_at = max(ready_at, last + _DELAYED_REFRESH_DEBOUNCE_SECONDS)
+        _pending_refresh_requests[key] = (tz_name, ready_at)
+        _refresh_queue_changed.set()
+        if _refresh_worker_task is None or _refresh_worker_task.done():
+            _refresh_worker_task = _refresh_task_factory(_drain_refresh_requests())
+    logger.info("[MART] queued refresh user=%s day=%s inserted=%d", user_id, day_local, inserted)
     return True
