@@ -195,6 +195,16 @@ _background_refresh_lock = asyncio.Lock()
 _forced_refresh_registry: Dict[Tuple[str, date], float] = {}
 _forced_refresh_inflight: set[Tuple[str, date]] = set()
 _forced_refresh_lock = asyncio.Lock()
+# The process guard rejects forced refreshes without waiting while holding a
+# request connection. The transaction advisory lock also covers other API workers.
+_mart_execution_lock = asyncio.Lock()
+_MART_ADVISORY_LOCK = (1195460929, 1)
+_MART_REFRESH_STATEMENT_TIMEOUT_MS = 5000
+_MART_REFRESH_TIMEOUT_SECONDS = 15.0
+
+
+class MartRefreshBusy(RuntimeError):
+    """Another API worker is refreshing marts; retry outside the DB pool."""
 
 
 def _pool_metric_int(metrics: Dict[str, Any], key: str) -> int:
@@ -248,11 +258,14 @@ async def _claim_forced_mart_refresh(user_id: str, day_local: date) -> tuple[boo
     return True, None
 
 
-async def _release_forced_mart_refresh(user_id: str, day_local: date) -> None:
+async def _release_forced_mart_refresh(
+    user_id: str, day_local: date, *, completed: bool = False
+) -> None:
     loop = asyncio.get_running_loop()
     key = (user_id, day_local)
     async with _forced_refresh_lock:
-        _forced_refresh_registry[key] = loop.time()
+        if completed:
+            _forced_refresh_registry[key] = loop.time()
         _forced_refresh_inflight.discard(key)
 
 
@@ -260,28 +273,37 @@ async def _execute_mart_refresh(
     user_id: str,
     day_local: date,
     tz_name: str = DEFAULT_TIMEZONE,
+    *,
+    conn=None,
 ) -> None:
-    try:
-        pool = await get_pool()
-        async with _pool_connection(pool) as conn:
-            async with conn.cursor() as cur:
-                try:
+    """Refresh atomically, reusing the read-only request connection when supplied.
+
+    No connection is held while waiting for another local refresh. The advisory
+    lock is transaction-scoped (safe for transaction-pooling PgBouncer), acquired
+    without waiting, and shared by all API processes using this code. Other cron
+    writers do not take this lock; PostgreSQL lock/statement limits still apply.
+    """
+    if _mart_execution_lock.locked():
+        raise MartRefreshBusy("mart refresh already running")
+    async with _mart_execution_lock:
+        async def _refresh(connection):
+            try:
+                async with connection.cursor() as cur:
+                    await cur.execute(
+                        "select set_config('statement_timeout', %s, true)",
+                        (str(_MART_REFRESH_STATEMENT_TIMEOUT_MS),),
+                    )
+                    await cur.execute("select set_config('lock_timeout', '1000', true)")
+                    await cur.execute(
+                        "select pg_try_advisory_xact_lock(%s, %s)", _MART_ADVISORY_LOCK
+                    )
+                    locked = await cur.fetchone()
+                    if not locked or not locked[0]:
+                        raise MartRefreshBusy("mart refresh active in another worker")
                     await cur.execute(
                         "select gaia.refresh_daily_summary_user(%s::uuid, %s::date, %s::text)",
                         (user_id, day_local, tz_name),
                     )
-                except Exception as exc:
-                    await _rollback_safely(conn)
-                    logger.warning(
-                        "[MART] daily summary refresh failed user=%s day=%s tz=%s error=%s",
-                        user_id,
-                        day_local,
-                        tz_name,
-                        exc,
-                    )
-                else:
-                    await conn.commit()
-                try:
                     await cur.execute(
                         "select to_regprocedure('gaia.refresh_daily_summary_sleep_user(uuid,date,text)')"
                     )
@@ -291,98 +313,30 @@ async def _execute_mart_refresh(
                             "select gaia.refresh_daily_summary_sleep_user(%s::uuid, %s::date, %s::text)",
                             (user_id, day_local, tz_name),
                         )
-                except Exception as exc:
-                    await _rollback_safely(conn)
-                    logger.warning(
-                        "[MART] sleep summary repair failed user=%s day=%s tz=%s error=%s",
-                        user_id,
-                        day_local,
-                        tz_name,
-                        exc,
-                    )
-                else:
-                    await conn.commit()
-                try:
                     await cur.execute(
                         "select marts.refresh_daily_features_user(%s::uuid, %s::date)",
                         (user_id, day_local),
                     )
-                except Exception as exc:
-                    await _rollback_safely(conn)
-                    logger.warning(
-                        "[MART] daily features refresh failed user=%s day=%s error=%s",
-                        user_id,
-                        day_local,
-                        exc,
-                    )
-                else:
-                    await conn.commit()
-    except Exception as exc:  # pragma: no cover - diagnostic logging
-        logger.warning(
-            "[MART] refresh failed user=%s day=%s error=%s",
-            user_id,
-            day_local,
-            exc,
-        )
+                await connection.commit()
+            except BaseException:
+                # Includes cancellation: return a usable connection and release
+                # the cross-process lock without falsely recording completion.
+                await _rollback_safely(connection)
+                raise
+
+        if conn is not None:
+            await asyncio.wait_for(_refresh(conn), _MART_REFRESH_TIMEOUT_SECONDS)
+        else:
+            pool = await get_pool()
+            async with _pool_connection(pool) as refresh_conn:
+                await asyncio.wait_for(_refresh(refresh_conn), _MART_REFRESH_TIMEOUT_SECONDS)
 
 
 async def mart_refresh(user_id: str, day_local: date, tz_name: str = DEFAULT_TIMEZONE) -> bool:
-    if not user_id:
-        return False
-    loop = asyncio.get_running_loop()
-    async with _refresh_lock:
-        last = _refresh_registry.get(user_id)
-        now = loop.time()
-        if last and now - last < MART_REFRESH_DEBOUNCE_SECONDS:
-            logger.debug(
-                "[MART] refresh skipped user=%s (debounce %.0fs)",
-                user_id,
-                MART_REFRESH_DEBOUNCE_SECONDS,
-            )
-            return False
-        key = (user_id, day_local)
-        existing = _refresh_inflight.get(key)
-        if existing and not existing.done():
-            logger.debug("[MART] refresh already running user=%s day=%s", user_id, day_local)
-            return False
-        _refresh_registry[user_id] = now
+    # All API background refreshes share one concurrency-limited scheduler.
+    from . import ingest as ingest_module
 
-    try:
-        from . import ingest as ingest_module  # type: ignore circular import
-    except Exception:  # pragma: no cover - import guard for early startup
-        ingest_module = None
-
-    task_factory = _refresh_task_factory
-    execute_fn = _execute_mart_refresh
-    if ingest_module is not None:
-        task_factory = getattr(ingest_module, "_refresh_task_factory", task_factory)
-        execute_fn = getattr(ingest_module, "_execute_refresh", execute_fn)
-
-    delay_seconds = random.uniform(*_REFRESH_DELAY_RANGE)
-
-    async def _runner() -> None:
-        try:
-            await asyncio.sleep(delay_seconds)
-            pressure_reason = _db_pressure_reason()
-            if pressure_reason:
-                logger.warning(
-                    "[MART] refresh skipped user=%s day=%s reason=%s",
-                    user_id,
-                    day_local,
-                    pressure_reason,
-                )
-                return
-            await execute_fn(user_id, day_local, tz_name)
-        finally:
-            async with _refresh_lock:
-                task = _refresh_inflight.get(key)
-                if task is not None and task is asyncio.current_task():
-                    _refresh_inflight.pop(key, None)
-
-    task = task_factory(_runner())
-    async with _refresh_lock:
-        _refresh_inflight[(user_id, day_local)] = task
-    return True
+    return await ingest_module._maybe_schedule_refresh(user_id, day_local, 1, tz_name)
 
 
 _MART_COLUMNS = [
@@ -2313,10 +2267,17 @@ async def features_today(
                         )
                         if claimed:
                             try:
-                                await _execute_mart_refresh(user_id, forced_refresh_day, tz_name)
+                                await _execute_mart_refresh(
+                                    user_id, forced_refresh_day, tz_name, conn=conn
+                                )
                                 forced_refresh_completed = True
+                            except MartRefreshBusy:
+                                forced_refresh_skipped = "inflight"
                             finally:
-                                await _release_forced_mart_refresh(user_id, forced_refresh_day)
+                                await _release_forced_mart_refresh(
+                                    user_id, forced_refresh_day,
+                                    completed=forced_refresh_completed,
+                                )
                         else:
                             forced_refresh_skipped = skip_reason
                 except Exception as exc:

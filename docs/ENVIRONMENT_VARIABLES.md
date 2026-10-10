@@ -154,3 +154,10 @@ Render-specific env vars are likely set in the dashboard (see `docs/OPEN_QUESTIO
 | `IG_CAROUSEL_CHILD_PACING_SEC` | Delay between IG carousel child container creates | `1.5` | `bots/earthscope_post/meta_poster.py` |
 | `IG_CAROUSEL_SINGLE_IMAGE_FALLBACK` | Allow IG carousel downgrade to a single-image post after retries fail | `true` | `bots/earthscope_post/meta_poster.py` |
 | `IG_REEL_CREATE_CYCLES` | Number of full reel container recreate cycles before giving up | `2` | `bots/earthscope_post/meta_poster.py` |
+
+### Local-current database operation bounds
+
+- `LOCAL_CURRENT_DB_CONNECT_TIMEOUT_SECONDS`: current-mode local-health polling connection limit, default `5`, accepted range `1`–`30` seconds.
+- `LOCAL_CURRENT_DB_STATEMENT_TIMEOUT_MS`: current-mode polling per-statement limit, default `5000`, accepted range `100`–`30000` milliseconds.
+
+These settings apply only within current-mode polling, including its initial ZIP lookup and fallback reads/writes. They do not change unrelated API or cron connections. They do not guarantee a hard per-ZIP wall-clock deadline. API background gauge scoring independently uses fixed 5-second operation limits.

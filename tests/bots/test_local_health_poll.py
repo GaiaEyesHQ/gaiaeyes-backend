@@ -204,3 +204,57 @@ def test_current_mode_rejects_cached_failures_above_absolute_limit(monkeypatch) 
 
     with pytest.raises(RuntimeError, match="4 location failure"):
         asyncio.run(local_health_poll.run("current"))
+
+
+def test_current_mode_bounds_location_fetch_assemble_write_and_fallback(monkeypatch) -> None:
+    pg = local_health_poll.pg
+    observed = []
+
+    def observe(stage):
+        observed.append((stage, pg._operation_timeout_settings.get()))
+
+    def fetch(*args):
+        observe("locations")
+        return [{"zip": "78754"}, {"zip": "49001"}]
+
+    async def assemble(zip_code):
+        await asyncio.sleep(0)
+        observe("assemble")
+        if zip_code == "49001":
+            raise TimeoutError
+        return {"ok": True}
+
+    def cached(zip_code):
+        observe("fallback")
+        return {"ok": True}
+
+    def write(*args):
+        observe("write")
+
+    monkeypatch.setattr(pg, "fetch", fetch)
+    monkeypatch.setattr(local_health_poll, "assemble_for_zip", assemble)
+    monkeypatch.setattr(local_health_poll, "latest_for_zip", cached)
+    monkeypatch.setattr(local_health_poll, "upsert_zip_payload", write)
+    with pytest.raises(RuntimeError):
+        asyncio.run(local_health_poll.run("current"))
+
+    expected = (
+        local_health_poll.LOCAL_CURRENT_DB_CONNECT_TIMEOUT_SECONDS,
+        local_health_poll.LOCAL_CURRENT_DB_STATEMENT_TIMEOUT_MS,
+    )
+    assert {stage for stage, _ in observed} == {"locations", "assemble", "write", "fallback"}
+    assert all(settings == expected for _, settings in observed)
+    assert pg._operation_timeout_settings.get() is None
+
+
+@pytest.mark.parametrize("mode", ["forecast", "both"])
+def test_other_modes_keep_existing_database_timeouts(monkeypatch, mode) -> None:
+    observed = []
+
+    def fetch(*args):
+        observed.append(local_health_poll.pg._operation_timeout_settings.get())
+        return []
+
+    monkeypatch.setattr(local_health_poll.pg, "fetch", fetch)
+    asyncio.run(local_health_poll.run(mode))
+    assert observed == [None]

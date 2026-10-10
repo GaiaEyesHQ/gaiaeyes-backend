@@ -90,7 +90,13 @@ def _verify_outputs(
     evaluations: dict[Tuple[str, date], dict],
     summary: dict,
 ) -> list[str]:
-    summary.update(outputs_found=0, oldest_output_changed_at=None, latest_output_changed_at=None)
+    summary.update(
+        outputs_found=0,
+        outputs_matching_evaluation=0,
+        outputs_superseded=0,
+        oldest_output_changed_at=None,
+        latest_output_changed_at=None,
+    )
     if not expected:
         return []
     user_ids = sorted({user_id for user_id, _ in expected})
@@ -117,6 +123,9 @@ def _verify_outputs(
         if row is None:
             errors.append("missing_output")
             continue
+        updated_at = row.get("updated_at")
+        if isinstance(updated_at, datetime) and updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
         if evaluation.get("inputs_hash") and row.get("inputs_hash") != evaluation["inputs_hash"]:
             # The old fingerprint still persisted after an actual input change.
             # A different third hash can be a concurrent writer; report that
@@ -124,13 +133,33 @@ def _verify_outputs(
             if evaluation.get("output_existed") and row.get("inputs_hash") == evaluation.get("previous_inputs_hash"):
                 errors.append("changed_inputs_pending")
             else:
-                errors.append("input_hash_mismatch")
-        updated_at = row.get("updated_at")
+                verified_at = evaluation.get("verified_output_updated_at")
+                if isinstance(verified_at, datetime) and verified_at.tzinfo is None:
+                    verified_at = verified_at.replace(tzinfo=timezone.utc)
+                evaluated_at = evaluation.get("evaluated_at")
+                if isinstance(evaluated_at, datetime) and evaluated_at.tzinfo is None:
+                    evaluated_at = evaluated_at.replace(tzinfo=timezone.utc)
+                # A later writer may legitimately replace this run's snapshot.
+                # Accept that only with atomic evidence our own exact hash was
+                # stored, or observed on an unchanged skip. A newer timestamp
+                # alone is not evidence that our evaluated output ever existed.
+                if (
+                    evaluation.get("verified_output_inputs_hash") == evaluation["inputs_hash"]
+                    and isinstance(verified_at, datetime)
+                    and isinstance(evaluated_at, datetime)
+                    and isinstance(updated_at, datetime)
+                    and updated_at > verified_at
+                    and updated_at >= evaluated_at - timedelta(seconds=5)
+                    and row.get("inputs_hash")
+                ):
+                    summary["outputs_superseded"] += 1
+                else:
+                    errors.append("input_hash_mismatch")
+        elif evaluation.get("inputs_hash"):
+            summary["outputs_matching_evaluation"] += 1
         if not isinstance(updated_at, datetime):
             errors.append("missing_updated_at")
             continue
-        if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=timezone.utc)
         changed_at.append(updated_at)
         if key in refreshed and updated_at < started_at - timedelta(seconds=5):
             errors.append("stale_updated_at")

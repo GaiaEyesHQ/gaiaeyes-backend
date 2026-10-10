@@ -35,7 +35,14 @@ def pick_column(columns: Iterable[str], candidates: Iterable[str]) -> str | None
     return None
 
 
-def upsert_row(schema: str, table: str, data: Dict[str, Any], conflict_cols: List[str]) -> None:
+def upsert_row(
+    schema: str,
+    table: str,
+    data: Dict[str, Any],
+    conflict_cols: List[str],
+    *,
+    returning: List[str] | None = None,
+) -> Dict[str, Any] | None:
     cols = table_columns(schema, table)
     insert_cols = [c for c in data.keys() if c in cols]
     if not insert_cols:
@@ -55,4 +62,9 @@ def upsert_row(schema: str, table: str, data: Dict[str, Any], conflict_cols: Lis
         f"values ({placeholders}) "
         f"on conflict ({', '.join(conflict_cols)}) do update set {updates}"
     )
+    if returning:
+        if any(column not in cols for column in returning):
+            raise RuntimeError(f"Return columns missing for {schema}.{table}")
+        sql += f" returning {', '.join(returning)}"
+        return pg.fetchrow(sql, *[data[c] for c in insert_cols])
     pg.execute(sql, *[data[c] for c in insert_cols])

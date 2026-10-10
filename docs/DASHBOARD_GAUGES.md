@@ -114,6 +114,12 @@ Idempotency:
 - `inputs_hash = sha256(json.dumps(inputs_snapshot, sort_keys=True))`
 - If the stored hash matches, updates are skipped unless `force=true`.
 
+Batch output verification:
+- The scorer keeps private evidence of the exact output it stored: the upsert returns `inputs_hash` and `updated_at` in the same SQL statement. An unchanged-input skip keeps the matching row it already read. This adds no database round trips or scoring retries, and fingerprints are not included in public responses or logs.
+- After all workers finish, the batch reports `outputs_matching_evaluation` separately from `outputs_superseded`. A different hash counts as superseded only when the batch has matching evidence for its own evaluated output and the current row has a strictly later `updated_at`, no older than the evaluation time with the existing five-second clock tolerance. This establishes that this run's evaluated snapshot was stored or observed before another output replaced it; it does not certify the later writer's input freshness.
+- Missing rows, missing evaluation evidence, missing timestamps, changed inputs still carrying the previous hash, unproven hash mismatches, equal/older mismatched timestamps, and stale refreshed timestamps remain failures. Output existence alone never clears a hash mismatch.
+- Verification does not recompute current inputs: live NOAA readings and time-dependent signals can change after evaluation. The existing input fingerprint and scoring semantics are unchanged.
+
 ## Health Status Gauge (v1.1)
 - Baseline window: 30 days (excluding current day), minimum 14 usable days.
 - Metrics: sleep minutes/efficiency/deep, SpO2, hr_max, steps, optional BP + HRV.

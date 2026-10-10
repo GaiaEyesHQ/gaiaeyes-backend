@@ -35,9 +35,15 @@ def _set_dev_bearer():
 
 
 @pytest.fixture(autouse=True)
-def _reset_ingest_queue_state():
+def _reset_ingest_queue_state(monkeypatch):
     ingest._backlog.clear()
     ingest._ingest_active_writes = 0
+    ingest._pending_refresh_requests.clear()
+    ingest._recent_refresh_requests.clear()
+    ingest._refresh_worker_task = None
+    ingest._active_refresh_key = None
+    monkeypatch.setattr(ingest, "_DELAYED_REFRESH_DELAY_SECONDS", 0)
+    monkeypatch.setattr(ingest, "_DELAYED_REFRESH_PRESSURE_RETRY_SECONDS", 0)
     try:
         yield
     finally:
@@ -123,7 +129,7 @@ def test_pool_metrics_show_pressure_requires_waiting_requests():
     assert summary._pool_metrics_show_pressure({"open": 8, "free": 0, "used": 8, "waiting": 1}) is True
 
 
-async def test_mart_refresh_recovers_transaction_after_daily_summary_failure(monkeypatch):
+async def test_mart_refresh_rolls_back_and_propagates_daily_summary_failure(monkeypatch):
     class _RefreshCursor(_FakeCursor):
         def __init__(self):
             self.calls = []
@@ -133,6 +139,8 @@ async def test_mart_refresh_recovers_transaction_after_daily_summary_failure(mon
             self.calls.append((query, params))
             if "gaia.refresh_daily_summary_user" in query:
                 raise RuntimeError("daily summary failed")
+            if "pg_try_advisory_xact_lock" in query:
+                self._exists_row = (True,)
             if "to_regprocedure" in query:
                 self._exists_row = ("gaia.refresh_daily_summary_sleep_user(uuid,date,text)",)
 
@@ -172,13 +180,14 @@ async def test_mart_refresh_recovers_transaction_after_daily_summary_failure(mon
 
     monkeypatch.setattr(summary, "get_pool", _get_pool)
 
-    await summary._execute_mart_refresh(str(uuid4()), date(2026, 7, 9), "America/Chicago")
+    with pytest.raises(RuntimeError, match="daily summary failed"):
+        await summary._execute_mart_refresh(str(uuid4()), date(2026, 7, 9), "America/Chicago")
 
     executed_sql = "\n".join(query for query, _ in conn.refresh_cursor.calls)
     assert conn.rollbacks == 1
-    assert conn.commits == 2
-    assert "gaia.refresh_daily_summary_sleep_user" in executed_sql
-    assert "marts.refresh_daily_features_user" in executed_sql
+    assert conn.commits == 0
+    assert "gaia.refresh_daily_summary_sleep_user" not in executed_sql
+    assert "marts.refresh_daily_features_user" not in executed_sql
 
 
 def test_ingest_queue_env_parsing_falls_back_for_invalid_values(monkeypatch):
@@ -897,7 +906,8 @@ async def test_features_today_force_refreshes_before_collect(monkeypatch, client
         calls.append("current_day")
         return today
 
-    async def _fake_execute_mart_refresh(user_id, day_local, tz_name="UTC"):  # noqa: ARG001
+    async def _fake_execute_mart_refresh(user_id, day_local, tz_name="UTC", *, conn=None):  # noqa: ARG001
+        assert conn is not None
         calls.append("refresh")
 
     async def _fake_collect(conn, user_id, tz_name, tzinfo, cached_payload=None):  # noqa: ARG001
