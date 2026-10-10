@@ -7,6 +7,9 @@ import logging
 import os
 import re
 import time
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass, field
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
@@ -29,6 +32,7 @@ from bots.gauges.gauge_scorer import (
 )
 from bots.gauges.local_payload import get_local_payload
 from bots.gauges.signal_resolver import resolve_signals
+from services.db import pg
 from services.drivers.all_drivers import build_exposure_driver_rows, build_ulf_driver_row
 from services.drivers.driver_normalize import normalize_environmental_drivers
 from services.gauges.alerts import dedupe_alert_pills
@@ -200,9 +204,26 @@ async def _refresh_stale_dashboard_space(payload: Dict[str, Any], day: date) -> 
     if not isinstance(signal_bar, dict):
         return payload
 
+    def refresh_space(_job):
+        started = time.perf_counter()
+        try:
+            with pg.operation_timeouts(connect_timeout=2, statement_timeout_ms=5000):
+                return refresh_signal_bar_space(signal_bar, day=day)
+        except Exception:
+            logger.warning("[dashboard] stale signal refresh failed; retaining cached space")
+            return signal_bar
+        finally:
+            logger.info("[dashboard] signal stage=stale_space elapsed_ms=%.1f",
+                        (time.perf_counter() - started) * 1000)
+
+    # Cached signal bars may contain different personalized data: bound their
+    # work together with fresh resolution, but never coalesce their outputs.
+    job = _submit_signal_job(("stale_space", object()), refresh_space)
+    if job is None:
+        return payload
     try:
         refreshed_signal_bar = await asyncio.wait_for(
-            asyncio.to_thread(refresh_signal_bar_space, signal_bar, day=day),
+            asyncio.shield(asyncio.wrap_future(job.future)),
             timeout=_SIGNAL_CONTEXT_TIMEOUT_SECONDS,
         )
     except TimeoutError:
@@ -634,37 +655,102 @@ async def _fetch_gauges_delta(conn, user_id: str, day: date) -> Dict[str, int]:
     return await _compute_gauges_delta_fallback(conn, user_id, day)
 
 
+# Keep admission tied to the real thread, not its cancellable asyncio waiter.
+# Timed-out callers cannot create an unbounded executor queue or free a busy slot.
+_SIGNAL_CONTEXT_MAX_WORKERS = 2
+_signal_context_executor = ThreadPoolExecutor(
+    max_workers=_SIGNAL_CONTEXT_MAX_WORKERS, thread_name_prefix="dashboard-signals"
+)
+_signal_context_jobs_lock = threading.Lock()
+
+
+@dataclass
+class _SignalContextJob:
+    future: Future | None = None
+    local_payload: Dict[str, Any] = field(default_factory=dict)
+
+
+_signal_context_jobs: dict[tuple[Any, Any], _SignalContextJob] = {}
+
+
+def _run_signal_context(user_id, day, definition, job):
+    started = time.perf_counter()
+    stage = "local_payload"
+    stage_started = started
+    try:
+        # Per-operation limits also apply after a caller stops waiting. They do
+        # not constitute a total deadline for this sequence or its HTTP calls.
+        with pg.operation_timeouts(connect_timeout=2, statement_timeout_ms=5000):
+            local_payload = get_local_payload(user_id, day) or {}
+            with _signal_context_jobs_lock:
+                job.local_payload = copy.deepcopy(local_payload)
+            logger.info("[dashboard] signal stage=%s elapsed_ms=%.1f outcome=completed",
+                        stage, (time.perf_counter() - stage_started) * 1000)
+            stage = "resolve_signals"
+            stage_started = time.perf_counter()
+            active_states = resolve_signals(
+                user_id, day, local_payload=local_payload, definition=definition or None,
+            )
+            logger.info("[dashboard] signal stage=%s elapsed_ms=%.1f outcome=completed",
+                        stage, (time.perf_counter() - stage_started) * 1000)
+            return active_states if isinstance(active_states, list) else [], local_payload
+    except Exception as exc:
+        logger.warning("[dashboard] signal stage=%s elapsed_ms=%.1f outcome=failed error_type=%s",
+                       stage, (time.perf_counter() - stage_started) * 1000, type(exc).__name__)
+        with _signal_context_jobs_lock:
+            return [], copy.deepcopy(job.local_payload)
+    finally:
+        logger.info("[dashboard] signal worker elapsed_ms=%.1f",
+                    (time.perf_counter() - started) * 1000)
+
+
+def _submit_signal_job(key, worker, *args):
+    with _signal_context_jobs_lock:
+        job = _signal_context_jobs.get(key)
+        if job is not None:
+            return job
+        if len(_signal_context_jobs) >= _SIGNAL_CONTEXT_MAX_WORKERS:
+            logger.warning("[dashboard] signal context capacity exhausted; optional context omitted")
+            return None
+        job = _SignalContextJob()
+        _signal_context_jobs[key] = job
+        try:
+            job.future = _signal_context_executor.submit(worker, *args, job)
+        except Exception as exc:
+            _signal_context_jobs.pop(key, None)
+            logger.warning("[dashboard] signal worker unavailable error_type=%s", type(exc).__name__)
+            return None
+
+    def release_slot(_future):
+        with _signal_context_jobs_lock:
+            if _signal_context_jobs.get(key) is job:
+                _signal_context_jobs.pop(key, None)
+    job.future.add_done_callback(release_slot)
+    return job
+
+
 async def _resolve_signal_context(
     user_id: str,
     day: date,
     definition: Dict[str, Any],
 ) -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
-    def _run() -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
-        local_payload = get_local_payload(user_id, day) or {}
-        active_states = resolve_signals(
-            user_id,
-            day,
-            local_payload=local_payload,
-            definition=definition or None,
-        )
-        return active_states if isinstance(active_states, list) else [], local_payload or {}
+    job = _submit_signal_job((user_id, day), _run_signal_context, user_id, day, definition)
+    if job is None:
+        return [], {}
 
+    # Shield only the future. Cancellation/timeout returns promptly while the
+    # still-running worker remains counted against the process-wide limit.
+    future = asyncio.wrap_future(job.future)
     try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(_run),
-            timeout=_SIGNAL_CONTEXT_TIMEOUT_SECONDS,
+        result = await asyncio.wait_for(
+            asyncio.shield(future), timeout=_SIGNAL_CONTEXT_TIMEOUT_SECONDS,
         )
+        return copy.deepcopy(result)
     except asyncio.TimeoutError:
-        logger.warning(
-            "[dashboard] resolve signal context timed out user=%s day=%s timeout=%ss",
-            user_id,
-            day,
-            _SIGNAL_CONTEXT_TIMEOUT_SECONDS,
-        )
-        return [], {}
-    except Exception as exc:
-        logger.warning("[dashboard] resolve signal context failed user=%s day=%s err=%s", user_id, day, exc)
-        return [], {}
+        logger.warning("[dashboard] signal context wait timed out timeout=%ss; worker remains bounded",
+                       _SIGNAL_CONTEXT_TIMEOUT_SECONDS)
+        with _signal_context_jobs_lock:
+            return [], copy.deepcopy(job.local_payload)
 
 
 def _coerce_day(value: Optional[date]) -> date:
@@ -1536,3 +1622,4 @@ async def earthscope_member_regenerate(
 
     result = await asyncio.to_thread(_run)
     return {"ok": True, "result": result}
+

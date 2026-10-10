@@ -151,3 +151,32 @@ The fixture creates and drops a uniquely named test database and refuses remote 
 A failed or pressure-skipped current-day request queues its requested local day and timezone, even when the response uses an older fallback row. Database pressure defers execution in the worker rather than discarding this connection-free queue admission. Background commits do not shortcut forced-refresh debounce, since newer samples may have arrived during execution.
 
 The existing retry cycle remains finite: a repeatedly failing key can occupy the worker for up to four 90-second work budgets plus three 20-second delays before its cooldown (excluding acquisition, cleanup, and gauge operations). Other API reads can use the remaining pool slots, but queued current-day work has no special priority over historical work.
+
+### Dashboard optional signal work
+
+Dashboard signal resolution and stale-cache space refresh share a process-local
+two-thread admission limit. In-flight resolution coalesces by user/day; distinct
+work is omitted when both slots are occupied rather than queued. A caller waits
+at most the existing six-second asyncio timeout. Timeout or cancellation does not
+release a slot: only actual synchronous completion does. Cached personalized
+space-refresh outputs are never coalesced across callers.
+
+Each worker scopes DB connect attempts to two seconds and each SQL operation to
+five seconds. These are operation limits, not a total worker deadline; multiple
+queries and HTTP attempts can outlive the request. The dedicated executor keeps
+such work from accumulating or consuming the general-purpose thread pool. A
+permanently stuck worker still occupies a slot until process restart. Limits are
+per API process, not a cross-process/global DB semaphore.
+
+Successfully loaded local payload is retained when optional signal resolution
+fails or the caller times out. Explicitly empty local payload no longer triggers
+a duplicate lookup. Stage logs distinguish local lookup, signal resolution, and
+stale-space refresh from total worker duration; timeout logs mean the caller
+stopped waiting, not that the synchronous work stopped. Missing signal states
+remain missing rather than being presented as successfully computed.
+
+The dashboard still holds its async request connection during assembly. This
+patch does not diagnose the production Schumann query plan/lock waits, change
+entitlement decisions, alter SQL/schema, or guarantee a fully enriched response
+within six seconds. Investigate those separately using approved read-only
+production diagnostics if residual latency persists.
