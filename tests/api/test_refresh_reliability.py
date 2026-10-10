@@ -346,3 +346,105 @@ async def test_same_pending_key_restarts_cancelled_worker(monkeypatch):
     assert ingest._refresh_worker_task is not None
     # The cancelled active key is preserved too (on its cooldown).
     assert ("first", date.today()) in ingest._pending_refresh_requests
+
+
+async def test_trailing_dirty_key_cannot_bypass_failure_cooldown(monkeypatch):
+    started = asyncio.Event()
+    release = asyncio.Event()
+    failed = asyncio.Event()
+    monkeypatch.setattr(ingest, "_DELAYED_REFRESH_MAX_PRESSURE_RETRIES", 0)
+    monkeypatch.setattr(ingest, "_REFRESH_FAILURE_COOLDOWN_SECONDS", 30)
+
+    async def fail(*args):
+        started.set()
+        await release.wait()
+        failed.set()
+        raise RuntimeError("slow query")
+
+    monkeypatch.setattr(ingest, "_execute_refresh", fail)
+    key = ("u", date.today())
+    await ingest._maybe_schedule_refresh(*key, 1)
+    await started.wait()
+    await ingest._maybe_schedule_refresh(*key, 1, "Pacific/Auckland")
+    release.set()
+    await failed.wait()
+    await asyncio.sleep(0)
+    tz, ready_at = ingest._pending_refresh_requests[key]
+    assert tz == "Pacific/Auckland"
+    assert ready_at - asyncio.get_running_loop().time() > 29
+    # Another upload coalesces without erasing the retry deadline.
+    assert not await ingest._maybe_schedule_refresh(*key, 1, "UTC")
+    assert ingest._pending_refresh_requests[key] == ("UTC", ready_at)
+    assert key not in ingest._recent_refresh_requests
+
+
+@pytest.mark.parametrize("pressure", [False, True])
+async def test_forced_fallback_queues_requested_day_and_timezone(monkeypatch, pressure):
+    from starlette.requests import Request
+
+    today = date(2026, 10, 10)
+    yesterday = today - timedelta(days=1)
+    queued = []
+    request = Request({
+        "type": "http", "method": "GET", "path": "/v1/features/today",
+        "query_string": b"force=1&tz=Pacific%2FAuckland", "headers": [],
+    })
+    request.state.user_id = "u"
+
+    async def no_cache(*args, **kwargs):
+        return None
+
+    async def current_day(*args):
+        return today
+
+    async def fail_refresh(*args, **kwargs):
+        raise TimeoutError("interactive budget exhausted")
+
+    async def collect(*args, **kwargs):
+        return (
+            {"user_id": "u", "day": yesterday, "steps_total": 1},
+            {"source": "yesterday", "day": today, "day_used": yesterday},
+            None,
+        )
+
+    async def queue(user, day, tz_name):
+        queued.append((user, day, tz_name))
+        return True
+
+    monkeypatch.setattr(summary, "get_last_good", no_cache)
+    monkeypatch.setattr(summary, "set_last_good", no_cache)
+    monkeypatch.setattr(summary, "_current_day_local", current_day)
+    monkeypatch.setattr(summary, "_execute_mart_refresh", fail_refresh)
+    monkeypatch.setattr(summary, "_collect_features", collect)
+    monkeypatch.setattr(summary, "mart_refresh", queue)
+    monkeypatch.setattr(summary, "_db_pressure_reason", lambda: "db_pressure" if pressure else None)
+    response = await summary.features_today(request, conn=Connection())
+    assert response["ok"] is True
+    assert queued == [("u", today, "Pacific/Auckland")]
+    assert ("u", today) not in summary._forced_refresh_registry
+
+
+async def test_commit_log_is_not_emitted_for_failed_write(monkeypatch, caplog):
+    caplog.set_level("INFO", logger=summary.__name__)
+    conn = Connection(fail="marts.refresh_daily_features_user")
+    with pytest.raises(RuntimeError):
+        await summary._execute_mart_refresh("u", date.today(), conn=conn)
+    assert "refresh committed" not in caplog.text
+    conn.fail = None
+    await summary._execute_mart_refresh("u", date.today(), conn=conn)
+    assert "refresh committed mode=interactive" in caplog.text
+    assert conn.commits == 1
+
+
+async def test_mart_select_logs_read_not_write_success(caplog):
+    caplog.set_level("INFO", logger=summary.__name__)
+
+    class ReadConnection(Connection):
+        @asynccontextmanager
+        async def cursor(self, *args, **kwargs):
+            yield self
+
+    await summary._fetch_mart_row(ReadConnection(), "u", date.today())
+    assert "[MART] read completed" in caplog.text
+    assert "refresh completed" not in caplog.text
+    assert "refresh committed" not in caplog.text

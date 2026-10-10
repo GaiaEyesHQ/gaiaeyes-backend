@@ -13,7 +13,9 @@ CREATE TABLE integration_probe.writes (
     user_id uuid NOT NULL,
     day date NOT NULL,
     backend_pid integer NOT NULL DEFAULT pg_backend_pid(),
-    transaction_id bigint NOT NULL DEFAULT txid_current()
+    transaction_id bigint NOT NULL DEFAULT txid_current(),
+    statement_timeout text NOT NULL DEFAULT current_setting('statement_timeout'),
+    lock_timeout text NOT NULL DEFAULT current_setting('lock_timeout')
 );
 CREATE TABLE integration_probe.current_snapshot (value integer NOT NULL);
 INSERT INTO integration_probe.current_snapshot VALUES (42);

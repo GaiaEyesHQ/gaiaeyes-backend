@@ -126,6 +126,20 @@ def writes(database):
     ).fetchall()
 
 
+def observe_commit_logs(summary, database, monkeypatch):
+    """Read on another connection at emission time, not merely after the call."""
+    observed = []
+    original_info = summary.logger.info
+
+    def info(message, *args, **kwargs):
+        if message.startswith("[MART] refresh committed"):
+            observed.append((message % args, writes(database)))
+        original_info(message, *args, **kwargs)
+
+    monkeypatch.setattr(summary.logger, "info", info)
+    return observed
+
+
 def assert_lock_available(database, summary):
     with database.transaction():
         assert database.execute(
@@ -190,6 +204,114 @@ async def test_forced_refresh_uses_only_already_checked_out_connection(
             assert (await (await conn.execute("SHOW statement_timeout")).fetchone()) == ("0",)
             assert (await (await conn.execute("SHOW lock_timeout")).fetchone()) == ("0",)
         assert pool.get_stats()["requests_num"] == 1
+    assert_lock_available(database, summary)
+
+
+async def test_six_second_summary_times_out_interactively_but_commits_in_background(
+    postgres_dsn, database, refresh_state, monkeypatch, caplog
+):
+    summary, _ = refresh_state
+    # Exercise the actual deployed budgets once: tiny monkeypatched limits would
+    # not catch applying the five-second request allowance to queued histories.
+    assert summary._MART_REFRESH_STATEMENT_TIMEOUT_MS == 5000
+    assert summary._MART_REFRESH_TIMEOUT_SECONDS == 15.0
+    assert summary._BACKGROUND_MART_REFRESH_STATEMENT_TIMEOUT_MS == 60000
+    assert summary._BACKGROUND_MART_REFRESH_TIMEOUT_SECONDS == 90.0
+    database.execute("UPDATE integration_probe.control SET delay_seconds = 6 WHERE stage = 'summary'")
+    caplog.set_level("INFO", logger=summary.logger.name)
+    committed = observe_commit_logs(summary, database, monkeypatch)
+
+    async with AsyncConnectionPool(postgres_dsn, min_size=1, max_size=1, open=False) as pool:
+        await pool.wait()
+
+        async def get_pool():
+            return pool
+
+        monkeypatch.setattr(summary, "get_pool", get_pool)
+        async with pool.connection() as conn:
+            pid = conn.info.backend_pid
+            started = monotonic()
+            with pytest.raises(errors.QueryCanceled, match="statement timeout"):
+                await summary._execute_mart_refresh(USER, DAY, conn=conn)
+            assert monotonic() - started >= 4.5
+            assert writes(database) == []
+            assert committed == []
+            assert conn.info.transaction_status == TransactionStatus.IDLE
+            assert not summary._mart_execution_lock.locked()
+            assert_lock_available(database, summary)
+
+        started = monotonic()
+        await summary._execute_mart_refresh(USER, DAY)
+        assert monotonic() - started >= 6
+        rows = writes(database)
+        assert {row[0] for row in rows} == {"summary", "sleep", "features"}
+        assert len(rows) == 3
+        assert {row[1] for row in rows} == {pid}
+        assert len({row[2] for row in rows}) == 1
+        assert database.execute(
+            "SELECT DISTINCT statement_timeout, lock_timeout FROM integration_probe.writes"
+        ).fetchall() == [("1min", "1s")]
+        assert len(committed) == 1
+        assert "mode=background" in committed[0][0]
+        assert committed[0][1] == rows
+        assert [
+            record.getMessage() for record in caplog.records
+            if record.getMessage().startswith("[MART] refresh committed")
+        ] == [committed[0][0]]
+        assert pool.get_stats()["pool_available"] == 1
+        async with pool.connection(timeout=0.5) as conn:
+            assert conn.info.backend_pid == pid
+            assert conn.info.transaction_status == TransactionStatus.IDLE
+            assert (await (await conn.execute("SHOW statement_timeout")).fetchone()) == ("0",)
+            assert (await (await conn.execute("SHOW lock_timeout")).fetchone()) == ("0",)
+    assert_lock_available(database, summary)
+
+
+async def test_background_total_deadline_rolls_back_and_releases_pool_connection(
+    postgres_dsn, database, refresh_state, monkeypatch, caplog
+):
+    summary, _ = refresh_state
+    # The background total deadline must still bound the longer statement limit.
+    monkeypatch.setattr(summary, "_BACKGROUND_MART_REFRESH_TIMEOUT_SECONDS", 0.4)
+    database.execute("UPDATE integration_probe.control SET delay_seconds = 10 WHERE stage = 'sleep'")
+    caplog.set_level("INFO", logger=summary.logger.name)
+    committed = observe_commit_logs(summary, database, monkeypatch)
+
+    async with AsyncConnectionPool(postgres_dsn, min_size=1, max_size=1, open=False) as pool:
+        await pool.wait()
+
+        async def get_pool():
+            return pool
+
+        monkeypatch.setattr(summary, "get_pool", get_pool)
+        async with pool.connection() as conn:
+            pid = conn.info.backend_pid
+        task = asyncio.create_task(summary._execute_mart_refresh(USER, DAY))
+        await wait_for_sleep(database, pid)
+        with pytest.raises(TimeoutError):
+            await task
+        assert writes(database) == []
+        assert committed == []
+        assert not summary._mart_execution_lock.locked()
+        assert_lock_available(database, summary)
+        assert pool.get_stats()["pool_available"] == 1
+        async with pool.connection(timeout=0.5) as conn:
+            assert conn.info.backend_pid == pid
+            assert conn.info.transaction_status == TransactionStatus.IDLE
+            assert (await (await conn.execute("SHOW statement_timeout")).fetchone()) == ("0",)
+            assert (await (await conn.execute("SHOW lock_timeout")).fetchone()) == ("0",)
+        database.execute("UPDATE integration_probe.control SET delay_seconds = 0")
+        await summary._execute_mart_refresh(USER, DAY)
+        assert len(writes(database)) == 3
+        assert {row[1] for row in writes(database)} == {pid}
+        assert len(committed) == 1
+        assert "mode=background" in committed[0][0]
+        assert len(committed[0][1]) == 3
+        assert [
+            record.getMessage() for record in caplog.records
+            if record.getMessage().startswith("[MART] refresh committed")
+        ] == [committed[0][0]]
+        assert pool.get_stats()["pool_available"] == 1
     assert_lock_available(database, summary)
 
 

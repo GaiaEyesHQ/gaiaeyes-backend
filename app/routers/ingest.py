@@ -943,9 +943,13 @@ async def _drain_refresh_requests() -> None:
                         _recent_refresh_requests.pop(key, None)
                         # Keep dirty dates through outages, but yield to other
                         # keys and wait before another bounded attempt cycle.
-                        _pending_refresh_requests.setdefault(
-                            key, (tz_name, asyncio.get_running_loop().time()
-                                  + _REFRESH_FAILURE_COOLDOWN_SECONDS),
+                        pending_tz, pending_at = _pending_refresh_requests.get(
+                            key, (tz_name, 0.0)
+                        )
+                        _pending_refresh_requests[key] = (
+                            pending_tz,
+                            max(pending_at, asyncio.get_running_loop().time()
+                                + _REFRESH_FAILURE_COOLDOWN_SECONDS),
                         )
                         logger.warning(
                             "[MART] refresh incomplete user=%s day=%s; retained for retry",
