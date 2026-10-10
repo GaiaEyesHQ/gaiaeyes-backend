@@ -274,7 +274,7 @@ def resolve_signals(
     day = _coerce_day(day)
     sig_defs = {s.get("key"): s for s in definition.get("signal_definitions", [])}
 
-    payload = _normalize_local_payload(local_payload or _fetch_local_payload(user_id, day))
+    payload = _normalize_local_payload(local_payload if local_payload is not None else _fetch_local_payload(user_id, day))
     weather = payload.get("weather") or {}
     air = payload.get("air") or {}
     allergens = payload.get("allergens") or {}
@@ -615,3 +615,4 @@ def resolve_signals(
         )
 
     return out
+

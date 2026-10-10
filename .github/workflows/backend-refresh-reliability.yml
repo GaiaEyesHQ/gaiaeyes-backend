@@ -61,6 +61,9 @@ jobs:
         run: |
           python -m pytest -q \
             tests/api/test_refresh_reliability.py \
+            tests/api/test_dashboard_signal_context.py \
+            tests/api/test_dashboard_cache.py \
+            tests/bots/test_signal_resolver.py \
             tests/api/test_features_today.py \
             tests/api/test_summary_mart_select.py \
             tests/bots/test_gauge_db_utils.py \
