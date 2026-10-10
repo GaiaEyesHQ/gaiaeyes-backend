@@ -131,3 +131,15 @@
 - Current local-health polling uses scoped database connect/statement limits, without retaining connections across provider requests. See `LOCAL_CURRENT_DB_CONNECT_TIMEOUT_SECONDS` and `LOCAL_CURRENT_DB_STATEMENT_TIMEOUT_MS`. These are per-operation bounds, not a hard 60-second per-ZIP deadline: synchronous calls still block that process's event loop, and sequential operations can accumulate. The existing cron supervisor bounds the whole local-current subprocess separately.
 
 Before production rollout, exercise concurrent historical uploads and current reads in a staging Postgres/PgBouncer environment, including statement cancellation and recovery. Observe pool waiting/used counts, refresh retry backlog, deadlocks, query latency, gauge supersession counts and local-current duration. These safeguards address confirmed code hazards; they do not establish the cause of a particular production outage.
+
+### Repeatable refresh verification
+
+`.github/workflows/backend-refresh-reliability.yml` runs the focused refresh, gauge, connection, and polling regression suite on Python 3.11. A separate step provisions a disposable PostgreSQL 17 service and runs `tests/integration/test_refresh_postgres.py`.
+
+To run the real-database tests locally, set `GAIA_TEST_POSTGRES_DSN` to an explicit numeric loopback PostgreSQL URL with permission to create a database, then run:
+
+```bash
+python -m pytest -q tests/integration/test_refresh_postgres.py
+```
+
+The fixture creates and drops a uniquely named test database and refuses remote hosts. Its synthetic SQL functions verify atomic rollback, advisory-lock contention, cancellation/timeout cleanup, pool connection reuse, scoped query limits, and concurrent historical work/current reads. These are real PostgreSQL mechanics tests, not production SQL performance or PgBouncer integration tests. Without the explicit opt-in variable, they skip.

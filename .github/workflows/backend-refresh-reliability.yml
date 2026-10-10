@@ -1,0 +1,79 @@
+name: Backend refresh reliability
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'services/**'
+      - 'bots/gauges/**'
+      - 'bots/local_health_poll.py'
+      - 'scripts/run_render_cron.py'
+      - 'tests/**'
+      - 'requirements.txt'
+      - '.github/workflows/backend-refresh-reliability.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'services/**'
+      - 'bots/gauges/**'
+      - 'bots/local_health_poll.py'
+      - 'scripts/run_render_cron.py'
+      - 'tests/**'
+      - 'requirements.txt'
+      - '.github/workflows/backend-refresh-reliability.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: gaia_test
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: gaia_refresh_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gaia_test -d gaia_refresh_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project and test dependencies
+        run: python -m pip install -r requirements.txt pytest pytest-asyncio
+      - name: Run refresh and database regressions
+        run: |
+          python -m pytest -q \
+            tests/api/test_refresh_reliability.py \
+            tests/api/test_features_today.py \
+            tests/api/test_summary_mart_select.py \
+            tests/bots/test_gauge_db_utils.py \
+            tests/bots/test_gauge_scoring_dates.py \
+            tests/bots/test_gauge_scoring_job.py \
+            tests/bots/test_gauge_scorer.py \
+            tests/bots/test_local_health_poll.py \
+            tests/test_pg_operation_timeouts.py \
+            tests/test_db_conninfo.py \
+            tests/test_db_failover.py \
+            tests/scripts/test_render_cron.py
+      - name: Verify isolated PostgreSQL concurrency
+        env:
+          GAIA_TEST_POSTGRES_DSN: >-
+            postgresql://gaia_test:local_test_only@127.0.0.1:5432/gaia_refresh_test?sslmode=disable
+        run: python -m pytest -q tests/integration/test_refresh_postgres.py
