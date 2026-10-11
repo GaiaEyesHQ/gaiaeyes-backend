@@ -106,8 +106,13 @@ def _restore_partial_cached_payload(primary: dict, fallback: dict | None) -> tup
 
     restored = dict(primary)
     changed = False
+    primary_air = primary.get("air") if isinstance(primary.get("air"), dict) else {}
+    # A completed refresh explicitly found no current AQI. Legacy cache rows
+    # have no AirNow observation timestamp, so restoring them would make an
+    # unaged reading appear current under the new weather/cache timestamp.
+    air_unavailable = primary_air.get("available") is False
 
-    if _aqi_missing(primary) and not _aqi_missing(fallback):
+    if not air_unavailable and _aqi_missing(primary) and not _aqi_missing(fallback):
         restored["air"] = _merge_section(primary.get("air"), fallback.get("air"))
         changed = True
 
@@ -120,9 +125,14 @@ def _restore_partial_cached_payload(primary: dict, fallback: dict | None) -> tup
         fallback_health = fallback.get("health") if isinstance(fallback.get("health"), dict) else {}
         merged_health = dict(primary_health)
         merged_flags = _merge_section(primary_health.get("flags"), fallback_health.get("flags"))
+        if air_unavailable:
+            merged_flags["aqi_flag"] = None
         if merged_flags:
             merged_health["flags"] = merged_flags
-        if not merged_health.get("messages") and isinstance(fallback_health.get("messages"), list):
+        # Legacy health messages mix AQI, weather, moon, and allergens without
+        # section provenance. Don't copy that whole list into a new snapshot,
+        # including one with valid current AQI and only missing allergens.
+        if "available" not in primary_air and not merged_health.get("messages") and isinstance(fallback_health.get("messages"), list):
             merged_health["messages"] = fallback_health["messages"]
         if merged_health:
             restored["health"] = merged_health

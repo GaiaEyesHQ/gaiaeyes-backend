@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Any, Dict, List
 
@@ -8,6 +9,13 @@ ZIP_BASE = "https://www.airnowapi.org/aq/observation/zipCode/current/"
 LATLON_BASE = "https://www.airnowapi.org/aq/observation/latLong/current/"
 DEFAULT_RADIUS_MI = int(os.getenv("LOCAL_SIGNALS_AIRNOW_RADIUS_MI", "25"))
 REQUEST_TIMEOUT_SECONDS = 10.0
+# One location's complete search, shared by both endpoints and every radius.
+CURRENT_TOTAL_BUDGET_SECONDS = 12.0
+
+# AirNow authenticates in query parameters. HTTP client INFO/DEBUG logs expose
+# request URLs; apply the cron's existing safeguard to API callers as well.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 async def _request(base: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:

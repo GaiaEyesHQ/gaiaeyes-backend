@@ -1,10 +1,15 @@
 import asyncio
+import logging
+import math
+from time import monotonic
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from .cache import latest_and_ref, get_previous_approx, nearest_row_to
 from services.geo.zip_lookup import zip_to_latlon
 from ..external import nws, airnow, pollen
 from ..time.moon import moon_phase
+
+logger = logging.getLogger(__name__)
 
 def _delta(curr, prev):
     try:
@@ -102,28 +107,57 @@ def _airnow_distance_ladder() -> tuple[int, ...]:
 
 
 async def _fetch_air_quality(zip_code: str, lat: float, lon: float) -> list[dict]:
-    for radius in _airnow_distance_ladder():
-        try:
-            aq_list = await airnow.current_by_latlon(lat, lon, distance_miles=radius)
-        except Exception as e:
-            print(
-                f"[local_signals] AirNow lat/lon error for zip={zip_code} "
-                f"radius={radius} type={type(e).__name__}: {e!r}; trying ZIP fallback"
-            )
-            break
-        if aq_list:
-            return aq_list
-
-    for radius in _airnow_distance_ladder():
-        try:
-            aq_list = await airnow.current_by_zip(zip_code, distance_miles=radius)
-        except Exception as e:
-            print(f"[local_signals] AirNow ZIP error for zip={zip_code} radius={radius}: {e}")
-            aq_list = []
-        if aq_list:
-            return aq_list
-
+    deadline = monotonic() + airnow.CURRENT_TOTAL_BUDGET_SECONDS
+    errors = 0
+    for endpoint in ("latlon", "zip"):
+        for radius in _airnow_distance_ladder():
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                logger.warning("[local_signals] AirNow budget exhausted zip=%s", zip_code)
+                return []
+            try:
+                request = (
+                    airnow.current_by_latlon(lat, lon, distance_miles=radius)
+                    if endpoint == "latlon"
+                    else airnow.current_by_zip(zip_code, distance_miles=radius)
+                )
+                # httpx's timeout is per I/O phase, not total request time.
+                # wait_for also waits for cancellation/HTTP client cleanup.
+                aq_list = await asyncio.wait_for(
+                    request,
+                    timeout=min(airnow.REQUEST_TIMEOUT_SECONDS, remaining),
+                )
+                if not isinstance(aq_list, list):
+                    raise ValueError("unexpected AirNow response shape")
+                aq_list = [row for row in aq_list if _valid_aqi_row(row)]
+            except Exception as exc:
+                errors += 1
+                # Never stringify provider exceptions: HTTPStatusError includes
+                # the full request URL and its API_KEY query parameter.
+                logger.warning(
+                    "[local_signals] AirNow error zip=%s endpoint=%s radius=%s type=%s status=%s",
+                    zip_code, endpoint, radius, type(exc).__name__,
+                    getattr(getattr(exc, "response", None), "status_code", None),
+                )
+                if errors >= 2:
+                    return []
+                # One alternate endpoint can recover a route-specific error.
+                # Wider radii do not fix a timeout or provider outage.
+                break
+            if aq_list:
+                return aq_list
+            if errors:
+                # The alternate endpoint returned no data after a failure;
+                # don't restart the full spatial search during an outage.
+                return []
     return []
+
+
+def _valid_aqi_row(row: Any) -> bool:
+    if not isinstance(row, dict) or isinstance(row.get("AQI"), bool):
+        return False
+    value = row.get("AQI")
+    return isinstance(value, (int, float)) and math.isfinite(value) and value >= 0
 
 
 def _pollen_coordinate_candidates(lat: float, lon: float) -> tuple[tuple[float, float], ...]:
@@ -287,6 +321,9 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
         _fetch_pollen_forecast(zip_code, lat, lon, days=3),
         return_exceptions=True,
     )
+    if isinstance(aq_list, Exception):
+        logger.warning("[local_signals] AirNow fetch failed zip=%s type=%s", zip_code, type(aq_list).__name__)
+        aq_list = []
     if isinstance(pollen_payload, Exception):
         print(f"[local_signals] pollen forecast error for zip={zip_code}: {type(pollen_payload).__name__}")
         pollen_payload = {}
@@ -296,7 +333,8 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     if aq_list:
         best = max(aq_list, key=lambda a: (a.get("AQI") or 0))
         aqi = best.get("AQI")
-        category = (best.get("Category") or {}).get("Name")
+        category_info = best.get("Category")
+        category = category_info.get("Name") if isinstance(category_info, dict) else None
         pollutant = best.get("ParameterName")
 
     aqi_flag = _aqi_bucket(aqi, category)
@@ -370,7 +408,7 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
             "baro_trend": baro_trend_3h,
             "pressure_trend": baro_trend_3h,
         },
-        "air": {"aqi": aqi, "category": category, "pollutant": pollutant},
+        "air": {"aqi": aqi, "category": category, "pollutant": pollutant, "available": aqi is not None},
         "allergens": allergens,
         "moon": m,
         "health": health,
