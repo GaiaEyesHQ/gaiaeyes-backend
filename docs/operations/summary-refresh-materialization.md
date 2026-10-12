@@ -27,10 +27,15 @@ in `tests/integration/test_summary_materialization.py`.
 
 ## Artifacts and guards
 
-- Apply: `supabase/migrations/20261010171000_materialize_summary_resp_rows.sql`
+- Apply: `supabase/migrations/20261012140725_materialize_summary_resp_rows.sql`
 - Exact rollback: `supabase/rollbacks/20261010171000_materialize_summary_resp_rows.sql`
 - Original catalog definition MD5: `2d0f389e83fdb5bffcc520fe42006b55`
 - Patched catalog definition MD5: `cedaa18418e89ba36fd14509b623e0fd`
+
+The apply filename matches the server-assigned production migration version
+`20261012140725`, recorded on 2026-10-12 at 14:07:25 UTC. This repository
+bookkeeping changes no SQL bytes or remote migration-history rows. The exact
+rollback script retains its original filename.
 
 The hashes are identification aids. The actual drift guard compares the complete
 `pg_get_functiondef` text, not just a hash. Already-applied, missing, or differently

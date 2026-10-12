@@ -31,9 +31,8 @@ pytestmark = pytest.mark.skipif(
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-FILENAME = "20261010171000_materialize_summary_resp_rows.sql"
-MIGRATION = ROOT / "supabase" / "migrations" / FILENAME
-ROLLBACK = ROOT / "supabase" / "rollbacks" / FILENAME
+MIGRATION = ROOT / "supabase" / "migrations" / "20261012140725_materialize_summary_resp_rows.sql"
+ROLLBACK = ROOT / "supabase" / "rollbacks" / "20261010171000_materialize_summary_resp_rows.sql"
 SIGNATURE = "gaia.refresh_daily_summary_user(uuid,date,text,integer)"
 USER = "00000000-0000-4000-8000-000000000001"
 OTHER_USER = "00000000-0000-4000-8000-000000000002"
