@@ -1,0 +1,32 @@
+---
+name: DONKI ingest tests
+
+"on":
+  pull_request:
+    paths:
+      - "scripts/ingest_nasa_donki.py"
+      - "tests/scripts/test_ingest_nasa_donki.py"
+      - ".github/workflows/donki-ingest-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/ingest_nasa_donki.py"
+      - "tests/scripts/test_ingest_nasa_donki.py"
+      - ".github/workflows/donki-ingest-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: python -m pip install httpx==0.27.0 asyncpg==0.29.0 pytest
+      - name: Run mocked DONKI regression tests
+        run: python -m pytest -q tests/scripts/test_ingest_nasa_donki.py
