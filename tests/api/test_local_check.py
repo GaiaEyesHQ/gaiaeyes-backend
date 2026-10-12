@@ -412,3 +412,54 @@ async def test_attach_forecast_daily_best_effort_falls_back_to_zip_rows_when_geo
             "refresh_if_stale": False,
         },
     ]
+
+
+@pytest.mark.parametrize("primary_messages", [[], ["Current weather message"]])
+def test_explicit_missing_aqi_cannot_be_restored_or_reaged(primary_messages):
+    primary = {
+        "weather": {"temp_c": 22, "obs_time": "2026-10-11T03:00:00+00:00"},
+        "air": {"aqi": None, "category": None, "pollutant": None, "available": False},
+        "allergens": {},
+        "health": {"flags": {"aqi_flag": None}, "messages": primary_messages},
+    }
+    fallback = {
+        "air": {"aqi": 12, "category": "Good"},
+        "allergens": {"source": "google-pollen:forecast", "state": "moderate"},
+        "health": {"flags": {"aqi_flag": "good", "allergen_state": "moderate"}, "messages": ["Air quality Good"]},
+        "asof": "2020-01-01T00:00:00+00:00",
+    }
+    restored, changed = local._restore_partial_cached_payload(primary, fallback)
+    assert changed  # Existing allergen restoration still works.
+    assert restored["air"] == primary["air"]
+    assert restored["weather"] == primary["weather"]
+    assert restored["health"]["flags"]["aqi_flag"] is None
+    assert restored["health"]["messages"] == primary_messages
+    assert restored["allergens"]["state"] == "moderate"
+    assert primary["health"]["flags"] == {"aqi_flag": None}
+
+
+def test_explicit_missing_aqi_is_not_repaired_from_unaged_cache():
+    primary = {"air": {"aqi": None, "available": False}, "allergens": {"source": "google-pollen:forecast", "state": "low"}}
+    fallback = {"air": {"aqi": 0, "category": "Good"}}
+    restored, changed = local._restore_partial_cached_payload(primary, fallback)
+    assert not changed
+    assert restored["air"]["aqi"] is None
+
+
+def test_current_zero_aqi_does_not_inherit_stale_air_health_messages():
+    primary = {
+        "air": {"aqi": 0, "category": "Good", "available": True},
+        "allergens": {},
+        "health": {"flags": {"aqi_flag": "good"}, "messages": []},
+    }
+    fallback = {
+        "air": {"aqi": 180, "category": "Unhealthy"},
+        "allergens": {"source": "google-pollen:forecast", "state": "moderate"},
+        "health": {"flags": {"aqi_flag": "unhealthy"}, "messages": ["Air quality Unhealthy—limit outdoor exertion."]},
+    }
+    restored, changed = local._restore_partial_cached_payload(primary, fallback)
+    assert changed
+    assert restored["air"]["aqi"] == 0
+    assert restored["health"]["flags"]["aqi_flag"] == "good"
+    assert restored["health"]["messages"] == []
+    assert restored["allergens"]["state"] == "moderate"
