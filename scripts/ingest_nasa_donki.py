@@ -10,7 +10,7 @@ ENV:
   OUTPUT_JSON_GZIP  (optional) "true"/"false" to also write .gz
 """
 
-import os, sys, asyncio, json, random, gzip, pathlib
+import os, sys, asyncio, json, random, gzip, pathlib, math
 
 # Helper to get environment variables with optional default and required flag
 def env(k, default=None, required=False):
@@ -78,7 +78,7 @@ async def fetch_goes_xrs(client: httpx.AsyncClient) -> list:
         if isinstance(data, list):
             return data
     except Exception as e:
-        print(f"[DONKI] GOES XRS fetch failed: {e}", file=sys.stderr)
+        print(f"[DONKI] GOES XRS fetch failed: {type(e).__name__}", file=sys.stderr)
     return []
 
 def summarize_flares_from_goes(goes_list: list, now: datetime) -> dict:
@@ -117,9 +117,9 @@ FALLBACK_RETRIES = int(env("DONKI_FALLBACK_RETRIES", str(RETRIES)))
 DAY_MODE = env("DONKI_DAY_MODE", "1").strip().lower() in ("1","true","yes","on")
 DAY_SLEEP_MS = int(env("DONKI_DAY_SLEEP_MS", "600"))  # pause between day calls
 
-# Primary (NASA Open APIs) + Fallback (CCMC DONKI WS on kauai)
+# Primary (NASA Open APIs) + public CCMC fallback (moved September 2026).
 BASE_PRIMARY = os.getenv("DONKI_BASE_PRIMARY", "https://api.nasa.gov/DONKI").rstrip("/")
-BASE_FALLBACK = os.getenv("DONKI_BASE_FALLBACK", "https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get").rstrip("/")
+BASE_FALLBACK = os.getenv("DONKI_BASE_FALLBACK", "https://ccmc.gsfc.nasa.gov/DONKI-API/get").rstrip("/")
 BASES = [BASE_PRIMARY, BASE_FALLBACK]
 
 UPSERT = """
@@ -328,31 +328,97 @@ async def sleepy(ms: int):
     delay = (ms / 1000.0) + (random.random() * 0.35)
     await asyncio.sleep(delay)
 
-async def fetch(client: httpx.AsyncClient, path: str, params: dict, retries: int = RETRIES, base_ms: int = RETRY_BASE_MS):
+class DonkiFetchError(RuntimeError):
+    """No provider returned a usable DONKI event list for a requested slice."""
+
+
+def valid_donki_event(event: dict, path: str) -> bool:
+    """Reject error objects and fields that would corrupt or break summaries.
+
+    Identifiers and CME analyses have existing aliases; missing optional values
+    are allowed. The required event time also supports the existing derived ID.
+    """
+    if not isinstance(event, dict):
+        return False
+    if path == "FLR":
+        id_fields = ("flrID", "eventID", "activityID")
+        required_time, optional_times = "beginTime", ("peakTime", "endTime")
+        if event.get("classType") is not None and not isinstance(event["classType"], str):
+            return False
+    elif path == "CME":
+        id_fields = ("activityID", "eventID")
+        required_time, optional_times = "startTime", ()
+        for key in ("cmeAnalyses", "analyses"):
+            analyses = event.get(key)
+            if analyses is None:
+                continue
+            if isinstance(analyses, dict):
+                analyses = [analyses]
+            if not isinstance(analyses, list):
+                return False
+            for analysis in analyses:
+                if not isinstance(analysis, dict):
+                    return False
+                directed = analysis.get("isEarthDirected")
+                if directed is not None and not isinstance(directed, bool):
+                    return False
+                speed = analysis.get("speed")
+                if speed is not None and speed != "":
+                    try:
+                        if isinstance(speed, bool) or not math.isfinite(float(speed)):
+                            return False
+                    except (TypeError, ValueError, OverflowError):
+                        return False
+    else:
+        return False
+    if any(event.get(key) is not None and not isinstance(event[key], str) for key in id_fields):
+        return False
+    for key in (required_time, *optional_times):
+        value = event.get(key)
+        if key != required_time and value in (None, ""):
+            continue
+        parsed = parse_iso(value) if isinstance(value, str) else None
+        if parsed is None or parsed.tzinfo is None:
+            return False
+    return True
+
+
+async def fetch(client: httpx.AsyncClient, path: str, params: dict, retries: int = RETRIES, base_ms: int = RETRY_BASE_MS, *, sources: set[str] | None = None):
     """
     Fetch with retry/backoff across primary and fallback DONKI endpoints.
-    - Tries NASA Open API first (requires api_key), then CCMC 'kauai' WS (no key).
-    - Retries (per base) on 5xx/429; returns [] when both bases fail.
+    - Sends api_key only to the HTTPS api.nasa.gov primary; never follows redirects.
+    - Retries (per base) on 5xx/429 and network errors.
+    - Returns [] only for a valid empty list; raises if every provider fails.
     """
-    print(f"[DONKI] Bases in use: {BASES}", file=sys.stderr)
-    for base in BASES:
-        url = f"{base}/{path.lstrip('/')}"
-        print(f"[DONKI] Trying {path} via {base} -> {url}", file=sys.stderr)
+    for index, base in enumerate(BASES):
+        provider = "primary" if index == 0 else "fallback"
+        # Base overrides are endpoints, not credential/query containers. Do not
+        # log raw URLs or exceptions: HTTP errors can contain the API key.
+        try:
+            base_url = httpx.URL(base)
+            if base_url.username or base_url.password or base_url.query or base_url.fragment:
+                raise ValueError("DONKI base must not contain credentials, query, or fragment")
+            url = base_url.copy_with(path=f"{base_url.path.rstrip('/')}/{path.lstrip('/')}")
+        except (httpx.InvalidURL, ValueError):
+            print(f"[DONKI] {path} invalid {provider} base; trying next provider.", file=sys.stderr)
+            continue
+        print(f"[DONKI] Trying {path} via {provider}", file=sys.stderr)
         attempt = 0
-        max_retries = PRIMARY_RETRIES if base == BASES[0] else FALLBACK_RETRIES
-        # Adjust params: CCMC WS does not accept api_key
-        call_params = dict(params)
-        if "kauai.ccmc.gsfc.nasa.gov" in base:
-            call_params.pop("api_key", None)
+        max_retries = PRIMARY_RETRIES if index == 0 else FALLBACK_RETRIES
+        call_params = {key: value for key, value in params.items() if key.lower() != "api_key"}
+        if (index == 0 and url.scheme == "https" and url.host == "api.nasa.gov"
+                and url.port in (None, 443) and "api_key" in params):
+            call_params["api_key"] = params["api_key"]
         while True:
             try:
-                r = await client.get(url, params=call_params, timeout=httpx.Timeout(45.0, connect=10.0))
+                r = await client.get(url, params=call_params,
+                                     timeout=httpx.Timeout(45.0, connect=10.0), follow_redirects=False)
                 r.raise_for_status()
                 data = r.json()
-                # Some endpoints return dict on error; normalize to list-success
-                if isinstance(data, dict):
-                    # Unexpected payload (likely error) — treat as failure for this base
-                    raise httpx.HTTPStatusError("Unexpected dict payload", request=r.request, response=r)
+                if not isinstance(data, list) or not all(valid_donki_event(event, path) for event in data):
+                    raise ValueError("Unexpected DONKI event payload")
+                if sources is not None:
+                    sources.add(str(url))
                 return data
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code if e.response is not None else None
@@ -360,37 +426,42 @@ async def fetch(client: httpx.AsyncClient, path: str, params: dict, retries: int
                 attempt += 1
                 if retryable and attempt <= max_retries:
                     delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.35)
-                    print(f"[DONKI] {path} via {base} HTTP {status}; retry {attempt}/{max_retries} in {delay:.2f}s", file=sys.stderr)
+                    print(f"[DONKI] {path} via {provider} HTTP {status}; retry {attempt}/{max_retries} in {delay:.2f}s", file=sys.stderr)
                     await asyncio.sleep(delay)
                     continue
                 # If this was not the last base, fall through to try next base
-                print(f"[DONKI] {path} failed via {base} (HTTP {status}) after {attempt} attempts; {'trying next base' if base != BASES[-1] else 'no more bases'}.", file=sys.stderr)
+                print(f"[DONKI] {path} failed via {provider} (HTTP {status}) after {attempt} attempts.", file=sys.stderr)
                 break
             except httpx.RequestError as e:
                 attempt += 1
                 if attempt <= max_retries:
                     delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.35)
-                    print(f"[DONKI] network error on {path} via {base}: {e!r}; retry {attempt}/{max_retries} in {delay:.2f}s", file=sys.stderr)
+                    print(f"[DONKI] network error on {path} via {provider}: {type(e).__name__}; retry {attempt}/{max_retries} in {delay:.2f}s", file=sys.stderr)
                     await asyncio.sleep(delay)
                     continue
-                print(f"[DONKI] network error on {path} via {base} after {attempt} attempts; {'trying next base' if base != BASES[-1] else 'no more bases'}.", file=sys.stderr)
+                print(f"[DONKI] network error on {path} via {provider} after {attempt} attempts.", file=sys.stderr)
                 break
-    # Exhausted all bases
-    return []
+            except ValueError:
+                print(f"[DONKI] {path} invalid JSON/event payload via {provider}.", file=sys.stderr)
+                break
+    raise DonkiFetchError(f"{path} fetch failed for all DONKI providers")
 
 async def main():
+    if DAYS < 0:
+        raise DonkiFetchError("START_DAYS_AGO must be zero or greater")
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=DAYS)
     params = {"startDate": iso_day(start), "endDate": iso_day(now), "api_key": KEY}
+    flr_sources, cme_sources = set(), set()
 
     async with httpx.AsyncClient() as client:
         if DAY_MODE:
             flr_all, cme_all = [], []
             for d0, d1 in day_range(start, now):
                 day_params = {"startDate": iso_day(d0), "endDate": iso_day(d1), "api_key": KEY}
-                flr_day = await fetch(client, "FLR", day_params) or []
+                flr_day = await fetch(client, "FLR", day_params, sources=flr_sources)
                 await sleepy(int(DAY_SLEEP_MS/2))
-                cme_day = await fetch(client, "CME", day_params) or []
+                cme_day = await fetch(client, "CME", day_params, sources=cme_sources)
                 if flr_day:
                     flr_all.extend(flr_day)
                 if cme_day:
@@ -398,8 +469,8 @@ async def main():
                 await sleepy(DAY_SLEEP_MS)
             flr, cme = flr_all, cme_all
         else:
-            flr = await fetch(client, "FLR", params) or []
-            cme = await fetch(client, "CME", params) or []
+            flr = await fetch(client, "FLR", params, sources=flr_sources)
+            cme = await fetch(client, "CME", params, sources=cme_sources)
 
         # Also fetch GOES XRS for reliable flare max in last 24h
         goes = await fetch_goes_xrs(client)
@@ -412,8 +483,8 @@ async def main():
         flares_summary = goes_summary
     cmes_summary = summarize_cmes(cme, now_ts)
     sources_meta = {
-        "flr_source": f"{BASE_PRIMARY}/FLR",
-        "cme_source": f"{BASE_PRIMARY}/CME"
+        "flr_source": ", ".join(sorted(flr_sources)),
+        "cme_source": ", ".join(sorted(cme_sources))
     }
 
     rows = []
@@ -443,19 +514,25 @@ async def main():
 
     if not rows:
         print("No DONKI events in range.")
-        return
-
-    conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)
-    try:
-        await conn.executemany(UPSERT, rows)
-        print(f"Upserted {len(rows)} DONKI events")
-        # Emit companion JSON for web/app dashboards
+    else:
+        conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)
         try:
-            emit_json_flares_cmes(now_ts, flares_summary, cmes_summary, sources_meta)
-        except Exception as e:
-            print(f"[DONKI] WARN: failed to emit flares_cmes.json: {e}")
-    finally:
-        await conn.close()
+            await conn.executemany(UPSERT, rows)
+            print(f"Upserted {len(rows)} DONKI events")
+        finally:
+            await conn.close()
+
+    # This point is reached only after every requested FLR/CME slice succeeded.
+    # A fully observed empty range should clear an old dashboard summary too.
+    try:
+        emit_json_flares_cmes(now_ts, flares_summary, cmes_summary, sources_meta)
+    except Exception as e:
+        print(f"[DONKI] WARN: failed to emit flares_cmes.json: {type(e).__name__}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except DonkiFetchError as e:
+        print(f"[DONKI] Incomplete fetch: {e}; existing database rows and JSON unchanged.", file=sys.stderr)
+        sys.exit(1)
+
