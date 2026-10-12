@@ -9,6 +9,8 @@ on:
       - 'bots/local_health_poll.py'
       - 'scripts/run_render_cron.py'
       - 'tests/**'
+      - 'supabase/migrations/**'
+      - 'supabase/rollbacks/**'
       - 'requirements.txt'
       - '.github/workflows/backend-refresh-reliability.yml'
   push:
@@ -20,6 +22,8 @@ on:
       - 'bots/local_health_poll.py'
       - 'scripts/run_render_cron.py'
       - 'tests/**'
+      - 'supabase/migrations/**'
+      - 'supabase/rollbacks/**'
       - 'requirements.txt'
       - '.github/workflows/backend-refresh-reliability.yml'
 
@@ -81,6 +85,7 @@ jobs:
             tests/scripts/test_render_cron.py
       - name: Verify isolated PostgreSQL concurrency
         env:
+          GAIA_TEST_SUMMARY_LARGE_PLAN: '1'
           GAIA_TEST_POSTGRES_DSN: >-
             postgresql://gaia_test:local_test_only@127.0.0.1:5432/gaia_refresh_test?sslmode=disable
-        run: python -m pytest -q tests/integration/test_refresh_postgres.py tests/integration/test_schumann_query.py
+        run: python -m pytest -q tests/integration/test_refresh_postgres.py tests/integration/test_schumann_query.py tests/integration/test_summary_materialization.py
