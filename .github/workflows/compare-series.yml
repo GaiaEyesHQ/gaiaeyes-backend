@@ -10,6 +10,10 @@ permissions:
     branches: [main]
   workflow_dispatch: {}
 
+concurrency:
+  group: quakes-history-publication
+  cancel-in-progress: false
+
 jobs:
   run:
     if: >-
@@ -58,31 +62,5 @@ jobs:
         run: |
           python3 scripts/build_compare_series.py
 
-      - name: Commit & push
-        run: |
-          set -euo pipefail
-          cd gaiaeyes-media
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config pull.rebase true
-          git add data/quakes_history.json data/space_history.json \
-            data/compare_series.json
-          if git diff --cached --quiet; then
-            echo "No changes."
-            exit 0
-          fi
-          git commit -m "chore: update histories and compare_series [skip ci]"
-          git fetch origin main || true
-          git pull --rebase origin main || true
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
-              echo "Push succeeded on attempt ${attempt}."
-              exit 0
-            fi
-            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
-            git fetch origin main || true
-            git pull --rebase origin main || true
-            sleep $((RANDOM % 4 + 2))
-          done
-          echo "ERROR: Could not push after 3 attempts."
-          exit 1
+      - name: Publish and verify history and comparison files
+        run: bash scripts/publish_compare_series.sh gaiaeyes-media

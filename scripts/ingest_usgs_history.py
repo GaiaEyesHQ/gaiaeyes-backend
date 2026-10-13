@@ -55,22 +55,25 @@ def bucket_mag(m: float) -> str:
     return "≥7.0"
 
 def build():
-    today = dt.datetime.now(dt.timezone.utc).date()
+    cutoff = dt.datetime.now(dt.timezone.utc)
+    today = cutoff.date()
     start = today - dt.timedelta(days=DAYS-1)
-    # Split into ~30-day chunks to avoid USGS 400s
+    # Query contiguous UTC windows through the captured run time, including the
+    # partial current day. USGS includes both query endpoints; below we count
+    # each window as [start, end) so shared-boundary events are counted once.
     chunks = []
-    cur = start
-    while cur <= today:
-        nxt = min(cur + dt.timedelta(days=30), today)
+    cur = dt.datetime.combine(start, dt.time.min, tzinfo=dt.timezone.utc)
+    while cur < cutoff:
+        nxt = min(cur + dt.timedelta(days=30), cutoff)
         chunks.append((cur, nxt))
-        cur = nxt + dt.timedelta(days=1)
+        cur = nxt
 
     daily = defaultdict(lambda: {"all":0,"m4p":0,"m5p":0,"m6p":0,"m7p":0})
     monthly = defaultdict(lambda: {"all":0,"m4p":0,"m5p":0,"m6p":0,"m7p":0})
 
     total_events = 0
     for s,e in chunks:
-        data = fetch_usgs(iso_date(s), iso_date(e))
+        data = fetch_usgs(s.isoformat(), e.isoformat())
         feats = data.get("features", [])
         total_events += len(feats)
         for f in feats:
@@ -82,7 +85,9 @@ def build():
                 m = float(mag) if mag is not None else None
             except Exception:
                 m = None
-            t = dt.datetime.utcfromtimestamp(time_ms/1000.0)
+            t = dt.datetime.fromtimestamp(time_ms/1000.0, tz=dt.timezone.utc)
+            if not s <= t < e:
+                continue
             dkey = t.date()
             mkey = month_key(dkey)
             # increment all
@@ -138,7 +143,9 @@ def build():
         "series": series,
         "meta": {
             "source": "USGS",
-            "note": "Daily counts are UTC day bins. 'm5p' = M5.0 and above."
+            "note": ("Daily counts are UTC day bins. 'm5p' = M5.0 and above. "
+                     "Current UTC day/month is partial; events before "
+                     f"{cutoff.isoformat().replace('+00:00', 'Z')} are included.")
         }
     }
     return out

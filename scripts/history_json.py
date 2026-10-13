@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 QUAKE_DAILY = ("all_daily", "m5p_daily", "m6p_daily")
+QUAKE_MONTHLY = ("m5p_monthly", "m6p_monthly")
 SPACE_DAILY = ("kp_daily_max", "bz_daily_min", "sw_daily_avg")
 MAX_AGE = dt.timedelta(hours=48)
 
@@ -16,6 +17,32 @@ def load_json(path):
         return json.loads(Path(path).read_bytes())
     except (OSError, ValueError) as exc:
         raise ValueError(f"{Path(path).name}: missing or invalid JSON") from exc
+
+
+def validate_series(series, name, key, now, *, monthly=False, counts=False):
+    points = series.get(key)
+    if not isinstance(points, list) or not points:
+        raise ValueError(f"{name}: missing or empty {key}")
+    previous = None
+    for point in points:
+        try:
+            day, value = point
+            date = dt.date.fromisoformat(day + "-01" if monthly else day)
+            canonical = date.isoformat()[:7] if monthly else date.isoformat()
+            valid = (day == canonical and type(value) in (int, float)
+                     and math.isfinite(value) and (previous is None or date > previous))
+            if counts:
+                valid = valid and type(value) is int and value >= 0
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name}: invalid {key} point") from exc
+        if not valid:
+            raise ValueError(f"{name}: invalid or unordered {key} point")
+        previous = date
+    earliest, latest = now.date() - MAX_AGE, now.date()
+    if monthly:
+        earliest, latest = earliest.replace(day=1), latest.replace(day=1)
+    if not earliest <= previous <= latest:
+        raise ValueError(f"{name}: stale or future {key} data ({previous})")
 
 
 def validate_history(data, name, daily_keys, *, now=None):
@@ -35,31 +62,20 @@ def validate_history(data, name, daily_keys, *, now=None):
     if not isinstance(series, dict):
         raise ValueError(f"{name}: missing series")
     for key in daily_keys:
-        points = series.get(key)
-        if not isinstance(points, list) or not points:
-            raise ValueError(f"{name}: missing or empty {key}")
-        previous = None
-        for point in points:
-            try:
-                day, value = point
-                date = dt.date.fromisoformat(day)
-                valid = (day == date.isoformat() and type(value) in (int, float)
-                         and math.isfinite(value) and (previous is None or date > previous))
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"{name}: invalid {key} point") from exc
-            if not valid:
-                raise ValueError(f"{name}: invalid or unordered {key} point")
-            previous = date
-        if not now.date() - MAX_AGE <= previous <= now.date():
-            raise ValueError(f"{name}: stale or future {key} data ({previous})")
+        validate_series(series, name, key, now)
 
 
 def validate_quakes_history(data, *, now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
-    validate_history(data, "quakes_history.json", QUAKE_DAILY, now=now)
-    for key in QUAKE_DAILY:
-        if any(type(value) is not int or value < 0 for _, value in data["series"][key]):
-            raise ValueError(f"quakes_history.json: invalid count in {key}")
+    validate_history(data, "quakes_history.json", (), now=now)
+    series = data["series"]
+    for key in (*QUAKE_DAILY, *QUAKE_MONTHLY):
+        validate_series(series, "quakes_history.json", key, now,
+                        monthly=key.endswith("_monthly"), counts=True)
+    for key in ("m4p_daily", "m4p_monthly"):
+        if key in series:
+            validate_series(series, "quakes_history.json", key, now,
+                            monthly=key.endswith("_monthly"), counts=True)
     # The generator pads daily bins through today. A fresh zero-filled endpoint
     # does not prove that USGS supplied recent events.
     event_days = [day for day, count in data["series"]["all_daily"] if count > 0]

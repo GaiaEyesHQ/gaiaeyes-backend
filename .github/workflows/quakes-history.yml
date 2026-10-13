@@ -8,6 +8,10 @@ permissions:
     - cron: "15 5 * * *"   # daily 05:15 UTC
   workflow_dispatch: {}
 
+concurrency:
+  group: quakes-history-publication
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest

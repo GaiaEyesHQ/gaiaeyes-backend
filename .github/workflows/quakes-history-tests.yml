@@ -9,7 +9,9 @@ name: Quake history publication tests
       - "scripts/supabase_storage.py"
       - "scripts/build_compare_series.py"
       - "scripts/ingest_usgs_history.py"
+      - "scripts/publish_compare_series.sh"
       - "tests/scripts/test_quakes_history_publication.py"
+      - "tests/scripts/test_compare_publication.py"
       - ".github/workflows/quakes-history*.yml"
       - ".github/workflows/compare-series.yml"
   push:
@@ -20,7 +22,9 @@ name: Quake history publication tests
       - "scripts/supabase_storage.py"
       - "scripts/build_compare_series.py"
       - "scripts/ingest_usgs_history.py"
+      - "scripts/publish_compare_series.sh"
       - "tests/scripts/test_quakes_history_publication.py"
+      - "tests/scripts/test_compare_publication.py"
       - ".github/workflows/quakes-history*.yml"
       - ".github/workflows/compare-series.yml"
 
@@ -41,3 +45,4 @@ jobs:
       - name: Run mocked history publication regressions
         run: >-
           python -m pytest -q tests/scripts/test_quakes_history_publication.py
+          tests/scripts/test_compare_publication.py
