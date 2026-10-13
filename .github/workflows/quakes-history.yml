@@ -1,11 +1,16 @@
+---
 name: quakes-history
 permissions:
   contents: write
   issues: write
-on:
+"on":
   schedule:
     - cron: "15 5 * * *"   # daily 05:15 UTC
   workflow_dispatch: {}
+
+concurrency:
+  group: quakes-history-publication
+  cancel-in-progress: false
 
 jobs:
   run:
@@ -47,7 +52,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BUCKET: space-visuals
-          MEDIA_DIR: ${{ runner.temp }}/media
           OUTPUT_JSON_PATH: ${{ runner.temp }}/media/data/quakes_history.json
         run: |
-          python3 scripts/space_visuals_upload_to_supabase.py
+          python3 scripts/sync_quakes_history.py publish
