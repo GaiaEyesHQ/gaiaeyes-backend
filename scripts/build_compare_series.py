@@ -6,14 +6,14 @@ Build compare_series.json for overlay charts comparing quakes and space-weather.
 import datetime as dt
 import json
 import os
+from pathlib import Path
+import sys
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-def load_json(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return None
+from scripts.history_json import load_json, validate_history, validate_quakes_history, SPACE_DAILY
 
 
 def main():
@@ -22,8 +22,10 @@ def main():
         "OUTPUT_JSON_PATH", os.path.join(media_dir, "data", "compare_series.json")
     )
 
-    qh = load_json(os.path.join(media_dir, "data", "quakes_history.json")) or {}
-    sh = load_json(os.path.join(media_dir, "data", "space_history.json")) or {}
+    qh = load_json(os.path.join(media_dir, "data", "quakes_history.json"))
+    sh = load_json(os.path.join(media_dir, "data", "space_history.json"))
+    validate_quakes_history(qh)
+    validate_history(sh, "space_history.json", SPACE_DAILY)
 
     qser = (qh.get("series") or {})
     sser = (sh.get("series") or {})
@@ -52,7 +54,7 @@ def main():
     }
 
     out = {
-        "timestamp_utc": dt.datetime.utcnow()
+        "timestamp_utc": dt.datetime.now(dt.timezone.utc)
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z"),
@@ -62,10 +64,13 @@ def main():
             "note": "Dates UTC. Use lag to explore timing; correlation is exploratory, not causal."
         },
     }
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
     print("[compare_series] wrote ->", out_path)
+    newest = max(day for day, count in qser["all_daily"] if count > 0)
+    print(f"[compare_series] quake_source_timestamp_utc={qh['timestamp_utc']} "
+          f"newest_quake_day={newest}")
 
 
 if __name__ == "__main__":

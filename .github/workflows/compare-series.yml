@@ -1,14 +1,20 @@
+---
 name: compare-series
 permissions:
   contents: write
   issues: write
-on:
-  schedule:
-    - cron: "20 5 * * *"
+"on":
+  workflow_run:
+    workflows: [quakes-history]
+    types: [completed]
+    branches: [main]
   workflow_dispatch: {}
 
 jobs:
   run:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
       MEDIA_REPO_OWNER: GaiaEyesHQ
@@ -24,11 +30,20 @@ jobs:
           token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
           path: gaiaeyes-media
 
+      - name: Fetch verified quakes_history.json from Supabase Storage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          BUCKET: space-visuals
+          OUTPUT_JSON_PATH: >-
+            ${{ github.workspace }}/gaiaeyes-media/data/quakes_history.json
+        run: python3 scripts/sync_quakes_history.py fetch
+
       - name: Build space_history.json
         env:
           SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_history.json
+          OUTPUT_JSON_PATH: >-
+            ${{ github.workspace }}/gaiaeyes-media/data/space_history.json
           HISTORY_DAYS: "365"
           SW_DAILY_TABLE: "marts.space_weather_daily"
           SW_DAILY_FIELDS: "day,kp_max,bz_min,sw_speed_avg"
@@ -38,7 +53,8 @@ jobs:
       - name: Build compare_series.json
         env:
           MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
-          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/compare_series.json
+          OUTPUT_JSON_PATH: >-
+            ${{ github.workspace }}/gaiaeyes-media/data/compare_series.json
         run: |
           python3 scripts/build_compare_series.py
 
@@ -49,17 +65,13 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config pull.rebase true
-          if git status --porcelain | grep -E "(space_history|compare_series)\.json" > /dev/null; then
-            git add data/space_history.json data/compare_series.json || true
-          else
-            echo "No changes."
-            exit 0
-          fi
+          git add data/quakes_history.json data/space_history.json \
+            data/compare_series.json
           if git diff --cached --quiet; then
             echo "No changes."
             exit 0
           fi
-          git commit -m "chore: update space_history.json and compare_series.json [skip ci]"
+          git commit -m "chore: update histories and compare_series [skip ci]"
           git fetch origin main || true
           git pull --rebase origin main || true
           for attempt in 1 2 3; do

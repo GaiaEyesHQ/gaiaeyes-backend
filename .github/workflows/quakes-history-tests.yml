@@ -1,0 +1,43 @@
+---
+name: Quake history publication tests
+
+"on":
+  pull_request:
+    paths:
+      - "scripts/history_json.py"
+      - "scripts/sync_quakes_history.py"
+      - "scripts/supabase_storage.py"
+      - "scripts/build_compare_series.py"
+      - "scripts/ingest_usgs_history.py"
+      - "tests/scripts/test_quakes_history_publication.py"
+      - ".github/workflows/quakes-history*.yml"
+      - ".github/workflows/compare-series.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/history_json.py"
+      - "scripts/sync_quakes_history.py"
+      - "scripts/supabase_storage.py"
+      - "scripts/build_compare_series.py"
+      - "scripts/ingest_usgs_history.py"
+      - "tests/scripts/test_quakes_history_publication.py"
+      - ".github/workflows/quakes-history*.yml"
+      - ".github/workflows/compare-series.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: python -m pip install requests PyYAML pytest
+      - name: Run mocked history publication regressions
+        run: >-
+          python -m pytest -q tests/scripts/test_quakes_history_publication.py
