@@ -6,18 +6,67 @@ Env:
   OUTPUT_JSON_PATH=/path/to/gaiaeyes-media/data/quakes_history.json
 """
 import os, sys, json, urllib.request, urllib.parse, datetime as dt
+import errno
+import http.client
+import socket
+import ssl
+import time
+import urllib.error
 from collections import defaultdict, Counter
 
 DAYS = int(os.getenv("HISTORY_DAYS", "365"))
 MONTHS = int(os.getenv("HISTORY_MONTHS", "24"))
 
 USGS_API = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+USGS_PAGE_SIZE = 5000
+USGS_MAX_ATTEMPTS = 4
+USGS_TIMEOUT_SECONDS = 60
+USGS_RETRY_BACKOFF_SECONDS = 2
+USGS_RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+
+
+def _retryable_usgs_error(exc):
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in USGS_RETRYABLE_STATUS
+    if isinstance(exc, urllib.error.URLError):
+        return _retryable_usgs_error(exc.reason)
+    if isinstance(exc, socket.gaierror):
+        return exc.errno == socket.EAI_AGAIN
+    return isinstance(exc, (http.client.IncompleteRead, TimeoutError,
+                            ConnectionError, ssl.SSLEOFError)) or (
+        isinstance(exc, OSError) and exc.errno in {errno.ENETUNREACH, errno.EHOSTUNREACH}
+    )
+
+
+def _fetch_usgs_page(req, offset):
+    for attempt in range(1, USGS_MAX_ATTEMPTS + 1):
+        try:
+            # Accept a page only after the full read. Each retry opens a fresh
+            # response for the same query, without advancing the offset.
+            with urllib.request.urlopen(req, timeout=USGS_TIMEOUT_SECONDS) as response:
+                if response.status == 204:
+                    return {"features": []}  # USGS's default no-data response.
+                raw = response.read()
+        except (http.client.IncompleteRead, OSError) as exc:
+            if isinstance(exc, urllib.error.HTTPError):
+                exc.close()
+            if not _retryable_usgs_error(exc) or attempt == USGS_MAX_ATTEMPTS:
+                raise
+            delay = USGS_RETRY_BACKOFF_SECONDS * 2 ** (attempt - 1)
+            failure = f"HTTP {exc.code}" if isinstance(exc, urllib.error.HTTPError) else type(exc).__name__
+            print(f"[quakes_history] USGS offset={offset} attempt={attempt}/{USGS_MAX_ATTEMPTS} "
+                  f"failed ({failure}); retrying in {delay}s", file=sys.stderr)
+            time.sleep(delay)
+        else:
+            # Invalid JSON/UTF-8 is not a transient transport failure.
+            return json.loads(raw.decode("utf-8"))
 
 def fetch_usgs(start_date: str, end_date: str):
     """Fetch all results between start_date and end_date using pagination."""
     all_features = []
+    seen_ids = set()
     offset = 1
-    limit = 20000
+    limit = USGS_PAGE_SIZE
     while True:
         params = dict(
             format="geojson",
@@ -30,12 +79,18 @@ def fetch_usgs(start_date: str, end_date: str):
         )
         url = USGS_API + "?" + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, headers={"User-Agent":"GaiaEyes/1.0"})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = json.loads(r.read().decode("utf-8"))
+        data = _fetch_usgs_page(req, offset)
         feats = data.get("features", [])
         if not feats:
             break
-        all_features.extend(feats)
+        for feature in feats:
+            event_id = feature.get("id")
+            if event_id is not None:
+                if event_id in seen_ids:
+                    continue
+                seen_ids.add(event_id)
+            all_features.append(feature)
+        # Advance/terminate by the raw page size, not the number of unique IDs.
         if len(feats) < limit:
             break
         offset += limit
