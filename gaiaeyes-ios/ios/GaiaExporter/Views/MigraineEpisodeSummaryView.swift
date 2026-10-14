@@ -1,16 +1,20 @@
 import SwiftUI
 
 struct MigraineEpisodeSummaryView: View {
+    let api: APIClient
     let episodeID: String
     let timeZone: TimeZone
     let accountScopeProvider: @MainActor () -> String
+    @State private var showGuide = false
+    @State private var showTimeEditor = false
+    @State private var editorBusy = false
     @State private var openedAccount: String
     @StateObject private var store: MigraineEpisodeSummaryStore
     @Environment(\.dismiss) private var dismiss
 
     init(api: APIClient, episodeID: String, accountScope: String, timeZone: TimeZone,
          accountScopeProvider: @escaping @MainActor () -> String) {
-        self.episodeID = episodeID; self.timeZone = timeZone; self.accountScopeProvider = accountScopeProvider
+        self.api = api; self.episodeID = episodeID; self.timeZone = timeZone; self.accountScopeProvider = accountScopeProvider
         _openedAccount = State(initialValue: accountScope)
         _store = StateObject(wrappedValue: MigraineEpisodeSummaryStore(api: api, accountScope: accountScopeProvider))
     }
@@ -32,11 +36,33 @@ struct MigraineEpisodeSummaryView: View {
                             Text("Saved episode").font(.title2.bold()).accessibilityIdentifier("migraine-summary-saved")
                             Text("Times shown in \(summary.displayTimezone)")
                         }.font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Button("Edit details") { showGuide = true }.accessibilityIdentifier("migraine-summary-edit")
+                            Button("Edit times") { showTimeEditor = true }.accessibilityIdentifier("migraine-summary-edit-times")
+                        }.buttonStyle(.bordered)
                         section("Episode", entries: summary.timing, empty: "Not recorded", id: "timing")
+                        if store.timelineLoaded {
+                            Text(store.highestRecordedSeverity.map { "Highest recorded severity: \($0)/10" } ?? "Highest recorded severity: Not reported")
+                                .accessibilityIdentifier("migraine-summary-highest")
+                            Text("This is the highest saved report, not an assumed peak between reports.").font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let error = store.timelineError { Text(error).font(.footnote).foregroundStyle(.orange) }
+                        section("Symptoms", entries: summary.symptoms, empty: "Not recorded", id: "symptoms")
+                        section("Pain locations", entries: summary.locations, empty: "Not recorded", id: "locations")
+                        section("Other relief tried", entries: summary.reliefs, empty: "Not recorded", id: "reliefs")
                         section("Medicines", entries: summary.medicines, empty: "No medicine entries recorded", id: "medicines")
                         section("Recorded early signs", entries: summary.earlySigns, empty: "Not recorded", id: "signs")
                         section("Recorded context", entries: summary.contexts, empty: "Not recorded", id: "contexts",
                                 introduction: "Recorded context does not establish a cause.")
+                        if store.timelineLoaded {
+                            section("Episode timeline", entries: store.timeline.map { entry in
+                                let date = MigraineFollowUpDraft.parseDate(entry.occurredAt)!
+                                return MigraineEpisodeSummary.Entry(id: "update-" + entry.id,
+                                    title: date.formatted(date: .abbreviated, time: .shortened),
+                                    lines: [entry.state.map { "State: \($0.rawValue)" },
+                                            entry.severity.map { "Reported severity: \($0)/10" }, entry.noteText].compactMap { $0 })
+                            }, empty: "No timeline entries recorded", id: "timeline")
+                        }
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Episode notes").font(.headline)
                             Text(summary.notes).fixedSize(horizontal: false, vertical: true)
@@ -86,7 +112,16 @@ struct MigraineEpisodeSummaryView: View {
             }
             .task(id: episodeID) { await load() }
             .onChange(of: accountScopeProvider()) { _, _ in store.invalidate() }
-            .onDisappear { store.invalidate() }
+            .sheet(isPresented: $showGuide, onDismiss: { Task { await load() } }) {
+                MigraineGuideView(api: api, episodeID: episodeID, accountScope: accountScopeProvider) { _ in Task { await load() } }
+            }
+            .sheet(isPresented: $showTimeEditor, onDismiss: { Task { await load() } }) {
+                NavigationStack {
+                    HistoricalSymptomEditor(api: api, episodeId: episodeID, accountScopeProvider: accountScopeProvider,
+                        onSaved: { Task { await load() } }, onBusyChange: { editorBusy = $0 })
+                        .toolbar { Button("Done") { showTimeEditor = false }.disabled(editorBusy) }
+                }.interactiveDismissDisabled(editorBusy)
+            }
         }
     }
 

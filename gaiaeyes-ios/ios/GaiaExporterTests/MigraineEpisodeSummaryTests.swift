@@ -22,7 +22,12 @@ struct MigraineEpisodeSummaryTests {
                 && $0.value(forHTTPHeaderField: "Authorization") == nil
                 && $0.value(forHTTPHeaderField: "X-Dev-UserId") == nil
         })
-        return requests.filter { $0.url?.path != "/health" }
+        let timelineReads = requests.filter { $0.url?.path.hasSuffix("/timeline") == true }
+        #expect(timelineReads.allSatisfy { request in
+            request.httpMethod == "GET" && request.url?.host == "gaia-fixture.invalid" && request.url?.query == nil
+                && [first, second].contains(request.url!.deletingLastPathComponent().lastPathComponent)
+        })
+        return requests.filter { $0.url?.path != "/health" && $0.url?.path.hasSuffix("/timeline") != true }
     }
 
     private func detail(id: String? = nil, revision: Int = 2,

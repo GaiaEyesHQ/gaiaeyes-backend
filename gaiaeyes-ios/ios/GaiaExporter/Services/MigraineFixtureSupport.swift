@@ -261,6 +261,9 @@ final class MigraineFixtureServer: @unchecked Sendable {
             captured.append(request)
             defer { captureEntryEvidence(); captureSummaryEvidence() }
             guard request.url?.host == "gaia-fixture.invalid" else { throw URLError(.unsupportedURL) }
+            if request.httpMethod == "GET", request.url?.path.hasSuffix("/timeline") == true {
+                return (200, Data(#"{"ok":true,"data":[]}"#.utf8))
+            }
             if scenario.hasPrefix("time-") || scenario.hasPrefix("calendar-time-") {
                 if request.url?.path.hasSuffix("/migraine-times") == true, let timeResponseData { return (200, timeResponseData) }
                 return try timeFixture.response(request)

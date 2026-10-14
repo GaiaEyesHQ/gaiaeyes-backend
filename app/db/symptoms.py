@@ -135,6 +135,13 @@ async def insert_symptom_event(
 
     normalized_ts = _normalize_ts(ts_utc)
     async with conn.cursor(row_factory=dict_row) as cur:
+        if symptom_code.upper() == "MIGRAINE" and normalized_ts is not None:
+            # The event and canonical episode are committed together by the route.
+            # Serialize simultaneous retries of the same explicit onset.
+            await cur.execute(
+                "select pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                (f"migraine:{user_id}:{normalized_ts.isoformat()}",), prepare=False,
+            )
         await cur.execute(
             sql,
             (
@@ -173,6 +180,7 @@ async def ensure_symptom_episode_for_event(
     source: str = "ios",
 ) -> Optional[dict]:
     started_at = _normalize_ts(ts_utc) or datetime.now(UTC)
+    interaction_at = datetime.now(UTC)
     normalized_note = _normalize_note(note_text)
     sql = """
     insert into raw.user_symptom_episodes (
@@ -225,8 +233,8 @@ async def ensure_symptom_episode_for_event(
                 started_at,
                 severity,
                 severity,
-                started_at,
-                started_at,
+                interaction_at,
+                interaction_at,
                 normalized_note,
                 started_at if normalized_note else None,
                 source,
@@ -284,6 +292,10 @@ async def ensure_symptom_episode_for_event(
     }
 
 
+class StaleSymptomUpdate(ValueError):
+    """A delayed observation cannot replace a newer saved severity report."""
+
+
 async def record_symptom_episode_update(
     conn,
     user_id: str,
@@ -316,6 +328,7 @@ async def record_symptom_episode_update(
              where id = %s
                and user_id = %s
              limit 1
+             for update
             """,
             (episode_id, user_id),
             prepare=False,
@@ -326,8 +339,37 @@ async def record_symptom_episode_update(
             raise RuntimeError("Symptom episode not found")
 
         next_state = normalized_state or _normalize_state(existing.get("current_state"))
-        next_severity = severity if severity is not None else existing.get("current_severity") or existing.get("original_severity")
+        previous_severity = existing.get("current_severity")
+        if previous_severity is None:
+            previous_severity = existing.get("original_severity")
+        next_severity = severity if severity is not None else previous_severity
         resolved_update_kind = update_kind or ("state_change" if normalized_state is not None else ("note" if normalized_note else "severity_update"))
+        if normalized_state == "resolved" and effective_ts < _normalize_ts(existing.get("started_at")):
+            raise ValueError("End time cannot precede the episode start")
+        if occurred_at is not None:
+            # A lost acknowledgement must not append the same observation again,
+            # or overwrite a newer observation on retry.
+            await cur.execute(
+                """select 1 from raw.user_symptom_episode_updates
+                   where user_id = %s and episode_id = %s and occurred_at = %s
+                     and update_kind = %s and state is not distinct from %s::text
+                     and severity is not distinct from %s::smallint
+                     and note_text is not distinct from %s::text
+                     and metadata = %s::jsonb limit 1""",
+                (user_id, episode_id, effective_ts, resolved_update_kind, normalized_state,
+                 severity, normalized_note, json.dumps(normalized_metadata, sort_keys=True)), prepare=False,
+            )
+            if await cur.fetchone():
+                return await fetch_symptom_episode(conn, user_id, episode_id)
+        if severity is not None:
+            await cur.execute(
+                """select max(occurred_at) as reported_at from raw.user_symptom_episode_updates
+                   where user_id = %s and episode_id = %s and severity is not null""",
+                (user_id, episode_id), prepare=False,
+            )
+            latest = await cur.fetchone()
+            if latest and latest.get("reported_at") and effective_ts < latest["reported_at"]:
+                raise StaleSymptomUpdate("A newer severity report is saved; refresh the episode before updating it")
         follow_up_state_payload = None
         if resolved_update_kind == "follow_up":
             follow_up_state_payload = {
@@ -355,14 +397,14 @@ async def record_symptom_episode_update(
                set current_state = %s,
                    current_severity = %s,
                    state_updated_at = case when %s::text is null then state_updated_at else %s end,
-                   last_interaction_at = %s,
+                   last_interaction_at = greatest(last_interaction_at, %s),
                    improvement_ts = case
                        when %s = 'improving' and improvement_ts is null then %s
                        when %s = 'resolved' and improvement_ts is null then %s
                        else improvement_ts
                    end,
                    resolution_ts = case
-                       when %s = 'resolved' then %s
+                       when %s = 'resolved' then coalesce(resolution_ts, %s)
                        when %s::text is not null then null
                        else resolution_ts
                    end,
@@ -399,11 +441,11 @@ async def record_symptom_episode_update(
                 normalized_state,
                 effective_ts,
                 effective_ts,
-                next_state,
+                normalized_state,
                 effective_ts,
-                next_state,
+                normalized_state,
                 effective_ts,
-                next_state,
+                normalized_state,
                 effective_ts,
                 normalized_state,
                 json.dumps(follow_up_state_payload, separators=(",", ":"), sort_keys=True) if follow_up_state_payload else None,
@@ -439,7 +481,7 @@ async def record_symptom_episode_update(
                 user_id,
                 resolved_update_kind,
                 normalized_state,
-                next_severity,
+                severity,
                 normalized_note,
                 effective_ts,
                 json.dumps(normalized_metadata, separators=(",", ":"), sort_keys=True),
@@ -665,7 +707,10 @@ async def fetch_current_symptom_items(
          where user_id = %s
          group by episode_id
     )
+    , active as (
     select
+        row_number() over (partition by (upper(ep.symptom_code) = 'MIGRAINE')
+            order by ep.last_interaction_at desc, ep.started_at desc) as current_rank,
         ep.id,
         ep.symptom_code,
         coalesce(sc.label, initcap(replace(ep.symptom_code, '_', ' '))) as label,
@@ -688,9 +733,12 @@ async def fetch_current_symptom_items(
         on notes.episode_id = ep.id
      where ep.user_id = %s
        and ep.current_state <> 'resolved'
-       and ep.last_interaction_at >= now() - (%s * interval '1 hour')
-     order by ep.last_interaction_at desc, ep.started_at desc
-     limit %s
+       and (upper(ep.symptom_code) = 'MIGRAINE'
+            or ep.last_interaction_at >= now() - (%s * interval '1 hour'))
+    )
+    select * from active
+     where upper(symptom_code) = 'MIGRAINE' or current_rank <= %s
+     order by last_interaction_at desc, started_at desc
     """
 
     async with conn.cursor(row_factory=dict_row) as cur:
@@ -879,6 +927,7 @@ async def fetch_current_symptom_timeline(
     *,
     days: int,
     limit: int = 80,
+    episode_id: Optional[str] = None,
 ) -> List[dict]:
     sql = """
     select
@@ -897,13 +946,15 @@ async def fetch_current_symptom_timeline(
       left join dim.symptom_codes sc
         on sc.symptom_code = ep.symptom_code
      where u.user_id = %s
-       and u.occurred_at >= now() - (%s * interval '1 day')
+       and ep.user_id = %s
+       and (%s::uuid is null or ep.id = %s::uuid)
+       and (%s::uuid is not null or u.occurred_at >= now() - (%s * interval '1 day'))
      order by u.occurred_at desc
      limit %s
     """
 
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(sql, (user_id, days, limit), prepare=False)
+        await cur.execute(sql, (user_id, user_id, episode_id, episode_id, episode_id, days, None if episode_id else limit), prepare=False)
         rows = await cur.fetchall()
 
     result: List[dict] = []

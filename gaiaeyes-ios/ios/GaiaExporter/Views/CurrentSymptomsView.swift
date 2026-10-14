@@ -128,6 +128,8 @@ private func isRecoverableCurrentSymptomsMutationError(_ error: Error) -> Bool {
 }
 
 struct CurrentSymptomsView: View {
+    @State private var snapshotGeneration = UUID()
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var auth = AuthManager.shared
     let api: APIClient
     var mode: ExperienceMode = .scientific
@@ -305,6 +307,12 @@ struct CurrentSymptomsView: View {
                 }
             }
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await loadSnapshot(showLoading: false) } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .symptomEpisodesDidChange).receive(on: RunLoop.main)) { _ in
+            Task { await loadSnapshot(showLoading: false) }
+        }
         .task {
             appLog("[CurrentSymptoms] page_open")
             if shouldRefreshOnAppear {
@@ -369,91 +377,50 @@ struct CurrentSymptomsView: View {
     }
 
     private func payload(from envelope: Envelope<CurrentSymptomsSnapshot>) throws -> CurrentSymptomsSnapshot {
-        if envelope.ok == false, envelope.data == nil {
-            throw NSError(
-                domain: "CurrentSymptoms",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: envelope.error ?? "Current symptoms unavailable"]
-            )
+        guard envelope.ok == true, let value = envelope.payload else {
+            throw NSError(domain: "CurrentSymptoms", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Current symptoms could not be refreshed"])
         }
-        return envelope.payload ?? CurrentSymptomsSnapshot(
-            generatedAt: "",
-            windowHours: 12,
-            summary: CurrentSymptomsSummary(activeCount: 0, newCount: 0, ongoingCount: 0, improvingCount: 0, worseCount: 0, lastUpdatedAt: nil, followUpAvailable: false),
-            items: [],
-            contributingDrivers: [],
-            patternContext: [],
-            followUpSettings: CurrentSymptomsFollowUpSettings(notificationsEnabled: false, enabled: false, notificationFamilyEnabled: false, pushEnabled: false, cadence: "balanced", states: ["new", "ongoing", "improving", "worse"], symptomCodes: []),
-            voiceSemantic: nil
-        )
+        return value
     }
 
+    @MainActor
     private func loadSnapshot(showLoading: Bool = true, surfaceErrors: Bool = true) async {
         let scope = openedAccountScope
         guard scope == currentAccountScope else { return }
-        if showLoading {
-            await MainActor.run {
-                isLoading = true
-                if surfaceErrors {
-                    errorMessage = nil
-                }
-            }
-        } else if surfaceErrors {
-            await MainActor.run {
-                errorMessage = nil
-            }
-        }
+        let generation = UUID(); snapshotGeneration = generation
+        if showLoading { isLoading = true }
+        if surfaceErrors { errorMessage = nil }
+        defer { if generation == snapshotGeneration { isLoading = false } }
         do {
-            let payload = try payload(from: try await api.fetchCurrentSymptoms(
-                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope }) }))
-            try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope })
-            await MainActor.run {
-                applySnapshot(payload)
-                if showLoading {
-                    isLoading = false
-                }
+            let validate: @MainActor () throws -> Void = {
+                try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope })
+                guard generation == snapshotGeneration else { throw CancellationError() }
             }
-            appLog("[CurrentSymptoms] snapshot ok active=\(payload.summary.activeCount)")
+            let result = try payload(from: try await api.fetchCurrentSymptoms(validateRequest: validate))
+            try validate()
+            applySnapshot(result)
         } catch {
-            guard scope == currentAccountScope else { return }
-            if isCurrentSymptomsCancellation(error) {
-                if showLoading {
-                    await MainActor.run {
-                        isLoading = false
-                    }
-                }
-                return
-            }
-            await MainActor.run {
-                if surfaceErrors {
-                    errorMessage = error.localizedDescription
-                }
-                if showLoading {
-                    isLoading = false
-                }
-            }
-            appLog("[CurrentSymptoms] snapshot error: \(error.localizedDescription)")
+            guard generation == snapshotGeneration, scope == currentAccountScope else { return }
+            if surfaceErrors && !isCurrentSymptomsCancellation(error) { errorMessage = error.localizedDescription }
         }
     }
 
+    @MainActor
     private func refreshSnapshotSilently() async -> CurrentSymptomsSnapshot? {
         let scope = openedAccountScope
         guard scope == currentAccountScope else { return nil }
+        let generation = UUID(); snapshotGeneration = generation
+        defer { if generation == snapshotGeneration { isLoading = false } }
         do {
-            let refreshed = try payload(from: try await api.fetchCurrentSymptoms(
-                validateRequest: { try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope }) }))
-            try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope })
-            await MainActor.run {
-                applySnapshot(refreshed)
+            let validate: @MainActor () throws -> Void = {
+                try MigraineFollowUpWorkflow.checkAccount(scope, current: { currentAccountScope })
+                guard generation == snapshotGeneration else { throw CancellationError() }
             }
-            appLog("[CurrentSymptoms] snapshot ok active=\(refreshed.summary.activeCount)")
-            return refreshed
-        } catch {
-            if !isCurrentSymptomsCancellation(error) {
-                appLog("[CurrentSymptoms] snapshot error: \(error.localizedDescription)")
-            }
-            return nil
-        }
+            let result = try payload(from: try await api.fetchCurrentSymptoms(validateRequest: validate))
+            try validate(); applySnapshot(result)
+            return result
+        } catch { return nil }
     }
 
     private func confirmRecoveredState(episodeId: String, expectedState: CurrentSymptomState, removeOnSuccess: Bool = false) async -> Bool {
@@ -502,8 +469,12 @@ struct CurrentSymptomsView: View {
 
     @MainActor
     private func applySnapshot(_ payload: CurrentSymptomsSnapshot) {
+        let previous = snapshot?.items.first { $0.id == selectedEpisodeId }
+        let keepDraft = previous.map { noteDraft != ($0.notePreview ?? "") || severityDraft != ($0.severity ?? $0.originalSeverity ?? 5) } ?? false
         snapshot = payload
-        syncSelection(with: payload)
+        if !keepDraft || !payload.items.contains(where: { $0.id == selectedEpisodeId }) {
+            syncSelection(with: payload)
+        }
         onSnapshotChanged(payload)
         let itemIds = Set(payload.items.map(\.id))
         optimisticStates = optimisticStates.filter { itemIds.contains($0.key) }

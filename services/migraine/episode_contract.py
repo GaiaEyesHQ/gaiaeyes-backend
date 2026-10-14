@@ -155,6 +155,9 @@ class MigraineEpisode(ContractModel):
     start: EpisodeTimestamp
     end: EpisodeTimestamp | None = None
     severity: int | None = Field(default=None, ge=0, le=10)
+    symptoms: list[EarlySign] = Field(default_factory=list)
+    pain_locations: list[EarlySign] = Field(default_factory=list)
+    reliefs: list[EarlySign] = Field(default_factory=list)
     early_signs: list[EarlySign] = Field(default_factory=list)
     contexts: list[EpisodeContext] = Field(default_factory=list)
     medicines: list[MedicineTaken] = Field(default_factory=list)

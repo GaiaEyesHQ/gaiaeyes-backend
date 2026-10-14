@@ -5,6 +5,11 @@ import Combine
 final class MigraineEpisodeSummaryStore: ObservableObject {
     typealias Fetch = (String, @escaping @MainActor () throws -> Void) async throws -> MigraineEpisodeDetail
     @Published private(set) var summary: MigraineEpisodeSummary?
+    @Published private(set) var timeline: [CurrentSymptomTimelineEntry] = []
+    @Published private(set) var timelineLoaded = false
+    @Published private(set) var timelineError: String?
+    @Published private(set) var highestRecordedSeverity: Int?
+    private var fetchTimeline: ((String, @escaping @MainActor () throws -> Void) async throws -> [CurrentSymptomTimelineEntry])?
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
     private(set) var episodeID: String?
@@ -15,6 +20,14 @@ final class MigraineEpisodeSummaryStore: ObservableObject {
 
     init(api: APIClient, accountScope: @escaping @MainActor () -> String) {
         self.accountScope = accountScope
+        fetchTimeline = { id, validate in
+            let response = try await api.fetchMigraineEpisodeTimeline(episodeId: id, validateRequest: validate)
+            guard response.ok == true, let entries = response.payload,
+                  entries.allSatisfy({ $0.episodeId == id && $0.symptomCode == "MIGRAINE"
+                      && ($0.severity.map { (0...10).contains($0) } ?? true)
+                      && MigraineFollowUpDraft.parseDate($0.occurredAt) != nil }) else { throw MigraineSaveError.invalidResponse }
+            return entries
+        }
         fetch = { id, validate in
             let response = try await api.fetchMigraineEpisodeDetail(episodeId: id, validateRequest: validate)
             guard response.ok == true, let detail = response.payload else { throw MigraineSaveError.invalidResponse }
@@ -27,6 +40,7 @@ final class MigraineEpisodeSummaryStore: ObservableObject {
     }
 
     func invalidate() {
+        timeline = []; timelineLoaded = false; timelineError = nil; highestRecordedSeverity = nil
         generation = UUID(); summary = nil; isLoading = false; errorMessage = nil; episodeID = nil; scope = nil
     }
 
@@ -47,6 +61,18 @@ final class MigraineEpisodeSummaryStore: ObservableObject {
             let detail = try await fetch(requestedID, validate)
             try validate()
             summary = try MigraineEpisodeSummary(detail: detail, episodeID: requestedID, timeZone: timeZone)
+            if let fetchTimeline {
+                do {
+                    let entries = try await fetchTimeline(requestedID, validate)
+                    try validate()
+                    timeline = entries.sorted { MigraineFollowUpDraft.parseDate($0.occurredAt)! > MigraineFollowUpDraft.parseDate($1.occurredAt)! }
+                    highestRecordedSeverity = (entries.compactMap(\.severity) + [detail.episode.severity].compactMap { $0 }).max()
+                    timelineLoaded = true
+                } catch {
+                    try validate()
+                    timelineError = "The full episode timeline could not be loaded. Highest recorded severity is unavailable. Refresh to retry."
+                }
+            }
         } catch {
             guard generation == token else { return }
             summary = nil

@@ -3716,6 +3716,7 @@ struct ContentView: View {
     @AppStorage("current_symptoms_cache_json") private var currentSymptomsCacheJSON: String = ""
     @State private var currentSymptomsSnapshot: CurrentSymptomsSnapshot? = nil
     @State private var currentSymptomsLoading: Bool = false
+    @State private var currentSymptomsGeneration = UUID()
     @State private var currentSymptomsError: String? = nil
     @State private var showSymptomSheet: Bool = false
     @State private var showInsightsSymptomSheet: Bool = false
@@ -9959,48 +9960,31 @@ struct ContentView: View {
         }
     }
 
+    @MainActor
     private func fetchCurrentSymptomsSummary(api override: APIClient? = nil) async {
         let api = override ?? state.apiWithAuth()
-        let shouldStart = await MainActor.run { () -> Bool in
-            guard !currentSymptomsLoading else { return false }
-            currentSymptomsLoading = true
-            currentSymptomsError = nil
-            return true
+        let scope = currentUserScopedCacheScope()
+        let generation = UUID(); currentSymptomsGeneration = generation
+        currentSymptomsLoading = true; currentSymptomsError = nil
+        let validate: @MainActor () throws -> Void = {
+            try Task.checkCancellation()
+            guard currentUserScopedCacheScope() == scope, currentSymptomsGeneration == generation else {
+                throw MigraineDraftError.accountChanged
+            }
         }
-        guard shouldStart else { return }
+        defer { if currentSymptomsGeneration == generation { currentSymptomsLoading = false } }
         do {
-            let envelope = try await api.fetchCurrentSymptoms()
-            if envelope.ok == false, envelope.data == nil {
-                await MainActor.run {
-                    currentSymptomsError = envelope.error ?? "Current symptoms unavailable"
-                    currentSymptomsLoading = false
-                }
-                return
+            let envelope = try await api.fetchCurrentSymptoms(validateRequest: validate)
+            try validate()
+            guard envelope.ok == true, let payload = envelope.payload else {
+                currentSymptomsError = "Current symptoms unavailable"; return
             }
-            if let payload = envelope.payload {
-                await MainActor.run {
-                    currentSymptomsSnapshot = payload
-                    persistCachedCurrentSymptomsSnapshot(payload)
-                    currentSymptomsLoading = false
-                }
-                appLog("[UI] current symptoms ok: active=\(payload.summary.activeCount)")
-            } else {
-                await MainActor.run {
-                    currentSymptomsLoading = false
-                }
-            }
-        } catch is CancellationError {
-            await MainActor.run { currentSymptomsLoading = false }
-            return
-        } catch let uerr as URLError where uerr.code == .cancelled {
-            await MainActor.run { currentSymptomsLoading = false }
-            return
+            currentSymptomsSnapshot = payload
+            persistCachedCurrentSymptomsSnapshot(payload)
         } catch {
-            await MainActor.run {
-                currentSymptomsError = error.localizedDescription
-                currentSymptomsLoading = false
-            }
-            appLog("[UI] current symptoms error: \(error.localizedDescription)")
+            guard currentSymptomsGeneration == generation, currentUserScopedCacheScope() == scope else { return }
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { return }
+            currentSymptomsError = "Current symptoms could not be refreshed"
         }
     }
 
@@ -10136,98 +10120,18 @@ struct ContentView: View {
         api: APIClient
     ) async -> SymptomLogAttemptStatus {
         do {
-            struct SymptomPostBody: Encodable {
-                let symptomCode: String
-                let tsUtc: String
-                let severity: Int?
-                let freeText: String?
-                let tags: [String]?
-            }
-
-            struct SymptomPostEnvelope: Decodable {
-                let ok: Bool?
-                let error: String?
-            }
-
-            let trimmedBase = state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let base = URL(string: trimmedBase.isEmpty ? "http://127.0.0.1:8000" : trimmedBase) else {
-                throw URLError(.badURL)
-            }
-
-            let url = base.appendingPathComponent("v1/symptoms")
-            var req = URLRequest(url: url)
-            req.httpMethod = "POST"
-            req.addValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.addValue("application/json", forHTTPHeaderField: "Accept")
-            req.timeoutInterval = 20
-            applyBackendAuthHeaders(to: &req)
-
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let body = SymptomPostBody(
-                symptomCode: event.symptomCode,
-                tsUtc: iso.string(from: event.tsUtc),
-                severity: event.severity,
-                freeText: event.freeText,
-                tags: event.tags
-            )
-
-            let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
-            req.httpBody = try encoder.encode(body)
-
-            appLog("[SYM] POST /v1/symptoms code=\(event.symptomCode) ts=\(body.tsUtc)")
-
-            let retryableCodes: Set<URLError.Code> = [
-                .timedOut, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed
-            ]
-            var attemptsRemaining = 1
-            var responseData: Data?
-            var response: URLResponse?
-
-            while responseData == nil || response == nil {
-                do {
-                    let result = try await api.send(req)
-                    responseData = result.0
-                    response = result.1
-                } catch let uerr as URLError where retryableCodes.contains(uerr.code) && attemptsRemaining > 0 {
-                    attemptsRemaining -= 1
-                    appLog("[SYM] retrying \(event.symptomCode) after \(uerr.code.rawValue)")
-                    try? await Task.sleep(nanoseconds: 400_000_000)
-                }
-            }
-
-            guard let data = responseData, let resp = response else {
-                throw URLError(.unknown)
-            }
-            guard let http = resp as? HTTPURLResponse else {
-                throw URLError(.badServerResponse)
-            }
-
-            if (200..<300).contains(http.statusCode) {
-                let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                if let envelope = try? decoder.decode(SymptomPostEnvelope.self, from: data),
-                   envelope.ok == false {
-                    let message = envelope.error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown"
-                    appLog("[SYM] logical failure for \(event.symptomCode): \(message)")
-                    return .failed
-                }
-                return .submitted
-            }
-
-            if (400..<500).contains(http.statusCode) {
-                let preview = String(data: data, encoding: .utf8) ?? ""
-                appLog("[SYM] server rejected \(event.symptomCode) (\(http.statusCode)): \(preview.prefix(160))")
-                return .failed
-            }
-
-            let preview = String(data: data, encoding: .utf8) ?? ""
-            appLog("[SYM] server error \(event.symptomCode) (\(http.statusCode)): \(preview.prefix(160)) — queued")
+            _ = try await api.postSymptomEvent(from: event)
+            return .submitted
+        } catch APIError.server(let code, _) {
+            guard code >= 500 else { return .failed }
             await state.enqueueSymptom(event)
-            await MainActor.run {
-                self.isSymptomServiceOffline = true
-            }
+            isSymptomServiceOffline = true
+            return .queued
+        } catch is DecodingError {
+            await state.enqueueSymptom(event)
+            return .queued
+        } catch MigraineSaveError.invalidResponse {
+            await state.enqueueSymptom(event)
             return .queued
         } catch let uerr as URLError {
             let offlineCodes: Set<URLError.Code> = [
@@ -10496,6 +10400,13 @@ struct ContentView: View {
         }()
 
         return VStack(spacing: 16) {
+            if MigraineStructuredFollowUpFeature.isEnabled && MigraineCalendarFeature.isEnabled {
+                MigraineHomeSection(api: state.apiWithAuth(), items: currentSymptomsSnapshot?.items ?? [],
+                    isRefreshing: currentSymptomsLoading, refreshError: currentSymptomsError,
+                    accountScope: { MigraineFollowUpWorkflow.accountScope() },
+                    onRefresh: { await fetchCurrentSymptomsSummary(api: state.apiWithAuth()) })
+                    .id(MigraineFollowUpWorkflow.accountScope())
+            }
             MissionControlSectionView(
                 experienceMode: experienceProfile.mode,
                 tempUnit: experienceProfile.tempUnit,
@@ -19933,6 +19844,9 @@ struct ContentView: View {
                     AppAnalytics.track("onboarding_started", properties: ["step": onboardingStepRaw])
                 }
 #endif
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .symptomEpisodesDidChange).receive(on: RunLoop.main)) { _ in
+                Task { await fetchCurrentSymptomsSummary(api: state.apiWithAuth()) }
             }
             .onReceive(NotificationCenter.default.publisher(for: .featuresShouldRefresh).receive(on: RunLoop.main)) { _ in
 #if DEBUG && GAIA_MIGRAINE_APP_VERIFICATION
