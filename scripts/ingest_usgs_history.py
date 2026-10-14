@@ -7,11 +7,13 @@ Env:
 """
 import os, sys, json, urllib.request, urllib.parse, datetime as dt
 import errno
+import gzip
 import http.client
 import socket
 import ssl
 import time
 import urllib.error
+import zlib
 from collections import defaultdict, Counter
 
 DAYS = int(os.getenv("HISTORY_DAYS", "365"))
@@ -32,30 +34,49 @@ def _retryable_usgs_error(exc):
         return _retryable_usgs_error(exc.reason)
     if isinstance(exc, socket.gaierror):
         return exc.errno == socket.EAI_AGAIN
-    return isinstance(exc, (http.client.IncompleteRead, TimeoutError,
+    return isinstance(exc, (http.client.IncompleteRead, EOFError, gzip.BadGzipFile,
+                            zlib.error, TimeoutError,
                             ConnectionError, ssl.SSLEOFError)) or (
         isinstance(exc, OSError) and exc.errno in {errno.ENETUNREACH, errno.EHOSTUNREACH}
     )
 
 
-def _fetch_usgs_page(req, offset):
+def _fetch_usgs_page(req, offset, start_date, end_date):
     for attempt in range(1, USGS_MAX_ATTEMPTS + 1):
+        bytes_read = 0
         try:
             # Accept a page only after the full read. Each retry opens a fresh
             # response for the same query, without advancing the offset.
             with urllib.request.urlopen(req, timeout=USGS_TIMEOUT_SECONDS) as response:
                 if response.status == 204:
                     return {"features": []}  # USGS's default no-data response.
+                encoding = ",".join(response.headers.get_all("Content-Encoding", [])).strip().lower()
+                if encoding not in {"", "identity", "gzip"}:
+                    raise ValueError("Unsupported USGS content encoding")
                 raw = response.read()
-        except (http.client.IncompleteRead, OSError) as exc:
+                bytes_read = len(raw)
+                if encoding == "gzip":
+                    if not raw:
+                        raise EOFError("Empty USGS gzip body")
+                    # Validate the complete gzip stream (including its trailer)
+                    # before accepting JSON or advancing this page's offset.
+                    raw = gzip.decompress(raw)
+        except (http.client.IncompleteRead, OSError, EOFError, zlib.error, ValueError) as exc:
+            if isinstance(exc, http.client.IncompleteRead):
+                bytes_read = len(exc.partial)
             if isinstance(exc, urllib.error.HTTPError):
                 exc.close()
-            if not _retryable_usgs_error(exc) or attempt == USGS_MAX_ATTEMPTS:
-                raise
+            retry = _retryable_usgs_error(exc) and attempt < USGS_MAX_ATTEMPTS
             delay = USGS_RETRY_BACKOFF_SECONDS * 2 ** (attempt - 1)
             failure = f"HTTP {exc.code}" if isinstance(exc, urllib.error.HTTPError) else type(exc).__name__
-            print(f"[quakes_history] USGS offset={offset} attempt={attempt}/{USGS_MAX_ATTEMPTS} "
-                  f"failed ({failure}); retrying in {delay}s", file=sys.stderr)
+            action = f"retrying in {delay}s" if retry else "aborting"
+            # Log only our query context and counts, never response bodies,
+            # headers, full URLs, or exception messages.
+            print(f"[quakes_history] USGS start={start_date!r} end={end_date!r} "
+                  f"limit={USGS_PAGE_SIZE} offset={offset} attempt={attempt}/{USGS_MAX_ATTEMPTS} "
+                  f"bytes_read={bytes_read} failed ({failure}); {action}", file=sys.stderr)
+            if not retry:
+                raise
             time.sleep(delay)
         else:
             # Invalid JSON/UTF-8 is not a transient transport failure.
@@ -78,8 +99,8 @@ def fetch_usgs(start_date: str, end_date: str):
             offset=str(offset)
         )
         url = USGS_API + "?" + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url, headers={"User-Agent":"GaiaEyes/1.0"})
-        data = _fetch_usgs_page(req, offset)
+        req = urllib.request.Request(url, headers={"User-Agent":"GaiaEyes/1.0", "Accept-Encoding":"gzip"})
+        data = _fetch_usgs_page(req, offset, start_date, end_date)
         feats = data.get("features", [])
         if not feats:
             break
@@ -217,4 +238,10 @@ def main():
     print(f"[quakes_history] wrote -> {path}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (http.client.IncompleteRead, OSError, EOFError, zlib.error, ValueError) as exc:
+        # Expected download/decode failures must not reintroduce upstream
+        # exception text (including body prefixes) through a CLI traceback.
+        print(f"[quakes_history] failed ({type(exc).__name__})", file=sys.stderr)
+        raise SystemExit(1) from None

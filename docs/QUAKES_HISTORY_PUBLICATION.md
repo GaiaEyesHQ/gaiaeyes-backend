@@ -45,15 +45,38 @@ timestamp remains the generation completion time, which may be later than the
 cutoff. The existing output structure is unchanged. See the
 [USGS time-boundary contract](https://earthquake.usgs.gov/fdsnws/event/1/#parameters).
 
-USGS downloads use pages of at most 5,000 events and up to four attempts per page,
-including opening the response and reading its entire body. Interrupted reads,
+USGS downloads request gzip and use pages of at most 5,000 events and up to four
+attempts per page, including opening the response, reading its entire body, and
+validating/decompressing a gzip response. An absent/empty `Content-Encoding` or
+explicit `identity` response remains supported when negotiation is ignored.
+Other or stacked encodings fail immediately. Interrupted reads,
 timeouts, connection errors, temporary DNS/network failures, TLS EOFs, and HTTP
-408/429/500/502/503/504 retry after 2, 4, and 8 seconds. Each attempt uses the same
-query and offset; results are accepted only after a complete read and successful
-JSON decoding. Duplicate event IDs within a query are counted once. Pagination
+408/429/500/502/503/504 retry after 2, 4, and 8 seconds. Empty/truncated gzip bodies
+and gzip/DEFLATE integrity failures use the same bounded retries. Each attempt
+uses the same query and offset; results are accepted only after a complete read,
+successful gzip validation when applicable, and successful JSON decoding.
+Duplicate event IDs within a query are counted once. Pagination
 uses the raw response count, so duplicates do not shorten a full page or change
 the next offset. HTTP 204 ends an empty query or terminal page normally. Invalid
 JSON/UTF-8, permanent HTTP/DNS errors, and certificate failures fail immediately.
+Retry and terminal transport/decompression diagnostics include query start/end,
+limit, offset, attempt, and received body-byte count, without logging response
+bodies, headers, full URLs, or exception messages. Byte counts refer to received
+compressed bytes for gzip responses, or to the partial body on `IncompleteRead`.
+The CLI also suppresses tracebacks for expected download/decode failures and
+exits nonzero with the exception type only; raw upstream messages cannot bypass
+the sanitized diagnostics. Imported functions still propagate their exceptions.
+
+Read-only probes on October 14 reproduced truncation in uncompressed 5,000-event
+pages at different byte counts; reading in smaller chunks did not resolve it.
+Two gzip pages completed a 9,816-event window and matched its count query, while
+transferring about 1.13 MB instead of 7.05 MB decoded. Smaller 500/1,000-event
+pages also completed, but would substantially increase request counts across
+730 days. Gzip keeps the existing page cap and query algorithm while reducing
+transfer size. These probes support the mitigation; they do not identify the
+failing upstream component or guarantee all future transfers. No fixed byte
+limit was established. If compression is ignored and a transfer still fails,
+bounded retries and fail-closed publication remain in effect.
 
 The page cap was reduced from 20,000 after two interrupted large downloads on
 October 14, 2026. Smaller pages reduce the maximum payload and repeated work per
@@ -159,6 +182,13 @@ pagination with duplicate-only pages, JSON/HTTP 204 terminal pages, unchanged
 generated series after recovery, nonzero CLI exit, and exact output preservation
 after failure on the first page, a later page, or a later UTC window. These tests
 run in the existing `quakes-history-tests.yml` job without changing that workflow.
+Gzip fixtures also cover successful decompression, identity fallback, unsupported
+and stacked encodings, complete gzip containing invalid JSON/UTF-8, truncated
+HTTP framing, empty/truncated gzip members, CRC/size/DEFLATE corruption, safe
+diagnostics, pagination/deduplication, and preservation of last-good output on
+compressed-body retry exhaustion. Subprocess tests verify terminal CLI stderr
+does not expose gzip body prefixes, raw exception messages, or URLs. All fixtures
+are synthetic.
 
 Read-only diagnosis on October 13, 2026: media history timestamp was
 `2025-11-26T05:34:48Z`; Compare timestamp was `2026-10-13T12:47:21` but its quake
