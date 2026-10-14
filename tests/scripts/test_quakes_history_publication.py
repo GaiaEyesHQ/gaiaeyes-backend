@@ -4,6 +4,8 @@ from copy import deepcopy
 from collections import Counter
 import datetime as dt
 import errno
+from email.message import Message
+import gzip
 import http.client
 import io
 import json
@@ -15,6 +17,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.parse
+import zlib
 
 import pytest
 import yaml
@@ -394,6 +397,7 @@ def test_workflows_publish_before_compare_and_commit_the_fetched_history():
 
 class InterruptedBody(io.BytesIO):
     status = 200
+    headers = Message()
 
     def __init__(self, error):
         super().__init__(b'{"features":[')
@@ -403,9 +407,12 @@ class InterruptedBody(io.BytesIO):
         raise self.error
 
 
-def usgs_response(raw, status=200):
+def usgs_response(raw, status=200, encoding=None):
     response = io.BytesIO(raw)
     response.status = status
+    response.headers = Message()
+    if encoding is not None:
+        response.headers["Content-Encoding"] = encoding
     return response
 
 
@@ -418,6 +425,7 @@ def mock_usgs_responses(monkeypatch, responses):
     calls, sleeps = [], []
 
     def open_url(request, *, timeout):
+        assert request.get_header("Accept-encoding") == "gzip"
         calls.append((request.full_url, timeout))
         response = next(responses)
         if isinstance(response, Exception):
@@ -427,6 +435,163 @@ def mock_usgs_responses(monkeypatch, responses):
     monkeypatch.setattr(ingest.urllib.request, "urlopen", open_url)
     monkeypatch.setattr(ingest.time, "sleep", sleeps.append)
     return calls, sleeps
+
+
+def gzip_usgs_page(*ids, encoding="gzip"):
+    raw = json.dumps({"features": [{"id": event_id} for event_id in ids]}).encode()
+    return usgs_response(gzip.compress(raw, mtime=0), encoding=encoding)
+
+
+def damaged_gzip(kind):
+    raw = gzip.compress(b'{"features":[{"id":"must-not-be-accepted"}]}', mtime=0)
+    if kind == "empty":
+        return b""
+    if kind == "truncated_header":
+        return raw[:5]
+    if kind == "truncated_trailer":
+        return raw[:-4]
+    if kind == "crc":
+        return raw[:-8] + bytes([raw[-8] ^ 1]) + raw[-7:]
+    if kind == "size":
+        return raw[:-4] + bytes([raw[-4] ^ 1]) + raw[-3:]
+    if kind == "deflate":
+        return raw[:10] + b"\x07" + raw[11:]  # Reserved DEFLATE block type.
+    if kind == "truncated_second_member":
+        return raw + raw[:5]
+    raise AssertionError(kind)
+
+
+@pytest.mark.parametrize("encoding", ["gzip", " GZip "])
+def test_usgs_accepts_complete_gzip_pages(monkeypatch, encoding):
+    response = gzip_usgs_page("one", encoding=encoding)
+    calls, sleeps = mock_usgs_responses(monkeypatch, [response])
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == [{"id": "one"}]
+    assert len(calls) == 1 and sleeps == [] and response.closed
+
+
+@pytest.mark.parametrize("encoding", [None, "", "identity", " Identity "])
+def test_usgs_accepts_identity_when_gzip_negotiation_is_ignored(monkeypatch, encoding):
+    response = usgs_response(b'{"features":[{"id":"one"}]}', encoding=encoding)
+    calls, sleeps = mock_usgs_responses(monkeypatch, [response])
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == [{"id": "one"}]
+    assert len(calls) == 1 and sleeps == [] and response.closed
+
+
+@pytest.mark.parametrize("kind", ["empty", "truncated_header", "truncated_trailer", "crc",
+                                  "size", "deflate", "truncated_second_member"])
+def test_usgs_retries_damaged_gzip_without_accepting_partial_json(monkeypatch, kind, capsys):
+    raw = damaged_gzip(kind)
+    damaged = usgs_response(raw, encoding="gzip")
+    complete = gzip_usgs_page("recovered")
+    calls, sleeps = mock_usgs_responses(monkeypatch, [damaged, complete])
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == [{"id": "recovered"}]
+    assert len(calls) == 2 and calls[0] == calls[1] and sleeps == [2]
+    assert damaged.closed and complete.closed
+    error = capsys.readouterr().err
+    assert f"bytes_read={len(raw)}" in error
+    assert "must-not-be-accepted" not in error
+
+
+@pytest.mark.parametrize("encoding", ["br", "deflate", "gzip, identity", "gzip, gzip", "unexpected-secret"])
+def test_usgs_unsupported_encodings_fail_immediately(monkeypatch, encoding, capsys):
+    response = gzip_usgs_page("one", encoding=encoding)
+    calls, sleeps = mock_usgs_responses(monkeypatch, [response])
+    with pytest.raises(ValueError, match="Unsupported USGS content encoding"):
+        ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert len(calls) == 1 and sleeps == [] and response.closed
+    assert "unexpected-secret" not in capsys.readouterr().err
+
+
+def test_usgs_rejects_multiple_content_encoding_fields(monkeypatch):
+    response = gzip_usgs_page("one")
+    response.headers.add_header("Content-Encoding", "br")
+    calls, sleeps = mock_usgs_responses(monkeypatch, [response])
+    with pytest.raises(ValueError, match="Unsupported USGS content encoding"):
+        ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert len(calls) == 1 and sleeps == [] and response.closed
+
+
+@pytest.mark.parametrize("raw", [b'{"features":[', b'\xff', b''])
+def test_usgs_complete_gzip_with_invalid_json_or_utf8_does_not_retry(monkeypatch, raw):
+    response = usgs_response(gzip.compress(raw, mtime=0), encoding="gzip")
+    calls, sleeps = mock_usgs_responses(monkeypatch, [response])
+    with pytest.raises((json.JSONDecodeError, UnicodeDecodeError)):
+        ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert len(calls) == 1 and sleeps == [] and response.closed
+
+
+@pytest.mark.parametrize("framing", ["content_length", "chunked"])
+def test_usgs_retries_actual_truncated_http_gzip_body(monkeypatch, framing):
+    raw = gzip.compress(b'{"features":[{"id":"unaccepted"}]}', mtime=0)
+    if framing == "content_length":
+        wire = f"Content-Length: {len(raw)}\r\n\r\n".encode() + raw[:-3]
+    else:
+        # All gzip bytes arrive, but the required terminal HTTP chunk is absent.
+        wire = b"Transfer-Encoding: chunked\r\n\r\n" + f"{len(raw):x}\r\n".encode() + raw + b"\r\n"
+
+    class SyntheticSocket:
+        def makefile(self, *args, **kwargs):
+            return io.BytesIO(b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\n" + wire)
+
+    response = http.client.HTTPResponse(SyntheticSocket())
+    response.begin()
+    calls, sleeps = mock_usgs_responses(monkeypatch, [response, gzip_usgs_page("recovered")])
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == [{"id": "recovered"}]
+    assert len(calls) == 2 and calls[0] == calls[1] and sleeps == [2] and response.closed
+
+
+def test_usgs_gzip_retries_preserve_offsets_and_deduplication(monkeypatch):
+    monkeypatch.setattr(ingest, "USGS_PAGE_SIZE", 2)
+    damaged = usgs_response(damaged_gzip("crc"), encoding="gzip")
+    responses = [gzip_usgs_page("a", "b"), damaged, gzip_usgs_page("b", "c"),
+                 gzip_usgs_page("c", "c"), gzip_usgs_page("d")]
+    calls, sleeps = mock_usgs_responses(monkeypatch, responses)
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == [
+        {"id": event_id} for event_id in ("a", "b", "c", "d")]
+    offsets = [urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["offset"][0] for url, _ in calls]
+    assert offsets == ["1", "3", "3", "5", "7"] and sleeps == [2]
+    assert calls[1] == calls[2] and all(response.closed for response in responses)
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("failure_point", ["first_page", "later_page", "later_chunk"])
+@pytest.mark.parametrize("kind", ["truncated_trailer", "crc", "deflate"])
+def test_usgs_gzip_exhaustion_preserves_last_good_output(
+        tmp_path, monkeypatch, usgs_clock, existing, failure_point, kind, capsys):
+    path = tmp_path / "quakes_history.json"
+    original = b'{"synthetic":"last good history"}\n'
+    if existing:
+        path.write_bytes(original)
+    monkeypatch.setenv("OUTPUT_JSON_PATH", str(path))
+    monkeypatch.setattr(ingest, "DAYS", 31 if failure_point == "later_chunk" else 1)
+    monkeypatch.setattr(ingest, "USGS_PAGE_SIZE", 2)
+    prefix = [] if failure_point == "first_page" else [
+        gzip_usgs_page("a", "b") if failure_point == "later_page" else gzip_usgs_page("a")]
+    failed = [usgs_response(damaged_gzip(kind), encoding="gzip") for _ in range(4)]
+    calls, sleeps = mock_usgs_responses(monkeypatch, prefix + failed)
+    with pytest.raises((EOFError, gzip.BadGzipFile, zlib.error)):
+        ingest.main()
+    assert len(calls) == len(prefix) + 4 and len(set(calls[-4:])) == 1
+    assert sleeps == [2, 4, 8] and all(response.closed for response in prefix + failed)
+    if existing:
+        assert path.read_bytes() == original
+    else:
+        assert not path.exists()
+    error = capsys.readouterr().err
+    assert error.count("retrying in") == 3 and error.count("aborting") == 1
+    assert "attempt=4/4" in error
+
+
+def test_usgs_diagnostics_include_safe_window_offset_and_partial_bytes(monkeypatch, capsys):
+    error = http.client.IncompleteRead(b"synthetic-secret", 100)
+    calls, sleeps = mock_usgs_responses(monkeypatch, [error, gzip_usgs_page("one")])
+    ingest.fetch_usgs("2026-10-01T00:00:00+00:00", "2026-10-14T12:00:00+00:00")
+    message = capsys.readouterr().err
+    assert "start='2026-10-01T00:00:00+00:00'" in message
+    assert "end='2026-10-14T12:00:00+00:00'" in message
+    assert "limit=5000 offset=1 attempt=1/4 bytes_read=16" in message
+    assert "synthetic-secret" not in message and "https://" not in message
+    assert len(calls) == 2 and sleeps == [2]
 
 
 @pytest.fixture
@@ -624,16 +789,19 @@ def test_usgs_exhaustion_leaves_last_good_output_untouched(
     assert len(calls) == len(first_page) + 4 and sleeps == [2, 4, 8]
 
 
-def test_usgs_recovered_download_writes_unchanged_history_contract(tmp_path, monkeypatch, usgs_clock):
+@pytest.mark.parametrize("compressed", [False, True])
+def test_usgs_recovered_download_writes_unchanged_history_contract(tmp_path, monkeypatch, usgs_clock, compressed):
     path = tmp_path / "quakes_history.json"
     monkeypatch.setenv("OUTPUT_JSON_PATH", str(path))
     monkeypatch.setattr(ingest, "DAYS", 1)
     event = {"id": "synthetic-quake", "properties": {
         "mag": 6.3, "time": int((usgs_clock - dt.timedelta(minutes=1)).timestamp() * 1000),
     }}
+    raw = json.dumps({"features": [event, event]}).encode()
+    recovered = usgs_response(gzip.compress(raw, mtime=0), encoding="gzip") if compressed else usgs_response(raw)
     calls, sleeps = mock_usgs_responses(monkeypatch, [
         InterruptedBody(http.client.IncompleteRead(b"partial", 100)),
-        usgs_response(json.dumps({"features": [event, event]}).encode()),
+        recovered,
     ])
     ingest.main()
     output = json.loads(path.read_text())
@@ -662,3 +830,44 @@ runpy.run_path("scripts/ingest_usgs_history.py", run_name="__main__")
     assert "IncompleteRead" in result.stderr and result.stderr.count("retrying in") == 3
     assert "wrote ->" not in result.stdout
     assert path.read_bytes() == b"synthetic last good file\n"
+
+
+@pytest.mark.parametrize("failure", ["gzip_header", "connection", "http_permanent"])
+def test_usgs_cli_sanitizes_terminal_exception_text_and_preserves_output(tmp_path, failure):
+    path = tmp_path / "quakes_history.json"
+    original = b"synthetic last good file\n"
+    path.write_bytes(original)
+    code = '''
+import atexit, io, json, runpy, time, urllib.error, urllib.request
+from email.message import Message
+state = {"attempts": 0, "sleeps": []}
+failure = FAILURE_KIND
+def broken(*args, **kwargs):
+    state["attempts"] += 1
+    if failure == "connection":
+        raise ConnectionResetError("synthetic-header-secret https://secret.example.invalid/?token=secret")
+    if failure == "http_permanent":
+        raise urllib.error.HTTPError("https://secret.example.invalid/?token=secret", 401,
+                                     "synthetic-header-secret", {}, io.BytesIO(b"body-marker"))
+    response = io.BytesIO(b"ZZsynthetic-body-marker")
+    response.status = 200
+    response.headers = Message()
+    response.headers["Content-Encoding"] = "gzip"
+    return response
+urllib.request.urlopen = broken
+time.sleep = state["sleeps"].append
+atexit.register(lambda: print(json.dumps(state)))
+runpy.run_path("scripts/ingest_usgs_history.py", run_name="__main__")
+'''.replace("FAILURE_KIND", repr(failure))
+    result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True,
+                            timeout=10, env={"PATH": os.environ.get("PATH", ""),
+                                             "OUTPUT_JSON_PATH": str(path), "HISTORY_DAYS": "2"})
+    assert result.returncode == 1 and path.read_bytes() == original
+    retryable = failure != "http_permanent"
+    assert json.loads(result.stdout) == {"attempts": 4 if retryable else 1,
+                                        "sleeps": [2, 4, 8] if retryable else []}
+    assert result.stderr.count("retrying in") == (3 if retryable else 0)
+    assert "aborting" in result.stderr and "[quakes_history] failed (" in result.stderr
+    for forbidden in ("Traceback", "synthetic-body-marker", "synthetic-header-secret",
+                      "secret.example.invalid", "token=secret", "Not a gzipped file", "b'ZZ'"):
+        assert forbidden not in result.stderr
