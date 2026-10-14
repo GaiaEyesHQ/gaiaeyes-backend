@@ -3,11 +3,18 @@
 from copy import deepcopy
 from collections import Counter
 import datetime as dt
+import errno
+import http.client
 import io
 import json
+import os
 from pathlib import Path
+import socket
+import ssl
+import subprocess
 import sys
 import urllib.error
+import urllib.parse
 
 import pytest
 import yaml
@@ -363,6 +370,11 @@ def test_workflows_publish_before_compare_and_commit_the_fetched_history():
     generate = next(step for step in steps if "ingest_usgs_history.py" in step.get("run", ""))
     assert upload["env"]["OUTPUT_JSON_PATH"] == generate["env"]["OUTPUT_JSON_PATH"]
     assert upload["env"]["BUCKET"] == "space-visuals"
+    assert steps.index(generate) < steps.index(upload)
+    assert "continue-on-error" not in publisher["jobs"]["run"]
+    for step in (generate, upload):
+        assert "continue-on-error" not in step
+        assert "if" not in step  # Default success() skips upload after generation fails.
     assert "space_visuals_upload_to_supabase.py" not in str(steps)
     assert "schedule" not in consumer["on"]
     assert consumer["on"]["workflow_run"] == {
@@ -378,3 +390,275 @@ def test_workflows_publish_before_compare_and_commit_the_fetched_history():
     build = next(i for i, run in enumerate(runs) if "build_compare_series.py" in run)
     commit = next(i for i, run in enumerate(runs) if "publish_compare_series.sh gaiaeyes-media" in run)
     assert fetch < build < commit
+
+
+class InterruptedBody(io.BytesIO):
+    status = 200
+
+    def __init__(self, error):
+        super().__init__(b'{"features":[')
+        self.error = error
+
+    def read(self, *args, **kwargs):
+        raise self.error
+
+
+def usgs_response(raw, status=200):
+    response = io.BytesIO(raw)
+    response.status = status
+    return response
+
+
+def usgs_page(*ids):
+    return usgs_response(json.dumps({"features": [{"id": event_id} for event_id in ids]}).encode())
+
+
+def mock_usgs_responses(monkeypatch, responses):
+    responses = iter(responses)
+    calls, sleeps = [], []
+
+    def open_url(request, *, timeout):
+        calls.append((request.full_url, timeout))
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(ingest.urllib.request, "urlopen", open_url)
+    monkeypatch.setattr(ingest.time, "sleep", sleeps.append)
+    return calls, sleeps
+
+
+@pytest.fixture
+def usgs_clock(monkeypatch):
+    cutoff = dt.datetime(2026, 10, 14, 12, tzinfo=dt.timezone.utc)
+
+    class FixedDatetime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cutoff
+
+    monkeypatch.setattr(ingest.dt, "datetime", FixedDatetime)
+    return cutoff
+
+
+@pytest.mark.parametrize("error", [
+    http.client.IncompleteRead(b"partial", 100),
+    http.client.RemoteDisconnected("synthetic disconnect"),
+    ConnectionResetError("synthetic reset"),
+    TimeoutError("synthetic timeout"),
+    urllib.error.URLError(TimeoutError("synthetic timeout")),
+    urllib.error.URLError(ConnectionRefusedError("synthetic refusal")),
+    urllib.error.URLError(socket.gaierror(socket.EAI_AGAIN, "temporary DNS failure")),
+    ssl.SSLEOFError("synthetic TLS EOF"),
+    OSError(errno.ENETUNREACH, "synthetic unreachable network"),
+    OSError(errno.EHOSTUNREACH, "synthetic unreachable host"),
+])
+@pytest.mark.parametrize("during_read", [False, True])
+def test_usgs_recovers_from_transient_open_and_full_body_failures(monkeypatch, error, during_read):
+    failed = InterruptedBody(error) if during_read else error
+    recovered = usgs_page("one")
+    calls, sleeps = mock_usgs_responses(monkeypatch, [failed, recovered])
+    result = ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert result == {"type": "FeatureCollection", "features": [{"id": "one"}]}
+    assert len(calls) == 2 and calls[0] == calls[1]
+    assert calls[0][1] == 60
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(calls[0][0]).query)
+    assert query["limit"] == ["5000"] and query["offset"] == ["1"]
+    assert query["starttime"] == ["2026-10-01"] and query["endtime"] == ["2026-10-14"]
+    assert query["orderby"] == ["time-asc"]
+    assert sleeps == [2]
+    assert recovered.closed
+    if during_read:
+        assert failed.closed
+
+
+@pytest.mark.parametrize("framing", [
+    b"Content-Length: 200\r\n\r\n",
+    b"Transfer-Encoding: chunked\r\n\r\n20\r\n",
+])
+def test_usgs_recovers_from_actual_http_response_truncation(monkeypatch, framing):
+    class SyntheticSocket:
+        def makefile(self, *args, **kwargs):
+            return io.BytesIO(b"HTTP/1.1 200 OK\r\n" + framing + b'{"features":[')
+
+    # Use the real HTTP parser against in-memory bytes; no socket is opened.
+    truncated = http.client.HTTPResponse(SyntheticSocket())
+    truncated.begin()
+    calls, sleeps = mock_usgs_responses(monkeypatch, [truncated, usgs_page("recovered")])
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == [{"id": "recovered"}]
+    assert len(calls) == 2 and calls[0] == calls[1] and sleeps == [2]
+    assert truncated.closed
+
+
+@pytest.mark.parametrize("status", [408, 429, 500, 502, 503, 504])
+def test_usgs_retries_selected_http_errors_and_closes_responses(monkeypatch, status):
+    body = io.BytesIO(b"synthetic service failure")
+    error = urllib.error.HTTPError(ingest.USGS_API, status, "synthetic", {}, body)
+    calls, sleeps = mock_usgs_responses(monkeypatch, [error, usgs_page("one")])
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == [{"id": "one"}]
+    assert len(calls) == 2 and calls[0] == calls[1]
+    assert sleeps == [2] and body.closed
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 413, 501])
+def test_usgs_permanent_http_failure_does_not_retry(monkeypatch, status):
+    body = io.BytesIO(b"synthetic permanent failure")
+    error = urllib.error.HTTPError(ingest.USGS_API, status, "synthetic", {}, body)
+    calls, sleeps = mock_usgs_responses(monkeypatch, [error])
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert caught.value is error
+    assert len(calls) == 1 and sleeps == [] and body.closed
+
+
+@pytest.mark.parametrize("error", [
+    ssl.SSLCertVerificationError("synthetic certificate failure"),
+    urllib.error.URLError(ssl.SSLCertVerificationError("synthetic certificate failure")),
+    socket.gaierror(socket.EAI_NONAME, "permanent DNS failure"),
+    urllib.error.URLError(socket.gaierror(socket.EAI_NONAME, "permanent DNS failure")),
+    urllib.error.URLError("unknown URL type"),
+    PermissionError("synthetic permission failure"),
+])
+def test_usgs_permanent_connection_failure_does_not_retry(monkeypatch, error):
+    calls, sleeps = mock_usgs_responses(monkeypatch, [error])
+    with pytest.raises(type(error)) as caught:
+        ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert caught.value is error
+    assert len(calls) == 1 and sleeps == []
+
+
+@pytest.mark.parametrize("raw", [b'{"features":[', b'\xff', b''])
+def test_usgs_malformed_response_fails_without_retry(monkeypatch, raw):
+    response = usgs_response(raw)
+    calls, sleeps = mock_usgs_responses(monkeypatch, [response])
+    with pytest.raises((json.JSONDecodeError, UnicodeDecodeError)):
+        ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert len(calls) == 1 and sleeps == [] and response.closed
+
+
+@pytest.mark.parametrize("during_read", [False, True])
+def test_usgs_exhaustion_is_bounded_and_propagates(monkeypatch, during_read, capsys):
+    errors = [http.client.IncompleteRead(b"partial", 100) for _ in range(4)]
+    responses = [InterruptedBody(error) for error in errors] if during_read else errors
+    calls, sleeps = mock_usgs_responses(monkeypatch, responses)
+    with pytest.raises(http.client.IncompleteRead) as caught:
+        ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert caught.value is errors[-1]
+    assert len(calls) == 4 and len(set(calls)) == 1
+    assert sleeps == [2, 4, 8]
+    assert capsys.readouterr().err.count("retrying in") == 3
+    if during_read:
+        assert all(response.closed for response in responses)
+
+
+def test_usgs_retries_same_page_and_deduplicates_using_raw_offsets(monkeypatch):
+    monkeypatch.setattr(ingest, "USGS_PAGE_SIZE", 2)
+    failed = InterruptedBody(http.client.IncompleteRead(b"partial", 100))
+    calls, sleeps = mock_usgs_responses(monkeypatch, [
+        usgs_page("a", "b"), failed, usgs_page("b", "c"),
+        usgs_page("c", "c"), usgs_page("d"),
+    ])
+    result = ingest.fetch_usgs("2026-10-01", "2026-10-14")
+    assert result["features"] == [{"id": event_id} for event_id in ("a", "b", "c", "d")]
+    offsets = [urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["offset"][0] for url, _ in calls]
+    assert offsets == ["1", "3", "3", "5", "7"]
+    assert calls[1] == calls[2] and sleeps == [2] and failed.closed
+
+
+def test_usgs_each_page_has_its_own_retry_allowance(monkeypatch):
+    monkeypatch.setattr(ingest, "USGS_PAGE_SIZE", 2)
+    calls, sleeps = mock_usgs_responses(monkeypatch, [
+        *[TimeoutError("first page") for _ in range(3)], usgs_page("a", "b"),
+        *[TimeoutError("second page") for _ in range(3)], usgs_page("c"),
+    ])
+    assert len(ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"]) == 3
+    assert sleeps == [2, 4, 8, 2, 4, 8]
+    assert len(calls) == 8
+    assert len(set(calls[:4])) == len(set(calls[4:])) == 1
+    assert calls[0] != calls[4]
+
+
+def test_usgs_empty_terminal_page_and_missing_ids_are_preserved(monkeypatch):
+    monkeypatch.setattr(ingest, "USGS_PAGE_SIZE", 2)
+    response = usgs_response(b'{"features":[{"properties":{}},{"properties":{}}]}')
+    calls, sleeps = mock_usgs_responses(monkeypatch, [response, usgs_page()])
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == [{"properties": {}}] * 2
+    assert len(calls) == 2 and sleeps == []
+
+
+@pytest.mark.parametrize("has_full_page", [False, True])
+def test_usgs_no_data_204_terminates_pagination(monkeypatch, has_full_page):
+    monkeypatch.setattr(ingest, "USGS_PAGE_SIZE", 2)
+    empty = usgs_response(b"", status=204)
+    responses = [usgs_page("a", "b"), empty] if has_full_page else [empty]
+    calls, sleeps = mock_usgs_responses(monkeypatch, responses)
+    expected = [{"id": "a"}, {"id": "b"}] if has_full_page else []
+    assert ingest.fetch_usgs("2026-10-01", "2026-10-14")["features"] == expected
+    assert len(calls) == len(responses) and sleeps == [] and empty.closed
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("failure_point", ["first_page", "later_page", "later_chunk"])
+def test_usgs_exhaustion_leaves_last_good_output_untouched(
+        tmp_path, monkeypatch, usgs_clock, existing, failure_point):
+    path = tmp_path / "quakes_history.json"
+    original = b'{"synthetic":"last good history"}\n'
+    if existing:
+        path.write_bytes(original)
+    monkeypatch.setenv("OUTPUT_JSON_PATH", str(path))
+    monkeypatch.setattr(ingest, "DAYS", 31 if failure_point == "later_chunk" else 1)
+    monkeypatch.setattr(ingest, "USGS_PAGE_SIZE", 2)
+    first_page = [] if failure_point == "first_page" else [
+        usgs_page("a", "b") if failure_point == "later_page" else usgs_page("a")
+    ]
+    calls, sleeps = mock_usgs_responses(monkeypatch, first_page + [
+        InterruptedBody(http.client.IncompleteRead(b"partial", 100)) for _ in range(4)
+    ])
+    with pytest.raises(http.client.IncompleteRead):
+        ingest.main()
+    if existing:
+        assert path.read_bytes() == original
+    else:
+        assert not path.exists()
+    assert len(calls) == len(first_page) + 4 and sleeps == [2, 4, 8]
+
+
+def test_usgs_recovered_download_writes_unchanged_history_contract(tmp_path, monkeypatch, usgs_clock):
+    path = tmp_path / "quakes_history.json"
+    monkeypatch.setenv("OUTPUT_JSON_PATH", str(path))
+    monkeypatch.setattr(ingest, "DAYS", 1)
+    event = {"id": "synthetic-quake", "properties": {
+        "mag": 6.3, "time": int((usgs_clock - dt.timedelta(minutes=1)).timestamp() * 1000),
+    }}
+    calls, sleeps = mock_usgs_responses(monkeypatch, [
+        InterruptedBody(http.client.IncompleteRead(b"partial", 100)),
+        usgs_response(json.dumps({"features": [event, event]}).encode()),
+    ])
+    ingest.main()
+    output = json.loads(path.read_text())
+    assert set(output) == {"timestamp_utc", "window", "daily", "monthly", "series", "meta"}
+    assert output["daily"] == [{"date": "2026-10-14", "all": 1, "m4p": 1, "m5p": 1, "m6p": 1, "m7p": 0}]
+    assert output["series"]["all_daily"] == [["2026-10-14", 1]]
+    assert output["series"]["m6p_monthly"] == [["2026-10", 1]]
+    assert len(calls) == 2 and sleeps == [2]
+
+
+def test_usgs_exhaustion_exits_nonzero_without_writing(tmp_path):
+    path = tmp_path / "quakes_history.json"
+    path.write_bytes(b"synthetic last good file\n")
+    code = '''
+import http.client, runpy, time, urllib.request
+def interrupted(*args, **kwargs):
+    raise http.client.IncompleteRead(b"synthetic partial", 100)
+urllib.request.urlopen = interrupted
+time.sleep = lambda seconds: None
+runpy.run_path("scripts/ingest_usgs_history.py", run_name="__main__")
+'''
+    result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True,
+                            timeout=10, env={"PATH": os.environ.get("PATH", ""),
+                                             "OUTPUT_JSON_PATH": str(path), "HISTORY_DAYS": "2"})
+    assert result.returncode != 0
+    assert "IncompleteRead" in result.stderr and result.stderr.count("retrying in") == 3
+    assert "wrote ->" not in result.stdout
+    assert path.read_bytes() == b"synthetic last good file\n"

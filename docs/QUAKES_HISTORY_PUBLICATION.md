@@ -45,6 +45,36 @@ timestamp remains the generation completion time, which may be later than the
 cutoff. The existing output structure is unchanged. See the
 [USGS time-boundary contract](https://earthquake.usgs.gov/fdsnws/event/1/#parameters).
 
+USGS downloads use pages of at most 5,000 events and up to four attempts per page,
+including opening the response and reading its entire body. Interrupted reads,
+timeouts, connection errors, temporary DNS/network failures, TLS EOFs, and HTTP
+408/429/500/502/503/504 retry after 2, 4, and 8 seconds. Each attempt uses the same
+query and offset; results are accepted only after a complete read and successful
+JSON decoding. Duplicate event IDs within a query are counted once. Pagination
+uses the raw response count, so duplicates do not shorten a full page or change
+the next offset. HTTP 204 ends an empty query or terminal page normally. Invalid
+JSON/UTF-8, permanent HTTP/DNS errors, and certificate failures fail immediately.
+
+The page cap was reduced from 20,000 after two interrupted large downloads on
+October 14, 2026. Smaller pages reduce the maximum payload and repeated work per
+failed transfer, at the cost of more requests for busy windows. The existing
+30-day UTC windows, output contract, and publication steps are unchanged. The
+60-second socket timeout applies to blocking operations, **not** the total page
+or build duration; four attempts and 14 seconds of backoff are not a strict
+254-second wall-clock bound. No workflow timeout or schedule is changed. Retries
+can increase runtime, and a persistent upstream failure still fails the job.
+The live USGS catalog is not a snapshot: deduplication avoids repeated IDs but
+cannot recover events omitted by catalog changes between offset-based requests.
+
+Exhausted retries propagate out of generation before opening the output file.
+An existing local history remains byte-for-byte intact, no partial new history
+is written, upload is skipped, and the automatically chained comparison remains
+gated on successful publication. The prior public files remain the last good
+publication. For incident recovery, **do not dispatch Compare alone against the
+previous day's history**: the 48-hour tolerance can accept it and mask a missing
+current history download. Verify a new history publication from the intended run
+before allowing comparison recovery.
+
 Media publication uses `scripts/publish_compare_series.sh`. It commits only the
 three generated files, fetches and rebases onto media `main`, and stops immediately
 on a rebase conflict. Non-fast-forward pushes retry at most three times, with a
@@ -121,6 +151,14 @@ exact midnight, and a run that finishes the following day. Local bare Git remote
 exercise overlapping pushes, conflicts, bounded retries, preservation of unrelated
 commits, and detection of absent commits or changed content after a successful
 push exit. Tests never contact production.
+
+USGS transfer regressions also cover recovery during open/body read, all selected
+transient HTTP responses, response closure, bounded exhaustion, immediate
+permanent failures, malformed JSON/UTF-8, retry budgets resetting on each page,
+pagination with duplicate-only pages, JSON/HTTP 204 terminal pages, unchanged
+generated series after recovery, nonzero CLI exit, and exact output preservation
+after failure on the first page, a later page, or a later UTC window. These tests
+run in the existing `quakes-history-tests.yml` job without changing that workflow.
 
 Read-only diagnosis on October 13, 2026: media history timestamp was
 `2025-11-26T05:34:48Z`; Compare timestamp was `2026-10-13T12:47:21` but its quake
