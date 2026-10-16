@@ -13,7 +13,9 @@ from uuid import UUID
 from bots.notifications.send_test_notification import APNS_ENV, TOPIC, Target, _timestamp, run_test
 
 CAMPAIGN = "phone-notification-test-20261016"
-ATTEMPT_ID = UUID("bce5e846-1942-4d98-a077-5ea17110f542")
+ATTEMPT_ID = UUID("3bff9fce-a9ba-4d47-bd11-740cb227e302")
+AUTHORIZED_RUN_NUMBER = 2
+PREVIOUS_BLOCKED_RUN_ID = "38844659979"
 REGISTRATION_SHA256 = "78d618c110b38c58b00ebc9ae02889384c62a5405d5bb91a04b4fdf3f8256d86"
 ACCOUNT_SHA256 = "85493336464a41c3ddd9eee51518f4480574d901f7a0837174f9218d629f3583"
 WORKFLOW_REF = "GaiaEyesHQ/gaiaeyes-backend/.github/workflows/phone-notification-test-20261016.yml@refs/heads/main"
@@ -25,7 +27,7 @@ CONTEXT = {
     "GITHUB_EVENT_NAME": "workflow_dispatch",
     "GITHUB_REF": "refs/heads/main",
     "GITHUB_WORKFLOW_REF": WORKFLOW_REF,
-    "GITHUB_RUN_NUMBER": "1",
+    "GITHUB_RUN_NUMBER": str(AUTHORIZED_RUN_NUMBER),
     "GITHUB_RUN_ATTEMPT": "1",
     "RUNNER_ENVIRONMENT": "github-hosted",
     "CONFIRM_SINGLE_SEND": "true",
@@ -71,7 +73,8 @@ def resolve_target(db: Any, updated_at: datetime) -> Target | None:
 
 def reservation(env: Mapping[str, str]) -> dict[str, str]:
     return {"campaign": CAMPAIGN, "run_id": env["GITHUB_RUN_ID"],
-            "run_number": "1", "run_attempt": "1", "status": "reserved_do_not_retry"}
+            "run_number": str(AUTHORIZED_RUN_NUMBER), "run_attempt": "1",
+            "previous_blocked_run_id": PREVIOUS_BLOCKED_RUN_ID, "status": "reserved_do_not_retry"}
 
 
 def reserve(env: Mapping[str, str], receipt_dir: Path) -> None:
@@ -149,7 +152,8 @@ def main(argv: list[str] | None = None) -> int:
             result = execute_once(pg, os.environ, receipt_dir)
     except Exception:
         result = {"status": "blocked_no_send", "reason": "existing_database_configuration_unavailable"}
-    result.update({"run_id": os.environ["GITHUB_RUN_ID"], "run_number": 1, "run_attempt": 1,
+    result.update({"run_id": os.environ["GITHUB_RUN_ID"], "run_number": AUTHORIZED_RUN_NUMBER, "run_attempt": 1,
+                   "previous_blocked_run_id": PREVIOUS_BLOCKED_RUN_ID,
                    "campaign": CAMPAIGN, "device_receipt": "unconfirmed",
                    "reservation_artifact_id": os.environ.get("RESERVATION_ARTIFACT_ID", "")})
     print(json.dumps(result, sort_keys=True))

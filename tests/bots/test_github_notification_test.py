@@ -97,7 +97,8 @@ def test_all_native_context_constraints_fail_closed_before_database(setup, key):
 
 @pytest.mark.parametrize("key,value", [
     ("GITHUB_RUN_ID", ""), ("GITHUB_RUN_ID", "0"), ("RUNNER_DEBUG", "1"),
-    ("GITHUB_RUN_NUMBER", "2"), ("GITHUB_RUN_ATTEMPT", "2"),
+    ("GITHUB_RUN_NUMBER", "1"), ("GITHUB_RUN_NUMBER", "3"),
+    ("GITHUB_RUN_NUMBER", "999"), ("GITHUB_RUN_ATTEMPT", "2"),
     ("GITHUB_RUN_ATTEMPT", "3"),
 ])
 def test_duplicate_dispatch_and_rerun_on_fresh_runner_never_sends(setup, tmp_path, key, value):
@@ -195,7 +196,7 @@ def test_workflow_has_one_guarded_secret_step_after_immutable_reservation():
     assert list(data["jobs"]) == ["send-once"]
     spec = data["jobs"]["send-once"]
     assert "strategy" not in spec and spec["timeout-minutes"] == 5
-    for condition in ("github.run_number == 1", "github.run_attempt == 1", "github.workflow_ref", "github.repository_id", "github.actor_id"):
+    for condition in ("github.run_number == 2", "github.run_attempt == 1", "github.workflow_ref", "github.repository_id", "github.actor_id"):
         assert condition in spec["if"]
     steps = spec["steps"]
     secret_steps = [i for i, step in enumerate(steps) if "secrets." in json.dumps(step)]
@@ -213,3 +214,20 @@ def test_workflow_has_one_guarded_secret_step_after_immutable_reservation():
         if "uses" in step:
             sha = step["uses"].split("@", 1)[1]
             assert len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)
+
+
+@pytest.mark.parametrize("run_number,attempt", [("1", "1"), ("1", "2"), ("2", "2"), ("2", "3"), ("3", "1"), ("999", "1")])
+def test_only_replacement_slot_can_read_database_or_attempt_send(setup, run_number, attempt):
+    db, env, receipt, calls = setup
+    env.update(GITHUB_RUN_NUMBER=run_number, GITHUB_RUN_ATTEMPT=attempt)
+    assert job.execute_once(db, env, receipt)["reason"] == "github_context_or_repeat_guard"
+    assert db.reads == [] and calls == []
+
+
+def test_replacement_reservation_records_exact_slot_and_predecessor(setup):
+    db, env, receipt, calls = setup
+    record = json.loads((receipt / "reservation.json").read_text())
+    assert record["run_number"] == "2" and record["run_attempt"] == "1"
+    assert record["previous_blocked_run_id"] == "38844659979"
+    assert job.ATTEMPT_ID != UUID("bce5e846-1942-4d98-a077-5ea17110f542")
+    assert job.context_ready(env)
