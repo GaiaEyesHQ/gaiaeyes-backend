@@ -31,7 +31,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       github.workflow_ref == format('{0}/{1}@{2}', github.repository,
       '.github/workflows/phone-notification-test-20261016.yml', github.ref) &&
-      github.run_number == 1 && github.run_attempt == 1 &&
+      github.run_number == 2 && github.run_attempt == 1 &&
       inputs.confirm_single_send
     runs-on: ubuntu-latest
     timeout-minutes: 5
