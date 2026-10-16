@@ -14,7 +14,7 @@ from bots.gauges.local_payload import get_local_payload
 from bots.gauges.signal_resolver import resolve_signals
 from bots.notifications.push_logic import (
     NotificationCandidate,
-    allows_severity,
+    family_allowed as _family_allowed,
     build_dedupe_key,
     can_emit_with_cooldown,
     flare_class_rank,
@@ -42,7 +42,7 @@ _SIGNAL_FAMILIES = {"geomagnetic", "solar_wind", "flare_cme_sep", "schumann"}
 _LOCAL_FAMILIES = {"pressure", "aqi", "temp"}
 _GAUGE_FAMILIES = {"pain", "energy", "sleep", "heart", "health_status"}
 _PROMPT_FAMILIES = {"symptom_followups", "daily_checkins"}
-_SYMPTOM_FOLLOWUP_PUSH_MAX_AGE = timedelta(days=7)
+_SYMPTOM_FOLLOWUP_PUSH_MAX_AGE = timedelta(hours=24)
 
 _PRESSURE_SIGNAL_KEYS = {
     "earthweather.pressure_swing_12h",
@@ -381,26 +381,6 @@ def _fetch_gauge_deltas(user_id: str, day: date) -> Dict[str, int]:
     return deltas
 
 
-def _family_allowed(preferences: Dict[str, Any], family: str, severity: str) -> bool:
-    if not preferences.get("enabled"):
-        return False
-    if not allows_severity(str(preferences.get("sensitivity") or "normal"), severity):
-        return False
-
-    family_flags = preferences.get("families") or {}
-    if family in _SIGNAL_FAMILIES:
-        return bool(preferences.get("signal_alerts_enabled")) and bool(family_flags.get(family, True))
-    if family in _LOCAL_FAMILIES:
-        return bool(preferences.get("local_condition_alerts_enabled")) and bool(family_flags.get(family, True))
-    if family in _GAUGE_FAMILIES:
-        return bool(preferences.get("personalized_gauge_alerts_enabled")) and bool(family_flags.get("gauge_spikes", True))
-    if family == "symptom_followups":
-        return bool(preferences.get("symptom_followups_enabled")) and bool(preferences.get("symptom_followup_push_enabled")) and bool(family_flags.get("symptom_followups", False))
-    if family == "daily_checkins":
-        return bool(preferences.get("daily_checkins_enabled")) and bool(preferences.get("daily_checkin_push_enabled")) and bool(family_flags.get("daily_checkins", False))
-    return False
-
-
 def _queue_candidate(
     *,
     user_id: str,
@@ -409,7 +389,11 @@ def _queue_candidate(
     status: str,
     error_text: str | None = None,
 ) -> bool:
-    dedupe_key = build_dedupe_key(user_id, candidate.family, candidate.event_key, now_utc)
+    prompt_id = (candidate.payload or {}).get("prompt_id")
+    dedupe_key = (
+        f"{user_id}:{candidate.family}:prompt:{prompt_id}"
+        if prompt_id else build_dedupe_key(user_id, candidate.family, candidate.event_key, now_utc)
+    )
     payload = json.dumps(candidate.event_payload(), separators=(",", ":"), sort_keys=True, default=str)
     row = pg.fetchrow(
         """
@@ -442,20 +426,8 @@ def _queue_candidate(
         now_utc,
         error_text,
     )
-    if row and candidate.payload:
-        prompt_id = (candidate.payload or {}).get("prompt_id")
-        if prompt_id:
-            pg.fetchrow(
-                """
-                update raw.user_feedback_prompts
-                   set delivered_at = coalesce(delivered_at, %s),
-                       updated_at = now()
-                 where id = %s::uuid
-                returning id
-                """,
-                now_utc,
-                prompt_id,
-            )
+    # Queueing and provider acceptance are not evidence of device presentation.
+    # Only the existing in-app presentation path may set prompt delivered_at.
     return row is not None
 
 
@@ -470,7 +442,8 @@ def _latest_events_by_family(user_id: str) -> Dict[str, Dict[str, Any]]:
                event_key
           from content.push_notification_events
          where user_id = %s
-           and status in ('queued', 'sent', 'skipped')
+           and (status in ('queued', 'sent', 'failed')
+                or (status = 'skipped' and error_text = 'bundled'))
          order by family, created_at desc
         """,
         user_id,
@@ -889,14 +862,8 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
 
 
 def _feedback_prompt_rows(user_id: str, prompt_type: str) -> List[Dict[str, Any]]:
-    extra_filters = ""
-    if prompt_type == "symptom_follow_up":
-        extra_filters = """
-           and delivered_at is null
-           and coalesce(snoozed_until, scheduled_for) >= now() - interval '7 days'
-        """
     return pg.fetch(
-        f"""
+        """
         select id,
                episode_id,
                symptom_code,
@@ -905,15 +872,23 @@ def _feedback_prompt_rows(user_id: str, prompt_type: str) -> List[Dict[str, Any]
                prompt_payload,
                status,
                scheduled_for,
+               snoozed_until,
                delivered_at,
                push_delivery_enabled
-          from raw.user_feedback_prompts
+          from raw.user_feedback_prompts p
          where user_id = %s
            and prompt_type = %s
            and status in ('pending', 'snoozed')
            and push_delivery_enabled = true
-           {extra_filters}
+           and (delivered_at is null or (status = 'snoozed' and snoozed_until > delivered_at))
            and coalesce(snoozed_until, scheduled_for) <= now()
+           and coalesce(snoozed_until, scheduled_for) >= now() - interval '24 hours'
+           and not exists (
+             select 1 from content.push_notification_events e
+              where e.user_id = p.user_id
+                and e.payload->>'prompt_id' = p.id::text
+                and e.status in ('queued', 'sent', 'failed')
+           )
          order by coalesce(snoozed_until, scheduled_for) asc, created_at asc
          limit 4
         """,
@@ -936,9 +911,10 @@ def _coerce_utc_datetime(value: Any) -> Optional[datetime]:
 
 
 def _symptom_followup_push_candidate_is_fresh(row: Dict[str, Any], now_utc: datetime) -> bool:
-    if row.get("delivered_at") is not None:
-        return False
     scheduled_for = _coerce_utc_datetime(row.get("snoozed_until")) or _coerce_utc_datetime(row.get("scheduled_for"))
+    delivered = _coerce_utc_datetime(row.get("delivered_at"))
+    if delivered is not None and not (row.get("status") == "snoozed" and scheduled_for and scheduled_for > delivered):
+        return False
     if scheduled_for is None:
         return False
     return scheduled_for >= now_utc - _SYMPTOM_FOLLOWUP_PUSH_MAX_AGE
@@ -1219,22 +1195,9 @@ def evaluate_user_notifications(user_id: str, day: date, preferences: Dict[str, 
             quiet_start=str(preferences.get("quiet_start") or "22:00"),
             quiet_end=str(preferences.get("quiet_end") or "08:00"),
         ):
-            if _queue_candidate(
-                user_id=user_id,
-                candidate=candidate,
-                now_utc=now_utc,
-                status="skipped",
-                error_text="quiet_hours",
-            ):
-                skipped += 1
-                _remember_latest_event(
-                    latest_events,
-                    family=candidate.family,
-                    severity=candidate.severity,
-                    status="skipped",
-                    created_at=now_utc,
-                    event_key=candidate.event_key,
-                )
+            # Re-evaluate after quiet hours. A skip must neither consume the
+            # dedupe/cooldown window nor mark a reminder delivered.
+            skipped += 1
             continue
 
         deliverable_candidates.append(candidate)
@@ -1340,13 +1303,22 @@ def main() -> None:
 
     total_queued = 0
     total_skipped = 0
+    failed = 0
     for row in _iter_user_rows(user_rows, args.limit):
         user_id = str(row.get("user_id") or "").strip()
         if not user_id:
             continue
         preferences = normalize_preferences(row)
         try:
-            result = evaluate_user_notifications(user_id, day, preferences)
+            with pg.operation_timeouts(connect_timeout=10, statement_timeout_ms=30000):
+                with pg.connection_scope() as conn, conn.transaction():
+                    lock = pg.fetchrow(
+                        "select pg_try_advisory_xact_lock(hashtextextended(%s, 0)) as acquired",
+                        f"push-eval:{user_id}",
+                    )
+                    if not (lock or {}).get("acquired"):
+                        continue
+                    result = evaluate_user_notifications(user_id, day, preferences)
             total_queued += result["queued"]
             total_skipped += result["skipped"]
             logger.info(
@@ -1356,10 +1328,13 @@ def main() -> None:
                 result["skipped"],
                 result["candidates"],
             )
-        except Exception as exc:
-            logger.exception("[push-eval] user=%s failed: %s", user_id, exc)
+        except Exception:
+            failed += 1
+            logger.error("[push-eval] user evaluation failed; transaction rolled back")
 
-    logger.info("[push-eval] done queued=%d skipped=%d", total_queued, total_skipped)
+    logger.info("[push-eval] done queued=%d skipped=%d failed=%d", total_queued, total_skipped, failed)
+    if failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

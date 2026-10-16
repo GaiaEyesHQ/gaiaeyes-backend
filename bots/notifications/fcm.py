@@ -55,7 +55,7 @@ class FcmClient:
                         "body": body,
                         **{str(key): str(value) for key, value in data.items() if value is not None},
                     },
-                    "android": {"priority": "high"},
+                    "android": {"priority": "high", "ttl": "300s"},
                 }
             },
             timeout=20,
@@ -70,4 +70,5 @@ class FcmClient:
             "status_code": response.status_code,
             "body": parsed,
             "raw_body": raw_body,
+            "retry_after": getattr(response, "headers", {}).get("Retry-After"),
         }

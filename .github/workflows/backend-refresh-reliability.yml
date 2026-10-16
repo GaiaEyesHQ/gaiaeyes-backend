@@ -6,6 +6,7 @@ on:
       - 'app/**'
       - 'services/**'
       - 'bots/gauges/**'
+      - 'bots/notifications/**'
       - 'bots/local_health_poll.py'
       - 'scripts/run_render_cron.py'
       - 'tests/**'
@@ -19,6 +20,7 @@ on:
       - 'app/**'
       - 'services/**'
       - 'bots/gauges/**'
+      - 'bots/notifications/**'
       - 'bots/local_health_poll.py'
       - 'scripts/run_render_cron.py'
       - 'tests/**'
@@ -79,6 +81,11 @@ jobs:
             tests/bots/test_gauge_scoring_job.py \
             tests/bots/test_gauge_scorer.py \
             tests/bots/test_local_health_poll.py \
+            tests/bots/test_notification_delivery_safety.py \
+            tests/bots/test_evaluate_push_notifications.py \
+            tests/bots/test_send_push_notifications.py \
+            tests/bots/test_push_logic.py \
+            tests/bots/test_fcm.py \
             tests/bots/test_send_test_notification.py \
             tests/bots/test_github_notification_test.py \
             tests/services/test_airnow_reliability.py \
@@ -93,4 +100,4 @@ jobs:
           GAIA_TEST_SUMMARY_LARGE_PLAN: '1'
           GAIA_TEST_POSTGRES_DSN: >-
             postgresql://gaia_test:local_test_only@127.0.0.1:5432/gaia_refresh_test?sslmode=disable
-        run: python -m pytest -q tests/integration/test_refresh_postgres.py tests/integration/test_schumann_query.py tests/integration/test_summary_materialization.py
+        run: python -m pytest -q tests/integration/test_refresh_postgres.py tests/integration/test_schumann_query.py tests/integration/test_summary_materialization.py tests/integration/test_notification_claims.py

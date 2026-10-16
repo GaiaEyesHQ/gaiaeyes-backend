@@ -73,6 +73,7 @@ class NotificationCandidate:
     def event_payload(self) -> Dict[str, Any]:
         payload = dict(self.payload or {})
         payload.setdefault("family", self.family)
+        payload.setdefault("severity", self.severity)
         payload.setdefault("event_key", self.event_key)
         payload.setdefault("target_type", self.target_type)
         payload.setdefault("target_key", self.target_key)
@@ -261,3 +262,23 @@ def can_emit_with_cooldown(
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def family_allowed(preferences: Dict[str, Any], family: str, severity: str) -> bool:
+    if not preferences.get("enabled"):
+        return False
+    if not allows_severity(str(preferences.get("sensitivity") or "normal"), severity):
+        return False
+
+    family_flags = preferences.get("families") or {}
+    if family in {"geomagnetic", "solar_wind", "flare_cme_sep", "schumann"}:
+        return bool(preferences.get("signal_alerts_enabled")) and bool(family_flags.get(family, True))
+    if family in {"pressure", "aqi", "temp"}:
+        return bool(preferences.get("local_condition_alerts_enabled")) and bool(family_flags.get(family, True))
+    if family in {"pain", "energy", "sleep", "heart", "health_status"}:
+        return bool(preferences.get("personalized_gauge_alerts_enabled")) and bool(family_flags.get("gauge_spikes", True))
+    if family == "symptom_followups":
+        return bool(preferences.get("symptom_followups_enabled")) and bool(preferences.get("symptom_followup_push_enabled")) and bool(family_flags.get("symptom_followups", False))
+    if family == "daily_checkins":
+        return bool(preferences.get("daily_checkins_enabled")) and bool(preferences.get("daily_checkin_push_enabled")) and bool(family_flags.get("daily_checkins", False))
+    return False
