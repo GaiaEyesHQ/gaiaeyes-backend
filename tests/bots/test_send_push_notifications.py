@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,8 @@ def _queued_event() -> dict[str, object]:
         "id": "evt-1",
         "user_id": "user-1",
         "family": "pressure",
+        "severity": "watch",
+        "created_at": datetime.now(timezone.utc),
         "event_key": "pressure_drop",
         "title": "Pressure changed",
         "body": "Open Gaia Eyes.",
@@ -44,7 +47,7 @@ def test_send_push_notifications_skips_when_notifications_are_currently_disabled
         return []
 
     monkeypatch.setattr(push_send, "_fetch_queued_events", _fake_fetch_queued_events)
-    monkeypatch.setattr(push_send, "_notifications_enabled", _fake_notifications_enabled)
+    monkeypatch.setattr(push_send, "_fetch_preferences", lambda user_id: {"enabled": False})
     monkeypatch.setattr(push_send, "_mark_event_status", _fake_mark_event_status)
     monkeypatch.setattr(push_send, "_fetch_user_tokens", _fake_fetch_user_tokens)
     monkeypatch.setattr(push_send, "_missing_apns_env", lambda: [])
@@ -74,7 +77,7 @@ def test_send_push_notifications_routes_android_tokens_through_fcm(monkeypatch):
             return _FakeFcmClient()
 
     monkeypatch.setattr(push_send, "_fetch_queued_events", lambda **kwargs: [_queued_event()])
-    monkeypatch.setattr(push_send, "_notifications_enabled", lambda user_id: True)
+    monkeypatch.setattr(push_send, "_fetch_preferences", lambda user_id: push_send.normalize_preferences({"enabled": True}))
     monkeypatch.setattr(
         push_send,
         "_fetch_user_tokens",
@@ -133,7 +136,7 @@ def test_send_push_notifications_disables_unregistered_android_token(monkeypatch
             return _FakeFcmClient()
 
     monkeypatch.setattr(push_send, "_fetch_queued_events", lambda **kwargs: [_queued_event()])
-    monkeypatch.setattr(push_send, "_notifications_enabled", lambda user_id: True)
+    monkeypatch.setattr(push_send, "_fetch_preferences", lambda user_id: push_send.normalize_preferences({"enabled": True}))
     monkeypatch.setattr(
         push_send,
         "_fetch_user_tokens",
@@ -161,7 +164,13 @@ def test_send_push_notifications_disables_unregistered_android_token(monkeypatch
     monkeypatch.setattr(push_send, "FcmClient", _FakeFcmFactory)
     monkeypatch.setattr(sys, "argv", ["send_push_notifications.py"])
 
-    push_send.main()
+    with pytest.raises(SystemExit, match="1"):
+        push_send.main()
 
     assert disabled == [("token-1", "UNREGISTERED")]
     assert marked == [("evt-1", "failed", "UNREGISTERED")]
+
+
+@pytest.fixture(autouse=True)
+def synthetic_claim(monkeypatch):
+    monkeypatch.setattr(push_send, "_claim_event", lambda event_id: _queued_event())

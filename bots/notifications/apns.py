@@ -94,6 +94,7 @@ def send_apns_notification(
     sandbox: bool = False,
     collapse_id: str | None = None,
     timeout_seconds: int | None = None,
+    expiration: int | None = None,
 ) -> Dict[str, Any]:
     host = "api.sandbox.push.apple.com" if sandbox else "api.push.apple.com"
     url = f"https://{host}/3/device/{device_token}"
@@ -124,6 +125,9 @@ def send_apns_notification(
     ]
     if collapse_id:
         cmd.extend(["--header", f"apns-collapse-id: {collapse_id[:64]}"])
+
+    if expiration is not None:
+        cmd.extend(["--header", f"apns-expiration: {expiration}"])
 
     run_options = {}
     if timeout_seconds is not None:

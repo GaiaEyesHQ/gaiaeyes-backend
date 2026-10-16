@@ -1,13 +1,29 @@
 name: send-push-notifications
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  workflow_run:
+    workflows: [evaluate-push-notifications]
+    types: [completed]
+    branches: [main]
   workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notification-delivery
+  cancel-in-progress: false
 
 jobs:
   run:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.id == github.repository_id &&
+       (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch'))
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       APNS_TEAM_ID: ${{ secrets.APNS_TEAM_ID }}
@@ -19,6 +35,9 @@ jobs:
       GAIA_LOG_LEVEL: INFO
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -37,4 +56,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Send queued push notifications
-        run: python -m bots.notifications.send_push_notifications
+        run: python -m bots.notifications.send_push_notifications --limit 100

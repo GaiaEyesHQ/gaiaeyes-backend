@@ -45,4 +45,4 @@ def test_fcm_uses_data_message_for_background_tap_routing(monkeypatch):
         "body": "Open today’s read.",
         "deep_link": "gaiaeyes://mission-control?family=gauge_spikes",
     }
-    assert message["android"] == {"priority": "high"}
+    assert message["android"] == {"priority": "high", "ttl": "300s"}

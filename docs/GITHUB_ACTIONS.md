@@ -29,8 +29,8 @@ This repo relies heavily on GitHub Actions for scheduled ingestion, JSON snapsho
 ### Health + features rollups
 - `health-daily-rollup.yml` — daily health rollups.
 - `daily-features-rollup.yml` — rolling daily features refresh.
-- `evaluate_push_notifications.yml` — evaluate current user state into queued push events every 15 minutes.
-- `send_push_notifications.yml` — send queued APNs or FCM notifications by registered platform and disable invalid tokens every 5 minutes. Requires GitHub Actions secrets `SUPABASE_DB_URL`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `FCM_PROJECT_ID`, and `FCM_SERVICE_ACCOUNT_JSON`.
+- `evaluate_push_notifications.yml` — evaluate current user state into queued push events on a requested quarter-hour schedule at minutes 7/22/37/52. GitHub scheduling is best effort; observed runs can be hours apart.
+- `send_push_notifications.yml` — run after each scheduled/manual evaluator completion on trusted `main`, with a manual fallback. Sends queued APNs or FCM notifications by registered platform and disables invalid tokens. Requires existing GitHub Actions secrets `SUPABASE_DB_URL`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `FCM_PROJECT_ID`, and `FCM_SERVICE_ACCOUNT_JSON`. See [notification delivery operations](NOTIFICATION_DELIVERY.md) for retry semantics and the remaining cadence limitation.
 
 ### Content + social
 - `gaia_eyes_daily.yml` — daily Earthscope pipeline (Supabase + media JSON + hardened FB/IG posting via `bots/earthscope_post/meta_poster.py`; see `docs/EARTHSCOPE_META_POSTING.md`).
