@@ -79,6 +79,8 @@ jobs:
             tests/bots/test_gauge_scoring_job.py \
             tests/bots/test_gauge_scorer.py \
             tests/bots/test_local_health_poll.py \
+            tests/bots/test_send_test_notification.py \
+            tests/bots/test_github_notification_test.py \
             tests/services/test_airnow_reliability.py \
             tests/services/test_local_signals_aggregator.py \
             tests/api/test_local_check.py \

@@ -93,6 +93,7 @@ def send_apns_notification(
     topic: str,
     sandbox: bool = False,
     collapse_id: str | None = None,
+    timeout_seconds: int | None = None,
 ) -> Dict[str, Any]:
     host = "api.sandbox.push.apple.com" if sandbox else "api.push.apple.com"
     url = f"https://{host}/3/device/{device_token}"
@@ -124,7 +125,14 @@ def send_apns_notification(
     if collapse_id:
         cmd.extend(["--header", f"apns-collapse-id: {collapse_id[:64]}"])
 
-    proc = subprocess.run(cmd, input=payload, capture_output=True, check=False)
+    run_options = {}
+    if timeout_seconds is not None:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        # Explicit one-shot callers must not inherit retries/logging from curlrc.
+        cmd[1:1] = ["--disable", "--globoff", "--retry", "0", "--max-time", str(timeout_seconds)]
+        run_options["timeout"] = timeout_seconds + 5
+    proc = subprocess.run(cmd, input=payload, capture_output=True, check=False, **run_options)
     stdout = (proc.stdout or b"").decode("utf-8", errors="replace")
     stderr = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
     body_text, _, status_text = stdout.rpartition("\n")
