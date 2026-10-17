@@ -43,6 +43,7 @@ struct SymptomPostResponse: Decodable {
     let id: String?
     let tsUtc: String?
     let error: String?
+    let episodeId: String?
 
     private struct StringBackedID: Decodable {
         let value: String
@@ -65,16 +66,19 @@ struct SymptomPostResponse: Decodable {
     private struct DataPayload: Decodable {
         let id: String?
         let tsUtc: String?
+        let episodeId: String?
 
         private enum CodingKeys: String, CodingKey {
             case id
             case tsUtc
+            case episodeId
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decodeIfPresent(StringBackedID.self, forKey: .id)?.value
             tsUtc = try container.decodeIfPresent(String.self, forKey: .tsUtc)
+            episodeId = try container.decodeIfPresent(String.self, forKey: .episodeId)
         }
     }
 
@@ -84,13 +88,15 @@ struct SymptomPostResponse: Decodable {
         case tsUtc
         case error
         case data
+        case episodeId
     }
 
-    init(ok: Bool? = nil, id: String? = nil, tsUtc: String? = nil, error: String? = nil) {
+    init(ok: Bool? = nil, id: String? = nil, tsUtc: String? = nil, error: String? = nil, episodeId: String? = nil) {
         self.ok = ok
         self.id = id
         self.tsUtc = tsUtc
         self.error = error
+        self.episodeId = episodeId
     }
 
     init(from decoder: Decoder) throws {
@@ -100,7 +106,22 @@ struct SymptomPostResponse: Decodable {
         id = try container.decodeIfPresent(StringBackedID.self, forKey: .id)?.value ?? payload?.id
         tsUtc = try container.decodeIfPresent(String.self, forKey: .tsUtc) ?? payload?.tsUtc
         error = try container.decodeIfPresent(String.self, forKey: .error)
+        episodeId = try container.decodeIfPresent(String.self, forKey: .episodeId) ?? payload?.episodeId
     }
+    func validated(for event: SymptomQueuedEvent) throws -> Self {
+        guard ok == true, let id, !id.isEmpty, let tsUtc,
+              let savedTime = MigraineFollowUpDraft.parseDate(tsUtc),
+              abs(savedTime.timeIntervalSince(event.tsUtc)) < 0.001 else {
+            throw MigraineSaveError.invalidResponse
+        }
+        if normalize(event.symptomCode) == "MIGRAINE" {
+            guard let episodeId, UUID(uuidString: episodeId) != nil else {
+                throw MigraineSaveError.invalidResponse
+            }
+        }
+        return self
+    }
+
 }
 
 struct SymptomCodeDefinition: Decodable {

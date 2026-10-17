@@ -53,8 +53,17 @@ final class MigraineAppVerificationServer: @unchecked Sendable {
     private var held: [@Sendable () -> Void] = []
     private var released = false
     private var responded = false
+    private var hasEpisode = true
+    private var creationLost = false
+    private var updates: [[String: Any]] = []
     init(scenario: String) {
         self.scenario = scenario
+        hasEpisode = !scenario.hasPrefix("guide-new")
+        if hasEpisode {
+            updates = [["id":"synthetic-original", "episode_id":MigraineTimeFixture.episodeID,
+                "symptom_code":"MIGRAINE", "label":"Migraine", "update_kind":"logged", "state":"ongoing",
+                "severity":8, "occurred_at":"2026-09-09T04:30:00Z"]]
+        }
         let behavior = scenario == "time-uncertain" ? "time-lost-entries"
             : scenario == "detail-uncertain" ? "time-detail-lost-entries" : "time-entries"
         fixture = MigraineTimeFixture(scenario: behavior, activeEpisode: true)
@@ -94,12 +103,13 @@ final class MigraineAppVerificationServer: @unchecked Sendable {
             let method = request.httpMethod ?? "GET"
             let id = MigraineTimeFixture.episodeID
             let episodePath = "/v1/symptoms/current/" + id
-            let allowed = method == "GET" && ["/health", "/v1/symptoms/current", "/v1/symptoms/current/timeline", "/v1/symptoms/migraine/history", episodePath, episodePath + "/migraine-detail", episodePath + "/migraine-times"].contains(path)
+            let allowed = method == "GET" && ["/health", "/v1/symptoms/current", "/v1/symptoms/current/timeline", "/v1/symptoms/migraine/history", episodePath, episodePath + "/timeline", episodePath + "/migraine-detail", episodePath + "/migraine-times"].contains(path)
                 || method == "PATCH" && [episodePath + "/migraine-detail", episodePath + "/migraine-times"].contains(path)
-                || method == "POST" && [episodePath + "/updates", episodePath + "/migraine-times", "/v1/symptoms/follow-ups/fixture-prompt/respond"].contains(path)
+                || method == "POST" && ["/v1/symptoms", episodePath + "/updates", episodePath + "/migraine-times", "/v1/symptoms/follow-ups/fixture-prompt/respond"].contains(path)
             let accepted = request.url?.host == "gaia-app-verification.invalid" && allowed
             var record: [String: Any] = ["method": method, "path": path, "accepted": accepted,
                 "scope": request.value(forHTTPHeaderField: "X-Dev-UserId") ?? "none"]
+            if let query = request.url?.query { record["query"] = query }
             if accepted, let body = request.httpBody {
                 record["body"] = try JSONSerialization.jsonObject(with: body)
                 // Keep original synthetic bytes for exact Decimal decoding in request assertions.
@@ -136,22 +146,32 @@ final class MigraineAppVerificationServer: @unchecked Sendable {
                 if scenario == "followup-uncertain" { throw URLError(.networkConnectionLost) }
                 return try json(["prompt": prompt, "episode": item, "migraine_detail": detail])
             }
+            if path == "/v1/symptoms", method == "POST" {
+                guard !otherAccount, let body = request.httpBody,
+                      let value = try JSONSerialization.jsonObject(with: body) as? [String: Any],
+                      value["symptom_code"] as? String == "MIGRAINE", let onset = value["ts_utc"] as? String else { return try error(422, "Synthetic onset required") }
+                if !hasEpisode {
+                    hasEpisode = true; fixture.startSyntheticEpisode(at: onset)
+                    updates = [["id":"synthetic-original", "episode_id":id, "symptom_code":"MIGRAINE",
+                        "label":"Migraine", "update_kind":"logged", "state":"new", "occurred_at":onset]]
+                }
+                if scenario == "guide-new-uncertain" && !creationLost { creationLost = true; throw URLError(.networkConnectionLost) }
+                return try json(["id":"4320153f-e300-449b-8810-e34b5d1482fe", "episode_id":id, "ts_utc":onset])
+            }
             if path == "/v1/symptoms/current" {
                 var itemRequest = request; itemRequest.url = request.url!.deletingLastPathComponent().appendingPathComponent("current/" + id)
                 let data = try fixture.response(itemRequest).1
                 var item = (try JSONSerialization.jsonObject(with: data) as! [String: Any])["data"] as! [String: Any]
                 if ["followup", "followup-uncertain"].contains(scenario), !responded { item["pending_follow_up"] = prompt }
+                let visible = !otherAccount && hasEpisode && item["current_state"] as? String != "resolved"
                 return try json(["generated_at": ISO8601DateFormatter().string(from: Date()), "window_hours": 24,
-                    "summary": ["active_count": otherAccount ? 0 : 1, "new_count": 0, "ongoing_count": otherAccount ? 0 : 1,
+                    "summary": ["active_count": visible ? 1 : 0, "new_count": 0, "ongoing_count": visible ? 1 : 0,
                                 "improving_count": 0, "worse_count": 0, "follow_up_available": false],
-                    "items": otherAccount ? [] : [item], "contributing_drivers": [], "pattern_context": [],
+                    "items": visible ? [item] : [], "contributing_drivers": [], "pattern_context": [],
                     "follow_up_settings": ["notifications_enabled": false, "enabled": false, "notification_family_enabled": false,
                         "push_enabled": false, "cadence": "off", "states": [], "symptom_codes": []]])
             }
-            if path == "/v1/symptoms/current/timeline" {
-                return try json(otherAccount ? [] : [["id": "synthetic-update", "episode_id": id, "symptom_code": "MIGRAINE",
-                    "label": "Migraine", "update_kind": "logged", "state": "ongoing", "severity": 5, "occurred_at": "2026-09-09T04:30:00Z"]])
-            }
+            if path == "/v1/symptoms/current/timeline" || path == episodePath + "/timeline" { return try json(otherAccount ? [] : updates) }
             if path == "/v1/symptoms/migraine/history", scenario == "calendar-unavailable" {
                 return try error(503, "migraine calendar history is not enabled")
             }
@@ -170,7 +190,25 @@ final class MigraineAppVerificationServer: @unchecked Sendable {
                     return try error(503, "Migraine time editing is not enabled")
                 }
             }
-            return try fixture.response(request)
+            let response = try fixture.response(request)
+            if method == "POST", path == episodePath + "/updates", response.0 == 200,
+               let body = request.httpBody, let value = try JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                let timestamp = value["ts_utc"] as? String ?? ISO8601DateFormatter().string(from: Date())
+                if !updates.contains(where: { $0["occurred_at"] as? String == timestamp }) {
+                    var entry: [String:Any] = ["id":UUID().uuidString,"episode_id":id,"symptom_code":"MIGRAINE","label":"Migraine",
+                        "update_kind":value["state"] == nil ? "severity_update" : "state_change", "occurred_at":timestamp]
+                    entry["state"] = value["state"]; entry["severity"] = value["severity"]; updates.append(entry)
+                }
+            }
+            if path == "/v1/symptoms/migraine/history", response.0 == 200 {
+                var envelope = try JSONSerialization.jsonObject(with: response.1) as! [String:Any]
+                var page = envelope["data"] as! [String:Any]
+                page["as_of"] = ISO8601DateFormatter().string(from: Date())
+                if !hasEpisode { page["items"] = [] as [String] }
+                envelope["data"] = page
+                return (200, try JSONSerialization.data(withJSONObject:envelope))
+            }
+            return response
         }
     }
 }

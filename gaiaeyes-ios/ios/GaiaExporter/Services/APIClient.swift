@@ -718,7 +718,7 @@ final class APIClient {
         return formatter.string(from: date)
     }
 
-    func postSymptomEvent(from event: SymptomQueuedEvent) async throws -> SymptomPostResponse {
+    func postSymptomEvent(from event: SymptomQueuedEvent, validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> SymptomPostResponse {
         let isoFmt = ISO8601DateFormatter()
         isoFmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let ts = isoFmt.string(from: event.tsUtc)
@@ -728,7 +728,7 @@ final class APIClient {
                                          freeText: event.freeText,
                                          tags: event.tags)
         do {
-            let response = try await postJSON("v1/symptoms", body: payload, as: SymptomPostResponse.self)
+            let response = try await postJSON("v1/symptoms", body: payload, as: SymptomPostResponse.self, validateRequest: validateRequest)
             if response.ok == false {
                 let message = response.error ?? "upload_failed"
                 if message.lowercased().contains("unknown") && message.lowercased().contains("symptom") {
@@ -736,10 +736,9 @@ final class APIClient {
                 }
                 throw APIError.server(code: 200, body: message)
             }
-            return response
-        } catch let decodeError as DecodingError {
-            logger?("[SYM] POST decode fallback: \(decodeError)")
-            return SymptomPostResponse(ok: nil, id: nil, tsUtc: nil, error: nil)
+            let confirmed = try response.validated(for: event)
+            NotificationCenter.default.post(name: .symptomEpisodesDidChange, object: nil)
+            return confirmed
         } catch APIError.server(let code, let body) {
             if code == 400, let data = body.data(using: .utf8) {
                 let decoder = APIClient.tolerantJSONDecoder()
@@ -805,6 +804,13 @@ final class APIClient {
 
     func fetchCurrentSymptomTimeline(days: Int = 7, validateRequest: (@MainActor () throws -> Void)? = nil) async throws -> Envelope<[CurrentSymptomTimelineEntry]> {
         try await getJSON("v1/symptoms/current/timeline?days=\(days)", as: Envelope<[CurrentSymptomTimelineEntry]>.self, validateRequest: validateRequest)
+    }
+
+    func fetchMigraineEpisodeTimeline(episodeId: String,
+        validateRequest: @escaping @MainActor () throws -> Void) async throws -> Envelope<[CurrentSymptomTimelineEntry]> {
+        guard UUID(uuidString: episodeId) != nil else { throw MigraineSaveError.invalidResponse }
+        return try await getJSON("v1/symptoms/current/\(episodeId)/timeline",
+            as: Envelope<[CurrentSymptomTimelineEntry]>.self, retries: 0, validateRequest: validateRequest)
     }
 
     func fetchMigraineHistory(range: DateInterval, cursor: String?,
@@ -873,12 +879,18 @@ final class APIClient {
             noteText: noteText,
             tsUtc: iso8601String(tsUtc)
         )
-        return try await postJSON(
+        let response = try await postJSON(
             "v1/symptoms/current/\(episodeId)/updates",
             body: payload,
             as: Envelope<CurrentSymptomItem>.self,
             validateRequest: validateRequest
         )
+        try await validateRequest?()
+        if response.ok == true, let saved = response.payload, saved.id == episodeId,
+           state.map({ saved.currentState == $0 }) ?? true, severity.map({ saved.severity == $0 }) ?? true {
+            NotificationCenter.default.post(name: .symptomEpisodesDidChange, object: nil)
+        }
+        return response
     }
 
     func deleteCurrentSymptom(episodeId: String) async throws -> Envelope<CurrentSymptomDeleteResult> {

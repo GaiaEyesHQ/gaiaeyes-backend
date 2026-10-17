@@ -2,6 +2,7 @@
 import Foundation
 
 extension Notification.Name {
+    static let symptomEpisodesDidChange = Notification.Name("gaia.symptom.episodes.changed")
     static let gaiaBackendDBRecovered = Notification.Name("gaia.backend.db.recovered")
     static let dashboardShouldRefresh = Notification.Name("DashboardShouldRefresh")
     static let gaiaAuthNeedsReauthentication = Notification.Name("gaia.auth.needs_reauthentication")
@@ -319,6 +320,10 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
                 let idText = resp.id ?? "-"
                 append("[Symptoms] uploaded \(event.symptomCode) → id=\(idText)")
             } catch SymptomUploadError.unknownSymptomCode {
+                guard normalize(event.symptomCode) != "MIGRAINE" else {
+                    append("[Symptoms] Migraine remains pending; the server must support its canonical code.")
+                    continue
+                }
                 appLog("[SYM] using code=OTHER (fallback)")
                 append("[SYM] using code=OTHER (fallback)")
                 let fallbackEvent = event.replacingSymptomCode(with: SymptomCodeHelper.fallbackCode, keepId: true)

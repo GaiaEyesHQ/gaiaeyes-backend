@@ -213,6 +213,14 @@ def fake_store(monkeypatch):
             },
         ]
 
+    async def _episode(conn, user_id, **kwargs):
+        return {"id": str(uuid4()), "current_state": "new"}
+
+    async def _schedule(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(symptoms_db, "ensure_symptom_episode_for_event", _episode)
+    monkeypatch.setattr(feedback_db, "maybe_schedule_symptom_follow_up", _schedule)
     monkeypatch.setattr(symptoms_db, "insert_symptom_event", _insert)
     monkeypatch.setattr(symptoms_db, "fetch_symptoms_today", _today)
     monkeypatch.setattr(symptoms_db, "fetch_daily_summary", _daily)
@@ -758,3 +766,57 @@ async def test_migraine_detail_requires_explicit_empty_list_to_clear(client: Asy
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_migraine_acknowledges_canonical_episode_without_inventing_severity(client, fake_store):
+    headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": str(uuid4())}
+    response = await client.post("/v1/symptoms", headers=headers, json={
+        "symptom_code": "MIGRAINE", "ts_utc": "2026-10-01T12:00:00Z"})
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["data"]["episode_id"]
+    assert fake_store.events[-1]["severity"] is None
+
+
+@pytest.mark.anyio
+async def test_migraine_canonical_failure_rolls_back_and_never_acknowledges(client, fake_store, monkeypatch):
+    class Connection:
+        rolled_back = False
+        committed = False
+        async def rollback(self):
+            self.rolled_back = True
+            fake_store.events.clear()
+        async def commit(self):
+            self.committed = True
+    connection = Connection()
+    async def db():
+        yield connection
+    async def fail(*args, **kwargs):
+        raise RuntimeError("synthetic canonical failure")
+    app.dependency_overrides[get_db] = db
+    monkeypatch.setattr(symptoms_db, "ensure_symptom_episode_for_event", fail)
+    response = await client.post("/v1/symptoms", headers={
+        "Authorization": "Bearer test-token", "X-Dev-UserId": str(uuid4())}, json={
+        "symptom_code": "MIGRAINE", "ts_utc": "2026-10-01T12:00:00Z"})
+    assert response.status_code == 503
+    assert connection.rolled_back and not connection.committed
+    assert not fake_store.events
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("start", [None, "2026-10-01T12:00:00"])
+async def test_migraine_requires_explicit_aware_onset(client, fake_store, start):
+    response = await client.post("/v1/symptoms", headers={
+        "Authorization": "Bearer test-token", "X-Dev-UserId": str(uuid4())}, json={
+        "symptom_code": "MIGRAINE", "ts_utc": start})
+    assert response.status_code == 422
+    assert not fake_store.events
+
+
+def test_current_migraines_preserve_each_unresolved_episode():
+    rows = [{"id": "older", "symptom_code": "MIGRAINE"},
+            {"id": "newer", "symptom_code": "MIGRAINE"},
+            {"id": "a", "symptom_code": "HEADACHE"},
+            {"id": "b", "symptom_code": "HEADACHE"}]
+    assert [row["id"] for row in symptoms_router._dedupe_current_symptom_rows(rows)] == ["older", "newer", "a"]

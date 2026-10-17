@@ -169,6 +169,7 @@ enum MigraineFollowUpWorkflow {
                       detail.episode.state == state.rawValue,
                       edit.matches(detail) else { throw MigraineSaveError.invalidResponse }
             }
+            NotificationCenter.default.post(name: .symptomEpisodesDidChange, object: nil)
             return saved
         } catch {
             try checkAccount(accountScope, current: currentAccountScope)
@@ -190,6 +191,7 @@ enum MigraineFollowUpWorkflow {
               saved.episode.episodeId == episodeId, edit.matches(saved) else {
             throw MigraineSaveError.invalidResponse
         }
+        NotificationCenter.default.post(name: .symptomEpisodesDidChange, object: nil)
         return saved
     }
 

@@ -11,11 +11,14 @@ struct MigraineEpisodeSummary: Equatable {
     let displayTimezone: String
     let timing: [Entry]
     let medicines: [Entry]
+    let symptoms: [Entry]
+    let locations: [Entry]
+    let reliefs: [Entry]
     let earlySigns: [Entry]
     let contexts: [Entry]
     let notes: String
 
-    init(detail: MigraineEpisodeDetail, episodeID: String, timeZone: TimeZone, locale: Locale = .current) throws {
+    init(detail: MigraineEpisodeDetail, episodeID: String, timeZone: TimeZone, locale: Locale = .current, now: Date = Date()) throws {
         let episode = detail.episode
         guard UUID(uuidString: episodeID) != nil, episode.episodeId == episodeID,
               episode.schemaVersion == "1.0", episode.symptomCode == "MIGRAINE",
@@ -48,19 +51,13 @@ struct MigraineEpisodeSummary: Equatable {
         let created = try instant(episode.lifecycle.createdAt), saved = try instant(episode.lifecycle.updatedAt)
         guard saved >= created else { throw MigraineSaveError.invalidResponse }
         var duration = "Not available without a recorded end time"
-        if let end {
-            let minutes = Int(end.timeIntervalSince(start) / 60)
-            let hours = minutes / 60
-            let minuteText = "\(minutes % 60) minute\(minutes % 60 == 1 ? "" : "s")"
-            let hourText = "\(hours) hour\(hours == 1 ? "" : "s")"
-            duration = minutes == 0 ? "Less than a minute" : hours == 0 ? minuteText
-                : minutes % 60 == 0 ? hourText : "\(hourText), \(minuteText)"
-        }
+        if let end { duration = Self.elapsed(from: start, to: end) }
+        else if episode.state != "resolved" { duration = Self.elapsed(from: start, to: now) + " · ongoing" }
         revision = detail.revision; displayTimezone = timeZone.identifier
         timing = [Entry(id: "start", title: "Started", lines: [try time(episode.start)]),
                   Entry(id: "end", title: "Ended", lines: [try time(episode.end)]),
-                  Entry(id: "state", title: "Saved state", lines: [episode.state.capitalized]),
-                  Entry(id: "severity", title: "Severity", lines: [episode.severity.map { "\($0)/10" } ?? "Not recorded"]),
+                  Entry(id: "state", title: "Saved state", lines: [episode.state == "resolved" ? "Ended" : "Active (\(episode.state))"]),
+                  Entry(id: "severity", title: "Last reported severity", lines: [episode.severity.map { "\($0)/10" } ?? "Not recorded"]),
                   Entry(id: "duration", title: "Elapsed duration", lines: [duration])]
         medicines = try episode.medicines.enumerated().map { index, medicine in
             guard !medicine.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -76,6 +73,16 @@ struct MigraineEpisodeSummary: Equatable {
                 "Taken: \(try time(medicine.takenAt))", "Dose: \(dose)", "Reported relief: \(relief)",
                 "Relief recorded: \(try time(medicine.reliefReportedAt))", "Note: \(text(medicine.notes))"])
         }
+        func observationEntries(_ values: [MigraineEarlySign], prefix: String) throws -> [Entry] {
+            try values.enumerated().map { index, value in
+                guard !value.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw MigraineSaveError.invalidResponse }
+                return Entry(id: "\(prefix)-\(index)", title: value.label,
+                             lines: ["Recorded: \(try time(value.reportedAt))", "Note: \(text(value.notes))"])
+            }
+        }
+        symptoms = try observationEntries(episode.symptoms ?? [], prefix: "symptom")
+        locations = try observationEntries(episode.painLocations ?? [], prefix: "location")
+        reliefs = try observationEntries(episode.reliefs ?? [], prefix: "relief")
         earlySigns = try episode.earlySigns.enumerated().map { index, sign in
             guard !sign.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw MigraineSaveError.invalidResponse }
             return Entry(id: "sign-\(index)", title: sign.label,
@@ -92,6 +99,15 @@ struct MigraineEpisodeSummary: Equatable {
         // it cannot provide a truthful last-updated label for this summary.
         notes = text(episode.notes)
     }
+    static func elapsed(from start: Date, to end: Date) -> String {
+        guard end >= start else { return "Start is in the future; review the saved time" }
+        let minutes = Int(end.timeIntervalSince(start) / 60), hours = Int(end.timeIntervalSince(start) / 3600)
+        if minutes == 0 { return "Less than a minute" }
+        let minuteText = "\(minutes % 60) minute\(minutes % 60 == 1 ? "" : "s")"
+        let hourText = "\(hours) hour\(hours == 1 ? "" : "s")"
+        return hours == 0 ? minuteText : minutes % 60 == 0 ? hourText : "\(hourText), \(minuteText)"
+    }
+
 }
 
 enum MigraineEpisodeSummaryError: Error {

@@ -95,6 +95,16 @@ final class MigraineTimeFixture {
             context["episode"] = episode
         }
     }
+    func startSyntheticEpisode(at timestamp: String) {
+        var episode = context["episode"] as! [String: Any]
+        episode["start"] = ["utc": timestamp, "timezone_source": "user"]
+        episode["state"] = "new"; episode["end"] = NSNull(); episode["severity"] = NSNull()
+        for key in ["symptoms", "pain_locations", "reliefs", "early_signs", "contexts", "medicines"] { episode[key] = [] as [String] }
+        episode["notes"] = NSNull()
+        episode["lifecycle"] = ["revision":1, "created_at":timestamp, "updated_at":timestamp]
+        context["episode"] = episode; context["revision"] = 0; context["raw_end_utc"] = NSNull()
+    }
+
     func response(_ request: URLRequest) throws -> (Int, Data) {
         let path = request.url!.path
         func json(_ data: Any) throws -> (Int, Data) {
@@ -117,7 +127,7 @@ final class MigraineTimeFixture {
             let items: [[String: Any]] = visible ? [["id": Self.episodeID, "started_at": onset,
                 "ended_at": ended as Any? ?? NSNull(), "state": state,
                 "end_status": ended != nil ? "recorded" : state == "resolved" ? "unknown" : "open",
-                "severity": 5, "note_preview": episode["notes"] ?? NSNull()]] : []
+                "severity": episode["severity"] ?? NSNull(), "note_preview": episode["notes"] ?? NSNull()]] : []
             return try json(["items": items, "start": start, "end": end, "as_of": "2026-09-10T12:00:00Z",
                 "snapshot": "time-fixture-\(context["revision"]!)", "next_cursor": NSNull(), "complete": true])
         }
@@ -191,7 +201,7 @@ final class MigraineTimeFixture {
                     return try json(["episode": episode, "revision": context["revision"]!, "changed": false])
                 }
                 guard body["expected_revision"] as? Int == context["revision"] as? Int else { return error(409) }
-                for key in ["notes", "medicines", "early_signs"] { if let value = body[key] { episode[key] = value } }
+                for key in ["notes", "medicines", "early_signs", "contexts", "symptoms", "pain_locations", "reliefs"] { if let value = body[key] { episode[key] = value } }
                 let revision = (context["revision"] as! Int) + 1
                 var lifecycle = episode["lifecycle"] as! [String: Any]; lifecycle["revision"] = revision
                 episode["lifecycle"] = lifecycle; context["revision"] = revision; context["episode"] = episode
@@ -208,6 +218,10 @@ final class MigraineTimeFixture {
                 episode["notes"] = note.trimmingCharacters(in: .whitespacesAndNewlines)
             }
             episode["severity"] = body["severity"] ?? episode["severity"]
+            if let state = body["state"] as? String {
+                episode["state"] = state
+                if state == "resolved", let ts = body["ts_utc"] as? String { episode["end"] = ["utc":ts, "timezone_source":"user"] }
+            }
             context["episode"] = episode; context["canonical_updated_at"] = "2026-09-10T04:01:00Z"
         }
         return try json(["id": Self.episodeID, "symptom_code": "MIGRAINE", "label": "Migraine",

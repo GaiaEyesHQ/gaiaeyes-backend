@@ -238,6 +238,9 @@ struct MigraineEpisode: Codable, Hashable {
     let notes: String?
     let provenance: MigraineEpisodeProvenance
     let lifecycle: MigraineEpisodeLifecycle
+    var symptoms: [MigraineEarlySign]? = nil
+    var painLocations: [MigraineEarlySign]? = nil
+    var reliefs: [MigraineEarlySign]? = nil
 }
 
 struct MigraineEpisodeDetail: Codable, Hashable {
@@ -252,14 +255,19 @@ enum MigraineTextChange: Hashable {
     case clear
 }
 
-struct MigraineStructuredEdit: Encodable, Hashable {
+struct MigraineStructuredEdit: Codable, Hashable {
     let expectedRevision: Int
     let earlySigns: [MigraineEarlySign]?
     let contexts: [MigraineEpisodeContext]?
     let medicines: [MigraineMedicineTaken]?
     let notes: MigraineTextChange
+    var symptoms: [MigraineEarlySign]? = nil
+    var painLocations: [MigraineEarlySign]? = nil
+    var reliefs: [MigraineEarlySign]? = nil
 
     private enum CodingKeys: String, CodingKey {
+        case symptoms, reliefs
+        case painLocations = "pain_locations"
         case expectedRevision = "expected_revision"
         case earlySigns = "early_signs"
         case contexts
@@ -268,7 +276,7 @@ struct MigraineStructuredEdit: Encodable, Hashable {
     }
 
     var hasChanges: Bool {
-        earlySigns != nil || contexts != nil || medicines != nil || notes != .retain
+        earlySigns != nil || contexts != nil || medicines != nil || notes != .retain || symptoms != nil || painLocations != nil || reliefs != nil
     }
 
     var followUpNoteText: String? {
@@ -278,6 +286,9 @@ struct MigraineStructuredEdit: Encodable, Hashable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(symptoms, forKey: .symptoms)
+        try container.encodeIfPresent(painLocations, forKey: .painLocations)
+        try container.encodeIfPresent(reliefs, forKey: .reliefs)
         try container.encode(expectedRevision, forKey: .expectedRevision)
         try container.encodeIfPresent(earlySigns, forKey: .earlySigns)
         try container.encodeIfPresent(contexts, forKey: .contexts)
@@ -296,6 +307,9 @@ struct MigraineStructuredEdit: Encodable, Hashable {
         // Only the immediately completed revision can be our save/replay.
         // This content check alone never proves that a follow-up prompt answered.
         guard detail.revision == expectedRevision + 1 else { return false }
+        for (intended, saved) in [(symptoms, detail.episode.symptoms), (painLocations, detail.episode.painLocations), (reliefs, detail.episode.reliefs)] {
+            if let intended, (intended.count != (saved ?? []).count || !zip(intended, saved ?? []).allSatisfy({ $0.matches($1) })) { return false }
+        }
         if let earlySigns,
            (earlySigns.count != detail.episode.earlySigns.count
             || !zip(earlySigns, detail.episode.earlySigns).allSatisfy({ $0.matches($1) })) { return false }
@@ -382,6 +396,27 @@ enum MigraineDraftError: Error, LocalizedError {
 }
 
 // Identity exists only in this draft. The API still stores the ordered array.
+extension MigraineStructuredEdit {
+    // Persist the complete submitted values for retries, including timezone
+    // provenance. Decode with convertFromSnakeCase, like API responses.
+    private enum DecodingKeys: String, CodingKey {
+        case expectedRevision, earlySigns, contexts, medicines, notes, symptoms, painLocations, reliefs
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: DecodingKeys.self)
+        expectedRevision = try values.decode(Int.self, forKey: .expectedRevision)
+        earlySigns = try values.decodeIfPresent([MigraineEarlySign].self, forKey: .earlySigns)
+        contexts = try values.decodeIfPresent([MigraineEpisodeContext].self, forKey: .contexts)
+        medicines = try values.decodeIfPresent([MigraineMedicineTaken].self, forKey: .medicines)
+        symptoms = try values.decodeIfPresent([MigraineEarlySign].self, forKey: .symptoms)
+        painLocations = try values.decodeIfPresent([MigraineEarlySign].self, forKey: .painLocations)
+        reliefs = try values.decodeIfPresent([MigraineEarlySign].self, forKey: .reliefs)
+        if !values.contains(.notes) { notes = .retain }
+        else if try values.decodeNil(forKey: .notes) { notes = .clear }
+        else { notes = .set(try values.decode(String.self, forKey: .notes)) }
+    }
+}
+
 struct MigraineMedicineDraftRow: Identifiable, Hashable {
     let id: UUID
     var originalIndex: Int?

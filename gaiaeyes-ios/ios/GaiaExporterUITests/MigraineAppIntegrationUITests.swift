@@ -35,6 +35,102 @@ final class MigraineAppIntegrationUITests: XCTestCase {
         } catch { XCTFail("Cannot verify isolated startup: \(error)") }
         return app
     }
+    @MainActor private func launchMigraineHome(_ scenario: String = "success", large: Bool = false) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-gaia-verify-normal-app", "-gaia-app-scenario", scenario,
+            "-gaia-enable-structured-migraine-follow-up", "-gaia-enable-migraine-calendar", "-gaia-enable-migraine-time-editing"]
+        if large { app.launchArguments.append("-gaia-app-large-text") }
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        let target = scenario.hasPrefix("guide-new") ? "home-migraine-log" : "home-migraine-details-" + episode
+        XCTAssertTrue(app.buttons[target].waitForExistence(timeout: 15))
+        reveal(app.buttons[target], app, up: true)
+        capture(app, "Migraine Home " + scenario + (large ? " large text" : ""))
+        return app
+    }
+
+    @MainActor func testMigraineHomeActionsDetailsSummaryEndAndCalendar() throws {
+        let app = launchMigraineHome()
+        tap(app.buttons["home-migraine-severity-" + episode], app)
+        XCTAssertTrue(app.buttons["migraine-severity-0"].waitForExistence(timeout: 5))
+        app.buttons["migraine-severity-0"].tap()
+        XCTAssertEqual(app.staticTexts["migraine-severity-value"].label, "0 / 10")
+        capture(app, "Migraine current severity zero is explicit")
+        tap(app.buttons["migraine-action-save"], app)
+        XCTAssertTrue(app.buttons["home-migraine-details-" + episode].waitForExistence(timeout: 10))
+        tap(app.buttons["home-migraine-details-" + episode], app)
+        XCTAssertTrue(app.buttons["Nausea"].waitForExistence(timeout: 10)); tap(app.buttons["Nausea"], app)
+        capture(app, "Migraine guided symptoms")
+        app.buttons["migraine-guide-next"].tap()
+        tap(app.buttons["Your left temple"], app)
+        capture(app, "Migraine pain location uses your left and right")
+        app.buttons["migraine-guide-next"].tap()
+        capture(app, "Migraine guided medicine entries preserve existing details")
+        app.buttons["migraine-guide-next"].tap()
+        tap(app.buttons["Rest"], app)
+        app.buttons["migraine-guide-next"].tap()
+        app.buttons["migraine-guide-next"].tap()
+        capture(app, "Migraine guided editable review")
+        app.buttons["migraine-guide-confirm"].tap()
+        XCTAssertTrue(app.buttons["home-migraine-summary-" + episode].waitForExistence(timeout: 15))
+        tap(app.buttons["home-migraine-summary-" + episode], app)
+        XCTAssertTrue(app.staticTexts["migraine-summary-saved"].waitForExistence(timeout: 10))
+        reveal(app.staticTexts["migraine-summary-highest"], app)
+        XCTAssertEqual(app.staticTexts["migraine-summary-highest"].label, "Highest recorded severity: 8/10")
+        capture(app, "Migraine summary distinguishes current zero and highest eight")
+        reveal(app.staticTexts["migraine-summary-symptom-0-title"], app)
+        XCTAssertEqual(app.staticTexts["migraine-summary-symptom-0-title"].label, "Nausea")
+        app.buttons["migraine-summary-done"].tap()
+        tap(app.buttons["home-migraine-end-" + episode], app)
+        app.buttons["migraine-end-now"].tap(); capture(app, "Migraine explicit end time")
+        tap(app.buttons["migraine-action-save"], app)
+        XCTAssertTrue(app.buttons["home-migraine-log"].waitForExistence(timeout: 10))
+        tap(app.buttons["home-migraine-calendar"], app)
+        XCTAssertTrue(app.buttons["migraine-calendar-episode-" + episode].waitForExistence(timeout: 10))
+        capture(app, "Migraine ended episode remains in calendar")
+    }
+
+    @MainActor func testMigraineNewDraftResumeAndPartialSaveLargeText() throws {
+        let app = launchMigraineHome("guide-new", large: true)
+        app.buttons["home-migraine-log"].tap()
+        XCTAssertTrue(app.buttons["migraine-guide-start-now"].waitForExistence(timeout: 5))
+        capture(app, "Migraine large text explicit start")
+        tap(app.buttons["migraine-guide-start-now"], app)
+        app.buttons["migraine-guide-next"].tap()
+        XCTAssertEqual(app.staticTexts["migraine-severity-value"].label, "Not selected")
+        capture(app, "Migraine large text optional severity")
+        app.buttons["migraine-guide-next"].tap()
+        tap(app.buttons["Nausea"], app)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["home-migraine-resume"].waitForExistence(timeout: 5))
+        tap(app.buttons["home-migraine-resume"], app)
+        XCTAssertTrue(app.buttons["Nausea"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["Nausea"].value as? String, "Selected")
+        capture(app, "Migraine large text resumed optional details")
+        app.buttons["migraine-guide-save"].tap()
+        XCTAssertTrue(app.buttons["home-migraine-details-" + episode].waitForExistence(timeout: 15))
+        capture(app, "Migraine large text acknowledged partial save")
+    }
+
+    @MainActor func testMigraineUncertainCreationRetriesSameEpisode() throws {
+        let app = launchMigraineHome("guide-new-uncertain")
+        app.buttons["home-migraine-log"].tap()
+        XCTAssertTrue(app.buttons["migraine-guide-start-now"].waitForExistence(timeout: 5))
+        app.buttons["migraine-guide-start-now"].tap(); app.buttons["migraine-guide-next"].tap()
+        app.buttons["migraine-severity-5"].tap(); app.buttons["migraine-guide-save"].tap()
+        XCTAssertTrue(app.buttons["migraine-guide-retry"].waitForExistence(timeout: 10))
+        capture(app, "Migraine uncertain creation retains frozen answers")
+        tap(app.buttons["migraine-guide-retry"], app)
+        XCTAssertTrue(app.buttons["home-migraine-details-" + episode].waitForExistence(timeout: 15))
+        tap(app.buttons["home-current-symptoms-open"], app)
+        XCTAssertTrue(app.buttons["g038-receipt-open"].waitForExistence(timeout: 5))
+        let records = try receipts(app)
+        let creates = records.filter { $0["method"] as? String == "POST" && $0["path"] as? String == "/v1/symptoms" }
+        XCTAssertEqual(creates.count, 2)
+        XCTAssertEqual((creates.first?["body"] as? NSDictionary), (creates.last?["body"] as? NSDictionary))
+        XCTAssertTrue(records.allSatisfy { $0["accepted"] as? Bool == true })
+    }
+
     @MainActor private func reveal(_ item: XCUIElement, _ app: XCUIApplication, up: Bool = false) {
         for _ in 0..<24 {
             let top = app.navigationBars.firstMatch.frame.maxY + 4

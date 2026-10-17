@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MigraineHistoryView: View {
+    @Environment(\.scenePhase) private var scenePhase
     let api: APIClient
     let accountScope: String
     let accountScopeProvider: @MainActor () -> String
@@ -103,6 +104,12 @@ struct MigraineHistoryView: View {
         .navigationTitle("Migraine calendar").navigationBarTitleDisplayMode(.inline)
         .toolbar { Button("Refresh") { Task { await load() } }.accessibilityIdentifier("migraine-calendar-refresh") }
         .task(id: loadKey) { await load() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await load() } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .symptomEpisodesDidChange).receive(on: RunLoop.main)) { _ in
+            Task { await load() }
+        }
         .onChange(of: accountScope) { _, _ in selectedEpisode = nil; summaryEpisode = nil }
         .refreshable { await load() }
         .sheet(item: $selectedEpisode, onDismiss: { editorIsSaving = false; Task { await load() } }) { episode in
