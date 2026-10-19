@@ -97,6 +97,7 @@ class SymptomEnvelope(BaseModel):
 class SymptomEventData(BaseModel):
     id: str
     ts_utc: str
+    episode_id: Optional[str] = None
 
 
 class SymptomEventResponse(SymptomEnvelope):
@@ -151,6 +152,9 @@ class CurrentSymptomUpdateIn(BaseModel):
 
 
 class MigraineStructuredFieldsIn(BaseModel):
+    symptoms: Optional[List[EarlySign]] = None
+    pain_locations: Optional[List[EarlySign]] = None
+    reliefs: Optional[List[EarlySign]] = None
     early_signs: Optional[List[EarlySign]] = None
     contexts: Optional[List[EpisodeContext]] = None
     medicines: Optional[List[MedicineTaken]] = None
@@ -158,7 +162,7 @@ class MigraineStructuredFieldsIn(BaseModel):
 
     @model_validator(mode="after")
     def reject_null_collections(self) -> "MigraineStructuredFieldsIn":
-        for field in ("early_signs", "contexts", "medicines"):
+        for field in ("early_signs", "contexts", "medicines", "symptoms", "pain_locations", "reliefs"):
             if field in self.model_fields_set and getattr(self, field) is None:
                 raise ValueError(f"{field} must be omitted to retain it or [] to clear it")
         return self
@@ -175,7 +179,7 @@ class MigraineEpisodeDetailUpdateIn(MigraineStructuredFieldsIn):
 
     @model_validator(mode="after")
     def require_structured_change(self) -> "MigraineEpisodeDetailUpdateIn":
-        supplied = self.model_fields_set & {"state", "early_signs", "contexts", "medicines", "notes"}
+        supplied = self.model_fields_set & {"state", "early_signs", "contexts", "medicines", "notes", "symptoms", "pain_locations", "reliefs"}
         if not supplied:
             raise ValueError("At least one structured migraine field must be supplied")
         if "state" in supplied and self.state is None:
@@ -392,7 +396,7 @@ def _dedupe_current_symptom_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, A
     seen_codes: set[str] = set()
     for row in rows:
         code = _normalize_symptom_code(str(row.get("symptom_code") or ""))
-        if code:
+        if code and code != "MIGRAINE":
             if code in seen_codes:
                 continue
             seen_codes.add(code)
@@ -491,10 +495,9 @@ async def _build_current_symptoms_payload(
     *,
     window_hours: int,
 ) -> CurrentSymptomsSnapshotOut:
-    try:
-        rows = await symptoms_db.fetch_current_symptom_items(conn, user_id, window_hours=window_hours)
-    except Exception:
-        rows = await symptoms_db.fetch_current_symptom_items_fallback(conn, user_id, window_hours=window_hours)
+    # Raw events cannot establish whether an older episode remains active.
+    # Report a refresh failure instead of silently dropping unresolved episodes.
+    rows = await symptoms_db.fetch_current_symptom_items(conn, user_id, window_hours=window_hours)
     rows = _dedupe_current_symptom_rows(rows)
 
     follow_up = await symptoms_db.fetch_symptom_follow_up_settings(conn, user_id)
@@ -749,7 +752,7 @@ async def _transaction_if_supported(conn):
 
 
 def _migraine_changes(payload: MigraineStructuredFieldsIn, *, state: Optional[str] = None) -> tuple[dict[str, Any], set[str]]:
-    fields = set(payload.model_fields_set) & {"early_signs", "contexts", "medicines", "notes"}
+    fields = set(payload.model_fields_set) & {"early_signs", "contexts", "medicines", "notes", "symptoms", "pain_locations", "reliefs"}
     changes = {field: getattr(payload, field) for field in fields}
     if state is not None:
         fields.add("state")
@@ -802,7 +805,16 @@ async def create_symptom_event(
 ):
     user_id = _require_user_id(request)
     normalized_code = _normalize_symptom_code(payload.symptom_code)
-    effective_severity = payload.severity if payload.severity is not None else 5
+    effective_severity = payload.severity if normalized_code == "MIGRAINE" else (payload.severity if payload.severity is not None else 5)
+    event_ts = payload.ts_utc
+    if normalized_code == "MIGRAINE":
+        if "ts_utc" not in payload.model_fields_set:
+            # Existing quick loggers record when the user logs the symptom.
+            # Capture that time once; do not infer a historical onset or severity.
+            # Guided clients supply their selected onset and retain it for retries.
+            event_ts = datetime.now(timezone.utc)
+        elif event_ts is None or event_ts.utcoffset() is None:
+            raise HTTPException(422, "An explicitly supplied migraine start time must include a timezone")
 
     try:
         code_rows = await symptoms_db.fetch_symptom_codes(conn)
@@ -829,6 +841,8 @@ async def create_symptom_event(
     other_key = "OTHER" if "OTHER" in lookup else None
 
     if normalized_code not in lookup:
+        if normalized_code == "MIGRAINE":
+            raise HTTPException(503, "Migraine logging is not configured on this server")
         if strict:
             valid_codes = sorted(lookup.keys())
             return JSONResponse(
@@ -859,66 +873,39 @@ async def create_symptom_event(
         },
     )
 
+    # A successful acknowledgement means both the event and its canonical episode
+    # committed. A failed episode insert must never strand a raw-only migraine.
     try:
-        result = await symptoms_db.insert_symptom_event(
-            conn,
-            user_id,
-            symptom_code=canonical_code,
-            ts_utc=payload.ts_utc,
-            severity=effective_severity,
-            free_text=payload.free_text,
-            tags=payload.tags,
-        )
-    except Exception as exc:  # pragma: no cover - exercised via tests
-        logger.exception("failed to insert symptom event", extra={"user_id": user_id, "symptom_code": canonical_code})
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": False,
-                "data": None,
-                "error": _error_text(exc),
-                "friendly_error": _ERR_RECORD_EVENT,
-            },
-        )
-    if not result.get("id") or not result.get("ts_utc"):
-        raise HTTPException(status_code=500, detail="Failed to persist symptom event")
-    episode = None
+        async with _transaction_if_supported(conn):
+            result = await symptoms_db.insert_symptom_event(
+                conn, user_id, symptom_code=canonical_code, ts_utc=event_ts,
+                severity=effective_severity, free_text=payload.free_text, tags=payload.tags,
+            )
+            if not result.get("id") or not result.get("ts_utc"):
+                raise RuntimeError("Failed to persist symptom event")
+            episode = await symptoms_db.ensure_symptom_episode_for_event(
+                conn, user_id, symptom_event_id=str(result["id"]), symptom_code=canonical_code,
+                ts_utc=datetime.fromisoformat(result["ts_utc"].replace("Z", "+00:00")),
+                severity=effective_severity, note_text=payload.free_text,
+            )
+            if not episode or not episode.get("id"):
+                raise RuntimeError("Failed to persist canonical symptom episode")
+    except Exception:
+        logger.exception("failed to persist symptom event and canonical episode")
+        raise HTTPException(503, "Symptom save could not be confirmed; retry the same entry")
+
+    # Reminder failures are separate from the committed episode. Roll back their
+    # own transaction so a database error cannot turn a canonical save into loss.
     try:
-        episode = await symptoms_db.ensure_symptom_episode_for_event(
-            conn,
-            user_id,
-            symptom_event_id=str(result["id"]),
-            symptom_code=canonical_code,
-            ts_utc=payload.ts_utc,
-            severity=effective_severity,
-            note_text=payload.free_text,
-        )
-    except Exception as exc:  # pragma: no cover - migration rollout fallback
-        logger.warning(
-            "symptom episode sync failed user=%s event=%s err=%s",
-            user_id,
-            result.get("id"),
-            exc,
-        )
-    if episode and episode.get("id"):
-        try:
+        async with _transaction_if_supported(conn):
             await feedback_db.maybe_schedule_symptom_follow_up(
-                conn,
-                user_id,
-                episode_id=str(episode["id"]),
-                trigger="logged",
-                reference_ts=payload.ts_utc,
+                conn, user_id, episode_id=str(episode["id"]), trigger="logged",
+                reference_ts=datetime.now(timezone.utc),
             )
-        except Exception as exc:  # pragma: no cover - defensive rollout fallback
-            logger.warning(
-                "symptom follow-up schedule failed user=%s episode=%s err=%s",
-                user_id,
-                episode.get("id"),
-                exc,
-            )
-    await _commit_if_supported(conn)
+    except Exception:
+        logger.warning("symptom follow-up scheduling unavailable after saved episode")
     await _refresh_gauges_for_symptom(user_id, result["ts_utc"])
-    data = SymptomEventData(id=result["id"], ts_utc=result["ts_utc"])
+    data = SymptomEventData(id=result["id"], ts_utc=result["ts_utc"], episode_id=str(episode["id"]))
     return SymptomEventResponse(data=data, error=None)
 
 
@@ -1088,12 +1075,18 @@ async def get_current_symptoms(
 async def get_current_symptom_timeline(
     request: Request,
     conn=Depends(get_db),
+    episode_id: Optional[UUID] = Query(None),
     days: int = Query(DEFAULT_CURRENT_TIMELINE_DAYS, ge=1, le=MAX_CURRENT_TIMELINE_DAYS),
 ):
     user_id = _require_user_id(request)
     try:
-        rows = await symptoms_db.fetch_current_symptom_timeline(conn, user_id, days=days)
+        if episode_id is not None:
+            rows = await symptoms_db.fetch_current_symptom_timeline(conn, user_id, days=days, episode_id=str(episode_id))
+        else:
+            rows = await symptoms_db.fetch_current_symptom_timeline(conn, user_id, days=days)
     except Exception:
+        if episode_id is not None:
+            raise HTTPException(503, "Episode timeline is temporarily unavailable")
         try:
             rows = await symptoms_db.fetch_current_symptom_timeline_fallback(conn, user_id, days=days)
         except Exception as exc:  # pragma: no cover - exercised via tests
@@ -1122,6 +1115,34 @@ async def get_current_symptom_timeline(
         for row in rows or []
     ]
     return _success(CurrentSymptomTimelineResponse(data=data))
+
+
+@router.get("/current/{episode_id}/timeline", response_model=CurrentSymptomTimelineResponse)
+async def get_episode_symptom_timeline(episode_id: UUID, request: Request, conn=Depends(get_db)):
+    return await get_current_symptom_timeline(request, conn=conn, episode_id=episode_id, days=1)
+
+
+@router.get("/history")
+async def get_symptom_history(
+    request: Request, start: AwareDatetime, end: AwareDatetime,
+    limit: int = Query(50, ge=1, le=100), cursor: Optional[str] = Query(None, max_length=2048),
+    conn=Depends(get_db),
+):
+    # Shared basic history is available regardless of condition preferences or
+    # the legacy migraine-only capability flag. No schema or data mutation.
+    user_id = _require_user_id(request)
+    try:
+        data = await read_history(conn, user_id, start=start, end=end, limit=limit, cursor=cursor, all_symptoms=True)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except HistoryChanged as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except (UndefinedColumn, UndefinedTable) as exc:
+        raise HTTPException(503, "symptom calendar storage is not available") from exc
+    except Exception as exc:
+        logger.exception("failed to load symptom calendar history")
+        raise HTTPException(500, "Symptom history is temporarily unavailable") from exc
+    return {"ok": True, "data": data}
 
 
 @router.get("/migraine/history")
@@ -1356,6 +1377,10 @@ async def update_current_symptom(
             note_text=payload.note_text,
             occurred_at=payload.ts_utc,
         )
+    except symptoms_db.StaleSymptomUpdate as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to update current symptom", extra={"user_id": user_id, "episode_id": episode_id})
         return _failure(
