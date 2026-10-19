@@ -47,3 +47,43 @@ async def test_route_uses_authenticated_scope_and_returns_page(client, monkeypat
     monkeypatch.setattr(router, 'read_history', read)
     response = await client.get(PATH, params=PARAMS, headers=HEADERS)
     assert response.status_code == 200 and response.json()['data']['complete']
+
+
+@pytest.mark.anyio
+async def test_episode_timeline_route_is_owner_scoped_and_does_not_fallback(client, monkeypatch):
+    episode_id = '33333333-3333-4333-8333-333333333333'
+    async def read(conn, user_id, **kwargs):
+        assert user_id == HEADERS['X-Dev-UserId'] and kwargs['episode_id'] == episode_id
+        return []
+    monkeypatch.setattr(router.symptoms_db, 'fetch_current_symptom_timeline', read)
+    path = f'/v1/symptoms/current/{episode_id}/timeline'
+    response = await client.get(path, headers=HEADERS)
+    assert response.status_code == 200 and response.json()['data'] == []
+    async def fail(*args, **kwargs): raise RuntimeError('synthetic storage unavailable')
+    monkeypatch.setattr(router.symptoms_db, 'fetch_current_symptom_timeline', fail)
+    assert (await client.get(path, headers=HEADERS)).status_code == 503
+    assert (await client.get(path)).status_code in (401,403)
+
+
+@pytest.mark.anyio
+async def test_shared_calendar_is_authenticated_and_independent_of_migraine_flags(client, monkeypatch):
+    monkeypatch.delenv('GAIA_MIGRAINE_CALENDAR_ENABLED', raising=False)
+    async def read(conn, user_id, **kwargs):
+        assert user_id == HEADERS['X-Dev-UserId'] and kwargs['all_symptoms'] is True
+        return {'items': [], 'complete': True, 'next_cursor': None}
+    monkeypatch.setattr(router, 'read_history', read)
+    response = await client.get('/v1/symptoms/history', params=PARAMS, headers=HEADERS)
+    assert response.status_code == 200 and response.json()['ok'] is True
+    assert (await client.get('/v1/symptoms/history', params=PARAMS)).status_code in (401,403)
+    assert (await client.get(PATH, params=PARAMS, headers=HEADERS)).status_code == 503
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize('error,status', [(ValueError('bad range'),422), (HistoryChanged('refresh'),409),
+    (UndefinedTable('missing'),503), (RuntimeError('private DB detail'),500)])
+async def test_shared_calendar_failures_never_become_empty_success(client, monkeypatch, error, status):
+    async def fail(*args, **kwargs): raise error
+    monkeypatch.setattr(router, 'read_history', fail)
+    response = await client.get('/v1/symptoms/history', params=PARAMS, headers=HEADERS)
+    assert response.status_code == status
+    assert 'items' not in response.json() and 'private DB detail' not in response.text

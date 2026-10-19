@@ -206,3 +206,25 @@ deployment, TestFlight build, or production activation is part of G-011.
 Android and website/member-hub presentation are intentionally deferred; a
 repository search found no equivalent editable migraine-medicine surface to
 update without creating a new parallel UI.
+
+## Active migraine and guided entry (October 2026)
+
+`GET /v1/symptoms/current` retains every unresolved `MIGRAINE` episode regardless of `window_hours` or the recent-item cap. Other symptom families keep their recent-activity window. Multiple unresolved migraine IDs remain separate, including older records awaiting user review. A failed canonical query is a refresh error; raw-event fallback cannot establish active state. No migration closes old episodes or invents end times.
+
+`POST /v1/symptoms` preserves existing quick logging when `ts_utc` is omitted: it captures the current server UTC logging time once for the event, canonical episode, and receipt. This does not infer a historical onset, severity, end, or other health detail. Explicit null, malformed, or timezone-free migraine timestamps remain invalid. The guided iOS flow still requires and submits a deliberately selected aware onset; supplied timestamps are never replaced with the current time. Omitted severity remains unknown.
+
+The event and canonical episode commit atomically; successful `data` includes `id`, `ts_utc`, and `episode_id`. Simultaneous retries of the same account/explicit onset serialize before event lookup/creation. Guided clients retain the submitted onset and require its matching receipt; a raw-only or malformed acknowledgement does not mean saved. Legacy omitted-timestamp requests retain their existing retry limitation: each new request logs the current time and cannot deduplicate a previous ambiguous save without a stable client timestamp or identity. Reminder scheduling is a separate transaction. Deploy the compatible backend before the candidate iOS app.
+
+Severity updates record the submitted value, including zero, without ending the episode. Duplicate timestamp/value updates are not appended again. A first-arrival severity report older than a newer saved report returns 409 instead of replacing current severity. Interaction time cannot move backwards. Subsequent note/severity edits preserve an existing recorded end; time correction remains the explicit path for changing it.
+
+`GET /v1/symptoms/current/{episode_id}/timeline` returns that account's complete episode timeline, without a recent-days cutoff. The dedicated route lets older servers fail explicitly instead of silently ignoring a filter. The summary distinguishes last reported severity from the highest recorded value in that timeline; it does not infer a peak between reports. A failed timeline read leaves the saved summary visible and marks the maximum unavailable.
+
+The existing structured JSON adds three optional collections, each using the existing `EarlySign` observation shape (`label`, optional `code`, `reported_at`, `notes`):
+
+- `symptoms`: symptoms during the episode.
+- `pain_locations`: user-selected anatomical labels; left/right refer to the user.
+- `reliefs`: non-medicine actions the user reports trying.
+
+These remain separate from `early_signs`, `contexts`, and `medicines`. Omitted collections retain prior values; `[]` explicitly clears; `null` is rejected. Old client patches preserve these fields. Existing JSON storage is used; no schema migration is introduced.
+
+The iOS guide requires explicit onset and medicine taken-time selection. Optional fields can be skipped, saved later, or resumed from a local account-scoped draft. Favorites save names only after an explicit action and never preselect an observation, medicine dose, or event time. Uncertain requests retain their original payload, revision, and timestamp provenance for retry. A stale-revision conflict requires reviewing the saved episode or explicitly discarding the local changes; it never silently merges conflicting versions. Automatic reopening prompts remain deferred pending a product decision.

@@ -116,3 +116,17 @@ def test_retry_match_compares_user_fields_without_duplicating_medicines() -> Non
 def test_worse_remains_a_valid_existing_lifecycle_state() -> None:
     episode = episode_from_canonical(canonical(current_state="worse"), None, now=START)
     assert episode.state == "worse"
+
+
+def test_guided_fields_remain_distinct_and_survive_legacy_patch():
+    base = episode_from_canonical(canonical(), None, now=START)
+    fields = {'symptoms': [EarlySign(label='Nausea')], 'pain_locations': [EarlySign(label='Your left temple')], 'reliefs': [EarlySign(label='Rest')]}
+    saved = apply_follow_up_patch(base, fields, fields, revision=1, now=START)
+    legacy = apply_follow_up_patch(saved, {'notes':'Synthetic note'}, {'notes'}, revision=2, now=START)
+    assert legacy.symptoms[0].label == 'Nausea'
+    assert legacy.pain_locations[0].label == 'Your left temple'
+    assert legacy.reliefs[0].label == 'Rest'
+    assert legacy.early_signs == [] and legacy.contexts == []
+    assert patch_matches_episode(legacy, fields, fields)
+    cleared = apply_follow_up_patch(legacy, {'symptoms':[]}, {'symptoms'}, revision=3, now=START)
+    assert cleared.symptoms == [] and cleared.pain_locations == legacy.pain_locations

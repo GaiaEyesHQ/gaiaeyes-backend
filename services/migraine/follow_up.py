@@ -13,7 +13,7 @@ from typing import Any, Iterable
 from services.migraine.episode_contract import MigraineEpisode
 
 
-STRUCTURED_FIELDS = frozenset({"state", "early_signs", "contexts", "medicines", "notes"})
+STRUCTURED_FIELDS = frozenset({"state", "early_signs", "contexts", "medicines", "notes", "symptoms", "pain_locations", "reliefs"})
 
 
 def _utc(value: datetime | None, *, fallback: datetime) -> datetime:
@@ -134,7 +134,7 @@ def apply_follow_up_patch(
     event_time = _utc(occurred_at, fallback=current_time)
     payload = base.model_dump(mode="python")
 
-    for field in ("early_signs", "contexts", "medicines", "notes"):
+    for field in ("early_signs", "contexts", "medicines", "notes", "symptoms", "pain_locations", "reliefs"):
         if field in fields:
             value = changes.get(field)
             if isinstance(value, list):
