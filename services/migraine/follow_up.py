@@ -117,6 +117,7 @@ def episode_from_canonical(
         payload["severity"] = severity
         payload["notes"] = canonical.get("latest_note_text")
 
+    payload["activity_status"] = "resolved" if state == "resolved" else "active" if canonical.get("activity_confirmed") is True else "needs_review"
     return MigraineEpisode.model_validate(payload)
 
 

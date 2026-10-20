@@ -140,6 +140,10 @@ async def _fetch_canonical_migraine_episode(
                    symptom_code,
                    started_at,
                    current_state,
+                   exists (select 1 from raw.user_symptom_episode_updates activity
+                     where activity.episode_id = raw.user_symptom_episodes.id
+                       and activity.user_id = raw.user_symptom_episodes.user_id
+                       and activity.metadata->>'activity_contract' = 'persistent_v1') as activity_confirmed,
                    original_severity,
                    current_severity,
                    resolution_ts,
@@ -297,7 +301,7 @@ async def save_migraine_follow_up_detail(
     if fields_to_project:
         from app.db import symptoms as symptoms_db
 
-        await symptoms_db.record_symptom_episode_update(
+        projected = await symptoms_db.record_symptom_episode_update(
             conn,
             user_id,
             episode_id,
@@ -311,6 +315,8 @@ async def save_migraine_follow_up_detail(
                 "structured_fields": sorted(supplied_fields),
             },
         )
+
+        next_episode = next_episode.model_copy(update={"activity_status": projected["activity_status"]})
 
     stored_result = await persist_migraine_episode_detail(
         conn,
@@ -604,6 +610,18 @@ async def save_migraine_time_correction(conn, user_id: str, episode_id: str, cor
             (episode.start.utc, episode.end.utc if episode.end else None, episode.state,
              state_time, interaction, episode_id, user_id), prepare=False)
         after = dict(await cur.fetchone())
+        if state_changed:
+            # An intentional state edit confirms persistence. Merely correcting
+            # an old onset does not establish that the symptom is still active.
+            await cur.execute("""insert into raw.user_symptom_episode_updates
+                (episode_id, user_id, update_kind, state, occurred_at, metadata, source)
+                values (%s, %s, 'state_change', %s, %s, %s::jsonb, 'time_correction')""",
+                (episode_id, user_id, episode.state, now, json.dumps({
+                    "activity_contract": "persistent_v1", "time_correction_request_id": str(correction.request_id)})),
+                prepare=False)
+    after["activity_confirmed"] = bool(canonical.get("activity_confirmed")) or state_changed
+    from app.db.symptoms import activity_status
+    episode = episode.model_copy(update={"activity_status": activity_status(after)})
     await persist_migraine_episode_detail(conn, user_id, episode, expected_revision=current_revision,
                                           change_kind="user_edit", source="time_correction", user_edit=True)
     await feedback_db.reconcile_migraine_time_correction(conn, user_id, before=canonical, after=after, now=now)

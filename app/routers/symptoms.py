@@ -3,13 +3,13 @@ from __future__ import annotations
 import asyncio
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Literal
 from zoneinfo import ZoneInfo
 from uuid import UUID
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, Field, conint, model_validator
 
@@ -242,6 +242,8 @@ class CurrentSymptomItemOut(BaseModel):
     logged_at: str
     last_interaction_at: Optional[str] = None
     current_state: str
+    activity_status: Literal["active", "needs_review", "recorded", "resolved"] = "needs_review"
+    updated_at: Optional[str] = None
     note_preview: Optional[str] = None
     note_count: int = 0
     likely_drivers: List[CurrentSymptomDriverOut] = Field(default_factory=list)
@@ -276,6 +278,8 @@ class CurrentSymptomsSnapshotOut(BaseModel):
     window_hours: int
     summary: CurrentSymptomSummaryOut
     items: List[CurrentSymptomItemOut] = Field(default_factory=list)
+    review_items: List[CurrentSymptomItemOut] = Field(default_factory=list)
+    recorded_items: List[CurrentSymptomItemOut] = Field(default_factory=list)
     contributing_drivers: List[CurrentSymptomDriverOut] = Field(default_factory=list)
     pattern_context: List[CurrentSymptomPatternOut] = Field(default_factory=list)
     follow_up_settings: CurrentSymptomFollowUpOut
@@ -393,13 +397,13 @@ def _serialize_pattern_ref(ref: Dict[str, Any]) -> CurrentSymptomPatternOut:
 
 def _dedupe_current_symptom_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     deduped: List[Dict[str, Any]] = []
-    seen_codes: set[str] = set()
+    seen_ids: set[str] = set()
     for row in rows:
-        code = _normalize_symptom_code(str(row.get("symptom_code") or ""))
-        if code and code != "MIGRAINE":
-            if code in seen_codes:
+        episode_id = str(row.get("id") or "")
+        if episode_id:
+            if episode_id in seen_ids:
                 continue
-            seen_codes.add(code)
+            seen_ids.add(episode_id)
         deduped.append(row)
     return deduped
 
@@ -574,6 +578,9 @@ async def _build_current_symptoms_payload(
     pattern_context: List[CurrentSymptomPatternOut] = []
     seen_pattern_ids: set[str] = set()
 
+    review_items = [_build_current_symptom_item_out(row) for row in rows if row.get("activity_status", "needs_review") == "needs_review"]
+    recorded_items = [_build_current_symptom_item_out(row) for row in rows if row.get("activity_status") == "recorded"]
+    rows = [row for row in rows if row.get("activity_status") == "active"]
     for row in rows:
         matches = _matching_pattern_refs(str(row.get("symptom_code") or ""), ranked_drivers)
         seen_driver_keys: set[str] = set()
@@ -609,6 +616,8 @@ async def _build_current_symptoms_payload(
             logged_at=str(row.get("started_at") or ""),
             last_interaction_at=row.get("last_interaction_at") or row.get("state_updated_at"),
             current_state=state,
+            activity_status=row.get("activity_status", "needs_review"),
+            updated_at=row.get("updated_at"),
             note_preview=_trimmed_text(row.get("latest_note_text")),
             note_count=int(row.get("note_count") or 0),
             likely_drivers=likely_drivers,
@@ -684,6 +693,8 @@ async def _build_current_symptoms_payload(
         window_hours=window_hours,
         summary=summary,
         items=items,
+        review_items=review_items,
+        recorded_items=recorded_items,
         contributing_drivers=contributing_drivers,
         pattern_context=pattern_context,
         follow_up_settings=follow_up_settings,
@@ -711,12 +722,14 @@ def _build_current_symptom_item_out(row: Dict[str, Any]) -> CurrentSymptomItemOu
         logged_at=str(row.get("started_at") or ""),
         last_interaction_at=row.get("last_interaction_at") or row.get("state_updated_at"),
         current_state=state,
+        activity_status=row.get("activity_status", "needs_review"),
+        updated_at=row.get("updated_at"),
         note_preview=_trimmed_text(row.get("latest_note_text")),
         note_count=int(row.get("note_count") or (1 if _trimmed_text(row.get("latest_note_text")) else 0)),
         likely_drivers=[],
         pattern_hint=pattern_hint,
         gauge_keys=_gauge_keys_for_symptom(str(row.get("symptom_code") or "")),
-        current_context_badge="Resolved" if state == "resolved" else _current_context_badge(state=state, likely_driver_count=0, pattern_hint=pattern_hint),
+        current_context_badge={"needs_review": "Current status unknown", "recorded": "Logged", "resolved": "Resolved"}.get(row.get("activity_status"), "Confirmed ongoing"),
         pending_follow_up=None,
     )
 
@@ -783,7 +796,12 @@ async def _refresh_gauges_for_symptom(user_id: str, ts_utc: str) -> None:
         score_user_day(user_id, event_day, force=True)
 
     try:
-        await asyncio.to_thread(_run)
+        from app.routers.dashboard import _get_dashboard_build_lock, _dashboard_cache, _dashboard_cache_lock
+        lock = await _get_dashboard_build_lock(user_id, event_day)
+        async with lock:
+            await asyncio.to_thread(_run)
+            async with _dashboard_cache_lock:
+                _dashboard_cache.pop((user_id, event_day.isoformat()), None)
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.warning(
             "symptom gauge refresh failed user=%s day=%s err=%s",
@@ -1356,12 +1374,64 @@ async def update_migraine_episode_detail(
     return _success(MigraineEpisodeDetailResponse(data=_migraine_detail_out(result)))
 
 
+class SymptomStatusReviewIn(BaseModel):
+    request_id: UUID
+    expected_updated_at: AwareDatetime
+    decision: Literal["ongoing", "resolved"]
+    reported_at: AwareDatetime
+    ended_at: Optional[AwareDatetime] = None
+
+    @model_validator(mode="after")
+    def validate_decision(self):
+        if self.ended_at is not None and (self.decision != "resolved" or self.ended_at > self.reported_at):
+            raise ValueError("An end time requires a resolved decision and cannot follow the review")
+        if self.reported_at > datetime.now(timezone.utc) + timedelta(minutes=5):
+            raise ValueError("The review time cannot be in the future")
+        return self
+
+
+@router.post("/current/{episode_id}/status-review", response_model=CurrentSymptomItemResponse)
+async def review_symptom_status(episode_id: UUID, payload: SymptomStatusReviewIn, request: Request,
+                                background_tasks: BackgroundTasks, conn=Depends(get_db)):
+    user_id = _require_user_id(request)
+    try:
+        async with _transaction_if_supported(conn):
+            row = await symptoms_db.record_symptom_episode_update(
+                conn, user_id, str(episode_id), state=payload.decision,
+                occurred_at=payload.ended_at or payload.reported_at,
+                expected_updated_at=payload.expected_updated_at,
+                resolution_time_unknown=payload.decision == "resolved" and payload.ended_at is None,
+                metadata={"status_review_request_id": str(payload.request_id),
+                          "status_review_reported_at": payload.reported_at.isoformat()},
+            )
+    except symptoms_db.StaleSymptomUpdate as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError as exc:
+        if str(exc) == "Symptom episode not found":
+            raise HTTPException(404, "Symptom episode not found") from exc
+        raise
+    try:
+        async with _transaction_if_supported(conn):
+            if row.get("current_state") == "resolved":
+                await feedback_db._expire_episode_prompts(conn, user_id, str(episode_id))
+            else:
+                await feedback_db.maybe_schedule_symptom_follow_up(
+                    conn, user_id, episode_id=str(episode_id), trigger="manual_update", reference_ts=payload.reported_at)
+    except Exception:
+        logger.warning("symptom reminder refresh unavailable after saved status review")
+    background_tasks.add_task(_refresh_gauges_for_symptom, user_id, payload.reported_at.isoformat())
+    return _success(CurrentSymptomItemResponse(data=_build_current_symptom_item_out(row)))
+
+
 @router.post("/current/{episode_id}/updates", response_model=CurrentSymptomItemResponse)
 async def update_current_symptom(
     episode_id: str,
     payload: CurrentSymptomUpdateIn,
     request: Request,
     conn=Depends(get_db),
+    background_tasks: BackgroundTasks = None,
 ):
     user_id = _require_user_id(request)
     if payload.state is None and payload.severity is None and _trimmed_text(payload.note_text) is None:
@@ -1394,22 +1464,21 @@ async def update_current_symptom(
 
     await _commit_if_supported(conn)
     try:
-        if _normalize_current_state(row.get("current_state")) == "resolved":
-            await feedback_db._expire_episode_prompts(conn, user_id, episode_id)
-        else:
-            await feedback_db.maybe_schedule_symptom_follow_up(
-                conn,
-                user_id,
-                episode_id=episode_id,
-                trigger="manual_update",
-                reference_ts=payload.ts_utc,
-            )
+        async with _transaction_if_supported(conn):
+            if _normalize_current_state(row.get("current_state")) == "resolved":
+                await feedback_db._expire_episode_prompts(conn, user_id, episode_id)
+            else:
+                await feedback_db.maybe_schedule_symptom_follow_up(
+                    conn, user_id, episode_id=episode_id, trigger="manual_update", reference_ts=payload.ts_utc,
+                )
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.warning("symptom follow-up resync failed user=%s episode=%s err=%s", user_id, episode_id, exc)
-    await _commit_if_supported(conn)
     refresh_ts = str(row.get("last_interaction_at") or row.get("state_updated_at") or row.get("started_at") or "")
     if refresh_ts:
-        await _refresh_gauges_for_symptom(user_id, refresh_ts)
+        if background_tasks is not None:
+            background_tasks.add_task(_refresh_gauges_for_symptom, user_id, refresh_ts)
+        else:
+            await _refresh_gauges_for_symptom(user_id, refresh_ts)
     return _success(CurrentSymptomItemResponse(data=_build_current_symptom_item_out(row)))
 
 

@@ -255,3 +255,128 @@ async def test_existing_migraine_cursor_without_new_calendar_fields_still_works(
     legacy = base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip('=')
     last = await read_history(conn,user,cursor=legacy,**args)
     assert last['complete'] and len(last['items']) == 1
+
+
+@pytest.mark.anyio
+async def test_legacy_unknown_is_read_only_separate_from_new_confirmed_and_point_logs(conn):
+    user = str(uuid4())
+    legacy = []
+    for state in ('new', 'ongoing', 'improving', 'worse'):
+        identifier, onset = await episode(conn, user)
+        await conn.execute("update raw.user_symptom_episode_updates set metadata=metadata-'activity_contract' where episode_id=%s", (identifier,))
+        await conn.execute('update raw.user_symptom_episodes set current_state=%s where id=%s', (state, identifier))
+        legacy.append(identifier)
+    headache, _ = await episode(conn, user, 'headache')
+    await conn.execute("update raw.user_symptom_episode_updates set metadata=metadata-'activity_contract' where episode_id=%s", (headache,))
+    fresh, _ = await episode(conn, user)
+    before = await (await conn.execute('select id,current_state,resolution_ts,updated_at from raw.user_symptom_episodes where user_id=%s order by id', (user,))).fetchall()
+    current = await db.fetch_current_symptom_items(conn, user, window_hours=12)
+    assert {r['id'] for r in current if r['activity_status']=='needs_review'} == set(legacy)
+    assert {r['id'] for r in current if r['activity_status']=='active'} == {fresh}
+    now = datetime.now(UTC)
+    page = await db.fetch_symptom_episode_range(conn,user,start=now-timedelta(days=1),end=now+timedelta(days=1),as_of=now,limit=100)
+    assert {r['id'] for r in page['items']} == {fresh}
+    history = await db.fetch_symptom_episode_range(conn,user,start=onset-timedelta(days=1),end=onset+timedelta(days=1),as_of=now,limit=100)
+    rows = {r['id']:r for r in history['items']}
+    assert all(rows[i]['activity_status']=='needs_review' and rows[i]['end_status']=='unknown' for i in legacy)
+    assert rows[headache]['end_status']=='instant' and rows[headache]['activity_status']=='recorded'
+    after = await (await conn.execute('select id,current_state,resolution_ts,updated_at from raw.user_symptom_episodes where user_id=%s order by id', (user,))).fetchall()
+    assert before == after
+
+
+@pytest.mark.anyio
+async def test_retry_old_log_and_note_or_severity_never_confirm_activity(conn):
+    user=str(uuid4()); identifier,onset=await episode(conn,user)
+    await conn.execute("update raw.user_symptom_episode_updates set metadata=metadata-'activity_contract' where episode_id=%s", (identifier,))
+    event_id = (await (await conn.execute('select symptom_event_id from raw.user_symptom_episodes where id=%s',(identifier,))).fetchone())[0]
+    await db.ensure_symptom_episode_for_event(conn,user,symptom_event_id=str(event_id),symptom_code='migraine',ts_utc=onset)
+    for values in ({'note_text':'Synthetic edit'}, {'severity':0}):
+        saved=await db.record_symptom_episode_update(conn,user,identifier,**values)
+        assert saved['activity_status']=='needs_review'
+    assert (await (await conn.execute("select count(*) from raw.user_symptom_episode_updates where episode_id=%s and metadata->>'activity_contract'='persistent_v1'",(identifier,))).fetchone())[0]==0
+
+
+@pytest.mark.anyio
+async def test_explicit_review_preserves_unknown_end_and_is_replay_safe(conn):
+    user=str(uuid4()); identifier,onset=await episode(conn,user)
+    await conn.execute("update raw.user_symptom_episode_updates set metadata=metadata-'activity_contract' where episode_id=%s", (identifier,))
+    initial=await db.fetch_symptom_episode(conn,user,identifier)
+    review_at=datetime.now(UTC); request_id=str(uuid4())
+    args=dict(state='resolved',occurred_at=review_at,resolution_time_unknown=True,
+              expected_updated_at=datetime.fromisoformat(initial['updated_at']),metadata={'status_review_request_id':request_id})
+    saved=await db.record_symptom_episode_update(conn,user,identifier,**args)
+    replay=await db.record_symptom_episode_update(conn,user,identifier,**args)
+    assert saved['activity_status']==replay['activity_status']=='resolved'
+    row=await (await conn.execute('select resolution_ts,improvement_ts from raw.user_symptom_episodes where id=%s',(identifier,))).fetchone()
+    assert row == (None, None)
+    assert (await (await conn.execute("select count(*) from raw.user_symptom_episode_updates where episode_id=%s and metadata->>'status_review_request_id'=%s",(identifier,request_id))).fetchone())[0]==1
+    page=await db.fetch_symptom_episode_range(conn,user,start=onset-timedelta(hours=1),end=onset+timedelta(hours=1),as_of=review_at,limit=100)
+    assert page['items'][0]['end_status']=='unknown' and page['items'][0]['state']=='resolved'
+    with pytest.raises(db.StaleSymptomUpdate):
+        await db.record_symptom_episode_update(conn,user,identifier,state='ongoing',expected_updated_at=datetime.fromisoformat(initial['updated_at']))
+    with pytest.raises(RuntimeError):
+        await db.record_symptom_episode_update(conn,str(uuid4()),identifier,**args)
+
+
+@pytest.mark.anyio
+async def test_confirmed_legacy_ongoing_survives_age_and_multiple_records_stay_independent(conn):
+    user=str(uuid4()); first,onset=await episode(conn,user,age=90); second,_=await episode(conn,user,age=91)
+    for identifier in (first,second):
+        await conn.execute("update raw.user_symptom_episode_updates set metadata=metadata-'activity_contract' where episode_id=%s",(identifier,))
+    confirmed=await db.record_symptom_episode_update(conn,user,first,state='ongoing')
+    assert confirmed['activity_status']=='active'
+    await conn.execute("update raw.user_symptom_episodes set last_interaction_at=started_at where id=%s",(first,))
+    rows=await db.fetch_current_symptom_items(conn,user,window_hours=1,limit=1)
+    assert {r['id']:r['activity_status'] for r in rows}=={first:'active',second:'needs_review'}
+    end=datetime.now(UTC)-timedelta(days=1)
+    await db.record_symptom_episode_update(conn,user,first,state='resolved',occurred_at=end)
+    page=await db.fetch_symptom_episode_range(conn,user,start=end-timedelta(hours=1),end=end+timedelta(hours=1),as_of=datetime.now(UTC),limit=100)
+    assert page['items'][0]['ended_at']==end.isoformat()
+    assert (await db.fetch_symptom_episode(conn,user,second))['activity_status']=='needs_review'
+
+
+@pytest.mark.anyio
+async def test_reconciliation_cannot_erase_or_change_an_already_recorded_end(conn):
+    user=str(uuid4()); identifier,start=await episode(conn,user)
+    end=start+timedelta(hours=3)
+    async with conn.transaction():
+        await db.record_symptom_episode_update(conn,user,identifier,state='resolved',occurred_at=end)
+    current=await db.fetch_symptom_episode(conn,user,identifier)
+    for unknown in (True,False):
+        with pytest.raises(ValueError,match='already resolved'):
+            async with conn.transaction():
+                await db.record_symptom_episode_update(conn,user,identifier,state='resolved',occurred_at=datetime.now(UTC),
+                    expected_updated_at=datetime.fromisoformat(current['updated_at']), resolution_time_unknown=unknown,
+                    metadata={'status_review_request_id':str(uuid4())})
+    row=await (await conn.execute('select resolution_ts from raw.user_symptom_episodes where id=%s',(identifier,))).fetchone()
+    assert row[0]==end
+
+
+@pytest.mark.anyio
+async def test_gauge_uses_report_time_deduplicates_and_preserves_historical_latest(conn,monkeypatch):
+    from bots.gauges import gauge_scorer as scorer
+    from zoneinfo import ZoneInfo
+    user=str(uuid4()); identifier,start=await episode(conn,user,age=2,severity=5)
+    # sync reader shares only the disposable local socket, never a network DSN.
+    with psycopg.connect(os.environ['GAIA_MIGRAINE_ACTIVE_TEST_DATABASE_URL'],autocommit=True,row_factory=psycopg.rows.dict_row) as reader:
+        monkeypatch.setattr(scorer.pg,'fetch',lambda sql,*params:list(reader.execute(sql,params).fetchall()))
+        monkeypatch.setattr(scorer.pg,'fetchrow',lambda sql,*params:reader.execute(sql,params).fetchone())
+        monkeypatch.setattr(scorer,'table_columns',lambda *a:{'id'})
+        monkeypatch.setattr(scorer,'LOCAL_TZ',ZoneInfo('UTC'))
+        async with conn.transaction():
+            await db.record_symptom_episode_update(conn,user,identifier,severity=2,occurred_at=datetime.now(UTC)-timedelta(minutes=5))
+        historical=scorer.fetch_symptom_summary(user,start.date())
+        assert historical['total_24h']==1 and historical['max_severity']==5
+        current=scorer.fetch_symptom_summary(user,datetime.now(UTC).date())
+        assert current['total_24h']==1 and current['max_severity']==2
+        async with conn.transaction():
+            await db.record_symptom_episode_update(conn,user,identifier,note_text='Synthetic note',occurred_at=datetime.now(UTC))
+        assert scorer.fetch_symptom_summary(user,datetime.now(UTC).date())['last_symptom_update_at']==current['last_symptom_update_at']
+        async with conn.transaction():
+            await db.record_symptom_episode_update(conn,user,identifier,severity=0,occurred_at=datetime.now(UTC))
+        assert scorer.fetch_symptom_summary(user,datetime.now(UTC).date())['gauge_boosts']=={}
+
+        async with conn.transaction():
+            await db.record_symptom_episode_update(conn,user,identifier,state='resolved',occurred_at=datetime.now(UTC))
+        assert scorer.fetch_symptom_summary(user,datetime.now(UTC).date())['total_24h']==0
+        assert scorer.fetch_symptom_summary(user,start.date())['max_severity']==5

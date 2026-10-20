@@ -880,6 +880,14 @@ def _feedback_prompt_rows(user_id: str, prompt_type: str) -> List[Dict[str, Any]
            and prompt_type = %s
            and status in ('pending', 'snoozed')
            and push_delivery_enabled = true
+           and (p.prompt_type <> 'symptom_follow_up' or exists (
+             select 1 from raw.user_symptom_episodes ep
+              where ep.id = p.episode_id and ep.user_id = p.user_id and ep.current_state <> 'resolved'
+                and not (upper(ep.symptom_code) <> 'MIGRAINE' and ep.current_state = 'new')
+                and exists (select 1 from raw.user_symptom_episode_updates activity
+                  where activity.episode_id = ep.id and activity.user_id = ep.user_id
+                    and activity.metadata->>'activity_contract' = 'persistent_v1')
+           ))
            and (delivered_at is null or (status = 'snoozed' and snoozed_until > delivered_at))
            and coalesce(snoozed_until, scheduled_for) <= now()
            and coalesce(snoozed_until, scheduled_for) >= now() - interval '24 hours'

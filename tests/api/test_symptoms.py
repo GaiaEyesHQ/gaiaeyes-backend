@@ -425,19 +425,21 @@ async def test_current_symptoms_snapshot_builds_live_context(monkeypatch, client
                 "current_severity": 7,
                 "started_at": "2024-04-02T08:00:00+00:00",
                 "current_state": "ongoing",
+                "activity_status": "active",
                 "state_updated_at": "2024-04-02T09:00:00+00:00",
                 "last_interaction_at": "2024-04-02T09:30:00+00:00",
                 "latest_note_text": "Worse this afternoon",
                 "note_count": 1,
             },
             {
-                "id": "ep-duplicate",
+                "id": "ep-1",
                 "symptom_code": "headache",
                 "label": "Headache",
                 "original_severity": 6,
                 "current_severity": 6,
                 "started_at": "2024-04-02T08:20:00+00:00",
                 "current_state": "new",
+                "activity_status": "active",
                 "state_updated_at": "2024-04-02T08:20:00+00:00",
                 "last_interaction_at": "2024-04-02T08:20:00+00:00",
                 "latest_note_text": None,
@@ -855,4 +857,47 @@ def test_current_migraines_preserve_each_unresolved_episode():
             {"id": "newer", "symptom_code": "MIGRAINE"},
             {"id": "a", "symptom_code": "HEADACHE"},
             {"id": "b", "symptom_code": "HEADACHE"}]
-    assert [row["id"] for row in symptoms_router._dedupe_current_symptom_rows(rows)] == ["older", "newer", "a"]
+    assert [row["id"] for row in symptoms_router._dedupe_current_symptom_rows(rows)] == ["older", "newer", "a", "b"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("decision,end", [("ongoing", None), ("resolved", None), ("resolved", "2026-09-11T12:00:00Z")])
+async def test_status_review_wire_contract_owner_and_unknown_end(client, monkeypatch, decision, end):
+    user, episode_id, request_id = str(uuid4()), str(uuid4()), str(uuid4())
+    captured = []
+    async def record(conn, owner, identifier, **values):
+        captured.append((owner, identifier, values))
+        return {"id":identifier, "symptom_code":"MIGRAINE", "label":"Migraine", "current_state":decision,
+                "activity_status":"active" if decision == "ongoing" else "resolved", "started_at":"2026-09-01T12:00:00Z",
+                "updated_at":"2026-09-12T12:00:01Z"}
+    async def noop(*a, **kw): pass
+    monkeypatch.setattr(symptoms_db, "record_symptom_episode_update", record)
+    monkeypatch.setattr(feedback_db, "maybe_schedule_symptom_follow_up", noop)
+    monkeypatch.setattr(feedback_db, "_expire_episode_prompts", noop)
+    body = {"request_id":request_id,"expected_updated_at":"2026-09-12T12:00:00Z", "decision":decision,
+            "reported_at":"2026-09-12T12:00:00Z", "ended_at":end}
+    response = await client.post(f"/v1/symptoms/current/{episode_id}/status-review", json=body,
+        headers={"Authorization":"Bearer test-token", "X-Dev-UserId":user})
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["activity_status"] == ("active" if decision == "ongoing" else "resolved")
+    owner, identifier, values = captured[0]
+    assert (owner,identifier) == (user,episode_id)
+    assert values["resolution_time_unknown"] == (decision == "resolved" and end is None)
+    assert values["metadata"]["status_review_request_id"] == request_id
+    assert values["expected_updated_at"] == datetime(2026,9,12,12,tzinfo=UTC)
+
+
+@pytest.mark.parametrize("change", [{"decision":"new"}, {"ended_at":"2026-09-13T00:00:00Z"}, {"reported_at":"2026-09-12T12:00:00"}])
+def test_status_review_rejects_invalid_or_ambiguous_request(change):
+    import pydantic
+    payload = {"request_id":str(uuid4()),"expected_updated_at":"2026-09-12T12:00:00Z", "decision":"resolved",
+               "reported_at":"2026-09-12T12:00:00Z", **change}
+    with pytest.raises(pydantic.ValidationError): symptoms_router.SymptomStatusReviewIn.model_validate(payload)
+
+
+def test_same_code_review_and_active_records_cannot_be_hidden_by_a_new_point():
+    rows = [{"id":"point", "symptom_code":"HEADACHE", "activity_status":"recorded"},
+            {"id":"active", "symptom_code":"HEADACHE", "activity_status":"active"},
+            {"id":"review1", "symptom_code":"HEADACHE", "activity_status":"needs_review"},
+            {"id":"review2", "symptom_code":"HEADACHE", "activity_status":"needs_review"}]
+    assert symptoms_router._dedupe_current_symptom_rows([*rows,rows[0]]) == rows

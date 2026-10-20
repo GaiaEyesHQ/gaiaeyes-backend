@@ -291,3 +291,26 @@ async def test_earthscope_member_regenerates_when_only_older_row_exists(monkeypa
     assert out["ok"] is True
     assert out["post"]["day"] == target_day
     assert out["post"]["title"] == "Your EarthScope"
+
+
+@pytest.mark.anyio
+async def test_symptom_refresh_recalculates_before_building_and_bypasses_cached_gauge(monkeypatch):
+    from contextlib import asynccontextmanager
+    from bots.gauges import gauge_scorer
+    order=[]
+    def score(owner,day,**kwargs):
+        assert owner=='synthetic' and kwargs=={'force':True,'require_corrected_symptoms':True}
+        order.append('score')
+    @asynccontextmanager
+    async def acquire(): yield object()
+    async def build(conn,owner,day,**kwargs):
+        assert order==['score'];order.append('build')
+        return {'day':day.isoformat(),'gauges':{'pain':20}},{}
+    async def no_cache(*a,**kw): raise AssertionError('stale gauge read')
+    monkeypatch.setattr(gauge_scorer,'score_user_day',score)
+    monkeypatch.setattr(dashboard_router,'_acquire_dashboard_conn',acquire)
+    monkeypatch.setattr(dashboard_router,'_build_dashboard_payload',build)
+    monkeypatch.setattr(dashboard_router,'_get_cached_dashboard',no_cache)
+    request=SimpleNamespace(state=SimpleNamespace(user_id='synthetic'))
+    out=await dashboard_router.dashboard(request,day=date(2026,9,12),debug=False,force=False,refresh_symptoms=True)
+    assert order==['score','build'] and out['gauges']['pain']==20

@@ -299,7 +299,10 @@ async def _fetch_symptom_episode(conn, user_id: str, episode_id: str) -> Optiona
                    ep.started_at,
                    ep.last_interaction_at,
                    ep.latest_note_text,
-                   ep.follow_up_state
+                   ep.follow_up_state,
+                   exists (select 1 from raw.user_symptom_episode_updates activity
+                     where activity.episode_id = ep.id and activity.user_id = ep.user_id
+                       and activity.metadata->>'activity_contract' = 'persistent_v1') as activity_confirmed
               from raw.user_symptom_episodes ep
               left join dim.symptom_codes sc
                 on sc.symptom_code = ep.symptom_code
@@ -324,6 +327,7 @@ async def _fetch_symptom_episode(conn, user_id: str, episode_id: str) -> Optiona
         "last_interaction_at": _normalize_ts(row.get("last_interaction_at")),
         "latest_note_text": row.get("latest_note_text"),
         "follow_up_state": _serialize_json(row.get("follow_up_state")) or {},
+        "activity_confirmed": row.get("activity_confirmed") is True,
     }
 
 
@@ -429,7 +433,7 @@ async def maybe_schedule_symptom_follow_up(
         return None
 
     state = _normalize_state(episode.get("current_state"))
-    if state == "resolved":
+    if state == "resolved" or not episode.get("activity_confirmed"):
         return None
     if state not in set(preferences.get("symptom_followup_states") or []):
         return None
@@ -577,6 +581,12 @@ async def fetch_due_symptom_follow_up_prompts(
         "prompt_type = 'symptom_follow_up'",
         "status in ('pending', 'snoozed')",
         "coalesce(snoozed_until, scheduled_for) <= now()",
+        """exists (select 1 from raw.user_symptom_episodes ep
+          where ep.id = p.episode_id and ep.user_id = p.user_id and ep.current_state <> 'resolved'
+            and not (upper(ep.symptom_code) <> 'MIGRAINE' and ep.current_state = 'new')
+            and exists (select 1 from raw.user_symptom_episode_updates activity
+              where activity.episode_id = ep.id and activity.user_id = ep.user_id
+                and activity.metadata->>'activity_contract' = 'persistent_v1'))""",
     ]
     if episode_ids:
         where.append("episode_id = any(%s)")
@@ -586,7 +596,7 @@ async def fetch_due_symptom_follow_up_prompts(
         await cur.execute(
             f"""
             select *
-              from raw.user_feedback_prompts
+              from raw.user_feedback_prompts p
              where {" and ".join(where)}
              order by coalesce(snoozed_until, scheduled_for) asc, created_at asc
             """,
@@ -959,13 +969,21 @@ async def _recent_symptom_context(conn, user_id: str) -> Dict[str, Any]:
                    coalesce(sc.label, initcap(replace(ep.symptom_code, '_', ' '))) as label,
                    ep.current_state,
                    ep.current_severity,
-                   ep.last_interaction_at
+                   ep.last_interaction_at,
+                   (ep.current_state <> 'resolved' and not (upper(ep.symptom_code) <> 'MIGRAINE' and ep.current_state = 'new')
+                    and exists (select 1 from raw.user_symptom_episode_updates activity
+                      where activity.episode_id = ep.id and activity.user_id = ep.user_id
+                        and activity.metadata->>'activity_contract' = 'persistent_v1')) as confirmed_active
               from raw.user_symptom_episodes ep
               left join dim.symptom_codes sc
                 on sc.symptom_code = ep.symptom_code
              where ep.user_id = %s
                and (
-                 ep.current_state <> 'resolved'
+                 (ep.current_state <> 'resolved'
+                   and not (upper(ep.symptom_code) <> 'MIGRAINE' and ep.current_state = 'new')
+                   and exists (select 1 from raw.user_symptom_episode_updates activity
+                     where activity.episode_id = ep.id and activity.user_id = ep.user_id
+                       and activity.metadata->>'activity_contract' = 'persistent_v1'))
                  or ep.last_interaction_at >= now() - interval '36 hours'
                )
              order by ep.last_interaction_at desc
@@ -984,7 +1002,7 @@ async def _recent_symptom_context(conn, user_id: str) -> Dict[str, Any]:
         if code and code not in codes:
             codes.append(code)
         label = str(row.get("label") or _label_from_code(code))
-        if label and label not in labels:
+        if row.get("confirmed_active") and label and label not in labels:
             labels.append(label)
         categories.add(_symptom_category(code))
 

@@ -59,13 +59,16 @@ def test_actual_explicit_scorer_uses_half_open_owner_bounds_and_exposure_lookbac
     assert len(queries) == 3
     for sql, params in queries:
         normalized = ' '.join(sql.split())
-        assert 'where user_id = %s' in normalized and params[0] == USER
+        if 'select ep.symptom_code' in sql:
+            assert params[0] == end and "else u.occurred_at end) < %s" in sql
+            params = params[1:]
+        assert any(token in normalized for token in ('where user_id = %s', 'where ep.user_id = %s', 'where event.user_id = %s')) and params[0] == USER
         if 'raw.user_exposure_events' in sql:
             assert params == (USER, start-timedelta(hours=72), end)
             assert 'event_ts_utc >= %s' in sql and 'event_ts_utc < %s' in sql
         else:
             assert params == (USER, start, end)
-            column = 'last_interaction_at' if 'raw.user_symptom_episodes' in sql else 'ts_utc'
+            column = 'coalesce(report.occurred_at, ep.started_at)' if 'select ep.symptom_code' in sql else 'event.ts_utc'
             assert f'{column} >= %s' in sql and f'{column} < %s' in sql
             assert 'raw.user_symptom_episodes' in sql or 'raw.user_symptom_events_effective' in sql
     assert len(writes) == 1
@@ -247,7 +250,7 @@ def test_persisted_chicago_refresh_days_and_strict_pending_retry_remain(monkeypa
     assert {row[2]['day'].isoformat() for row in writes} == set(receipt['refresh_days'])
     assert len(writes) == 2
     assert all(call.kwargs['user_id'] == USER and call.kwargs['require_corrected_symptoms'] for call in patterns.call_args_list)
-    bounds = {(p[1], p[2]) for sql, p in queries if 'raw.user_symptom_' in sql}
+    bounds = {(p[-2], p[-1]) for sql, p in queries if 'raw.user_symptom_' in sql}
     assert bounds == {
         (datetime(2026,3,8,6,tzinfo=timezone.utc),datetime(2026,3,9,5,tzinfo=timezone.utc)),
         (datetime(2026,11,1,5,tzinfo=timezone.utc),datetime(2026,11,2,6,tzinfo=timezone.utc)),
