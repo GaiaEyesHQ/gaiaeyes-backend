@@ -967,6 +967,8 @@ function gaia_dashboard_proxy_backend(WP_REST_Request $request) {
         [
             'day' => 'day',
             'debug' => 'debug',
+            'force' => 'force',
+            'refresh_symptoms' => 'refresh_symptoms',
         ]
     );
 }
@@ -1176,6 +1178,24 @@ add_action('rest_api_init', function () {
                 'sanitize_callback' => 'absint',
             ],
         ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/current-symptoms/(?P<episode_id>[^/]+)', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            $episode_id = sanitize_text_field((string) $request['episode_id']);
+            return gaia_dashboard_proxy_json($request, '/v1/symptoms/current/' . rawurlencode($episode_id));
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/current-symptoms/(?P<episode_id>[^/]+)/status-review', [
+        'methods' => WP_REST_Server::CREATABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            $episode_id = sanitize_text_field((string) $request['episode_id']);
+            return gaia_dashboard_proxy_json($request, '/v1/symptoms/current/' . rawurlencode($episode_id) . '/status-review', [], WP_REST_Server::CREATABLE);
+        },
     ]);
 
     register_rest_route('gaia/v1', '/member/current-symptoms/(?P<episode_id>[^/]+)/updates', [

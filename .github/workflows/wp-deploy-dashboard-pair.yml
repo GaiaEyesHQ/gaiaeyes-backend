@@ -1,0 +1,108 @@
+name: Deploy reviewed dashboard pair
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/wp-deploy-dashboard-pair.yml'
+      - 'scripts/deploy_dashboard_pair.sh'
+      - 'tests/scripts/test_deploy_dashboard_pair.py'
+      - 'scripts/check_symptom_status_web.cjs'
+      - 'wp-content/mu-plugins/gaia-dashboard.php'
+      - 'wp-content/mu-plugins/gaia-dashboard.js'
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Reviewed main commit to deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-pair-${{ github.event_name }}-${{ github.event.pull_request.number || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha || github.sha }}
+          persist-credentials: false
+      - name: Verify dashboard and synthetic deployment behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l wp-content/mu-plugins/gaia-dashboard.php
+          node --check wp-content/mu-plugins/gaia-dashboard.js
+          node scripts/check_symptom_status_web.cjs
+          bash -n scripts/deploy_dashboard_pair.sh
+          python -m pip install pytest
+          python -m pytest -q tests/scripts/test_deploy_dashboard_pair.py
+  deploy:
+    needs: verify
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+      - name: Validate and package exactly two website files
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l wp-content/mu-plugins/gaia-dashboard.php
+          node --check wp-content/mu-plugins/gaia-dashboard.js
+          node scripts/check_symptom_status_web.cjs
+          mkdir -m 700 dashboard-release
+          cp wp-content/mu-plugins/gaia-dashboard.php wp-content/mu-plugins/gaia-dashboard.js scripts/deploy_dashboard_pair.sh dashboard-release/
+          echo "php_sha256=$(sha256sum dashboard-release/gaia-dashboard.php | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "js_sha256=$(sha256sum dashboard-release/gaia-dashboard.js | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Prepare private temporary upload directory
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}
+          port: ${{ secrets.SG_SSH_PORT }}
+          username: ${{ secrets.SG_SSH_USER }}
+          key: ${{ secrets.SG_SSH_KEY }}
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+          envs: RELEASE_ID
+          script: |
+            set -eu
+            umask 077
+            case "$RELEASE_ID" in ''|*[!0-9-]*) exit 1;; esac
+            mkdir -m 700 "/tmp/gaia-dashboard-$RELEASE_ID"
+      - name: Upload pair and private deployment helper
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}
+          port: ${{ secrets.SG_SSH_PORT }}
+          username: ${{ secrets.SG_SSH_USER }}
+          key: ${{ secrets.SG_SSH_KEY }}
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+          source: dashboard-release/gaia-dashboard.php,dashboard-release/gaia-dashboard.js,dashboard-release/deploy_dashboard_pair.sh
+          target: /tmp/gaia-dashboard-${{ github.run_id }}-${{ github.run_attempt }}
+          strip_components: 1
+      - name: Install and verify only the dashboard pair
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          PHP_SHA256: ${{ steps.package.outputs.php_sha256 }}
+          JS_SHA256: ${{ steps.package.outputs.js_sha256 }}
+          SG_TARGET_PATH_PROD: ${{ secrets.SG_TARGET_PATH_PROD }}
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}
+          port: ${{ secrets.SG_SSH_PORT }}
+          username: ${{ secrets.SG_SSH_USER }}
+          key: ${{ secrets.SG_SSH_KEY }}
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+          envs: RELEASE_ID,PHP_SHA256,JS_SHA256,SG_TARGET_PATH_PROD
+          script: bash "/tmp/gaia-dashboard-$RELEASE_ID/deploy_dashboard_pair.sh"

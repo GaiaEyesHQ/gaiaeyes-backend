@@ -288,6 +288,7 @@
     return `
       <article class="${cardClass}" ${clickable ? `data-gauge-key="${esc(row && row.key ? row.key : "")}"` : ""}>
         <div class="gaia-dashboard__gauge-label">${esc(row && row.label ? row.label : "")}</div>
+        ${row && row.key === "pain" ? '<p class="gaia-dashboard__helper">Estimated load · 0–100. Reported symptom severity uses 0–10; older reports may no longer contribute.</p>' : ""}
         <div class="gaia-dashboard__gauge-meter">
           <svg class="gaia-dashboard__gauge-arc" viewBox="0 0 100 100" aria-hidden="true">
             <defs>
@@ -2080,6 +2081,22 @@
     }
   };
 
+  const refreshSymptomGauges = async (root, state) => {
+    try {
+      const response = await fetchJsonWithParams(routeFor("dashboard"), state.authCtx && state.authCtx.token || "",
+        { day: localDayISO(), force: 1, refresh_symptoms: 1 });
+      if (state.authCtx.invalidated) return;
+      if (!response || !response.gauges) throw new Error("Gauge refresh unavailable");
+      state.dashboard = { ...state.dashboard, gauges: response.gauges,
+        gaugesMeta: response.gauges_meta || response.gaugesMeta || {}, gaugesDelta: response.gauges_delta || response.gaugesDelta || {},
+        modalModels: response.modal_models || response.modalModels || state.dashboard.modalModels };
+      delete state.member.errors.symptomGauges;
+    } catch (_) {
+      state.member.errors.symptomGauges = "Your symptom is saved. Gauge refresh is unavailable; refresh the dashboard to retry.";
+    }
+    if (!state.authCtx.invalidated) renderMemberHub(root, state);
+  };
+
   const refreshCurrentSymptomsInBackground = async (root, state) => {
     try {
       state.member.currentSymptoms = await fetchJsonWithParams(
@@ -2156,6 +2173,7 @@
       delete state.member.errors.currentSymptoms;
       renderMemberHub(root, state);
       refreshCurrentSymptomsInBackground(root, state);
+      refreshSymptomGauges(root, state);
     } catch (err) {
       state.member.currentSymptoms = previousSnapshot;
       if (previousStatus && previousStatus.message) {
@@ -2173,6 +2191,79 @@
       setCurrentSymptomPending(state, episodeId, false);
       renderMemberHub(root, state);
     }
+  };
+
+  const symptomReviewDraft = (state, id) => {
+    state.ui.symptomReviewDrafts ||= {};
+    return state.ui.symptomReviewDrafts[id] ||= { decision: "", end: "", request: null };
+  };
+
+  const commitSymptomReview = async (root, state, item, reload = false) => {
+    const id = textOrEmpty(item.id), draft = symptomReviewDraft(state, id);
+    if (isCurrentSymptomPending(state, id) || state.authCtx.invalidated) return;
+    const token = state.authCtx && state.authCtx.token || "";
+    const base = routeFor("currentSymptomUpdatesBase");
+    if (!base) return;
+    setCurrentSymptomPending(state, id, true);
+    try {
+      if (reload) {
+        const saved = extractEnvelopeData(await fetchJson(`${base}/${encodeURIComponent(id)}`, token));
+        if (state.authCtx.invalidated) return;
+        if (!saved || saved.id !== id) throw new Error("Saved status could not be confirmed.");
+        draft.request = null; draft.decision = ""; draft.end = "";
+        upsertCurrentSymptomItem(state, saved);
+        setCurrentSymptomRowStatus(state, id, "Saved status reloaded. Choose again if review is still needed.", false);
+      } else {
+        if (!draft.request) {
+          if (!["ongoing", "resolved"].includes(draft.decision) || !item.updated_at) throw new Error("Choose a status before saving.");
+          const reported = new Date(), end = draft.decision === "resolved" && draft.end ? new Date(draft.end) : null;
+          if (end && (!Number.isFinite(end.getTime()) || end > reported || end < new Date(item.logged_at))) {
+            throw new Error("The end must be between the recorded start and now.");
+          }
+          draft.request = { request_id: crypto.randomUUID(), expected_updated_at: item.updated_at,
+            decision: draft.decision, reported_at: reported.toISOString(), ended_at: end ? end.toISOString() : null };
+        }
+        const response = await postJson(`${base}/${encodeURIComponent(id)}/status-review`, token, draft.request);
+        if (state.authCtx.invalidated) return;
+        const saved = extractEnvelopeData(response);
+        if (response.ok !== true || !saved || saved.id !== id || saved.current_state !== draft.request.decision ||
+            saved.activity_status !== (draft.request.decision === "ongoing" ? "active" : "resolved")) {
+          throw new Error("The saved status could not be confirmed.");
+        }
+        draft.request = null; upsertCurrentSymptomItem(state, saved);
+        setCurrentSymptomRowStatus(state, id, "Status saved.", false);
+        refreshSymptomGauges(root, state);
+      }
+      delete state.member.errors.currentSymptoms;
+    } catch (error) {
+      setCurrentSymptomRowStatus(state, id,
+        draft.request ? "Update not confirmed. Retry the same update or reload saved status before choosing again. " + error.message : error.message, true);
+    } finally {
+      setCurrentSymptomPending(state, id, false);
+      if (!state.authCtx.invalidated) renderMemberHub(root, state);
+    }
+  };
+
+  const renderSymptomReviewRow = (state, item) => {
+    const id = textOrEmpty(item.id), draft = symptomReviewDraft(state, id);
+    const busy = isCurrentSymptomPending(state, id), locked = busy || !!draft.request;
+    const status = currentSymptomRowStatus(state, id);
+    return `<article class="gaia-dashboard__current-symptom-row">
+      <strong>${esc(item.label || "Symptom")}</strong>
+      <p>Current status unknown · ${esc(formatIsoDate(item.logged_at))}</p>
+      <label>Status now <select data-symptom-review-choice="${esc(id)}" ${locked ? "disabled" : ""}>
+        <option value="" ${!draft.decision ? "selected" : ""}>Choose a status</option>
+        <option value="ongoing" ${draft.decision === "ongoing" ? "selected" : ""}>Still ongoing since this start</option>
+        <option value="resolved" ${draft.decision === "resolved" ? "selected" : ""}>No longer active</option>
+      </select></label>
+      ${draft.decision === "resolved" ? `<p>End time is optional. Leave it empty if unknown; today’s date will not be used.</p>
+        <label>Known end (your local time) <input type="datetime-local" value="${esc(draft.end)}" data-symptom-review-end="${esc(id)}" ${locked ? "disabled" : ""}></label>` : ""}
+      <div class="gaia-dashboard__current-symptom-actions">
+        <button type="button" class="gaia-dashboard__current-symptom-btn" data-symptom-review-save="${esc(id)}" ${busy || !draft.decision || !item.updated_at ? "disabled" : ""}>${busy ? "Saving…" : draft.request ? "Retry same update" : "Save status"}</button>
+        <button type="button" class="gaia-dashboard__current-symptom-btn" data-symptom-review-reload="${esc(id)}" ${busy ? "disabled" : ""}>Reload saved status</button>
+      </div>
+      ${status && status.message ? `<p role="status">${esc(status.message)}</p>` : ""}
+    </article>`;
   };
 
   const moveCurrentSymptomFollowUp = async (root, state, item, action) => {
@@ -2418,6 +2509,21 @@
         });
       });
     });
+
+    root.querySelectorAll("[data-symptom-review-choice]").forEach((node) => node.addEventListener("change", () => {
+      const draft = symptomReviewDraft(state, node.dataset.symptomReviewChoice);
+      if (!draft.request) { draft.decision = node.value; renderMemberHub(root, state); }
+    }));
+    root.querySelectorAll("[data-symptom-review-end]").forEach((node) => node.addEventListener("input", () => {
+      const draft = symptomReviewDraft(state, node.dataset.symptomReviewEnd);
+      if (!draft.request) draft.end = node.value;
+    }));
+    for (const action of ["save", "reload"]) {
+      root.querySelectorAll(`[data-symptom-review-${action}]`).forEach((node) => node.addEventListener("click", async () => {
+        const item = currentSymptomItemById(state, node.getAttribute(`data-symptom-review-${action}`));
+        if (item) await commitSymptomReview(root, state, item, action === "reload");
+      }));
+    }
 
     root.querySelectorAll("[data-current-symptom-action]").forEach((node) => {
       node.addEventListener("click", async () => {
@@ -3226,7 +3332,8 @@
     !!(state && state.ui && state.ui.currentSymptomPendingById && state.ui.currentSymptomPendingById[episodeId]);
 
   const currentSymptomItemById = (state, episodeId) =>
-    maybeArray(extractCurrentSymptoms(state && state.member && state.member.currentSymptoms)?.items).find(
+    ["items", "review_items", "recorded_items"].flatMap((key) =>
+      maybeArray(extractCurrentSymptoms(state && state.member && state.member.currentSymptoms)?.[key])).find(
       (item) => textOrEmpty(item && item.id) === textOrEmpty(episodeId)
     ) || null;
 
@@ -3235,6 +3342,7 @@
     if (normalized === "improving") return "Improving";
     if (normalized === "worse") return "Worse";
     if (normalized === "resolved") return "Resolved";
+    if (normalized === "new") return "Logged";
     return "Ongoing";
   };
 
@@ -3258,7 +3366,8 @@
       textOrEmpty(item && item.note_preview) ||
       textOrEmpty(primaryDriver && (primaryDriver.pattern_hint || primaryDriver.relation || primaryDriver.display)) ||
       "Mark whether this is holding steady, easing, or getting heavier.";
-    const severity = Number(item && (item.severity ?? item.original_severity));
+    const rawSeverity = item && (item.severity ?? item.original_severity);
+    const severity = rawSeverity == null ? NaN : Number(rawSeverity);
     const severityLine = Number.isFinite(severity) ? `Severity ${Math.round(severity)}/10` : "Recently logged";
     const timestampLine = formatIsoDate(
       textOrEmpty(item && item.last_interaction_at) || textOrEmpty(item && item.logged_at)
@@ -3368,7 +3477,8 @@
 
   const rebuildCurrentSymptomsSummary = (snapshot) => {
     if (!snapshot || typeof snapshot !== "object") return snapshot;
-    const items = maybeArray(snapshot.items).filter(Boolean);
+    const items = maybeArray(snapshot.items).filter((item) => item && item.activity_status === "active" && item.current_state !== "resolved");
+    snapshot.items = items;
     const summary = {
       ...(maybeObject(snapshot.summary) || {}),
       active_count: items.length,
@@ -3402,16 +3512,13 @@
   const upsertCurrentSymptomItem = (state, item) => {
     if (!item || typeof item !== "object") return;
     updateCurrentSymptomsSnapshot(state, (snapshot) => {
-      const items = maybeArray(snapshot.items);
-      const index = items.findIndex((row) => textOrEmpty(row && row.id) === textOrEmpty(item.id));
-      if (normalizeCurrentSymptomState(item.current_state) === "resolved") {
-        if (index >= 0) items.splice(index, 1);
-      } else if (index >= 0) {
-        items[index] = item;
-      } else {
-        items.unshift(item);
+      for (const key of ["items", "review_items", "recorded_items"]) {
+        snapshot[key] = maybeArray(snapshot[key]).filter((row) => textOrEmpty(row && row.id) !== textOrEmpty(item.id));
       }
-      snapshot.items = items;
+      if (normalizeCurrentSymptomState(item.current_state) !== "resolved") {
+        const key = item.activity_status === "active" ? "items" : item.activity_status === "recorded" ? "recorded_items" : "review_items";
+        snapshot[key].unshift(item);
+      }
     });
   };
 
@@ -4089,7 +4196,9 @@
     const currentSymptomsError = textOrEmpty(state.member.errors && state.member.errors.currentSymptoms);
     const featuresError = textOrEmpty(state.member.errors && state.member.errors.features);
     const lunarError = textOrEmpty(state.member.errors && state.member.errors.lunar);
-    const symptomItems = maybeArray(currentSymptoms && currentSymptoms.items).slice(0, 4);
+    const symptomItems = maybeArray(currentSymptoms && currentSymptoms.items).filter((item) => item.activity_status === "active");
+    const reviewItems = maybeArray(currentSymptoms && currentSymptoms.review_items);
+    const recordedItems = maybeArray(currentSymptoms && currentSymptoms.recorded_items);
     const summary = currentSymptoms && currentSymptoms.summary ? currentSymptoms.summary : {};
     const healthCards = healthStatCards(features, profilePreferences).slice(0, 5);
     const sleepCards = sleepStageCards(features);
@@ -4151,6 +4260,12 @@
                     }</div>`
               }
             </article>
+            ${state.member.errors.symptomGauges ? `<p role="status">${esc(state.member.errors.symptomGauges)}</p>` : ""}
+            ${reviewItems.length ? `<article class="gaia-dashboard__card"><h4>Earlier symptoms need review</h4>
+              <p>Their current status was not confirmed. They remain in history and are not counted as active.</p>
+              <details ${reviewItems.some((item) => symptomReviewDraft(state, item.id).decision) ? "open" : ""}><summary>Review ${reviewItems.length} records</summary>${reviewItems.map((item) => renderSymptomReviewRow(state, item)).join("")}</details></article>` : ""}
+            ${recordedItems.length ? `<article class="gaia-dashboard__card"><h4>Recently logged</h4>
+              ${recordedItems.map((item) => `<p><strong>${esc(item.label || "Symptom")}</strong> · ${esc(formatIsoDate(item.logged_at))}<br>Logged · duration not recorded</p>`).join("")}</article>` : ""}
             ${renderDailyCheckInCard(state, "body")}
           </div>
           <div class="gaia-dashboard__grid">
@@ -5024,6 +5139,7 @@
         email: user && user.email ? user.email : "",
         token,
         onSignOut: async (message) => {
+          state.authCtx.invalidated = true;
           try {
             await supabase.auth.signOut();
           } finally {
@@ -5032,6 +5148,7 @@
         },
         onSwitch: async () => {
           if (!window.confirm("Sign out and use another Gaia Eyes account?")) return;
+          state.authCtx.invalidated = true;
           try {
             await supabase.auth.signOut();
           } catch (switchErr) {
