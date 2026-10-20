@@ -42,6 +42,14 @@ jobs:
           bash -n scripts/deploy_dashboard_pair.sh
           python -m pip install pytest
           python -m pytest -q tests/scripts/test_deploy_dashboard_pair.py
+          # The transfer image runs as UID 1000, unlike the hosted runner owner.
+          # These are public source files; the remote upload directory stays 0700.
+          mkdir -m 755 dashboard-release
+          cp wp-content/mu-plugins/gaia-dashboard.php wp-content/mu-plugins/gaia-dashboard.js scripts/deploy_dashboard_pair.sh dashboard-release/
+          docker run --rm --network none --entrypoint /bin/sh \
+            -v "$PWD/dashboard-release:/source:ro" \
+            ghcr.io/appleboy/drone-scp:1.6.14 \
+            -c 'tar -czf /tmp/dashboard-test.tar.gz -C /source gaia-dashboard.php gaia-dashboard.js deploy_dashboard_pair.sh && test "$(tar -tzf /tmp/dashboard-test.tar.gz | wc -l)" -eq 3'
   deploy:
     needs: verify
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha
@@ -60,7 +68,8 @@ jobs:
           php -l wp-content/mu-plugins/gaia-dashboard.php
           node --check wp-content/mu-plugins/gaia-dashboard.js
           node scripts/check_symptom_status_web.cjs
-          mkdir -m 700 dashboard-release
+          # Public source must be readable by the SCP action container's UID 1000.
+          mkdir -m 755 dashboard-release
           cp wp-content/mu-plugins/gaia-dashboard.php wp-content/mu-plugins/gaia-dashboard.js scripts/deploy_dashboard_pair.sh dashboard-release/
           echo "php_sha256=$(sha256sum dashboard-release/gaia-dashboard.php | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
           echo "js_sha256=$(sha256sum dashboard-release/gaia-dashboard.js | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
