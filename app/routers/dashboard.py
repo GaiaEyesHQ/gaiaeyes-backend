@@ -1314,12 +1314,16 @@ async def dashboard(
     day: Optional[date] = Query(None),
     debug: bool = Query(False),
     force: bool = Query(False),
+    refresh_symptoms: bool = Query(False),
 ):
     started = time.perf_counter()
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id missing from request context")
     day = _coerce_day(day)
+    refresh_symptoms = refresh_symptoms is True # also safe for direct Python callers
+    if refresh_symptoms:
+        force = True
 
     if not debug and not force:
         cached_payload, cache_age, is_stale = await _get_cached_dashboard(user_id, day, allow_stale=True)
@@ -1348,6 +1352,12 @@ async def dashboard(
 
     lock = await _get_dashboard_build_lock(user_id, day)
     async with lock:
+        if refresh_symptoms:
+            from bots.gauges.gauge_scorer import score_user_day
+            try:
+                await asyncio.to_thread(score_user_day, user_id, day, force=True, require_corrected_symptoms=True)
+            except Exception as exc:
+                raise HTTPException(503, "Symptoms saved; gauge refresh is still unavailable") from exc
         if not debug and not force:
             cached_payload, cache_age, _ = await _get_cached_dashboard(user_id, day)
             if cached_payload is not None:

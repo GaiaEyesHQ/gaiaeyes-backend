@@ -264,7 +264,7 @@ async def test_actual_gauge_input_reader_moves_onset_without_duplicates(monkeypa
             monkeypatch.setattr(gauge_scorer.pg,'fetchrow',lambda query,*params:sync.execute(query,params).fetchone())
             monkeypatch.setattr(gauge_scorer,'table_columns',columns)
             # Observe actual selected inputs; full gauge scoring needs other synthetic datasets.
-            monkeypatch.setattr(gauge_scorer,'_build_symptom_signal_summary',lambda rows:rows)
+            monkeypatch.setattr(gauge_scorer,'_build_symptom_signal_summary',lambda rows,**kwargs:rows)
             assert gauge_scorer.fetch_symptom_summary(USER_A,datetime(2026,8,31).date())==[]
             rows=gauge_scorer.fetch_symptom_summary(USER_A,datetime(2026,8,30).date())
             assert len(rows)==1 and rows[0]['ts_utc']==datetime(2026,8,31,4,30,tzinfo=UTC)

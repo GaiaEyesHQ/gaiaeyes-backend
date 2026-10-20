@@ -152,6 +152,7 @@ class MigraineEpisode(ContractModel):
     symptom_event_id: UUID | None = None
     symptom_code: Literal["MIGRAINE"] = "MIGRAINE"
     state: EpisodeState
+    activity_status: Literal["active", "needs_review", "resolved"] = "needs_review"
     start: EpisodeTimestamp
     end: EpisodeTimestamp | None = None
     severity: int | None = Field(default=None, ge=0, le=10)

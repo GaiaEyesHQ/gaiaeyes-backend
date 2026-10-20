@@ -223,3 +223,15 @@ def test_explicit_snooze_remains_fresh_despite_previous_presentation():
     assert evaluate._symptom_followup_push_candidate_is_fresh(row, NOW)
     row['status'] = 'pending'
     assert not evaluate._symptom_followup_push_candidate_is_fresh(row, NOW)
+
+
+def test_already_queued_follow_up_checks_owned_active_episode_at_send_time(monkeypatch):
+    queries=[]
+    def fetch(query,*params):
+        queries.append((query,params)); return None
+    monkeypatch.setattr(sender.pg,'fetchrow',fetch)
+    assert sender._prompt_policy(event(family='symptom_followups',payload={'prompt_id':'synthetic'}),NOW)=='prompt_no_longer_current'
+    sql,params=queries[0]
+    assert params[0]=='synthetic'
+    assert "ep.user_id = p.user_id" in sql and "activity.user_id = ep.user_id" in sql
+    assert "activity_contract' = 'persistent_v1'" in sql and "ep.current_state <> 'resolved'" in sql

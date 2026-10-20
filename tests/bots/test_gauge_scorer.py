@@ -382,3 +382,18 @@ class GaugeScorerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_zero_unknown_and_expired_severity_do_not_invent_load():
+    from datetime import datetime, timedelta, timezone
+    from bots.gauges import gauge_scorer as scorer
+    now=datetime(2026,9,12,12,tzinfo=timezone.utc)
+    for severity,age in [(None,0),(0,0),(8,25)]:
+        summary=scorer._build_symptom_signal_summary([{'symptom_code':'MIGRAINE','severity':severity,
+            'current_state':'ongoing','ts_utc':now-timedelta(hours=age)}],asof=now)
+        assert summary['gauge_boosts']=={}
+        adjusted,_=scorer.apply_symptom_gauge_adjustments({'pain':20},summary)
+        assert adjusted['pain']==20
+    worse=scorer._build_symptom_signal_summary([{'symptom_code':'MIGRAINE','severity':8,
+        'current_state':'worse','ts_utc':now}],asof=now)
+    assert worse['gauge_boosts']['pain']>0

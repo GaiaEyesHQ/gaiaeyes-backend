@@ -139,7 +139,15 @@ def _prompt_policy(event: Dict[str, Any], now: datetime) -> str | None:
     row = pg.fetchrow(
         """select status, delivered_at, push_delivery_enabled,
                   coalesce(snoozed_until, scheduled_for) as due_at
-             from raw.user_feedback_prompts where id = %s and user_id = %s""",
+             from raw.user_feedback_prompts p where id = %s and user_id = %s
+               and (p.prompt_type <> 'symptom_follow_up' or exists (
+                 select 1 from raw.user_symptom_episodes ep
+                  where ep.id = p.episode_id and ep.user_id = p.user_id and ep.current_state <> 'resolved'
+                    and not (upper(ep.symptom_code) <> 'MIGRAINE' and ep.current_state = 'new')
+                    and exists (select 1 from raw.user_symptom_episode_updates activity
+                      where activity.episode_id = ep.id and activity.user_id = ep.user_id
+                        and activity.metadata->>'activity_contract' = 'persistent_v1')
+               ))""",
         prompt_id, event["user_id"],
     )
     due = (row or {}).get("due_at")

@@ -11,6 +11,32 @@ from psycopg.rows import dict_row
 UTC = timezone.utc
 CURRENT_SYMPTOM_STATES = ("new", "ongoing", "improving", "worse", "resolved")
 
+# This marker records use of the persistent-activity contract, never an age cutoff.
+# Legacy logs/updates did not capture this intent and must not be promoted on read.
+ACTIVITY_CONTRACT = "persistent_v1"
+
+
+def activity_status(row: dict) -> str:
+    state = row.get("current_state", row.get("state", "new"))
+    if state == "resolved":
+        return "resolved"
+    if str(row.get("symptom_code", "")).upper() != "MIGRAINE" and state == "new":
+        return "recorded"
+    return "active" if row.get("activity_confirmed") is True else "needs_review"
+
+
+def activity_confirmation_sql(alias: str) -> str:
+    # episode_id is indexed; owner is checked on both the episode and its audit row.
+    return f"""exists (select 1 from raw.user_symptom_episode_updates activity
+        where activity.episode_id = {alias}.id and activity.user_id = {alias}.user_id
+          and activity.metadata->>'activity_contract' = 'persistent_v1')"""
+
+
+def activity_status_sql(alias: str) -> str:
+    return f"""case when {alias}.current_state = 'resolved' then 'resolved'
+      when upper({alias}.symptom_code) <> 'MIGRAINE' and {alias}.current_state = 'new' then 'recorded'
+      when {activity_confirmation_sql(alias)} then 'active' else 'needs_review' end"""
+
 
 def _normalize_ts(ts: Optional[datetime]) -> Optional[datetime]:
     if ts is None:
@@ -274,7 +300,7 @@ async def ensure_symptom_episode_for_event(
                     severity,
                     normalized_note,
                     started_at,
-                    json.dumps({"symptom_event_id": symptom_event_id}, separators=(",", ":"), sort_keys=True),
+                    json.dumps({"symptom_event_id": symptom_event_id, "activity_contract": ACTIVITY_CONTRACT}, separators=(",", ":"), sort_keys=True),
                     source,
                 ),
                 prepare=False,
@@ -309,11 +335,19 @@ async def record_symptom_episode_update(
     source: str = "ios",
     update_kind: Optional[str] = None,
     metadata: Optional[dict] = None,
+    resolution_time_unknown: bool = False,
+    expected_updated_at: Optional[datetime] = None,
 ) -> dict:
     normalized_state = _normalize_state(state) if state is not None else None
     normalized_note = _normalize_note(note_text)
     effective_ts = _normalize_ts(occurred_at) or datetime.now(UTC)
-    normalized_metadata = metadata or {}
+    normalized_metadata = dict(metadata or {})
+    if normalized_state is not None:
+        normalized_metadata["activity_contract"] = ACTIVITY_CONTRACT
+    if resolution_time_unknown:
+        if normalized_state != "resolved":
+            raise ValueError("Unknown end time requires an explicit resolved decision")
+        normalized_metadata["resolution_time_unknown"] = True
 
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
@@ -323,7 +357,8 @@ async def record_symptom_episode_update(
                    current_state,
                    current_severity,
                    original_severity,
-                   started_at
+                   started_at,
+                   updated_at
               from raw.user_symptom_episodes
              where id = %s
                and user_id = %s
@@ -361,6 +396,10 @@ async def record_symptom_episode_update(
             )
             if await cur.fetchone():
                 return await fetch_symptom_episode(conn, user_id, episode_id)
+        if expected_updated_at is not None and _normalize_ts(existing.get("updated_at")) != _normalize_ts(expected_updated_at):
+            raise StaleSymptomUpdate("This episode changed; refresh and review its status before saving")
+        if normalized_metadata.get("status_review_request_id") and existing.get("current_state") == "resolved":
+            raise ValueError("This episode is already resolved; use the time editor to correct a recorded end")
         if severity is not None:
             await cur.execute(
                 """select max(occurred_at) as reported_at from raw.user_symptom_episode_updates
@@ -404,6 +443,7 @@ async def record_symptom_episode_update(
                        else improvement_ts
                    end,
                    resolution_ts = case
+                       when %s then null
                        when %s = 'resolved' then coalesce(resolution_ts, %s)
                        when %s::text is not null then null
                        else resolution_ts
@@ -443,8 +483,9 @@ async def record_symptom_episode_update(
                 effective_ts,
                 normalized_state,
                 effective_ts,
-                normalized_state,
+                normalized_state if not resolution_time_unknown else None,
                 effective_ts,
+                resolution_time_unknown,
                 normalized_state,
                 effective_ts,
                 normalized_state,
@@ -493,18 +534,7 @@ async def record_symptom_episode_update(
     if not updated:
         raise RuntimeError("Failed to update symptom episode")
 
-    return {
-        "id": _serialize_uuid(updated.get("id")),
-        "symptom_code": updated.get("symptom_code"),
-        "current_state": _normalize_state(updated.get("current_state")),
-        "original_severity": updated.get("original_severity"),
-        "current_severity": updated.get("current_severity"),
-        "started_at": _serialize_ts(updated.get("started_at")),
-        "state_updated_at": _serialize_ts(updated.get("state_updated_at")),
-        "last_interaction_at": _serialize_ts(updated.get("last_interaction_at")),
-        "latest_note_text": updated.get("latest_note_text"),
-        "latest_note_at": _serialize_ts(updated.get("latest_note_at")),
-    }
+    return await fetch_symptom_episode(conn, user_id, episode_id)
 
 
 async def delete_symptom_episode(conn, user_id: str, episode_id: str) -> dict:
@@ -699,7 +729,7 @@ async def fetch_current_symptom_items(
     window_hours: int,
     limit: int = 20,
 ) -> List[dict]:
-    sql = """
+    sql = f"""
     with notes as (
         select episode_id,
                count(*) filter (where note_text is not null and btrim(note_text) <> '') as note_count
@@ -712,6 +742,8 @@ async def fetch_current_symptom_items(
         row_number() over (partition by (upper(ep.symptom_code) = 'MIGRAINE')
             order by ep.last_interaction_at desc, ep.started_at desc) as current_rank,
         ep.id,
+        ep.updated_at,
+        {activity_confirmation_sql("ep")} as activity_confirmed,
         ep.symptom_code,
         coalesce(sc.label, initcap(replace(ep.symptom_code, '_', ' '))) as label,
         ep.original_severity,
@@ -734,10 +766,11 @@ async def fetch_current_symptom_items(
      where ep.user_id = %s
        and ep.current_state <> 'resolved'
        and (upper(ep.symptom_code) = 'MIGRAINE'
+            or ep.current_state in ('ongoing', 'improving', 'worse')
             or ep.last_interaction_at >= now() - (%s * interval '1 hour'))
     )
     select * from active
-     where upper(symptom_code) = 'MIGRAINE' or current_rank <= %s
+     where upper(symptom_code) = 'MIGRAINE' or current_state <> 'new' or current_rank <= %s
      order by last_interaction_at desc, started_at desc
     """
 
@@ -756,6 +789,8 @@ async def fetch_current_symptom_items(
                 "current_severity": row.get("current_severity"),
                 "started_at": _serialize_ts(row.get("started_at")),
                 "current_state": _normalize_state(row.get("current_state")),
+                "activity_status": activity_status(row),
+                "updated_at": _serialize_ts(row.get("updated_at")),
                 "state_updated_at": _serialize_ts(row.get("state_updated_at")),
                 "last_interaction_at": _serialize_ts(row.get("last_interaction_at")),
                 "latest_note_text": row.get("latest_note_text"),
@@ -770,8 +805,10 @@ async def fetch_current_symptom_items(
 
 
 async def fetch_symptom_episode(conn, user_id: str, episode_id: str) -> dict:
-    sql = """
+    sql = f"""
     select ep.id,
+           ep.updated_at,
+           {activity_confirmation_sql("ep")} as activity_confirmed,
            ep.symptom_code,
            coalesce(sc.label, initcap(replace(ep.symptom_code, '_', ' '))) as label,
            ep.original_severity,
@@ -809,6 +846,8 @@ async def fetch_symptom_episode(conn, user_id: str, episode_id: str) -> dict:
         "current_severity": row.get("current_severity"),
         "started_at": _serialize_ts(row.get("started_at")),
         "current_state": _normalize_state(row.get("current_state")),
+                "activity_status": activity_status(row),
+                "updated_at": _serialize_ts(row.get("updated_at")),
         "state_updated_at": _serialize_ts(row.get("state_updated_at")),
         "last_interaction_at": _serialize_ts(row.get("last_interaction_at")),
         "latest_note_text": row.get("latest_note_text"),
@@ -858,6 +897,8 @@ async def fetch_current_symptom_items_fallback(
                 "current_severity": row.get("severity"),
                 "started_at": _serialize_ts(row.get("ts_utc")),
                 "current_state": "new",
+                "activity_status": "recorded",
+                "updated_at": None,
                 "state_updated_at": _serialize_ts(row.get("ts_utc")),
                 "last_interaction_at": _serialize_ts(row.get("ts_utc")),
                 "latest_note_text": note_text,
@@ -878,23 +919,26 @@ async def fetch_migraine_episode_range(
     # One SQL statement gives the fingerprint and page the same MVCC snapshot.
     # The existing (user_id, started_at DESC) index bounds the candidate scan.
     # No episode-update join: repeated updates never multiply calendar entries.
-    query = """
-    with canonical as materialized (
-      select id, started_at, current_state as state,
+    query = f"""
+    with classified as materialized (
+      select e.*, {activity_status_sql("e")} as activity_status
+        from raw.user_symptom_episodes e
+       where e.user_id = %s and upper(e.symptom_code) = 'MIGRAINE' and e.started_at < %s
+    ), canonical as materialized (
+      select id, started_at, current_state as state, activity_status,
              case when current_state = 'resolved' and resolution_ts >= started_at
                   then resolution_ts end as ended_at,
-             case when current_state <> 'resolved' then 'open'
-                  when resolution_ts >= started_at then 'recorded' else 'unknown' end as end_status,
+             case when activity_status = 'active' then 'open'
+                  when current_state = 'resolved' and resolution_ts >= started_at then 'recorded' else 'unknown' end as end_status,
              current_severity as severity, latest_note_text as note_preview, updated_at
-        from raw.user_symptom_episodes
-       where user_id = %s and upper(symptom_code) = 'MIGRAINE' and started_at < %s
+        from classified
     ), matching as materialized (
       select * from canonical
        where started_at >= %s or ended_at > %s or (end_status = 'open' and %s > %s)
     ), stamp as (
       select md5(coalesce(string_agg(md5(row(
           id, extract(epoch from started_at), state, extract(epoch from ended_at),
-          end_status, severity, note_preview, extract(epoch from updated_at)
+          end_status, activity_status, severity, note_preview, extract(epoch from updated_at)
         )::text), '' order by id), '')) as snapshot
         from matching m
     )
@@ -916,7 +960,7 @@ async def fetch_migraine_episode_range(
             continue
         items.append({"id": str(row["id"]), "started_at": _serialize_ts(row["started_at"]),
                       "ended_at": _serialize_ts(row["ended_at"]), "state": row["state"],
-                      "end_status": row["end_status"], "severity": row["severity"],
+                      "end_status": row["end_status"], "activity_status": row["activity_status"], "severity": row["severity"],
                       "note_preview": row["note_preview"]})
     return {"snapshot": rows[0]["snapshot"], "items": items}
 
@@ -929,28 +973,30 @@ async def fetch_symptom_episode_range(
     """All reported symptoms, including legacy raw-only logs, without creating rows.
 
     New non-migraine logs are points until an ongoing state or end is recorded.
-    An unresolved migraine remains an open episode under its existing contract.
+    Only an explicitly confirmed active episode spans days; legacy unknown status is a point.
     """
-    query = """
-    with canonical as materialized (
+    query = f"""
+    with classified as materialized (
+      select e.*, {activity_status_sql("e")} as activity_status from raw.user_symptom_episodes e
+       where e.user_id = %s and e.started_at < %s
+    ), canonical as materialized (
       select e.id, 'episode'::text as record_kind, e.started_at,
              upper(e.symptom_code) as symptom_code,
              coalesce(c.label, initcap(replace(e.symptom_code, '_', ' '))) as label,
-             e.current_state as state,
+             e.current_state as state, e.activity_status,
              case when e.current_state = 'resolved' and e.resolution_ts >= e.started_at
                   then e.resolution_ts end as ended_at,
              case when e.current_state = 'resolved' and e.resolution_ts >= e.started_at then 'recorded'
                   when e.current_state = 'resolved' then 'unknown'
-                  when upper(e.symptom_code) = 'MIGRAINE' or e.current_state in ('ongoing','improving','worse') then 'open'
-                  else 'instant' end as end_status,
+                  when e.activity_status = 'active' then 'open'
+                  when e.activity_status = 'needs_review' then 'unknown' else 'instant' end as end_status,
              e.current_severity as severity, e.latest_note_text as note_preview, e.updated_at
-        from raw.user_symptom_episodes e
+        from classified e
         left join dim.symptom_codes c on c.symptom_code = e.symptom_code
-       where e.user_id = %s and e.started_at < %s
       union all
       select e.id, 'event'::text, e.ts_utc, upper(e.symptom_code),
              coalesce(c.label, initcap(replace(e.symptom_code, '_', ' '))),
-             'new', null::timestamptz, 'instant', e.severity, e.free_text, e.ts_utc
+             'new', 'recorded', null::timestamptz, 'instant', e.severity, e.free_text, e.ts_utc
         from raw.user_symptom_events e
         left join dim.symptom_codes c on c.symptom_code = e.symptom_code
        where e.user_id = %s and e.ts_utc >= %s and e.ts_utc < %s
@@ -962,7 +1008,7 @@ async def fetch_symptom_episode_range(
     ), stamp as (
       select md5(coalesce(string_agg(md5(row(
           id, record_kind, symptom_code, label, extract(epoch from started_at), state,
-          extract(epoch from ended_at), end_status, severity, note_preview, extract(epoch from updated_at)
+          extract(epoch from ended_at), end_status, activity_status, severity, note_preview, extract(epoch from updated_at)
         )::text), '' order by id, record_kind), '')) as snapshot from matching
     )
     select stamp.snapshot, page.* from stamp left join lateral (
@@ -978,7 +1024,7 @@ async def fetch_symptom_episode_range(
         rows = await cur.fetchall()
     items = [{"id": str(r["id"]), "record_kind": r["record_kind"], "symptom_code": r["symptom_code"],
               "label": r["label"], "started_at": _serialize_ts(r["started_at"]),
-              "ended_at": _serialize_ts(r["ended_at"]), "state": r["state"], "end_status": r["end_status"],
+              "ended_at": _serialize_ts(r["ended_at"]), "state": r["state"], "end_status": r["end_status"], "activity_status": r["activity_status"],
               "severity": r["severity"], "note_preview": r["note_preview"]} for r in rows if r["id"] is not None]
     return {"snapshot": rows[0]["snapshot"], "items": items}
 

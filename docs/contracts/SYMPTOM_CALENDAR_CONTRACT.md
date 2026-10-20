@@ -31,3 +31,6 @@ The page envelope retains `start`, `end`, `as_of`, `snapshot`, `next_cursor`, `c
 Deploy the reviewed backend endpoint before distributing the matching client. Existing canonical symptom storage is required; no new SQL migration, flag change, production backfill, or data mutation is part of this work. Old servers produce a visible unavailable/error state. Enhanced details/time editing still need their separately reviewed existing migrations and capability flags. No release operation is authorized by these local changes.
 
 The shared backend is usable by the website. The new calendar UI and condition gating are iOS changes; website/member-hub UI parity is deferred explicitly and must be reviewed if an equivalent calendar is shipped there. Fibromyalgia, ME/CFS, and POTS flows remain deferred.
+
+
+Activity clarification: [Symptom activity and earlier-entry review](SYMPTOM_ACTIVITY_REVIEW_CONTRACT.md) supersedes treating every unresolved state as an open duration. Unconfirmed records remain on their recorded onset day until reviewed.

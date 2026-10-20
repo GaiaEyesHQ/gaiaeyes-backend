@@ -267,24 +267,46 @@ def fetch_user_tags(user_id: str) -> List[Dict[str, Any]]:
 
 def fetch_symptom_summary(user_id: str, day: date, *, require_corrected_symptoms: bool = False) -> Dict[str, Any]:
     start, end = _local_day_bounds(day)
+    # Current reports use rolling freshness across midnight. Historical rescores
+    # retain the requested local-day/DST boundaries and an end-of-day clock.
+    asof = min(datetime.now(timezone.utc), end) if day == datetime.now(LOCAL_TZ).date() else end
+    if day == datetime.now(LOCAL_TZ).date():
+        start, end = asof - timedelta(hours=24), asof
+    historical_state = """coalesce((select prior.state from raw.user_symptom_episode_updates prior
+        where prior.episode_id = ep.id and prior.user_id = ep.user_id and prior.state is not null
+          and prior.occurred_at <= coalesce(report.occurred_at, ep.started_at)
+        order by prior.occurred_at desc, prior.created_at desc, prior.id desc limit 1), 'new')"""
+    state_at_report = "ep.current_state" if day == datetime.now(LOCAL_TZ).date() else historical_state
     episode_rows: List[Dict[str, Any]] = []
     episode_cols = table_columns("raw", "user_symptom_episodes")
     if episode_cols or require_corrected_symptoms:
         try:
             episode_rows = pg.fetch(
-                """
-                select symptom_code,
-                       coalesce(current_severity, original_severity) as severity,
-                       last_interaction_at as ts_utc,
-                       latest_note_text as free_text,
-                       current_state
-                  from raw.user_symptom_episodes
-                 where user_id = %s
-                   and last_interaction_at >= %s
-                   and last_interaction_at < %s
-                   and current_state in ('new', 'ongoing', 'improving')
-                 order by last_interaction_at desc
+                f"""
+                select ep.symptom_code, coalesce(report.severity, ep.original_severity) as severity,
+                       coalesce(report.occurred_at, ep.started_at) as ts_utc,
+                       ep.latest_note_text as free_text, {state_at_report} as current_state
+                  from raw.user_symptom_episodes ep
+                  left join lateral (
+                    select u.severity,
+                           case when u.update_kind = 'logged' then ep.started_at else u.occurred_at end as occurred_at
+                      from raw.user_symptom_episode_updates u
+                     where u.episode_id = ep.id and u.user_id = ep.user_id and u.severity is not null
+                       and (case when u.update_kind = 'logged' then ep.started_at else u.occurred_at end) < %s
+                     order by (case when u.update_kind = 'logged' then ep.started_at else u.occurred_at end) desc,
+                              u.created_at desc, u.id desc limit 1
+                  ) report on true
+                 where ep.user_id = %s
+                   and coalesce(report.occurred_at, ep.started_at) >= %s and coalesce(report.occurred_at, ep.started_at) < %s
+                   and {state_at_report} in ('new', 'ongoing', 'improving', 'worse')
+                   and ({'false' if day == datetime.now(LOCAL_TZ).date() else 'true'}
+                     or upper(ep.symptom_code) <> 'MIGRAINE' and ep.current_state = 'new'
+                     or exists (select 1 from raw.user_symptom_episode_updates activity
+                       where activity.episode_id = ep.id and activity.user_id = ep.user_id
+                         and activity.metadata->>'activity_contract' = 'persistent_v1'))
+                 order by report.occurred_at desc
                 """,
+                end,
                 user_id,
                 start,
                 end,
@@ -303,14 +325,18 @@ def fetch_symptom_summary(user_id: str, day: date, *, require_corrected_symptoms
     else:
         capability = pg.fetchrow("select to_regclass('raw.user_symptom_events_effective') is not null as available")
         source = "raw.user_symptom_events_effective" if capability and capability.get("available") else "raw.user_symptom_events"
+    canonical_exclusion = "" if not episode_cols and not require_corrected_symptoms else """
+       and not exists (select 1 from raw.user_symptom_episodes ep
+                        where ep.user_id = event.user_id and ep.symptom_event_id = event.id)"""
     try:
         rows = pg.fetch(
             f"""
-            select symptom_code, severity, ts_utc, free_text, tags
-              from {source}
-             where user_id = %s
-               and ts_utc >= %s
-               and ts_utc < %s
+            select event.symptom_code, event.severity, event.ts_utc, event.free_text, event.tags
+              from {source} event
+             where event.user_id = %s
+               and event.ts_utc >= %s
+               and event.ts_utc < %s
+               {canonical_exclusion}
              order by ts_utc desc
             """,
             user_id,
@@ -322,13 +348,13 @@ def fetch_symptom_summary(user_id: str, day: date, *, require_corrected_symptoms
             raise
         rows = []
 
-    return _build_symptom_signal_summary([*(rows or []), *episode_rows])
+    return _build_symptom_signal_summary([*(rows or []), *episode_rows], asof=asof)
 
 
 def _severity_points(value: Any) -> float:
     severity = _safe_float(value)
-    if severity is None:
-        severity = 5.0
+    if severity is None or severity <= 0:
+        return 0.0
     if severity <= 2.0:
         return 2.0
     if severity <= 4.0:
@@ -367,8 +393,8 @@ def _state_multiplier(value: Any) -> float:
     return _CURRENT_SYMPTOM_STATE_MULTIPLIERS.get(token, 1.0)
 
 
-def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any]:
-    now_utc = datetime.now(timezone.utc)
+def _build_symptom_signal_summary(events: List[Dict[str, Any]], *, asof: Optional[datetime] = None) -> Dict[str, Any]:
+    now_utc = asof or datetime.now(timezone.utc)
     gauge_boosts: Dict[str, float] = {key: 0.0 for key in _SYMPTOM_EFFECT_KEYS}
     recent_gauge_boosts: Dict[str, float] = {key: 0.0 for key in _SYMPTOM_EFFECT_KEYS}
     grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -415,7 +441,7 @@ def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any
             continue
         severity_points = _severity_points(severity)
         cluster_key = _SYMPTOM_CLUSTER_WEIGHTS.get(code)
-        if cluster_key:
+        if cluster_key and severity_points > 0:
             cluster_keys.add(cluster_key)
         for gauge_key, weight in effects.items():
             contribution = severity_points * float(weight) * recency_mult * state_mult
@@ -1203,7 +1229,7 @@ def apply_symptom_gauge_adjustments(
 
     all_boosts = symptoms.get("gauge_boosts") or {}
     recent_boosts = symptoms.get("recent_gauge_boosts") or {}
-    if not all_boosts:
+    if "gauge_boosts" not in symptoms:
         derived_boosts: Dict[str, float] = {}
         for row in symptoms.get("top_symptoms") or []:
             code = _normalize_symptom_code(row.get("symptom_code"))
