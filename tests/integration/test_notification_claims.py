@@ -125,10 +125,26 @@ def test_prompt_selection_allows_due_snooze_and_excludes_existing_attempt(queue,
         snoozed_until timestamptz, delivered_at timestamptz, push_delivery_enabled bool,
         created_at timestamptz default now())''')
     try:
+        queue.execute('''create table raw.user_symptom_episodes (
+            id uuid primary key default gen_random_uuid(), user_id text,
+            symptom_code text, current_state text)''')
+        queue.execute('''create table raw.user_symptom_episode_updates (
+            episode_id uuid, user_id text, metadata jsonb)''')
+        episode = queue.fetchrow("""insert into raw.user_symptom_episodes
+            (user_id,symptom_code,current_state)
+            values ('synthetic','MIGRAINE','ongoing') returning id""")
         row = queue.fetchrow("""insert into raw.user_feedback_prompts
-            (user_id,prompt_type,status,scheduled_for,snoozed_until,delivered_at,push_delivery_enabled)
-            values ('synthetic','symptom_follow_up','snoozed',now()-interval '2 days',
-                    now()-interval '1 minute',now()-interval '2 hours',true) returning id""")
+            (user_id,episode_id,prompt_type,status,scheduled_for,snoozed_until,delivered_at,push_delivery_enabled)
+            values ('synthetic',%s,'symptom_follow_up','snoozed',now()-interval '2 days',
+                    now()-interval '1 minute',now()-interval '2 hours',true) returning id""", episode['id'])
+        assert not evaluator._feedback_prompt_rows('synthetic','symptom_follow_up')
+        queue.execute("""insert into raw.user_symptom_episode_updates
+            (episode_id,user_id,metadata)
+            values (%s,'different-owner','{"activity_contract":"persistent_v1"}')""", episode['id'])
+        assert not evaluator._feedback_prompt_rows('synthetic','symptom_follow_up')
+        queue.execute("""insert into raw.user_symptom_episode_updates
+            (episode_id,user_id,metadata)
+            values (%s,'synthetic','{"activity_contract":"persistent_v1"}')""", episode['id'])
         assert len(evaluator._feedback_prompt_rows('synthetic','symptom_follow_up')) == 1
         candidate = NotificationCandidate('symptom_followups','followup','watch','Synthetic','Synthetic',
                                           'current_symptoms','synthetic',payload={'prompt_id':str(row['id'])})
