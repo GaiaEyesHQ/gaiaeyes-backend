@@ -1013,7 +1013,6 @@ async def _fetch_latest_gauges(
 
 
 async def _build_dashboard_payload(
-    conn,
     user_id: str,
     day: date,
     *,
@@ -1029,86 +1028,100 @@ async def _build_dashboard_payload(
         timings_ms[name] = round((now - step_started) * 1000.0, 1)
         step_started = now
 
-    payload, rpc_fallback_used = await _call_dashboard_payload(conn, user_id, day)
-    if not isinstance(payload, dict):
-        payload = {}
-    mark_step("rpc_payload")
+    # Hold pooled connections only while their SQL work is running. Optional
+    # signal and threaded enrichment work use independent connections.
+    async with _acquire_dashboard_conn() as conn:
+        payload, rpc_fallback_used = await _call_dashboard_payload(conn, user_id, day)
+        if not isinstance(payload, dict):
+            payload = {}
+        mark_step("rpc_payload")
 
-    paid_probe = await _probe_paid_user(conn, user_id)
-    entitled = paid_probe.get("entitled")
-    public_post = await _fetch_public_post(conn, day)
-    member_post = await _fetch_member_post(conn, user_id, day)
-    personal_post = payload.get("personal_post")
-    mark_step("posts_entitlement")
+        paid_probe = await _probe_paid_user(conn, user_id)
+        entitled = paid_probe.get("entitled")
+        public_post = await _fetch_public_post(conn, day)
+        member_post = await _fetch_member_post(conn, user_id, day)
+        personal_post = payload.get("personal_post")
+        mark_step("posts_entitlement")
 
-    resolved_member = member_post or personal_post
+        resolved_member = member_post or personal_post
 
-    out = dict(payload)
-    out["entitled"] = entitled
-    out["member_post"] = resolved_member
-    out["public_post"] = public_post
+        out = dict(payload)
+        out["entitled"] = entitled
+        out["member_post"] = resolved_member
+        out["public_post"] = public_post
 
-    latest_ulf = None
-    try:
-        latest_ulf = await ulf_db.get_latest_ulf_context(conn)
-        out.update(build_ulf_payload(latest_ulf, include_empty=True))
-    except Exception as exc:
-        logger.warning("[dashboard] geomagnetic context lookup failed user=%s day=%s err=%s", user_id, day, exc)
-        out.update(build_ulf_payload(None, include_empty=True))
-    mark_step("ulf")
+        latest_ulf = None
+        try:
+            latest_ulf = await ulf_db.get_latest_ulf_context(conn)
+            out.update(build_ulf_payload(latest_ulf, include_empty=True))
+        except Exception as exc:
+            logger.warning("[dashboard] geomagnetic context lookup failed user=%s day=%s err=%s", user_id, day, exc)
+            out.update(build_ulf_payload(None, include_empty=True))
+        mark_step("ulf")
 
-    definition = _safe_dashboard_definition()
-    gauge_fallback = await _fetch_latest_gauges(
-        conn,
-        user_id,
-        day,
-        fallback_if_missing=True,
-        definition=definition,
-    )
-    if not out.get("gauges") and gauge_fallback.get("gauges"):
-        out["gauges"] = gauge_fallback.get("gauges")
-    if not out.get("alerts") and gauge_fallback.get("alerts"):
-        out["alerts"] = gauge_fallback.get("alerts")
-    if not out.get("day") and gauge_fallback.get("day"):
-        out["day"] = gauge_fallback.get("day")
+        definition = _safe_dashboard_definition()
+        gauge_fallback = await _fetch_latest_gauges(
+            conn,
+            user_id,
+            day,
+            fallback_if_missing=True,
+            definition=definition,
+        )
+        if not out.get("gauges") and gauge_fallback.get("gauges"):
+            out["gauges"] = gauge_fallback.get("gauges")
+        if not out.get("alerts") and gauge_fallback.get("alerts"):
+            out["alerts"] = gauge_fallback.get("alerts")
+        if not out.get("day") and gauge_fallback.get("day"):
+            out["day"] = gauge_fallback.get("day")
 
-    if definition:
-        out["gauge_zones"] = _normalized_default_zones(definition)
-        out["gauge_labels"] = _gauge_labels(definition)
-        gauges = out.get("gauges")
-        if isinstance(gauges, dict):
-            out["gauges_meta"] = _decorate_gauges(gauges, definition)
-    out["alerts"] = _normalized_alerts(out.get("alerts"))
-    mark_step("gauges")
+        if definition:
+            out["gauge_zones"] = _normalized_default_zones(definition)
+            out["gauge_labels"] = _gauge_labels(definition)
+            gauges = out.get("gauges")
+            if isinstance(gauges, dict):
+                out["gauges_meta"] = _decorate_gauges(gauges, definition)
+        out["alerts"] = _normalized_alerts(out.get("alerts"))
+        mark_step("gauges")
 
-    out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
-    mark_step("gauge_delta")
+        out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
+        mark_step("gauge_delta")
 
     active_states, local_payload, signal_bar_payload = await _resolve_signal_context(
         user_id, day, definition, include_signal_bar=True,
     )
     mark_step("signal_context")
+    async def fetch_personalization_rows():
+        async with _acquire_dashboard_conn() as conn:
+            # A single connection executes SQL serially; avoid leaving sibling
+            # query tasks running when an error returns it to the pool.
+            return (
+                await fetch_best_pattern_rows(conn, user_id),
+                await fetch_recent_outcome_summary(conn, user_id, day),
+                await feedback_db.fetch_latest_daily_check_in(conn, user_id),
+                await _fetch_latest_pending_follow_up(conn, user_id),
+                await _fetch_guide_seen_state(conn, user_id),
+            )
+
     (
         user_tags,
-        pattern_rows,
-        recent_outcomes,
+        personalization_rows,
         health_status_explainer,
         symptom_gauge_context,
         symptom_summary,
-        latest_daily_check_in,
-        pending_follow_up,
-        guide_seen_state,
     ) = await asyncio.gather(
         asyncio.to_thread(fetch_user_tags, user_id),
-        fetch_best_pattern_rows(conn, user_id),
-        fetch_recent_outcome_summary(conn, user_id, day),
+        fetch_personalization_rows(),
         asyncio.to_thread(fetch_health_status_context, user_id, day),
         asyncio.to_thread(fetch_recent_symptom_gauge_context, user_id, day),
         asyncio.to_thread(fetch_symptom_summary, user_id, day),
-        feedback_db.fetch_latest_daily_check_in(conn, user_id),
-        _fetch_latest_pending_follow_up(conn, user_id),
-        _fetch_guide_seen_state(conn, user_id),
     )
+    (
+        pattern_rows,
+        recent_outcomes,
+        latest_daily_check_in,
+        pending_follow_up,
+        guide_seen_state,
+    ) = personalization_rows
     mark_step("personalization_inputs")
 
     drivers = normalize_environmental_drivers(
@@ -1283,9 +1296,8 @@ async def _refresh_stale_dashboard(user_id: str, day: date) -> None:
             return
         started = time.perf_counter()
         try:
-            async with _acquire_dashboard_conn() as conn:
-                out, timings_ms = await _build_dashboard_payload(conn, user_id, day, debug=False)
-                await _set_cached_dashboard(user_id, day, out)
+            out, timings_ms = await _build_dashboard_payload(user_id, day, debug=False)
+            await _set_cached_dashboard(user_id, day, out)
             elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
             logger.info(
                 "[dashboard] stale refresh built user=%s day=%s ms=%s timings=%s",
@@ -1372,8 +1384,7 @@ async def dashboard(
                     refresh_scheduled=False,
                 )
 
-        async with _acquire_dashboard_conn() as conn:
-            out, timings_ms = await _build_dashboard_payload(conn, user_id, day, debug=debug)
+        out, timings_ms = await _build_dashboard_payload(user_id, day, debug=debug)
 
         if not debug:
             await _set_cached_dashboard(user_id, day, out)

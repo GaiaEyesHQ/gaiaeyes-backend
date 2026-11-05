@@ -178,11 +178,13 @@ stale-space refresh from total worker duration; timeout logs mean the caller
 stopped waiting, not that the synchronous work stopped. Missing signal states
 remain missing rather than being presented as successfully computed.
 
-The dashboard still holds its async request connection during assembly. This
-patch does not diagnose the production Schumann query plan/lock waits, change
-entitlement decisions, alter SQL/schema, or guarantee a fully enriched response
-within six seconds. Investigate those separately using approved read-only
-production diagnostics if residual latency persists.
+Dashboard assembly now uses two short SQL-only checkout scopes. It releases
+the first connection before waiting for optional signal work and releases the
+personalization SQL connection independently of threaded personalization reads.
+The existing six-second optional signal wait is unchanged and is not a total
+endpoint latency guarantee. Entitlement decisions, response shape, cache policy,
+and SQL/schema are unchanged. Residual Schumann query cost and lock waits require
+separate database investigation.
 
 Dashboard signal-bar I/O now runs within that same bounded optional worker,
 including live space and Schumann snapshots. The response thread composes only
@@ -201,3 +203,42 @@ calm-colored placeholders when all items are absent; correcting that UI requires
 a coordinated client release. Source timestamps and existing dashboard freshness
 metadata are retained; no new freshness threshold or claim of live data is
 introduced. The six-second request wait still does not promise full enrichment.
+
+### Pool cancellation cleanup
+
+The request DB dependency now uses the pool's native async context manager for
+setup, endpoint work, and transaction cleanup. Only acquisition/setup failures
+before the first yield may retry or fail over. Endpoint and commit errors
+propagate without trying to replay a yield dependency. Prepared statements are
+disabled with `prepare_threshold=None` for transaction-pooler compatibility;
+`0` would prepare immediately rather than disable them.
+
+`psycopg_pool` is pinned to released version 3.3.3, which returns connections
+before propagating checkout-check cancellation. This includes cancellation-loss
+fixes first shipped in 3.2.8 and the check-propagation fix in 3.3.2; see the
+[upstream release notes](https://github.com/psycopg/psycopg/blob/pool-3.3.3/docs/news_pool.rst).
+
+A small pool subclass shields and joins its native reset/return operation before
+propagating cancellation, including repeated cancellation. It protects all pool
+callers, both normal returns and failed checkout checks. The request must wait
+for this cleanup rather than abandoning a background task, so observed latency
+can exceed an acquisition or request timeout. Native transaction commit/rollback
+semantics are unchanged: a cancellation after a commit has completed cannot undo
+it. Interrupted transaction cleanup is reset or discarded by the native pool
+before reuse.
+
+The subclass overrides the private `_putconn` hook because both public return
+and checkout-error paths use it in 3.3.3. Keep the version pin and rerun the
+installed-library regression tests when upgrading; this is deliberate private
+API coupling, not a guarantee for other library versions. Pool shutdown,
+process termination, or an indefinitely stalled database operation still need
+operational handling.
+
+Run `python -m pytest -q tests/test_db_lifecycle.py tests/test_db_conninfo.py tests/test_db_failover.py`
+with a dummy `DATABASE_URL` for offline verification. Tests use fake connections
+and the installed driver's/pool's real checkout, transaction-exit, reset and
+return code with network operations stubbed. Coverage includes normal completion,
+setup/request cancellation, repeated checkout/return cancellation, generator
+close, cancellation during commit/rollback, pre-yield retry limits, error
+propagation, and prepared-statement configuration. These tests do not establish
+the cause of a past outage or replace staging Postgres/transaction-pooler tests.

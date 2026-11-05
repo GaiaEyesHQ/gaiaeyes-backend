@@ -211,10 +211,18 @@ def _prepare_conninfo() -> None:
     _pool_active_label = primary_label
 
 
+class _CancellationSafePool(AsyncConnectionPool):
+    async def _putconn(self, conn, from_getconn: bool) -> None:
+        # Version-pinned hook: public putconn() and failed checkout checks both
+        # use this path in psycopg_pool 3.3.3. Protect reset/return for every
+        # caller, including ones using pool.connection() without get_db().
+        await _complete_pool_cleanup(super()._putconn(conn, from_getconn))
+
+
 def _make_pool(conninfo: str) -> AsyncConnectionPool:
     """Create a configured async connection pool for the provided conninfo."""
 
-    return AsyncConnectionPool(
+    return _CancellationSafePool(
         conninfo=conninfo,
         min_size=_pool_min_size(),
         max_size=_pool_max_size(),
@@ -227,7 +235,7 @@ def _make_pool(conninfo: str) -> AsyncConnectionPool:
         # "_pg3_*" does not exist' errors when connections are reused.
         kwargs={
             "sslmode": "require",
-            "prepare_threshold": 0,
+            "prepare_threshold": None,
         },
     )
 
@@ -588,16 +596,42 @@ async def get_pool() -> AsyncConnectionPool:
     return pool
 
 
+async def _complete_pool_cleanup(awaitable) -> None:
+    """Finish cleanup before propagating cancellation to the caller."""
+    cleanup = asyncio.create_task(awaitable)
+    cancelled = None
+    while not cleanup.done():
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError as cancel:
+            # Retain and join the task: shield alone would orphan cleanup when
+            # the request exits. Repeated task.cancel() calls must not interrupt
+            # a rollback or the pool's awaited return/lock acquisition.
+            cancelled = cancel
+    cleanup.result()
+    if cancelled is not None:
+        raise cancelled
+
+
 async def get_db() -> AsyncGenerator:
+    """Borrow once for the request; retry only before handing it a connection."""
     attempts = 0
     while attempts < 3:
         attempts += 1
         pool = await get_pool()
-        ctx = pool.connection()
+        yielded = False
 
         try:
-            conn = await ctx.__aenter__()
+            # Native transaction semantics handle setup/request cancellation;
+            # the pool subclass protects its awaited reset/return from interruption.
+            async with pool.connection() as conn:
+                await conn.execute(f"set statement_timeout = {_STATEMENT_TIMEOUT_MS}")
+                yielded = True
+                yield conn  # FastAPI injects this as `conn` in your endpoints
+            return
         except PoolTimeout:
+            if yielded:
+                raise
             _log_pool_diag(pool)
             if await handle_pool_timeout("pool timeout acquiring connection") and attempts < 3:
                 await asyncio.sleep(0)
@@ -609,39 +643,13 @@ async def get_db() -> AsyncGenerator:
                 continue
             raise
         except Exception as exc:
+            # A yield dependency cannot replay endpoint work. Propagate request
+            # and commit/cleanup errors instead of yielding a second connection.
+            if yielded:
+                raise
             if await handle_connection_failure(exc) and attempts < 3:
                 continue
             raise
-
-        try:
-            await conn.execute(f"set statement_timeout = {_STATEMENT_TIMEOUT_MS}")
-        except Exception as exc:
-            await ctx.__aexit__(type(exc), exc, exc.__traceback__)
-            if await _maybe_failover(exc) and attempts < 3:
-                await asyncio.sleep(0)
-                continue
-            raise
-
-        try:
-            yield conn  # FastAPI injects this as `conn` in your endpoints
-        except Exception as exc:  # pragma: no cover - defensive, FastAPI handles
-            # If the request code tripped a statement error mid-transaction, make sure
-            # we don't hand an "aborted" connection back to the pool. Roll back first.
-            try:
-                await conn.rollback()
-            except Exception:
-                pass
-            await ctx.__aexit__(type(exc), exc, exc.__traceback__)
-            # If this was a "current transaction is aborted"-style error, allow one
-            # more acquisition attempt so the request can proceed on a clean conn.
-            if isinstance(exc, psycopg_errors.InFailedSqlTransaction) and attempts < 3:
-                logger.warning("[DB] aborted transaction detected; retrying request on a fresh connection (attempt %d)", attempts)
-                await asyncio.sleep(0)
-                continue
-            raise
-        else:
-            await ctx.__aexit__(None, None, None)
-        return
 
     raise RuntimeError("DB connection acquisition failed")
 
