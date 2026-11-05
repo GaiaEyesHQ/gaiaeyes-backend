@@ -303,7 +303,7 @@ async def test_symptom_refresh_recalculates_before_building_and_bypasses_cached_
         order.append('score')
     @asynccontextmanager
     async def acquire(): yield object()
-    async def build(conn,owner,day,**kwargs):
+    async def build(owner,day,**kwargs):
         assert order==['score'];order.append('build')
         return {'day':day.isoformat(),'gauges':{'pain':20}},{}
     async def no_cache(*a,**kw): raise AssertionError('stale gauge read')
