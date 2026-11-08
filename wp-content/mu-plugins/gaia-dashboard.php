@@ -90,6 +90,17 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__gauge-meter{position:relative;display:grid;place-items:center;margin-top:2px}
         .gaia-dashboard__gauge-arc{width:104px;height:104px;display:block}
         @media(min-width:1200px){.gaia-dashboard__gauge-arc{width:110px;height:110px}}
+        @media(min-width:900px){
+            .gaia-dashboard__gauges--compact{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge{padding:10px;gap:6px;min-height:0;min-width:0}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-label{font-size:12px;min-height:30px;text-align:center}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-arc{width:88px;height:88px;max-width:100%}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-value{font-size:22px;gap:2px}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-delta{font-size:10px}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-zone{font-size:10px}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__tap-hint{text-align:center}
+        }
+        @media(min-width:1000px){.gaia-dashboard__gauges--compact{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}}
         .gaia-dashboard__gauge-ring{fill:none;stroke:rgba(255,255,255,.12);stroke-width:9}
         .gaia-dashboard__gauge-value-arc{fill:none;stroke-width:9;stroke-linecap:round}
         .gaia-dashboard__gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
@@ -233,11 +244,11 @@ add_action('wp_enqueue_scripts', function () {
         @media(min-width:900px){.gaia-dashboard__form-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
         .gaia-dashboard__field{display:flex;flex-direction:column;gap:6px}
         .gaia-dashboard__field label{font-size:12px;color:#9da9c1}
-        .gaia-dashboard__field input,.gaia-dashboard__field select,.gaia-dashboard__field textarea{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#101826;color:#e8edf7;padding:10px 12px}
+        .gaia-dashboard__field input:not([type="checkbox"]):not([type="radio"]),.gaia-dashboard__field select,.gaia-dashboard__field textarea{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#101826;color:#e8edf7;padding:10px 12px}
         .gaia-dashboard__field textarea{min-height:84px;resize:vertical}
         .gaia-dashboard__exposure-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:start}
         .gaia-dashboard__toggle-chip{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:14px;background:#172130;border:1px solid rgba(255,255,255,.08);color:#d6e3fa;font-size:14px;line-height:1.45;min-height:0}
-        .gaia-dashboard__toggle-chip input{accent-color:#2b8cff;flex:0 0 auto;margin-top:3px}
+        .gaia-dashboard__toggle-chip input[type="checkbox"]{accent-color:#2b8cff;flex:0 0 18px;width:18px;height:18px;min-width:18px;padding:0;margin:2px 0 0}
         .gaia-dashboard__toggle-chip span{display:block;flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:break-word;word-break:normal}
         .gaia-dashboard__helper{font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__status-note{font-size:12px;color:#d8b176}

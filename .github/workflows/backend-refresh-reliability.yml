@@ -66,6 +66,7 @@ jobs:
       - name: Run refresh and database regressions
         run: |
           python -m pytest -q \
+            tests/api/test_symptoms.py \
             tests/api/test_refresh_reliability.py \
             tests/api/test_dashboard_signal_context.py \
             tests/api/test_dashboard_signal_bar_bounds.py \
