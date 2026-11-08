@@ -255,7 +255,7 @@
     return `${valueText} ${unit}`;
   };
 
-  const renderGaugeCard = (row, zones, entry) => {
+  const renderGaugeCard = (row, zones, entry, compact = false) => {
     const numeric = Number(row && row.value);
     const hasValue = Number.isFinite(numeric);
     const meta = row && row.meta && typeof row.meta === "object" ? row.meta : {};
@@ -288,7 +288,7 @@
     return `
       <article class="${cardClass}" ${clickable ? `data-gauge-key="${esc(row && row.key ? row.key : "")}"` : ""}>
         <div class="gaia-dashboard__gauge-label">${esc(row && row.label ? row.label : "")}</div>
-        ${row && row.key === "pain" ? '<p class="gaia-dashboard__helper">Estimated load · 0–100. Reported symptom severity uses 0–10; older reports may no longer contribute.</p>' : ""}
+        ${row && row.key === "pain" && !compact ? '<p class="gaia-dashboard__helper">Estimated load · 0–100. Reported symptom severity uses 0–10; older reports may no longer contribute.</p>' : ""}
         <div class="gaia-dashboard__gauge-meter">
           <svg class="gaia-dashboard__gauge-arc" viewBox="0 0 100 100" aria-hidden="true">
             <defs>
@@ -4141,9 +4141,10 @@
                 .join("")}</div>`
             : '<div class="gaia-dashboard__muted">No active alerts.</div>'
         }
-        <div class="gaia-dashboard__gauges">
-          ${gaugeRows.map((row) => renderGaugeCard(row, gaugeZones, !!(payload.modalModels && payload.modalModels.gauges && payload.modalModels.gauges[row.key]))).join("")}
+        <div class="gaia-dashboard__gauges gaia-dashboard__gauges--compact">
+          ${gaugeRows.map((row) => renderGaugeCard(row, gaugeZones, !!(payload.modalModels && payload.modalModels.gauges && payload.modalModels.gauges[row.key]), true)).join("")}
         </div>
+        <p class="gaia-dashboard__helper">Pain is an estimated load · 0–100. Reported symptom severity uses 0–10; older reports may no longer contribute.</p>
         <div class="gaia-dashboard__gauge-legend">
           ${["low", "mild", "elevated", "high"]
             .map(

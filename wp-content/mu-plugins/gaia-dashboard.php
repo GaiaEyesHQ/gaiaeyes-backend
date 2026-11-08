@@ -90,6 +90,17 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__gauge-meter{position:relative;display:grid;place-items:center;margin-top:2px}
         .gaia-dashboard__gauge-arc{width:104px;height:104px;display:block}
         @media(min-width:1200px){.gaia-dashboard__gauge-arc{width:110px;height:110px}}
+        @media(min-width:900px){
+            .gaia-dashboard__gauges--compact{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge{padding:10px;gap:6px;min-height:0;min-width:0}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-label{font-size:12px;min-height:30px;text-align:center}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-arc{width:88px;height:88px;max-width:100%}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-value{font-size:22px;gap:2px}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-delta{font-size:10px}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__gauge-zone{font-size:10px}
+            .gaia-dashboard__gauges--compact .gaia-dashboard__tap-hint{text-align:center}
+        }
+        @media(min-width:1000px){.gaia-dashboard__gauges--compact{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}}
         .gaia-dashboard__gauge-ring{fill:none;stroke:rgba(255,255,255,.12);stroke-width:9}
         .gaia-dashboard__gauge-value-arc{fill:none;stroke-width:9;stroke-linecap:round}
         .gaia-dashboard__gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
