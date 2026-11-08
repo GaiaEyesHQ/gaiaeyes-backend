@@ -25,6 +25,68 @@ UTC = timezone.utc
 REAL_REFRESH_GAUGES_FOR_SYMPTOM = symptoms_router._refresh_gauges_for_symptom
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("next_state", ["improving", "resolved"])
+async def test_follow_up_sends_saved_receipt_before_slow_gauge_refresh(monkeypatch, next_state):
+    import asyncio
+    import json
+
+    owner = str(uuid4())
+    events = []
+    messages = []
+    refresh_started = asyncio.Event()
+    release_refresh = asyncio.Event()
+
+    class Connection:
+        async def commit(self):
+            events.append("commit")
+
+    async def database():
+        yield Connection()
+
+    async def respond(conn, user_id, prompt_id, **kwargs):
+        assert user_id == owner
+        assert prompt_id == "prompt-a"
+        events.append("write")
+        return {"prompt": {"id": prompt_id, "episode_id": "episode-a", "symptom_code": "FATIGUE"},
+                "episode": {"id": "episode-a", "symptom_code": "FATIGUE", "current_state": next_state,
+                            "activity_status": "resolved" if next_state == "resolved" else "active",
+                            "last_interaction_at": "2026-11-08T19:16:33Z"}}
+
+    async def slow_refresh(user_id, timestamp):
+        assert user_id == owner
+        assert timestamp == "2026-11-08T19:16:33Z"
+        events.append("refresh")
+        refresh_started.set()
+        await release_refresh.wait()
+
+    async def capture(scope, receive, send):
+        async def record(message):
+            messages.append(message)
+            await send(message)
+        await app(scope, receive, record)
+
+    app.dependency_overrides[get_db] = database
+    monkeypatch.setattr(feedback_db, "respond_symptom_follow_up", respond)
+    monkeypatch.setattr(symptoms_router, "_refresh_gauges_for_symptom", slow_refresh)
+    async with AsyncClient(transport=ASGITransport(app=capture), base_url="http://test") as client:
+        task = asyncio.create_task(client.post(
+            "/v1/symptoms/follow-ups/prompt-a/respond", json={"state": next_state},
+            headers={"Authorization": "Bearer test-token", "X-Dev-UserId": owner},
+        ))
+        try:
+            await asyncio.wait_for(refresh_started.wait(), timeout=2)
+            bodies = [m for m in messages if m["type"] == "http.response.body"]
+            assert bodies and not bodies[-1].get("more_body", False)
+            payload = json.loads(b"".join(m.get("body", b"") for m in bodies))
+            assert payload["ok"] is True
+            assert payload["data"]["episode"]["current_state"] == next_state
+            assert events == ["write", "commit", "refresh"]
+        finally:
+            release_refresh.set()
+            await task
+
+
 class FakeSymptomStore:
     def __init__(self) -> None:
         self.events: List[dict] = []

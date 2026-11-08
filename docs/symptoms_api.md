@@ -35,6 +35,12 @@ X-Dev-UserId: <uuid>  # optional helper for the dev bearer path
 
 ## Response envelope
 
+Follow-up responses commit the symptom change before returning the saved episode.
+Gauge recalculation runs after the HTTP response, so a slow refresh does not delay
+the save receipt past the member hub proxy timeout. If the website loses a receipt,
+it reads the canonical episode and confirms its state and interaction timestamp
+before showing success; it does not automatically repeat the write.
+
 All symptom routes respond with a predictable JSON envelope:
 
 ```json

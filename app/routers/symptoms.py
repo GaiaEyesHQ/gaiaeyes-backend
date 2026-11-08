@@ -1487,6 +1487,7 @@ async def respond_symptom_follow_up(
     prompt_id: str,
     payload: SymptomFollowUpResponseIn,
     request: Request,
+    background_tasks: BackgroundTasks,
     conn=Depends(get_db),
 ):
     user_id = _require_user_id(request)
@@ -1591,7 +1592,7 @@ async def respond_symptom_follow_up(
     episode = result.get("episode") or {}
     refresh_ts = str(episode.get("last_interaction_at") or episode.get("state_updated_at") or episode.get("started_at") or "")
     if refresh_ts and should_refresh:
-        await _refresh_gauges_for_symptom(user_id, refresh_ts)
+        background_tasks.add_task(_refresh_gauges_for_symptom, user_id, refresh_ts)
     return _success(
         SymptomFollowUpPromptEnvelope(
             data=SymptomFollowUpPromptResponse(

@@ -7,6 +7,7 @@ on:
       - 'scripts/deploy_dashboard_pair.sh'
       - 'tests/scripts/test_deploy_dashboard_pair.py'
       - 'scripts/check_symptom_status_web.cjs'
+      - 'scripts/check_dashboard_web.cjs'
       - 'wp-content/mu-plugins/gaia-dashboard.php'
       - 'wp-content/mu-plugins/gaia-dashboard.js'
   workflow_dispatch:
@@ -39,6 +40,7 @@ jobs:
           php -l wp-content/mu-plugins/gaia-dashboard.php
           node --check wp-content/mu-plugins/gaia-dashboard.js
           node scripts/check_symptom_status_web.cjs
+          node scripts/check_dashboard_web.cjs
           bash -n scripts/deploy_dashboard_pair.sh
           python -m pip install pytest
           python -m pytest -q tests/scripts/test_deploy_dashboard_pair.py
@@ -68,6 +70,7 @@ jobs:
           php -l wp-content/mu-plugins/gaia-dashboard.php
           node --check wp-content/mu-plugins/gaia-dashboard.js
           node scripts/check_symptom_status_web.cjs
+          node scripts/check_dashboard_web.cjs
           # Public source must be readable by the SCP action container's UID 1000.
           mkdir -m 755 dashboard-release
           cp wp-content/mu-plugins/gaia-dashboard.php wp-content/mu-plugins/gaia-dashboard.js scripts/deploy_dashboard_pair.sh dashboard-release/

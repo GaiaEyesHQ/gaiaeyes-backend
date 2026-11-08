@@ -2118,7 +2118,7 @@
     const normalizedState = normalizeCurrentSymptomState(nextState);
     const prompt = maybeObject(item && item.pending_follow_up);
     const previousSnapshot = cloneJson(state.member.currentSymptoms);
-    const previousStatus = currentSymptomRowStatus(state, episodeId);
+    const submittedAt = new Date().toISOString();
     setCurrentSymptomPending(state, episodeId, true);
     setCurrentSymptomRowStatus(state, episodeId, normalizedState === "resolved" ? "Saving resolution…" : "Saving update…", false);
     updateCurrentSymptomsSnapshot(state, (snapshot) => {
@@ -2142,17 +2142,26 @@
     try {
       const token = state.authCtx && state.authCtx.token ? state.authCtx.token : "";
       let response;
-      if (prompt && textOrEmpty(prompt.id)) {
-        response = await respondCurrentSymptomFollowUp(token, prompt.id, {
-          state: normalizedState,
-          ts_utc: new Date().toISOString(),
-        });
-      } else {
-        response = await updateCurrentSymptomState(token, episodeId, {
-          state: normalizedState,
-          ts_utc: new Date().toISOString(),
-        });
+      try {
+        const body = { state: normalizedState, ts_utc: submittedAt };
+        response = prompt && textOrEmpty(prompt.id)
+          ? await respondCurrentSymptomFollowUp(token, prompt.id, body)
+          : await updateCurrentSymptomState(token, episodeId, body);
+      } catch (err) {
+        // A proxy timeout can lose the receipt after the write committed. Read
+        // the canonical episode before rolling back; never repeat the write.
+        const base = routeFor("currentSymptomUpdatesBase");
+        const receipt = base
+          ? await fetchJson(`${base}/${encodeURIComponent(episodeId)}`, token).catch(() => null)
+          : null;
+        const saved = receipt && receipt.ok === true ? extractEnvelopeData(receipt) : null;
+        if (!saved || saved.id !== episodeId || saved.current_state !== normalizedState ||
+            !(Date.parse(saved.last_interaction_at) >= Date.parse(submittedAt))) {
+          throw new Error("Your update could not be confirmed. Refresh the dashboard to check the saved status before trying again.");
+        }
+        response = { ok: true, data: prompt ? { episode: saved } : saved };
       }
+      if (state.authCtx.invalidated) return;
       if (response && response.ok === false) {
         throw new Error(response.friendly_error || response.error || "Could not update symptom.");
       }
@@ -2176,16 +2185,12 @@
       refreshSymptomGauges(root, state);
     } catch (err) {
       state.member.currentSymptoms = previousSnapshot;
-      if (previousStatus && previousStatus.message) {
-        setCurrentSymptomRowStatus(state, episodeId, previousStatus.message, !!previousStatus.isError);
-      } else {
-        setCurrentSymptomRowStatus(
-          state,
-          episodeId,
-          err && err.message ? err.message : "Could not update symptom.",
-          true
-        );
-      }
+      setCurrentSymptomRowStatus(
+        state,
+        episodeId,
+        err && err.message ? err.message : "Could not update symptom.",
+        true
+      );
       renderMemberHub(root, state);
     } finally {
       setCurrentSymptomPending(state, episodeId, false);
@@ -3699,12 +3704,15 @@
 
   const sleepStageCards = (features) => {
     if (!features || typeof features !== "object") return [];
+    // Some devices send sleep stages without a separate time-in-bed sample;
+    // the legacy features response represents that absence as zero.
+    const inbed = asNumber(featureValue(features, "inbed_m", "inbedM"));
     return [
       { label: "REM", value: formatMinutesShort(featureValue(features, "rem_m", "remM", "sleep_rem_minutes", "sleepRemMinutes")) },
       { label: "Core", value: formatMinutesShort(featureValue(features, "core_m", "coreM", "sleep_core_minutes", "sleepCoreMinutes")) },
       { label: "Deep", value: formatMinutesShort(featureValue(features, "deep_m", "deepM", "sleep_deep_minutes", "sleepDeepMinutes")) },
       { label: "Awake", value: formatMinutesShort(featureValue(features, "awake_m", "awakeM", "sleep_awake_minutes", "sleepAwakeMinutes")) },
-      { label: "In bed", value: formatMinutesShort(featureValue(features, "inbed_m", "inbedM")) },
+      { label: "In bed", value: inbed > 0 ? formatMinutesShort(inbed) : "—" },
     ].filter((item) => item.value !== "—");
   };
 
@@ -4906,7 +4914,6 @@
           <div class="gaia-dashboard__shell-copy">
             <span class="gaia-dashboard__shell-kicker">Member Hub</span>
             <h2 class="gaia-dashboard__title">${esc(title)}</h2>
-            <p class="gaia-dashboard__shell-subtitle">Mission Control for the web: gauges, body context, patterns, outlook, drivers, and a lighter Guide layer in one signed-in shell.</p>
           </div>
         </div>
         ${renderMissionSection(state)}
