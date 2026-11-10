@@ -144,4 +144,4 @@ services:
           type: web
           envVarKey: SUPABASE_DB_URL
       - key: GAIA_MIGRAINE_TIME_REFRESH_WORKER_ENABLED
-        value: "0"
+        sync: false
