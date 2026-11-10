@@ -40,6 +40,9 @@ def _python(*parts: str) -> tuple[str, ...]:
 
 
 LANES: dict[str, tuple[Step, ...]] = {
+    "migraine_refresh": (
+        Step("durable_migraine_refresh", _python("scripts/run_migraine_time_refresh.py", "--max-users", "4", "--max-seconds", "240"), 270),
+    ),
     "critical": (
         Step(
             "space_current",

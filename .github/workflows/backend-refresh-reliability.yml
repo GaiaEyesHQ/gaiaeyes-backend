@@ -9,6 +9,9 @@ on:
       - 'bots/notifications/**'
       - 'bots/local_health_poll.py'
       - 'scripts/run_render_cron.py'
+      - 'scripts/test_migraine_refresh_postgres.py'
+      - 'scripts/run_migraine_time_refresh.py'
+      - 'bots/patterns/**'
       - 'tests/**'
       - 'supabase/migrations/**'
       - 'supabase/rollbacks/**'
@@ -23,6 +26,9 @@ on:
       - 'bots/notifications/**'
       - 'bots/local_health_poll.py'
       - 'scripts/run_render_cron.py'
+      - 'scripts/test_migraine_refresh_postgres.py'
+      - 'scripts/run_migraine_time_refresh.py'
+      - 'bots/patterns/**'
       - 'tests/**'
       - 'supabase/migrations/**'
       - 'supabase/rollbacks/**'
@@ -102,3 +108,23 @@ jobs:
           GAIA_TEST_POSTGRES_DSN: >-
             postgresql://gaia_test:local_test_only@127.0.0.1:5432/gaia_refresh_test?sslmode=disable
         run: python -m pytest -q tests/integration/test_refresh_postgres.py tests/integration/test_schumann_query.py tests/integration/test_summary_materialization.py tests/integration/test_notification_claims.py
+
+  migraine-durable-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project and test dependencies
+        run: python -m pip install -r requirements.txt pytest pytest-asyncio
+      - name: Verify PostgreSQL binaries already provided by runner
+        run: |
+          command -v pg_config
+          "$(pg_config --bindir)/initdb" --version
+      - name: Verify durable corrections in owned socket-only PostgreSQL
+        run: python scripts/test_migraine_refresh_postgres.py

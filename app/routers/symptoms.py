@@ -1265,6 +1265,7 @@ async def get_migraine_time_context(episode_id: str, request: Request, conn=Depe
 
 @router.post("/current/{episode_id}/migraine-times", response_model=MigraineTimeResponse)
 async def correct_migraine_episode_times(episode_id: str, payload: TimeCorrectionIn, request: Request, conn=Depends(get_db)):
+    from psycopg.errors import LockNotAvailable
     user_id = _require_user_id(request)
     _require_migraine_time_editing()
     try:
@@ -1274,19 +1275,19 @@ async def correct_migraine_episode_times(episode_id: str, payload: TimeCorrectio
     try:
         async with _transaction_if_supported(conn):
             result = await migraine_db.save_migraine_time_correction(conn, user_id, episode_id, payload)
+            from services.migraine.refresh_queue import receipt_refresh
+            result["refresh"] = await receipt_refresh(conn, user_id, payload.request_id)
     except migraine_db.MigraineDetailUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except migraine_db.MigraineEpisodeNotFound as exc:
         raise HTTPException(status_code=404, detail="Migraine episode not found") from exc
     except (migraine_db.StaleMigraineRevision, UniqueViolation) as exc:
         raise HTTPException(status_code=409, detail="Episode or correction request changed; reload the saved version") from exc
+    except LockNotAvailable as exc:
+        raise HTTPException(status_code=503, detail="Refresh publication is busy; retry the same correction") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    # The receipt remains valid even if rebuilding a derivative fails.
-    try:
-        result["refresh"] = await _refresh_migraine_time_correction(user_id, result)
-    except Exception:
-        result["refresh"] = {"status": "pending", "pending_components": ["derived_summaries"]}
+    # Canonical receipt and durable refresh job have committed. Never await derivatives here.
     return _success(MigraineTimeResponse(data=result))
 
 

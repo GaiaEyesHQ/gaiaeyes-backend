@@ -2114,8 +2114,24 @@ def _run_pattern_engine_once(
     since_day = as_of_day - timedelta(days=max(days_back - 1, 0))
     updated_at = datetime.now(timezone.utc)
 
+    from services.migraine.refresh_publication import (
+        PublicationSnapshot, StaleRefreshPublication, capture_all_generations,
+        capture_user_generation, publication_guard, is_worker_publication,
+    )
     with psycopg.connect(dsn or _resolve_dsn(), **_connect_kwargs()) as conn:
         _configure_connection(conn)
+        # Capture BEFORE any input prefetch; locking only final writes would
+        # permit an old global-cron snapshot to replace a newer correction.
+        if user_id is not None:
+            publication_snapshots = {str(user_id): capture_user_generation(str(user_id), conn)}
+            existing_publication_users = {str(user_id)}
+        else:
+            publication_snapshots = capture_all_generations(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute("""select user_id from marts.user_pattern_associations
+                    union select user_id from marts.user_daily_outcomes
+                    union select user_id from marts.user_daily_features""")
+                existing_publication_users = {str(row['user_id']) for row in cur.fetchall()}
         logger.info(
             "[pattern_engine] start since=%s as_of=%s user=%s",
             since_day,
@@ -2206,22 +2222,44 @@ def _run_pattern_engine_once(
             len(association_rows),
         )
 
-        _delete_scope(conn, "marts.user_pattern_associations", since_day=None, user_id=user_id, day_scoped=False)
-        _delete_scope(conn, "marts.user_daily_outcomes", since_day=since_day, user_id=user_id, day_scoped=True)
-        _delete_scope(conn, "marts.user_daily_features", since_day=since_day, user_id=user_id, day_scoped=True)
-
-        _insert_rows(conn, "marts.user_daily_features", _feature_insert_columns(), feature_rows)
-        _insert_rows(conn, "marts.user_daily_outcomes", _outcome_insert_columns(), outcome_rows)
-        _insert_rows(conn, "marts.user_pattern_associations", _association_insert_columns(), association_rows)
+        # End the read-only calculation transaction before taking any state
+        # locks. Each user's replacement is a separate short atomic commit.
         conn.commit()
-        logger.info("[pattern_engine] commit complete")
+        grouped = []
+        for rows in (feature_rows, outcome_rows, association_rows):
+            by_user = defaultdict(list)
+            for row in rows:
+                by_user[str(row['user_id'])].append(row)
+            grouped.append(by_user)
+        publication_users = existing_publication_users | set().union(*(set(group) for group in grouped))
+        published_features, published_outcomes, published_associations = [], [], []
+        stale_users = 0
+        for target_user in sorted(publication_users):
+            snapshot = publication_snapshots.get(target_user, PublicationSnapshot())
+            try:
+                with publication_guard(conn, target_user, snapshot):
+                    _delete_scope(conn, "marts.user_pattern_associations", since_day=None, user_id=target_user, day_scoped=False)
+                    _delete_scope(conn, "marts.user_daily_outcomes", since_day=since_day, user_id=target_user, day_scoped=True)
+                    _delete_scope(conn, "marts.user_daily_features", since_day=since_day, user_id=target_user, day_scoped=True)
+                    _insert_rows(conn, "marts.user_daily_features", _feature_insert_columns(), grouped[0].get(target_user, []))
+                    _insert_rows(conn, "marts.user_daily_outcomes", _outcome_insert_columns(), grouped[1].get(target_user, []))
+                    _insert_rows(conn, "marts.user_pattern_associations", _association_insert_columns(), grouped[2].get(target_user, []))
+            except StaleRefreshPublication:
+                if is_worker_publication():
+                    raise
+                stale_users += 1
+                continue
+            published_features.extend(grouped[0].get(target_user, []))
+            published_outcomes.extend(grouped[1].get(target_user, []))
+            published_associations.extend(grouped[2].get(target_user, []))
+        logger.info("[pattern_engine] publications complete stale_users=%d", stale_users)
 
-    surfaced = sum(1 for row in association_rows if row.get("surfaceable"))
     return {
-        "features": len(feature_rows),
-        "outcomes": len(outcome_rows),
-        "associations": len(association_rows),
-        "surfaced": surfaced,
+        "features": len(published_features),
+        "outcomes": len(published_outcomes),
+        "associations": len(published_associations),
+        "surfaced": sum(1 for row in published_associations if row.get("surfaceable")),
+        "stale_users": stale_users,
     }
 
 

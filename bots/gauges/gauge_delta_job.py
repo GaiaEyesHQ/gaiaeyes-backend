@@ -120,12 +120,19 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="Limit number of users processed.")
     args = parser.parse_args()
 
+    from services.migraine.refresh_publication import (
+        PublicationSnapshot, StaleRefreshPublication, capture_all_generations, capture_user_generation, publication_guard,
+    )
+    # Capture before today's input prefetch, not immediately before upsert.
+    snapshots = ({str(args.user_id): capture_user_generation(str(args.user_id))}
+                 if args.user_id else capture_all_generations())
     day = _coerce_day(args.day)
     rows = _fetch_rows_for_day(day, args.user_id, args.limit)
     logger.info("[gauge_delta] rows=%d day=%s", len(rows), day.isoformat())
 
     ok = 0
     failed = 0
+    superseded = 0
     for row in _iter_rows(rows, args.limit):
         uid = str(row.get("user_id") or "").strip()
         if not uid:
@@ -133,24 +140,28 @@ def main() -> None:
         try:
             yday = _fetch_yesterday_row(uid, day)
             deltas = _build_deltas(row, yday)
-            upsert_row(
-                "marts",
-                "user_gauges_delta_day",
-                {
-                    "user_id": uid,
-                    "day": day,
-                    "deltas_json": json.dumps(deltas, default=str),
-                    "updated_at": datetime.now(timezone.utc),
-                },
-                ["user_id", "day"],
-            )
+            with pg.connection_scope() as publication_conn:
+                with publication_guard(publication_conn, uid, snapshots.get(uid, PublicationSnapshot())):
+                    upsert_row(
+                        "marts",
+                        "user_gauges_delta_day",
+                        {
+                            "user_id": uid,
+                            "day": day,
+                            "deltas_json": json.dumps(deltas, default=str),
+                            "updated_at": datetime.now(timezone.utc),
+                        },
+                        ["user_id", "day"],
+                    )
             ok += 1
             logger.info("[gauge_delta] user=%s day=%s ok=true", uid, day.isoformat())
+        except StaleRefreshPublication:
+            superseded += 1
         except Exception as exc:
             failed += 1
             logger.exception("[gauge_delta] user=%s day=%s failed: %s", uid, day.isoformat(), exc)
 
-    logger.info("[gauge_delta] done ok=%d failed=%d day=%s", ok, failed, day.isoformat())
+    logger.info("[gauge_delta] done ok=%d failed=%d superseded=%d day=%s", ok, failed, superseded, day.isoformat())
 
 
 if __name__ == "__main__":

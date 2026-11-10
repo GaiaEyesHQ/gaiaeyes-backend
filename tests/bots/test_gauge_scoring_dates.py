@@ -1,6 +1,8 @@
 """Synthetic actual-scorer/query contracts for the batch date compatibility fix."""
 import asyncio
 import copy
+from contextlib import nullcontext
+from types import SimpleNamespace
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import Mock
 from zoneinfo import ZoneInfo
@@ -20,6 +22,11 @@ def no_database_and_chicago(monkeypatch):
         raise AssertionError('Unexpected database operation')
     for name in ['fetch', 'fetchrow', 'execute', 'connection_scope']:
         monkeypatch.setattr(scorer.pg, name, unexpected)
+    # Date/query unit tests isolate the separately PG-tested publication fence.
+    from services.migraine import refresh_publication as publication
+    monkeypatch.setattr(publication, 'capture_user_generation', lambda uid: publication.PublicationSnapshot())
+    monkeypatch.setattr(publication, 'publication_guard', lambda *a: nullcontext(False))
+    monkeypatch.setattr(scorer.pg, 'connection_scope', lambda: nullcontext(SimpleNamespace(transaction=lambda: nullcontext())))
     monkeypatch.setattr(scorer, 'LOCAL_TZ', ZoneInfo('America/Chicago'))
 
 

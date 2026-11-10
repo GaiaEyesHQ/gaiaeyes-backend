@@ -507,7 +507,9 @@ async def _require_time_correction_capability(conn) -> None:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute("""select count(*) = 2
               and to_regclass('raw.user_symptom_events_effective') is not null
-              and to_regclass('marts.symptom_daily_effective') is not null as available
+              and to_regclass('marts.symptom_daily_effective') is not null
+              and to_regclass('raw.migraine_time_refresh_users') is not null
+              and to_regclass('raw.migraine_time_refresh_jobs') is not null as available
             from information_schema.columns
             where table_schema = 'raw' and table_name = 'user_migraine_episode_detail_revisions'
               and column_name in ('correction_request_id', 'time_correction')""", prepare=False)
@@ -642,6 +644,8 @@ async def save_migraine_time_correction(conn, user_id: str, episode_id: str, cor
             set correction_request_id = %s, time_correction = %s::jsonb
             where episode_id = %s and user_id = %s and revision = %s""",
             (correction.request_id, json.dumps(metadata), episode_id, user_id, current_revision + 1), prepare=False)
+    from services.migraine.refresh_queue import enqueue
+    await enqueue(conn, user_id, episode_id, correction.request_id, days, pattern_since)
     return {**ack, "refresh_days": days, "pattern_since_day": pattern_since}
 
 

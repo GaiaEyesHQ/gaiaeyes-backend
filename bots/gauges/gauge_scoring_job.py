@@ -183,6 +183,7 @@ def _score_chunk(
     *,
     force: bool,
 ) -> list[Tuple[Tuple[str, date], dict | None, str | None, dict]]:
+    from services.migraine.refresh_publication import StaleRefreshPublication
     results: list[Tuple[Tuple[str, date], dict | None, str | None, dict]] = []
     # Keep one connection per worker so concurrency remains bounded and each
     # user avoids repeated TLS/pool handshakes across the score's small queries.
@@ -193,6 +194,8 @@ def _score_chunk(
             try:
                 result = score_user_day(uid, target_day, force=force, diagnostics=diagnostics)
                 results.append((key, result, None, diagnostics))
+            except StaleRefreshPublication:
+                results.append((key, {"ok": True, "skipped": True, "skip_reason": "superseded_publication"}, None, {}))
             except Exception as exc:
                 results.append((key, None, type(exc).__name__, diagnostics))
                 logger.error("[gauges] score_failed error_type=%s", type(exc).__name__)
@@ -223,6 +226,7 @@ def main() -> None:
     failures: list[str] = []
     evaluations: dict[Tuple[str, date], dict] = {}
     unchanged_inputs = 0
+    superseded_publications = 0
 
     # Use the same resolved zone as the scorer's raw-input intervals. Capture
     # once so notification preferences or a midnight-crossing batch cannot
@@ -260,6 +264,10 @@ def main() -> None:
                             failures.append("score_not_ok")
                         elif not result.get("skipped"):
                             refreshed.add(key)
+                        elif result.get("skip_reason") == "superseded_publication":
+                            superseded_publications += 1
+                            expected.discard(key)
+                            evaluations.pop(key, None)
                         elif result.get("skip_reason") == "unchanged_inputs":
                             unchanged_inputs += 1
                         else:
@@ -281,6 +289,7 @@ def main() -> None:
         "last_evaluated_at": max(evaluation_times).isoformat() if evaluation_times else None,
         "refreshed": len(refreshed),
         "unchanged_inputs": unchanged_inputs,
+        "superseded_publications": superseded_publications,
         "eligibility_source_failures": eligibility_failures,
         "verification_completed": False,
     }
