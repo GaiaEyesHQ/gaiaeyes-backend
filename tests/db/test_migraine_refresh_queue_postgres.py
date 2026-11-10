@@ -225,7 +225,7 @@ async def test_additive_migration_repeat_preserves_receipts_and_queue():
         eid,_=await create_correction(conn);before=await snapshot(conn,eid)
         state=query('select generation,writer_epoch from raw.migraine_time_refresh_users')
         jobs=query('select * from raw.migraine_time_refresh_jobs')
-        sql=Path('supabase/migrations/20261109210000_add_migraine_time_refresh_queue.sql').read_text()
+        sql=Path('supabase/migrations/20261110032646_add_migraine_time_refresh_queue.sql').read_text()
         await conn.execute(sql,prepare=False);await conn.execute(sql,prepare=False)
         assert await snapshot(conn,eid)==before
         assert query('select generation,writer_epoch from raw.migraine_time_refresh_users')==state

@@ -33,7 +33,7 @@ MIGRATIONS = (
     "tests/db/fixtures/migraine_postgres_prerequisites.sql",
     "supabase/migrations/20260908002922_add_migraine_episode_details.sql",
     "supabase/migrations/20260910033343_add_migraine_time_corrections.sql",
-    "supabase/migrations/20261109210000_add_migraine_time_refresh_queue.sql",
+    "supabase/migrations/20261110032646_add_migraine_time_refresh_queue.sql",
 )
 
 
