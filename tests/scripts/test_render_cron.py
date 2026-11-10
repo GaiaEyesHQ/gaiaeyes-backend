@@ -63,3 +63,48 @@ def test_base_environment_aliases_supabase_url_for_shared_settings(monkeypatch) 
     expected = "postgresql://user:pass@example.com:6543/postgres?sslmode=require"
     assert env["SUPABASE_DB_URL"] == expected
     assert env["DATABASE_URL"] == expected
+
+
+def test_migraine_worker_flag_is_runtime_managed() -> None:
+    from pathlib import Path
+    import yaml
+
+    blueprint = yaml.safe_load(Path("render-crons.yaml").read_text())
+    worker = next(service for service in blueprint["services"]
+                  if service["name"] == "gaiaeyes-migraine-time-refresh")
+    assert worker["type"] == "cron"
+    assert worker["plan"] == "starter"
+    assert worker["schedule"] == "*/5 * * * *"
+    assert worker["startCommand"] == "python scripts/run_render_cron.py migraine_refresh"
+    flag = next(item for item in worker["envVars"]
+                if item.get("key") == "GAIA_MIGRAINE_TIME_REFRESH_WORKER_ENABLED")
+    assert flag == {"key": "GAIA_MIGRAINE_TIME_REFRESH_WORKER_ENABLED", "sync": False}
+
+
+def test_migraine_worker_defaults_off(monkeypatch, capsys) -> None:
+    import ast
+    from pathlib import Path
+
+    # Execute the real CLI main without importing database clients or credentials.
+    source = ast.parse(Path("scripts/run_migraine_time_refresh.py").read_text())
+    main = next(node for node in source.body if isinstance(node, ast.FunctionDef) and node.name == "main")
+    import argparse
+    import json
+    import os
+    import sys
+    import time
+
+    def unexpected_work(*args, **kwargs):
+        raise AssertionError("disabled worker must not access the queue")
+
+    namespace = dict(argparse=argparse, json=json, os=os, time=time,
+                     claim=unexpected_work, process=unexpected_work, health=unexpected_work)
+    exec(compile(ast.Module(body=[main], type_ignores=[]), "worker-main", "exec"), namespace)
+    monkeypatch.setattr(sys, "argv", ["worker"])
+    for value in (None, "0", "false", ""):
+        if value is None:
+            monkeypatch.delenv("GAIA_MIGRAINE_TIME_REFRESH_WORKER_ENABLED", raising=False)
+        else:
+            monkeypatch.setenv("GAIA_MIGRAINE_TIME_REFRESH_WORKER_ENABLED", value)
+        namespace["main"]()
+        assert json.loads(capsys.readouterr().out) == {"status": "disabled"}
