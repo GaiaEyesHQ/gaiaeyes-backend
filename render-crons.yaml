@@ -123,3 +123,25 @@ services:
         value: America/Chicago
       - key: LOCAL_SIGNALS_TTL_MINUTES
         value: "60"
+
+  # Additive, opt-in worker; enable only after migration and all writer fencing deploys.
+  - type: cron
+    name: gaiaeyes-migraine-time-refresh
+    runtime: python
+    region: oregon
+    plan: starter
+    branch: main
+    autoDeployTrigger: commit
+    schedule: "*/5 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scripts/run_render_cron.py migraine_refresh
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SUPABASE_DB_URL
+        fromService:
+          name: gaiaeyes-backend
+          type: web
+          envVarKey: SUPABASE_DB_URL
+      - key: GAIA_MIGRAINE_TIME_REFRESH_WORKER_ENABLED
+        value: "0"

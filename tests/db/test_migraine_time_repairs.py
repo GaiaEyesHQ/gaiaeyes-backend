@@ -101,12 +101,17 @@ async def test_failed_actual_corrected_reader_preserves_gauge_and_committed_retr
         await conn.commit()
         request = await request_for(conn, eid, start=stamp('2026-08-30T23:30:00'))
         response = await router.correct_migraine_episode_times(eid, request, _request(USER_A), conn)
-        assert response['data']['refresh'] == {'status': 'pending', 'pending_components': ['daily_gauges']}
+        assert response['data']['refresh'] == {'status': 'pending', 'pending_components': ['daily_gauges','personal_patterns']}
+        from services.migraine import refresh_queue
+        assert refresh_queue.process(refresh_queue.claim()) is False
         assert any('from raw.user_symptom_events_effective' in query for query in reads)
         assert not writes and previous_gauges == {'sentinel': 'prior derived values'}
         committed = await snapshot(conn, eid)
         assert committed['detail']['lifecycle']['revision'] == 2
         failed = False
+        with psycopg.connect(_database_url(),autocommit=True) as worker_setup:
+            worker_setup.execute('update raw.migraine_time_refresh_jobs set available_at=clock_timestamp() where user_id=%s',(USER_A,))
+        assert refresh_queue.process(refresh_queue.claim())
         retry = await router.correct_migraine_episode_times(eid, request, _request(USER_A), conn)
         assert retry['data']['refresh'] == {'status': 'complete', 'pending_components': []}
         assert retry['data']['replayed'] and retry['data']['request_id'] == str(request.request_id)
@@ -129,7 +134,7 @@ async def test_required_reader_failure_cannot_write_or_fall_back(monkeypatch, fa
     response = await router._refresh_migraine_time_correction(USER_A, {'refresh_days': ['2026-09-01'], 'pattern_since_day': '2026-06-13'})
     assert response == {'status': 'pending', 'pending_components': ['daily_gauges']}
     writer.assert_not_called()
-    assert not any('from raw.user_symptom_events\n' in query for query in reads)
+    assert not any('from raw.user_symptom_events event\n' in query for query in reads)
 
 
 async def test_legacy_reader_keeps_existing_optional_empty_behavior(monkeypatch):
@@ -138,7 +143,7 @@ async def test_legacy_reader_keeps_existing_optional_empty_behavior(monkeypatch)
     reader = Mock(side_effect=RuntimeError('legacy optional read'))
     monkeypatch.setattr(gauges.pg, 'fetch', reader)
     assert gauges.fetch_symptom_summary(USER_A, date(2026, 9, 1)) == gauges._build_symptom_signal_summary([])
-    assert 'from raw.user_symptom_events\n' in reader.call_args.args[0]
+    assert 'from raw.user_symptom_events event\n' in reader.call_args.args[0]
 
 
 async def test_required_pattern_source_never_falls_back_after_capability_loss(monkeypatch):

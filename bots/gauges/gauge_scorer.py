@@ -1913,6 +1913,8 @@ def score_user_day(
     require_corrected_symptoms: bool = False,
     diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    from services.migraine.refresh_publication import capture_user_generation, publication_guard
+    publication = capture_user_generation(user_id)
     definition, version = load_definition_base()
     day = _coerce_day(day)
 
@@ -2021,25 +2023,32 @@ def score_user_day(
         "updated_at": datetime.now(timezone.utc),
     }
 
-    if diagnostics is None:
-        upsert_row("marts", "user_gauges_day", payload, ["user_id", "day"])
-    else:
-        # RETURNING proves this evaluation's output was stored by the same
-        # statement, without a read-back that another writer can race. The
-        # PgClient call returns after commit (or the scoped autocommit write).
-        persisted = upsert_row(
-            "marts", "user_gauges_day", payload, ["user_id", "day"],
-            returning=["inputs_hash", "updated_at"],
-        )
-        if persisted and persisted.get("inputs_hash") == inputs_hash:
-            diagnostics.update(
-                verified_output_inputs_hash=persisted["inputs_hash"],
-                verified_output_updated_at=persisted.get("updated_at"),
-            )
-    try:
-        _upsert_gauge_delta(user_id, day, {**gauges, "health_status": health_status})
-    except Exception as exc:
-        logger.warning("[gauges] delta refresh failed user=%s day=%s err=%s", user_id, day, exc)
+    with pg.connection_scope() as publication_conn:
+        with publication_guard(publication_conn, user_id, publication) as correction_user:
+            if diagnostics is None:
+                upsert_row("marts", "user_gauges_day", payload, ["user_id", "day"])
+            else:
+                # RETURNING proves this evaluation's output was stored by the same
+                # statement, without a read-back that another writer can race. The
+                # PgClient call returns after commit (or the scoped autocommit write).
+                persisted = upsert_row(
+                    "marts", "user_gauges_day", payload, ["user_id", "day"],
+                    returning=["inputs_hash", "updated_at"],
+                )
+                if persisted and persisted.get("inputs_hash") == inputs_hash:
+                    diagnostics.update(
+                        verified_output_inputs_hash=persisted["inputs_hash"],
+                        verified_output_updated_at=persisted.get("updated_at"),
+                    )
+            try:
+                # Savepoint retains legacy optional delta behavior, while a
+                # correction worker must not acknowledge a partial publication.
+                with publication_conn.transaction():
+                    _upsert_gauge_delta(user_id, day, {**gauges, "health_status": health_status})
+            except Exception as exc:
+                if correction_user:
+                    raise
+                logger.warning("[gauges] delta refresh failed user=%s day=%s error_type=%s", user_id, day, type(exc).__name__)
     return {"ok": True, "skipped": False, "user_id": user_id, "day": _iso_day(day)}
 
 

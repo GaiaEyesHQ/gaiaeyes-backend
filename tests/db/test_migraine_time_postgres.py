@@ -164,10 +164,13 @@ async def test_real_route_commit_then_refresh_receipt_survives_refresh_failure(m
             raise RuntimeError('synthetic downstream failure')
         monkeypatch.setattr(router,'_refresh_migraine_time_correction',refresh)
         response=await router.correct_migraine_episode_times(eid,request,_request(USER_A),conn)
-        assert response['data']['refresh']['status']=='pending' and calls
-        assert {'2026-09-08','2026-09-09','2026-08-31','2026-09-01'} <= set(calls[0][1])
+        assert response['data']['refresh']['status']=='pending' and not calls
+        assert {'2026-09-08','2026-09-09','2026-08-31','2026-09-01'} <= set(response['data']['refresh_days'])
+        async with await _connect() as observer:
+            observed=await snapshot(observer,eid)
+            assert observed['detail']['lifecycle']['revision']==response['data']['revision']
         again=await router.correct_migraine_episode_times(eid,request,_request(USER_A),conn)
-        assert again['data']['replayed'] and len(calls)==2
+        assert again['data']['replayed'] and not calls
         path=os.getenv('GAIA_TIME_EVIDENCE_DIR')
         if path:
             out=Path(path);out.mkdir(parents=True,exist_ok=True)
@@ -194,7 +197,8 @@ async def test_projection_owner_policies_and_actual_daily_pattern_readers():
         eid,_=await seed(conn)
         await _insert_parent(conn,user_id=USER_B,episode_id=uuid4(),event_id=uuid4(),start=datetime(2026,9,2,tzinfo=UTC),source='manual')
         request=await request_for(conn,eid,start=stamp('2026-08-30T23:30:00'));await save(conn,eid,request)
-        daily=await symptoms.fetch_daily_summary(conn,USER_A,60)
+        days=max(60,(datetime.now(UTC).date()-datetime(2026,8,31).date()).days+2)
+        daily=await symptoms.fetch_daily_summary(conn,USER_A,days)
         assert [row['day'] for row in daily]==['2026-08-31'] and daily[0]['events']==1
         with psycopg.connect(_database_url()) as sync:
             stats=pattern_engine_job._fetch_symptom_rows(sync,since_day=datetime(2026,8,1).date(),as_of_day=datetime(2026,9,30).date(),user_id=USER_A)
