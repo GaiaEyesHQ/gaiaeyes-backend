@@ -23,7 +23,7 @@ def design_key(product):
         if handle.startswith(prefix):
             return handle[len(prefix):]
     title = str(product.get("title") or "").lower()
-    title = re.sub(r"\\b(modcore coaster|stone coaster|wall print|sticker|magnet|mug|koozie|tea towel|kitchen towel)\\b", "", title)
+    title = re.sub(r"\b(modcore coaster|stone coaster|wall print|sticker|magnet|mug|koozie|tea towel|kitchen towel)\b", "", title)
     return re.sub(r"[^a-z0-9]+", "-", title).strip("-")
 
 
@@ -75,7 +75,7 @@ def main():
     if not isinstance(products, list) or not isinstance(used, list):
         raise ValueError("Expected JSON arrays")
     drafts = make_drafts(products, used)
-    Path(args.output).write_text(json.dumps(drafts, indent=2) + "\\n")
+    Path(args.output).write_text(json.dumps(drafts, indent=2) + "\n")
     print(f"Generated {len(drafts)} review-only drafts")
 
 
