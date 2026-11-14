@@ -65,11 +65,6 @@ class MetaClient:
             return PublishResult(self.config.brand, "instagram", "preview")
         if not approved:
             raise PermissionError("Live publishing requires explicit approval")
-        user_id = self.config.instagram_user_id
-        container = self._call("POST", f"{user_id}/media",
-                               data={"image_url": image_url, "caption": caption})
-        if not container.get("id"):
-            raise MetaPublishError("Instagram did not return a creation ID")
-        # Single-image containers can require processing time; caller should
-        # implement status polling before enabling this path in production.
-        raise MetaPublishError("Instagram live publishing disabled pending container polling")
+        # No Instagram network calls until processing/polling and idempotency
+        # are implemented and reviewed. Prevent partial publish attempts.
+        raise MetaPublishError("Instagram live publishing is not enabled yet")
