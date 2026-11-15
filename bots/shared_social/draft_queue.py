@@ -96,18 +96,24 @@ def validate_snapshot(snapshot):
             raise ValueError("Catalog timestamp must include its timezone")
 
 
-def sync(snapshot, directory, *, overrides=None, previously_used=(), renderer=render_images):
+def sync(snapshot, directory, *, overrides=None, previously_used=(), renderer=render_images, progress=None):
     used = set(previously_used)
+    if progress:
+        progress("Opening the local review queue; waiting if another refresh is running...")
     with locked(directory) as directory:
         # Live readers run inside the queue lock so overlapping refreshes cannot apply out of order.
+        if progress and callable(snapshot):
+            progress("Reading the complete Shopify catalog...")
         snapshot = snapshot() if callable(snapshot) else snapshot
         validate_snapshot(snapshot)
         # Build the whole eligible set before touching stored review decisions.
         drafts = make_drafts(snapshot["products"], overrides=overrides)
+        if progress:
+            progress(f"Read {len(snapshot['products'])} products. Preparing {len(drafts)} artwork drafts...")
         db = connect(directory)
         try:
             prepared = []
-            for draft in drafts:
+            for index, draft in enumerate(drafts, 1):
                 payload = {k: v for k, v in draft.items() if k not in {"status", "approved"}}
                 old = db.execute("SELECT payload, status FROM drafts WHERE design_key=?", (draft["design_key"],)).fetchone()
                 generation = json.loads(old["payload"]).get("review_generation", 0) if old else 0
@@ -117,6 +123,10 @@ def sync(snapshot, directory, *, overrides=None, previously_used=(), renderer=re
                     payload["review_generation"] = generation
                 payload["images"] = renderer(draft, directory)
                 prepared.append((draft, payload, revision(payload)))
+                if progress and (index == 1 or index % 10 == 0 or index == len(drafts)):
+                    progress(f"Prepared images for {index} of {len(drafts)} artwork drafts.")
+            if progress:
+                progress("Saving the complete review queue...")
             stamp = now()
             with db:
                 db.executemany("INSERT OR IGNORE INTO used_artworks VALUES (?)", ((key,) for key in used))

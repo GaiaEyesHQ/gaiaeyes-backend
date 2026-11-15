@@ -174,13 +174,15 @@ class CommandTests(unittest.TestCase):
             "nodes": [product("mug-cat", "Cat Mug"), product("sticker-cat", "Cat Sticker", number=2)],
             "pageInfo": {"hasNextPage": False, "endCursor": None}}}})])
         client = ShopifyCatalog(CatalogConfig(client_id="id", client_secret="local-secret"), session=transport)
+        progress = io.StringIO()
+        progress.isatty = lambda: True
         with tempfile.TemporaryDirectory() as temp, \
              patch("sys.argv", ["sync_drafts", "sync", "--prompt", "--output", temp]), \
              patch("sys.stdin.isatty", return_value=True), patch("sys.stderr.isatty", return_value=True), \
              patch("bots.shared_social.sync_drafts.getpass.getpass", side_effect=["id", "local-secret"]), \
              patch("bots.shared_social.sync_drafts.ShopifyCatalog", return_value=client), \
              patch("bots.shared_social.sync_drafts.sync", side_effect=lambda s, d, **k: sync(s, d, renderer=renderer, **k)), \
-             redirect_stdout(io.StringIO()) as output:
+             redirect_stdout(io.StringIO()) as output, redirect_stderr(progress):
             main()
             result = json.loads((Path(temp)/"review.json").read_text())
             self.assertEqual(result["last_sync"]["product_count"], 2)
@@ -190,6 +192,12 @@ class CommandTests(unittest.TestCase):
             self.assertEqual(len(transport.calls), 3)
             self.assertNotIn("local-secret", output.getvalue())
             self.assertNotIn("exchanged-token-do-not-log", output.getvalue())
+            self.assertEqual(json.loads(output.getvalue())["counts"], {"needs_review": 1})
+            self.assertIn("Reading the complete Shopify catalog", progress.getvalue())
+            self.assertIn("Prepared images for 1 of 1 artwork drafts", progress.getvalue())
+            self.assertNotIn("local-secret", progress.getvalue())
+            self.assertNotIn("exchanged-token-do-not-log", progress.getvalue())
+            self.assertNotIn("Cat Mug", progress.getvalue())
 
     def test_later_catalog_page_failure_cannot_withdraw_existing_drafts(self):
         from bots.shared_social.draft_queue import sync, review

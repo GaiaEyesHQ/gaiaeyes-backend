@@ -11,6 +11,11 @@ from bots.shared_social.draft_queue import review, sync
 from bots.shared_social.shopify_catalog import CatalogConfig, CatalogError, ShopifyCatalog
 
 
+def show_progress(message):
+    # Counts and fixed stage labels only. Keep stdout reserved for the JSON result.
+    print(message, file=sys.stderr, flush=True)
+
+
 def client_config(prompt=False):
     if not prompt:
         return CatalogConfig.from_environment()
@@ -53,7 +58,7 @@ def main():
             if not isinstance(used, list) or not all(isinstance(v, str) for v in used):
                 raise ValueError("Used keys must be a JSON array of strings")
             snapshot = json.loads(Path(args.catalog).read_text()) if args.catalog else ShopifyCatalog(client_config(args.prompt)).fetch
-            report = sync(snapshot, args.output, overrides=overrides, previously_used=used)
+            report = sync(snapshot, args.output, overrides=overrides, previously_used=used, progress=show_progress)
         else:
             report = review(args.output, args.draft_id, args.revision, args.decision, args.reviewer)
     except (EOFError, KeyboardInterrupt):
