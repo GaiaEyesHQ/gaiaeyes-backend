@@ -1,5 +1,5 @@
 """Brand-specific Meta publishing configuration; never print tokens."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 
 
@@ -8,7 +8,7 @@ class BrandConfig:
     brand: str
     facebook_page_id: str
     instagram_user_id: str
-    access_token: str
+    access_token: str = field(repr=False)
 
     @classmethod
     def from_environment(cls, brand: str) -> "BrandConfig":

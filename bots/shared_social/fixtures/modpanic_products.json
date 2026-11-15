@@ -1,0 +1,402 @@
+{
+  "schema_version": 1,
+  "brand": "mod_panic",
+  "shop_id": "gid://shopify/Shop/41637576867",
+  "shop_domain": "oops-hand-sanitizer.myshopify.com",
+  "source": "Shopify Admin read on 2026-11-14; limited regression fixture, not a complete catalog",
+  "complete": false,
+  "products": [
+    {
+      "id": "gid://shopify/Product/9227320918179",
+      "title": "All You Need Is Love And Tacos Sticker",
+      "handle": "sticker-all-you-need-is-love-and-tacos",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Decorative Stickers",
+      "onlineStoreUrl": "https://modpanic.com/products/sticker-all-you-need-is-love-and-tacos",
+      "tags": [
+        "2in",
+        "3in",
+        "4in",
+        "All",
+        "all you need is love",
+        "And",
+        "Gift",
+        "Is",
+        "Love",
+        "Mod Panic",
+        "Need",
+        "Pop-Culture",
+        "Retro-Future",
+        "Square",
+        "Sticker",
+        "Tacos",
+        "You"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/sticker_square_All-you-need-is-love-and-tacos_default_product.png?v=1789253497"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/9227320950947",
+      "title": "All You Need Is Love And Tacos Magnet",
+      "handle": "magnet-all-you-need-is-love-and-tacos",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Refrigerator Magnets",
+      "onlineStoreUrl": "https://modpanic.com/products/magnet-all-you-need-is-love-and-tacos",
+      "tags": [
+        "2.17x2.95in-rect",
+        "3in-square",
+        "All",
+        "all you need is love",
+        "And",
+        "funny",
+        "Gift",
+        "Humor",
+        "Is",
+        "Love",
+        "Magnet",
+        "Mod Panic",
+        "Need",
+        "Pop Culture",
+        "Retro Future",
+        "Square",
+        "Tacos",
+        "Witty Gifts",
+        "You"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/magnet_square_All-you-need-is-love-and-tacos_default_product.png?v=1787200759"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/9227320983715",
+      "title": "All You Need Is Love And Tacos Stone Coaster",
+      "handle": "stone_coaster-all-you-need-is-love-and-tacos",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Stone Coasters",
+      "onlineStoreUrl": "https://modpanic.com/products/stone_coaster-all-you-need-is-love-and-tacos",
+      "tags": [
+        "4inx4in",
+        "All",
+        "all you need is love",
+        "And",
+        "coaster",
+        "Gift",
+        "Gifts",
+        "Home Decor",
+        "Is",
+        "Love",
+        "Mod Panic",
+        "Need",
+        "Pop Culture",
+        "Square",
+        "Stone Coaster",
+        "Tacos",
+        "You"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/stone_coaster_square_All-you-need-is-love-and-tacos_default_product.png?v=1787200765"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/9227321016483",
+      "title": "All You Need Is Love And Tacos Wall Print",
+      "handle": "wall_print-all-you-need-is-love-and-tacos",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Wall Art",
+      "onlineStoreUrl": "https://modpanic.com/products/wall_print-all-you-need-is-love-and-tacos",
+      "tags": [
+        "12inx12in",
+        "16inx16in",
+        "8inx8in",
+        "All",
+        "all you need is love",
+        "And",
+        "art",
+        "Gift",
+        "Home Decor",
+        "Humor",
+        "Is",
+        "Love",
+        "Mod Panic",
+        "Need",
+        "Pop Culture",
+        "poster",
+        "Retro",
+        "Square",
+        "Tacos",
+        "Wall Art",
+        "Wall Print",
+        "You"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/wall_print_square_All-you-need-is-love-and-tacos_default_product.png?v=1787200771"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/9246687199395",
+      "title": "All You Need Is Love And Tacos ModCore Coaster",
+      "handle": "modcore_coaster-all-you-need-is-love-and-tacos",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "ModCore Coasters",
+      "onlineStoreUrl": "https://modpanic.com/products/modcore_coaster-all-you-need-is-love-and-tacos",
+      "tags": [
+        "100mm square",
+        "All",
+        "And",
+        "coaster",
+        "highly absorbent",
+        "Is",
+        "Love",
+        "Mod Panic",
+        "ModCore",
+        "ModCore Coaster",
+        "Need",
+        "Square",
+        "Tacos",
+        "You"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/modcore_coaster_square_All-you-need-is-love-and-tacos_default_product.png?v=1788840757"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/15504869621923",
+      "title": "All you need is love and tacos Mug",
+      "handle": "mug-all-you-need-is-love-and-tacos",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Mugs",
+      "onlineStoreUrl": "https://modpanic.com/products/mug-all-you-need-is-love-and-tacos",
+      "tags": [
+        "ceramic mug",
+        "drinkware",
+        "love",
+        "Mod Panic",
+        "mug",
+        "square artwork",
+        "tacos"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/all-you-need-is-love-and-tacos_mug_15oz_white.png?v=1794325593"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/15516156362915",
+      "title": "Mississippi Blue Wave Koozie",
+      "handle": "koozie-mississippi-blue-wave",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Koozies",
+      "onlineStoreUrl": "https://modpanic.com/products/koozie-mississippi-blue-wave",
+      "tags": [
+        "4inx5in",
+        "Koozie",
+        "Mississippi Blue Wave",
+        "Mod Panic",
+        "Rect"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/koozie_Mississippi-Blue-Wave_shape-rect_sizes-4inx5in_price-5_product.png?v=1794625740"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/15516724002979",
+      "title": "Mississippi Blue Wave Mug",
+      "handle": "mug-mississippi-blue-wave",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Mugs",
+      "onlineStoreUrl": "https://modpanic.com/products/mug-mississippi-blue-wave",
+      "tags": [
+        "Adventure",
+        "Blue Wave",
+        "Coffee Time",
+        "drinkware",
+        "Inspired",
+        "Mississippi",
+        "Mod Panic",
+        "mug",
+        "Nature",
+        "Travel",
+        "Wild Waters"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/mississippi-blue-wave_mug_15oz_white.png?v=1794633516"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/15516727083171",
+      "title": "Mississippi Blue Wave Sticker",
+      "handle": "sticker-mississippi-blue-wave",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Decorative Stickers",
+      "onlineStoreUrl": "https://modpanic.com/products/sticker-mississippi-blue-wave",
+      "tags": [
+        "2in",
+        "3in",
+        "4in",
+        "Blue",
+        "Mississippi",
+        "Mod Panic",
+        "Square",
+        "Sticker",
+        "Wave"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/sticker_square_Mississippi-Blue-Wave_default_product.png?v=1794633569"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/15516727378083",
+      "title": "Mississippi Blue Wave Magnet",
+      "handle": "magnet-mississippi-blue-wave",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Refrigerator Magnets",
+      "onlineStoreUrl": "https://modpanic.com/products/magnet-mississippi-blue-wave",
+      "tags": [
+        "3in-square",
+        "Blue",
+        "Magnet",
+        "Mississippi",
+        "Mod Panic",
+        "Square",
+        "Wave"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/magnet_square_Mississippi-Blue-Wave_default_product.png?v=1794633578"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/15516727935139",
+      "title": "Mississippi Blue Wave Stone Coaster",
+      "handle": "stone_coaster-mississippi-blue-wave",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Stone Coasters",
+      "onlineStoreUrl": "https://modpanic.com/products/stone_coaster-mississippi-blue-wave",
+      "tags": [
+        "3.75inx3.75in",
+        "Blue",
+        "coaster",
+        "Mississippi",
+        "Mod Panic",
+        "Square",
+        "Stone Coaster",
+        "Wave"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/stone_coaster_square_Mississippi-Blue-Wave_default_product.png?v=1794633588"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/15516728492195",
+      "title": "Mississippi Blue Wave ModCore Coaster",
+      "handle": "modcore_coaster-mississippi-blue-wave",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "ModCore Coasters",
+      "onlineStoreUrl": "https://modpanic.com/products/modcore_coaster-mississippi-blue-wave",
+      "tags": [
+        "100mm square",
+        "Blue",
+        "coaster",
+        "highly absorbent",
+        "Mississippi",
+        "Mod Panic",
+        "ModCore",
+        "ModCore Coaster",
+        "Square",
+        "Wave"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/modcore_coaster_square_Mississippi-Blue-Wave_default_product.png?v=1794633598"
+          }
+        }
+      }
+    },
+    {
+      "id": "gid://shopify/Product/15516729114787",
+      "title": "Mississippi Blue Wave Wall Print",
+      "handle": "wall_print-mississippi-blue-wave",
+      "status": "ACTIVE",
+      "vendor": "Mod Panic",
+      "productType": "Wall Art",
+      "onlineStoreUrl": "https://modpanic.com/products/wall_print-mississippi-blue-wave",
+      "tags": [
+        "12inx12in",
+        "16inx16in",
+        "20inx20in",
+        "8inx8in",
+        "art",
+        "Blue",
+        "Mississippi",
+        "Mod Panic",
+        "poster",
+        "Square",
+        "Wall Print",
+        "Wave"
+      ],
+      "featuredMedia": {
+        "preview": {
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0416/3757/6867/files/wall_print_square_Mississippi-Blue-Wave_default_product.png?v=1794633610"
+          }
+        }
+      }
+    }
+  ]
+}

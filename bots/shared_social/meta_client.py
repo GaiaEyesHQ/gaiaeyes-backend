@@ -54,6 +54,8 @@ class MetaClient:
             return PublishResult(self.config.brand, "facebook", "preview")
         if not approved:
             raise PermissionError("Live publishing requires explicit approval")
+        if self.config.brand.upper().replace("-", "_") == "MOD_PANIC":
+            raise MetaPublishError("Mod Panic live publishing is disabled; local review is not publish authorization")
         result = self._call("POST", f"{self.config.facebook_page_id}/photos",
                             data={"url": image_url, "caption": caption})
         return PublishResult(self.config.brand, "facebook", "published", result.get("post_id") or result.get("id"))
