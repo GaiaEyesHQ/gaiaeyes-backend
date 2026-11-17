@@ -9,11 +9,34 @@ from unittest.mock import patch
 
 from bots.shared_social.sync_drafts import main
 from bots.shared_social.shopify_catalog import CatalogError
-from bots.shared_social.test_draft_queue import renderer, snapshot
+from bots.shared_social.test_draft_queue import install_test_captions, renderer, snapshot
 from bots.shared_social.test_shopify_drafts import product
 
 
 class CommandTests(unittest.TestCase):
+    def setUp(self):
+        install_test_captions(self)
+
+    def test_caption_command_updates_local_queue_without_credentials_or_network(self):
+        from bots.shared_social.draft_queue import sync
+        from bots.shared_social.captions import load_library
+        with tempfile.TemporaryDirectory() as temp:
+            before = sync(snapshot([product("mug-cat", "Cat Mug")]), temp, renderer=renderer)
+            with patch.dict(load_library()["designs"]["cat"], {"facebook": "A revised cat-specific story."}), \
+                 patch("sys.argv", ["sync_drafts", "captions", "--output", temp]), \
+                 patch("bots.shared_social.sync_drafts.ShopifyCatalog") as reader, \
+                 patch("bots.shared_social.sync_drafts.client_config") as credentials, \
+                 patch("bots.shared_social.draft_queue.render_images") as images, \
+                 redirect_stdout(io.StringIO()) as output:
+                main()
+                reader.assert_not_called()
+                credentials.assert_not_called()
+                images.assert_not_called()
+                self.assertEqual(json.loads(output.getvalue())["counts"], {"needs_review": 1})
+            after = json.loads((Path(temp)/"review.json").read_text())
+            self.assertEqual(before["last_sync"], after["last_sync"])
+            self.assertNotEqual(before["drafts"][0]["revision"], after["drafts"][0]["revision"])
+
     def test_offline_snapshot_to_review_queue_end_to_end(self):
         from bots.shared_social.draft_queue import sync
         with tempfile.TemporaryDirectory() as temp:

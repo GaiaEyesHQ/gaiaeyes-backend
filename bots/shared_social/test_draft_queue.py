@@ -5,8 +5,10 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from bots.shared_social.draft_queue import review, sync
+from bots.shared_social.captions import load_library
+from bots.shared_social.draft_queue import refresh_captions, review, sync
 from bots.shared_social.shopify_catalog import CatalogError, SHOP_DOMAIN, SHOP_ID
 from bots.shared_social.test_shopify_drafts import product
 
@@ -28,8 +30,19 @@ def renderer(draft, directory):
     return assets
 
 
+def install_test_captions(case):
+    # Keep synthetic catalog fixtures out of the real Mod Panic editorial library.
+    fixture = {key: {"facebook": f"A {key} has opinions about your schedule.",
+                     "instagram": f"The {key} is in charge today.",
+                     "hashtags": ["#PetPeople"], "cta": "Meet the pet"} for key in ("cat", "dog")}
+    editing = patch.dict(load_library()["designs"], fixture)
+    editing.start()
+    case.addCleanup(editing.stop)
+
+
 class QueueTests(unittest.TestCase):
     def setUp(self):
+        install_test_captions(self)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name)
@@ -41,6 +54,55 @@ class QueueTests(unittest.TestCase):
     def approve(self, draft=None):
         d = draft or self.sync()["drafts"][0]
         return review(self.path, d["draft_id"], d["revision"], "approved", "Test reviewer")
+
+    def test_caption_refresh_invalidates_approval_without_changing_catalog_or_images(self):
+        before = self.approve()
+        old = before["drafts"][0]
+        with patch.dict(load_library()["designs"]["cat"], {"facebook": "The cat has filed a formal objection."}):
+            after = refresh_captions(self.path)
+            new = after["drafts"][0]
+            self.assertNotEqual(old["revision"], new["revision"])
+            self.assertEqual(new["status"], "needs_review")
+            self.assertIsNone(new["reviewer"])
+            self.assertEqual(after["last_sync"], before["last_sync"])
+            for field in ("images", "products", "last_seen", "draft_id", "product_id"):
+                self.assertEqual(old[field], new[field])
+            with self.assertRaisesRegex(ValueError, "changed"):
+                self.approve(old)
+            self.assertEqual(after["last_caption_update"]["changed_drafts"], 1)
+            repeated = refresh_captions(self.path)
+            self.assertEqual(after, repeated)
+            self.assertIn("Catalog-check time is unchanged", (self.path/"review.html").read_text())
+            self.assertEqual(self.sync()["drafts"][0]["revision"], new["revision"])
+
+    def test_caption_refresh_preserves_withdrawn_and_suppressed_rows(self):
+        self.catalog["products"].append(product("mug-dog", "Dog Mug", number=2))
+        self.sync(previously_used=["dog"])
+        before = self.sync(snapshot([]))
+        after = refresh_captions(self.path)
+        self.assertEqual(before, after)
+
+    def test_caption_refresh_fails_atomically_when_any_asset_is_tampered(self):
+        self.catalog["products"].append(product("mug-dog", "Dog Mug", number=2))
+        before = self.sync()
+        saved = (self.path/"review.json").read_bytes()
+        bad = before["drafts"][-1]["images"]["instagram"]["path"]
+        (self.path/bad).write_bytes(b"tampered")
+        with patch.dict(load_library()["designs"]["cat"], {"facebook": "New cat wording"}):
+            with self.assertRaisesRegex(ValueError, "image changed"):
+                refresh_captions(self.path)
+        self.assertEqual(saved, (self.path/"review.json").read_bytes())
+        with sqlite3.connect(self.path/"queue.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM caption_updates").fetchone()[0], 0)
+
+    def test_new_design_with_missing_copy_cannot_be_approved(self):
+        result = self.sync(snapshot([product("mug-new-unknown-design", "New Unknown Design Mug")]))
+        draft = result["drafts"][0]
+        self.assertEqual(draft["caption_status"], "needs_copy")
+        with self.assertRaisesRegex(ValueError, "tailored captions"):
+            self.approve(draft)
+        rejected = review(self.path, draft["draft_id"], draft["revision"], "rejected", "Reviewer")
+        self.assertEqual(rejected["drafts"][0]["status"], "rejected")
 
     def test_rerun_is_idempotent_and_keeps_approval_for_exact_revision(self):
         first = self.sync()["drafts"][0]

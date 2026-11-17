@@ -11,6 +11,7 @@ import sqlite3
 import tempfile
 
 from bots.shared_social.draft_images import render_images
+from bots.shared_social.captions import captions_for
 from bots.shared_social.shopify_catalog import SHOP_DOMAIN, SHOP_ID
 from bots.shared_social.shopify_drafts import make_drafts
 
@@ -56,6 +57,8 @@ def connect(directory):
         id INTEGER PRIMARY KEY, completed_at TEXT NOT NULL, fetched_at TEXT,
         product_count INTEGER NOT NULL, eligible_product_count INTEGER NOT NULL,
         artwork_count INTEGER NOT NULL)""")
+    db.execute("""CREATE TABLE IF NOT EXISTS caption_updates (
+        id INTEGER PRIMARY KEY, updated_at TEXT NOT NULL, changed_drafts INTEGER NOT NULL)""")
     db.commit()
     return db
 
@@ -171,6 +174,38 @@ def verify_assets(payload, directory):
             raise ValueError("Draft image changed; regenerate and review again")
 
 
+def refresh_captions(directory):
+    """Revise existing active drafts without fetching products, rendering, or advancing sync time."""
+    with locked(directory) as directory:
+        if not (directory / "queue.sqlite3").is_file():
+            raise ValueError("An existing review queue is required")
+        db = connect(directory)
+        try:
+            prepared = []
+            for row in db.execute("SELECT * FROM drafts ORDER BY design_key"):
+                if row["status"] in {"withdrawn", "suppressed"}:
+                    continue
+                payload = json.loads(row["payload"])
+                if revision(payload) != row["revision"]:
+                    raise ValueError("Stored draft content does not match its revision")
+                verify_assets(payload, directory)
+                hero = {"id": payload["product_id"], "title": payload["product_title"],
+                        "url": payload["product_url"]}
+                payload.update(captions_for(payload["design_key"], hero))
+                digest = revision(payload)
+                if digest != row["revision"]:
+                    prepared.append((digest, json.dumps(payload, ensure_ascii=False), row["draft_id"]))
+            with db:
+                db.executemany("""UPDATE drafts SET revision=?, payload=?, status='needs_review',
+                    reviewer=NULL, reviewed_at=NULL WHERE draft_id=?""", prepared)
+                if prepared:
+                    db.execute("INSERT INTO caption_updates (updated_at, changed_drafts) VALUES (?, ?)",
+                               (now(), len(prepared)))
+            return export(db, directory)
+        finally:
+            db.close()
+
+
 def review(directory, draft_id, expected_revision, decision, reviewer):
     if decision not in {"approved", "rejected"} or not reviewer.strip() or len(reviewer) > 120:
         raise ValueError("A decision and reviewer name are required")
@@ -183,6 +218,8 @@ def review(directory, draft_id, expected_revision, decision, reviewer):
             payload = json.loads(row["payload"])
             if row["revision"] != expected_revision or revision(payload) != expected_revision:
                 raise ValueError("Draft changed; review the current revision")
+            if decision == "approved" and payload.get("caption_status") == "needs_copy":
+                raise ValueError("This design needs tailored captions before approval")
             verify_assets(payload, directory)
             stamp = now()
             with db:
@@ -218,8 +255,10 @@ def export(db, directory):
                         "reviewed_at": row["reviewed_at"], "last_seen": row["last_seen"]})
         entries.append(payload)
     latest = db.execute("SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1").fetchone()
+    caption_update = db.execute("SELECT * FROM caption_updates ORDER BY id DESC LIMIT 1").fetchone()
     report = {"brand": "mod_panic", "publishing_enabled": False,
-              "last_sync": dict(latest) if latest else None, "drafts": entries}
+              "last_sync": dict(latest) if latest else None,
+              "last_caption_update": dict(caption_update) if caption_update else None, "drafts": entries}
     atomic_write(Path(directory) / "review.json", json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     esc = html.escape
     cards = []
@@ -230,7 +269,8 @@ def export(db, directory):
             f'<div><h3>{p.title()}</h3><img src="{esc(draft["images"][p]["path"], quote=True)}" alt="{esc(draft["product_title"], quote=True)}"><pre>{esc(draft[p+"_caption"])}</pre></div>'
             for p in ("facebook", "instagram"))
         links = " · ".join(f'<a href="{esc(p["url"], quote=True)}" rel="noreferrer">{esc(p["title"])}</a>' for p in draft["products"])
-        cards.append(f'<article><h2>{esc(draft["design_key"])}</h2><p>{esc(draft["status"])} · {len(draft["products"])} products</p><div class="platforms">{platforms}</div><p>{links}</p><p>{esc(draft["review_notes"][0])}</p><details><summary>Review identifiers</summary><p>ID: {draft["draft_id"]}</p><p>Revision: {draft["revision"]}</p></details></article>')
+        copy_notice = '<p>Needs design-specific captions before approval.</p>' if draft.get("caption_status") == "needs_copy" else ''
+        cards.append(f'<article><h2>{esc(draft["design_key"])}</h2><p>{esc(draft["status"])} · {len(draft["products"])} products</p>{copy_notice}<div class="platforms">{platforms}</div><p>{links}</p><p>{esc(draft["review_notes"][0])}</p><details><summary>Review identifiers</summary><p>ID: {draft["draft_id"]}</p><p>Revision: {draft["revision"]}</p></details></article>')
     document = '''<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
@@ -247,6 +287,8 @@ article{background:white;padding:28px;margin:30px 0;border-radius:16px}.platform
         freshness += f'<p>{latest["product_count"]} products checked · {latest["eligible_product_count"]} eligible products · {latest["artwork_count"]} artwork groups.</p>'
     else:
         freshness = '<p>No refresh time has been recorded for this existing queue.</p>'
+    if caption_update:
+        freshness += f'<p>Captions revised: <time>{esc(caption_update["updated_at"])}</time> · {caption_update["changed_drafts"]} drafts updated. Catalog-check time is unchanged.</p>'
     freshness += '<p>Schedules are disabled. Product changes appear after a successful full refresh; reload this page afterward. Deleted products are removed from active drafts, and changed drafts require review again.</p>'
     atomic_write(Path(directory) / "review.html", document + freshness + "".join(cards) + "</html>")
     return report

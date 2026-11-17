@@ -84,7 +84,7 @@ class ShopifyDraftTests(unittest.TestCase):
             self.assertFalse(safe_url(url, image=True), url)
 
     def test_platform_captions_are_distinct_and_no_unverified_claims(self):
-        draft = make_drafts([product("mug-cat", "Cat Mug")])[0]
+        draft = make_drafts([product("mug-nope-cat", "Nope Cat Mug")])[0]
         self.assertIn(draft["product_url"], draft["facebook_caption"])
         self.assertIn("#ModPanic", draft["instagram_caption"])
         self.assertNotIn("link in", draft["instagram_caption"])

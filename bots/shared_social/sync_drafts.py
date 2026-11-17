@@ -7,7 +7,7 @@ import sys
 import warnings
 
 from bots.shared_social.draft_images import ImageError
-from bots.shared_social.draft_queue import review, sync
+from bots.shared_social.draft_queue import refresh_captions, review, sync
 from bots.shared_social.shopify_catalog import CatalogConfig, CatalogError, ShopifyCatalog
 
 
@@ -39,6 +39,8 @@ def main():
     source.add_argument("--prompt", action="store_true", help="Enter client credentials privately for this live refresh")
     fetch.add_argument("--artwork-map", help="JSON object mapping product IDs or handles to stable artwork slugs")
     fetch.add_argument("--used-keys", help="JSON array of artwork keys already used; persisted as suppressed")
+    captions = commands.add_parser("captions", help="Update existing draft captions locally; no catalog read or image changes")
+    captions.add_argument("--output", required=True, help="Existing persistent review queue directory")
     approve = commands.add_parser("review", help="Record a local decision; never publish")
     approve.add_argument("--output", required=True)
     approve.add_argument("--draft-id", required=True)
@@ -59,6 +61,8 @@ def main():
                 raise ValueError("Used keys must be a JSON array of strings")
             snapshot = json.loads(Path(args.catalog).read_text()) if args.catalog else ShopifyCatalog(client_config(args.prompt)).fetch
             report = sync(snapshot, args.output, overrides=overrides, previously_used=used, progress=show_progress)
+        elif args.command == "captions":
+            report = refresh_captions(args.output)
         else:
             report = review(args.output, args.draft_id, args.revision, args.decision, args.reviewer)
     except (EOFError, KeyboardInterrupt):

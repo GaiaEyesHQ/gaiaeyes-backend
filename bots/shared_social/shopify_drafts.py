@@ -7,6 +7,8 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from bots.shared_social.captions import captions_for
+
 SHOP_DOMAIN = "modpanic.com"
 # Remove complete format words only at the ends, never meaningful words inside artwork names.
 FORMATS = (
@@ -103,8 +105,7 @@ def make_drafts(products, previously_used=(), *, overrides=None):
             "draft_id": hashlib.sha256(("mod_panic:" + key).encode()).hexdigest()[:20],
             "product_id": hero["id"], "product_title": title, "product_url": url,
             "image_url": hero["image_url"], "products": products,
-            "facebook_caption": f"{title}\n\nA little personality for the everyday. Which corner of your world needs this?\n\nExplore it at {url}",
-            "instagram_caption": f"{title}\n\nGive your everyday a little more personality.\n\nFind it at modpanic.com.\n\n#ModPanic #EverydayPersonality",
+            **captions_for(key, hero),
             "review_notes": ["Verify artwork grouping, image/title match, rights, and product availability before approval."],
             "status": "needs_review", "approved": False,
         })
