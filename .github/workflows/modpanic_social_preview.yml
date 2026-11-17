@@ -1,0 +1,64 @@
+---
+name: Mod Panic social checks
+
+on:
+  pull_request:
+    paths:
+      - 'bots/shared_social/**'
+      - '.github/workflows/modpanic_social_preview.yml'
+  workflow_dispatch:
+    inputs:
+      verify_shopify:
+        description: >-
+          Verify Mod Panic Shopify credentials and read-only access
+          (no product import)
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing social dependencies
+        run: python -m pip install 'requests>=2.32.3' 'Pillow>=10.4.0'
+      - name: Test catalog, grouping, images, queue, and publishing safeguards
+        run: >-
+          python -m unittest discover -s bots/shared_social
+          -t . -p 'test_*.py' -v
+      - name: Preview-only confirmation
+        run: echo "No credentials loaded. No live publishing performed."
+
+  verify-shopify:
+    needs: preview
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+          inputs.verify_shopify == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing social dependencies
+        run: python -m pip install 'requests>=2.32.3' 'Pillow>=10.4.0'
+      - name: Verify the Shopify store and read-only permissions
+        env:
+          MOD_PANIC_SHOPIFY_CLIENT_ID: >-
+            ${{ secrets.MOD_PANIC_SHOPIFY_CLIENT_ID }}
+          MOD_PANIC_SHOPIFY_CLIENT_SECRET: >-
+            ${{ secrets.MOD_PANIC_SHOPIFY_CLIENT_SECRET }}
+        run: python -m bots.shared_social.sync_drafts verify

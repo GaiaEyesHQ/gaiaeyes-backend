@@ -1,0 +1,1309 @@
+{
+  "schema_version": 1,
+  "style": {
+    "voice": "Playful, specific to the artwork, lightly irreverent; never generic filler.",
+    "instagram": "Short hook, visual joke or attitude, minimal relevant hashtags.",
+    "facebook": "A different conversational hook, a short design-specific story, direct product link.",
+    "facts": "Use verified product names and design subjects; no invented materials, stock, prices, endorsements or provenance."
+  },
+  "designs": {
+    "alfred-e-neuman": {
+      "instagram": "The face says unbothered. The calendar strongly disagrees.\n\nLet Alfred handle the worrying. Or, more likely, refuse to.",
+      "facebook": "A packed calendar. A growing to-do list. And Alfred E. Neuman, looking spectacularly unconcerned about all of it.\n\nBorrow a little of that energy when your day starts acting important.",
+      "hashtags": [
+        "#AlfredENeuman",
+        "#UnbotheredEnergy"
+      ],
+      "cta": "Add a little Alfred"
+    },
+    "alfred-e-neuman-what-me-worry": {
+      "instagram": "The plan? Unclear. The expression? Absolutely untroubled.\n\nAlfred E. Neuman understood the assignment: do not panic.",
+      "facebook": "Some people have a five-year plan. Alfred E. Neuman has a facial expression.\n\nFor the person who meets every minor catastrophe with a shrug and keeps right on going.",
+      "hashtags": [
+        "#WhatMeWorry",
+        "#AlfredENeuman"
+      ],
+      "cta": "Meet the least worried one here"
+    },
+    "all-you-need-is-love-and-tacos": {
+      "instagram": "Love language: extra salsa. 🌮\n\nA surprisingly complete life plan, in six words.",
+      "facebook": "We reviewed the five-year plan and added more tacos.\n\nAll You Need Is Love And Tacos makes a strong case for keeping your priorities deliciously simple. Tag the person who always knows where dinner should come from.",
+      "hashtags": [
+        "#TacoPeople",
+        "#LoveAndTacos"
+      ],
+      "cta": "Make room for tacos"
+    },
+    "arizona-wildflowers": {
+      "instagram": "Arizona has entered the chat. It brought flowers.\n\nDesert daydreams, minus the sand in your shoes.",
+      "facebook": "For the person who goes looking for desert views and comes home with 87 flower photos.\n\nArizona Wildflowers gives that particular camera roll a new place to live. No convincing everyone to stop the car required.",
+      "hashtags": [
+        "#ArizonaWildflowers",
+        "#DesertDaydreams"
+      ],
+      "cta": "Take the scenic detour"
+    },
+    "atlanta-ferris-wheel-vintage-art-deco": {
+      "instagram": "Atlanta, with a little extra drama in the design department.\n\nVintage Art Deco meets Ferris-wheel daydreaming. 🎡",
+      "facebook": "You can love a city and still insist that it dress up for its portrait.\n\nAtlanta Ferris Wheel Vintage Art Deco brings a dressed-for-the-occasion mood to your Atlanta affection. Excellent company for someone who always chooses the scenic route.",
+      "hashtags": [
+        "#AtlantaLove",
+        "#ArtDecoMood"
+      ],
+      "cta": "Give Atlanta its close-up"
+    },
+    "atlanta-skyline-drone": {
+      "instagram": "Atlanta from above. Your traffic complaints from very, very far below.\n\nA skyline worth changing your perspective for.",
+      "facebook": "Sometimes the best way to appreciate a city is to get above your usual route through it.\n\nAtlanta Skyline Drone offers a different angle on a familiar favorite. Same Atlanta love, considerably less discussion about which exit to take.",
+      "hashtags": [
+        "#AtlantaSkyline",
+        "#CityViews"
+      ],
+      "cta": "See Atlanta from another angle"
+    },
+    "atlanta-vivid-sunrise": {
+      "instagram": "Atlanta showed up early and made it everyone’s business.\n\nSunrise energy for people who negotiate with their alarm.",
+      "facebook": "Not everyone is a morning person. That doesn’t mean you have to miss the good part.\n\nAtlanta Vivid Sunrise lets you appreciate the city’s early-morning mood at a perfectly reasonable hour. Noon counts.",
+      "hashtags": [
+        "#AtlantaSunrise",
+        "#CityColor"
+      ],
+      "cta": "Keep the sunrise"
+    },
+    "aus-tex": {
+      "instagram": "Short name. Long list of reasons you’re attached.\n\nAus Tex: for people who can turn any conversation into an Austin conversation.",
+      "facebook": "You said “Austin” once. Somehow you’re now explaining your favorite food stop, a show you saw, and why your friend should visit.\n\nAus Tex is for that completely normal level of hometown enthusiasm.",
+      "hashtags": [
+        "#AusTex",
+        "#AustinPeople"
+      ],
+      "cta": "Wear your Austin heart on your shopping list"
+    },
+    "austin-bandana": {
+      "instagram": "Austin has a pattern of doing its own thing.\n\nThe bandana department got the memo.",
+      "facebook": "A little Austin attitude, with a bandana twist.\n\nFor the friend whose version of “just throwing something together” always has more character than everyone else’s carefully considered plan.",
+      "hashtags": [
+        "#AustinStyle",
+        "#BandanaMood"
+      ],
+      "cta": "Pick up the pattern"
+    },
+    "austin-black-cat": {
+      "instagram": "Austin attitude. Black-cat management.\n\nThe cat has declined your meeting invitation. 🐈‍⬛",
+      "facebook": "If Austin had a department of selective enthusiasm, this black cat would run it.\n\nA little hometown affection, a little feline judgment, and absolutely no interest in being told to act normal.",
+      "hashtags": [
+        "#AustinCats",
+        "#BlackCatEnergy"
+      ],
+      "cta": "Meet the new management"
+    },
+    "austin-black-cat-color": {
+      "instagram": "The black cat requested more color.\n\nApparently “mysterious” and “making an entrance” can coexist.",
+      "facebook": "Black-cat energy doesn’t have to keep a low profile.\n\nAustin Black Cat Color is for the person who wants their feline attitude with a louder introduction. The cat remains unavailable for comment.",
+      "hashtags": [
+        "#AustinStyle",
+        "#CatAttitude"
+      ],
+      "cta": "Let the cat make an entrance"
+    },
+    "austin-cat": {
+      "instagram": "Keep Austin weird. The cat was already on it.\n\nLocal attitude, feline edition.",
+      "facebook": "An Austin cat doesn’t need help developing a personality. It needs you to stop sitting in its spot.\n\nFor cat people with a soft spot for Austin and a very realistic understanding of who’s in charge.",
+      "hashtags": [
+        "#AustinCat",
+        "#CatPeople"
+      ],
+      "cta": "Invite the cat along"
+    },
+    "austin-cat-black-and-white": {
+      "instagram": "No color commentary needed.\n\nThis Austin cat’s opinions are already pretty clear.",
+      "facebook": "Austin Cat, keeping things black and white while reserving the right to be complicated.\n\nFor anyone who likes their hometown nods simple and their cats just a little difficult to impress.",
+      "hashtags": [
+        "#AustinCat",
+        "#BlackAndWhite"
+      ],
+      "cta": "Keep it feline"
+    },
+    "austin-downtown-skyline-sunset": {
+      "instagram": "Austin at sunset: suddenly you have time to stare.\n\nDowntown can wait. The view can’t.",
+      "facebook": "That moment when downtown stops being a destination and becomes the whole view.\n\nAustin Downtown Skyline Sunset is for the person who says “one quick picture” and then takes twelve. We understand the editing process.",
+      "hashtags": [
+        "#AustinSunset",
+        "#DowntownViews"
+      ],
+      "cta": "Save the sunset"
+    },
+    "austin-in-words": {
+      "instagram": "Austin. We have a few words.\n\nMostly affectionate. Occasionally about parking.",
+      "facebook": "Some places deserve a love letter. Austin gets the whole conversation.\n\nAustin in Words is for anyone who can’t quite explain what they love about the city without adding three more things.",
+      "hashtags": [
+        "#AustinInWords",
+        "#AustinLove"
+      ],
+      "cta": "Find your Austin words"
+    },
+    "austin-mandala": {
+      "instagram": "Austin, going around in very good circles.\n\nA mandala moment for a city that rarely sits still.",
+      "facebook": "Your schedule can be all over the place. Your Austin affection can still have a center.\n\nAustin Mandala gives that hometown feeling a different rhythm—one worth pausing your scroll for.",
+      "hashtags": [
+        "#AustinMandala",
+        "#PatternPeople"
+      ],
+      "cta": "Take a closer look"
+    },
+    "austin-music-festival-stay-weird-live-loud": {
+      "instagram": "Stay weird. Live loud. Discuss the set list later.\n\nAustin festival energy, even on a very ordinary Tuesday. 🎶",
+      "facebook": "For the friend who says “just one more song” like it’s a legally binding agreement.\n\nAustin Music Festival Stay Weird Live Loud keeps the festival-minded part of your personality in the conversation, even when the weekend is over.",
+      "hashtags": [
+        "#StayWeirdLiveLoud",
+        "#AustinMusic"
+      ],
+      "cta": "Keep the festival feeling"
+    },
+    "austin-rocks": {
+      "instagram": "Austin rocks. You may now resume arguing about your favorite band.\n\nWe’ll be over here making a playlist.",
+      "facebook": "Some city opinions need a long explanation. “Austin rocks” is already a complete sentence.\n\nFor the person who has a favorite venue, a backup favorite venue, and a story about a really good Tuesday night.",
+      "hashtags": [
+        "#AustinRocks",
+        "#MusicPeople"
+      ],
+      "cta": "Turn up the Austin"
+    },
+    "austin-skyline-icons": {
+      "instagram": "Austin recognition test: you were never going to be subtle about it.\n\nSkyline love, with all the enthusiasm left in.",
+      "facebook": "You know a city has you when even its skyline starts feeling like a familiar face.\n\nAustin Skyline Icons is for locals, former locals, and the friend who visited once and keeps bringing it up.",
+      "hashtags": [
+        "#AustinSkyline",
+        "#CityCrush"
+      ],
+      "cta": "Spot your city"
+    },
+    "austin-sunrise": {
+      "instagram": "Austin’s awake. We’re still negotiating.\n\nSunrise appreciation does not require sunrise attendance.",
+      "facebook": "We support getting up early for an Austin sunrise. We also support enjoying the idea after your second cup of coffee.\n\nAustin Sunrise keeps the morning mood handy for both kinds of people.",
+      "hashtags": [
+        "#AustinSunrise",
+        "#MorningNegotiations"
+      ],
+      "cta": "Bring the morning home"
+    },
+    "austin-sunset": {
+      "instagram": "Austin really does know how to end a day.\n\nConsider this your tiny standing ovation.",
+      "facebook": "The group chat can wait. Austin is doing its sunset thing.\n\nFor anyone who has ever stopped mid-sentence because the sky got interesting—and then made everyone else look too.",
+      "hashtags": [
+        "#AustinSunset",
+        "#SkyWatchers"
+      ],
+      "cta": "Hold on to that evening"
+    },
+    "austin-sunset-over-the-lake": {
+      "instagram": "Lake plans: look at the sunset. Look at it some more.\n\nAn extremely full itinerary.",
+      "facebook": "The best lake plans occasionally involve doing almost nothing.\n\nAustin Sunset Over The Lake celebrates that excellent combination of water, evening, and one more reason to stay a little longer.",
+      "hashtags": [
+        "#AustinLakeLife",
+        "#SunsetPeople"
+      ],
+      "cta": "Keep the lakeside mood"
+    },
+    "austin-texas-downtown-skyline": {
+      "instagram": "Downtown Austin, invited into your everyday plans.\n\nNo parking strategy included.",
+      "facebook": "You can be attached to downtown Austin without wanting to navigate it every single day.\n\nAustin Texas Downtown Skyline keeps the city affection close and leaves the logistics out of the picture.",
+      "hashtags": [
+        "#DowntownAustin",
+        "#SkylinePeople"
+      ],
+      "cta": "Take downtown with you"
+    },
+    "austin-texas-in-words": {
+      "instagram": "Warning: may start another Austin conversation.\n\nYou were going to tell that story anyway.",
+      "facebook": "Your Austin stories have recurring characters, strong opinions, and occasionally a sequel.\n\nAustin Texas In Words fits right in. For the person whose shortest hometown story still needs a little backstory.",
+      "hashtags": [
+        "#AustinTexas",
+        "#WordPeople"
+      ],
+      "cta": "Give Austin another word"
+    },
+    "austin-texas-skyline": {
+      "instagram": "A familiar skyline is basically a hometown handshake.\n\nAustin, you’re looking very recognizable.",
+      "facebook": "No explanation needed. You see the Austin skyline and immediately have an opinion about where to eat afterward.\n\nFor people whose city love comes with a very specific recommendation list.",
+      "hashtags": [
+        "#AustinTexas",
+        "#SkylineLove"
+      ],
+      "cta": "Say hello to Austin"
+    },
+    "austin-texas-skyline-sunburst": {
+      "instagram": "Austin requested better lighting. The sunburst obliged.\n\nSubtle was apparently not on the mood board.",
+      "facebook": "A skyline with main-character lighting? Austin would.\n\nAustin Texas Skyline Sunburst turns your city affection up a notch. For anyone who thinks a hometown shout-out deserves a little radiance.",
+      "hashtags": [
+        "#AustinSkyline",
+        "#Sunburst"
+      ],
+      "cta": "Let Austin shine"
+    },
+    "austin-texas-skyline-with-bats": {
+      "instagram": "The skyline has a night crew. 🦇\n\nAustin’s bats would like some credit for the atmosphere.",
+      "facebook": "Austin has plenty of personalities. Some of them have wings.\n\nAustin Texas Skyline with Bats gives the city’s bat-loving crowd a familiar reason to smile. For the friend who always remembers to look up.",
+      "hashtags": [
+        "#AustinBats",
+        "#AustinSkyline"
+      ],
+      "cta": "Make room for the night crew"
+    },
+    "austin-texas-sunrise": {
+      "instagram": "Good morning, Austin. We said it. That counts.\n\nAn early-bird mood with no alarm attached.",
+      "facebook": "There’s something charming about an Austin morning before your to-do list starts making suggestions.\n\nAustin Texas Sunrise is a little nod to that part of the day. Enjoy it whenever you actually get around to waking up.",
+      "hashtags": [
+        "#AustinMornings",
+        "#SunriseMood"
+      ],
+      "cta": "Start with a sunrise"
+    },
+    "austin-texas-sunset-skyline": {
+      "instagram": "Day’s over. Austin’s skyline has a closing argument.\n\nIt’s a pretty convincing one.",
+      "facebook": "Some cities leave you with a souvenir. Austin leaves you explaining a sunset to someone who wasn’t there.\n\nAustin Texas Sunset Skyline does a little of the explaining for you.",
+      "hashtags": [
+        "#AustinEvenings",
+        "#SunsetSkyline"
+      ],
+      "cta": "Keep the closing scene"
+    },
+    "austin-texas-vivid-bar-key": {
+      "instagram": "The bar key has Austin opinions now.\n\nSmall accessory. Big hometown attachment.",
+      "facebook": "Even the little things can have a favorite city.\n\nAustin Texas Vivid Bar Key is for the person whose Austin affection extends all the way to the accessories. A full hometown commitment, really.",
+      "hashtags": [
+        "#AustinAccessories",
+        "#VividAustin"
+      ],
+      "cta": "Meet the little hometown nod"
+    },
+    "austin-texas-vivid-skyline": {
+      "instagram": "Austin’s skyline did not come here to blend in.\n\nVivid seems about right.",
+      "facebook": "If your feelings about Austin are loud, your skyline choice can be too.\n\nAustin Texas Vivid Skyline gives the city a spirited introduction. Quiet admiration was never really your thing anyway.",
+      "hashtags": [
+        "#VividSkyline",
+        "#AustinLove"
+      ],
+      "cta": "Pick the vivid view"
+    },
+    "austin-texas-weird-af": {
+      "instagram": "Austin, but make the subtext extremely obvious.\n\nWeird AF. No footnotes.",
+      "facebook": "Some hometown slogans tiptoe. This one walks right up and introduces itself.\n\nAustin Texas Weird AF is for the friend who treats “that’s a little weird” as encouraging feedback.",
+      "hashtags": [
+        "#WeirdAF",
+        "#AustinTexas"
+      ],
+      "cta": "Own the weird"
+    },
+    "austin-vivid": {
+      "instagram": "Austin brought the color. You bring the attachment.\n\nA very workable arrangement.",
+      "facebook": "There’s casual fondness for Austin, and then there’s bringing it into every part of your day.\n\nAustin Vivid is for the second group. We suspect you already know which one you’re in.",
+      "hashtags": [
+        "#AustinVivid",
+        "#ColorPeople"
+      ],
+      "cta": "Add your Austin accent"
+    },
+    "austin-vivid-downtown-skyline": {
+      "instagram": "Downtown Austin, with the volume knob politely ignored.\n\nFor city people who like a vivid view.",
+      "facebook": "Downtown has enough going on without pretending to be understated.\n\nAustin Vivid Downtown Skyline leans into the city-view enthusiasm. Pair it with your best “you should have seen it” story.",
+      "hashtags": [
+        "#DowntownAustin",
+        "#VividViews"
+      ],
+      "cta": "Bring downtown into focus"
+    },
+    "bandana": {
+      "instagram": "A bandana mood without a dress code.\n\nPatterns are allowed to have personalities too.",
+      "facebook": "Some patterns have been minding their own business for ages and still manage to make an entrance.\n\nBandana is for anyone who appreciates a familiar pattern with a little attitude.",
+      "hashtags": [
+        "#BandanaStyle",
+        "#PatternLove"
+      ],
+      "cta": "Follow the pattern"
+    },
+    "big-dumb-cup": {
+      "instagram": "The cup is big. The attachment is bigger.\n\nWe are not taking questions about our emotional-support beverage.",
+      "facebook": "It has a place in the car, a place on your desk, and apparently a central role in your personality.\n\nBig Dumb Cup understands that the beverage situation has become a whole lifestyle. No judgment. We brought ours too.",
+      "hashtags": [
+        "#BigDumbCup",
+        "#CupPeople"
+      ],
+      "cta": "Commit to the cup situation"
+    },
+    "bird-of-paradise-california": {
+      "instagram": "California sent flowers. They chose an excellent name.\n\nBird of Paradise has entered vacation mode.",
+      "facebook": "A flower called Bird of Paradise was never going to be shy about making an impression.\n\nFor the person whose California daydreams always seem to involve something blooming.",
+      "hashtags": [
+        "#BirdOfParadise",
+        "#CaliforniaFlowers"
+      ],
+      "cta": "Let the daydream bloom"
+    },
+    "bless-your-heart": {
+      "instagram": "Three words. Several possible meanings.\n\nTone of voice sold separately.",
+      "facebook": "“Bless your heart” can be affection, sympathy, or a very elegantly wrapped opinion.\n\nFor the person who understands that delivery is everything—and that sometimes the sweetest words have the most range.",
+      "hashtags": [
+        "#BlessYourHeart",
+        "#SouthernSayings"
+      ],
+      "cta": "Choose your interpretation"
+    },
+    "bob-ross": {
+      "instagram": "A little Bob Ross energy for a day that forgot how to relax.\n\nThe schedule can lower its voice.",
+      "facebook": "Your day has enough people telling you to hurry.\n\nBob Ross is a welcome change of company for anyone who would rather slow down, make something, and stop treating every small detour like a disaster.",
+      "hashtags": [
+        "#BobRoss",
+        "#CreativePeople"
+      ],
+      "cta": "Make room for a gentler mood"
+    },
+    "california-flowers": {
+      "instagram": "California called. Apparently we’re doing flowers today.\n\nWe’ve cleared our schedule.",
+      "facebook": "Some people bring home travel stories. Some bring home a suspicious number of flower photos.\n\nCalifornia Flowers is for the second group, and for anyone who thinks “look at that one” is a perfectly good afternoon plan.",
+      "hashtags": [
+        "#CaliforniaFlowers",
+        "#FlowerPeople"
+      ],
+      "cta": "Bring the flower detour home"
+    },
+    "california-mushrooms": {
+      "instagram": "California, with a little less skyline and a little more mushroom.\n\nExcellent news for the fungi fan club.",
+      "facebook": "For the person who can turn a casual walk into a very enthusiastic mushroom discussion.\n\nCalifornia Mushrooms gives that fungi fascination a place in the everyday. No one promised you’d stop pointing them out.",
+      "hashtags": [
+        "#CaliforniaMushrooms",
+        "#FungiPeople"
+      ],
+      "cta": "Join the fungi conversation"
+    },
+    "california-poppies": {
+      "instagram": "California poppies. Extremely good at stealing the scene.\n\nWe support their dramatic tendencies.",
+      "facebook": "You were admiring the whole view. Then the poppies made it about them.\n\nCalifornia Poppies is for flower people who don’t mind being pleasantly distracted. The rest of the scenery will understand.",
+      "hashtags": [
+        "#CaliforniaPoppies",
+        "#FlowerCrush"
+      ],
+      "cta": "Give the poppies their moment"
+    },
+    "california-superbloom": {
+      "instagram": "California heard “a few flowers” and took it personally.\n\nSuperbloom energy. Sensible restraint can wait.",
+      "facebook": "A regular bloom is lovely. A superbloom sounds like the flowers formed a committee and decided to go all out.\n\nFor anyone who has never once said, “That’s probably enough flowers.”",
+      "hashtags": [
+        "#CaliforniaSuperbloom",
+        "#MoreFlowersPlease"
+      ],
+      "cta": "Let the flowers take over"
+    },
+    "catnip-madness": {
+      "instagram": "The cat has discovered catnip. The meeting is canceled.\n\nPlease respect this extremely important development.",
+      "facebook": "One minute, a dignified household companion. The next, Catnip Madness.\n\nFor cat people who know exactly how quickly a tiny distraction can become the evening’s main event.",
+      "hashtags": [
+        "#CatnipMadness",
+        "#CatPeople"
+      ],
+      "cta": "Celebrate the feline plot twist"
+    },
+    "catzilla": {
+      "instagram": "Small cat. Monster-level confidence.\n\nCatzilla has identified your plans as an obstacle.",
+      "facebook": "Every cat believes it is the biggest thing in the room. Catzilla simply made that belief the theme.\n\nFor anyone whose perfectly ordinary pet has a remarkably convincing tiny-monster routine.",
+      "hashtags": [
+        "#Catzilla",
+        "#TinyMonster"
+      ],
+      "cta": "Meet the household monster"
+    },
+    "coffee-in-words": {
+      "instagram": "Words before coffee: limited.\n\nWords about coffee: apparently endless.",
+      "facebook": "You may not be conversational before coffee, but you could give a fairly detailed presentation about it.\n\nCoffee In Words is for the people whose morning vocabulary begins with one very important subject.",
+      "hashtags": [
+        "#CoffeeInWords",
+        "#CoffeePeople"
+      ],
+      "cta": "Start the coffee conversation"
+    },
+    "custom": {
+      "instagram": "The cup holder is a very small stage.\n\nYou can still have a very big idea.",
+      "facebook": "Between navigation debates, snack negotiations, and the person controlling the music, your car already has a personality.\n\nCustom Car Coaster gives you another detail to think about. Start with the product page and see what fits your idea.",
+      "hashtags": [
+        "#CarCoaster",
+        "#YourKindOfDetail"
+      ],
+      "cta": "Explore the custom option"
+    },
+    "don-t-worry-it-gets-worse": {
+      "instagram": "Inspirational? Debatable.\n\nAccurate to the group chat’s sense of humor? Painfully.",
+      "facebook": "For the friend whose pep talks take an unexpected turn.\n\nDon’t worry, It gets worse! is a little dark humor for people who find a very specific kind of comfort in a spectacularly unhelpful slogan.",
+      "hashtags": [
+        "#DarkHumor",
+        "#ItGetsWorse"
+      ],
+      "cta": "Meet the unconventional pep talk"
+    },
+    "dont-fuck-with-texas": {
+      "instagram": "Texas has issued a brief statement.\n\nThe statement is not subtle.",
+      "facebook": "Some Texas pride comes with a polite introduction. This version skips directly to the point.\n\nFor the friend whose affection for the state has never needed help making itself heard.",
+      "hashtags": [
+        "#TexasAttitude",
+        "#LoudAndClear"
+      ],
+      "cta": "Read the Texas statement"
+    },
+    "dont-lose-your-magic": {
+      "instagram": "Keep the magic. Lose the urge to explain it to everyone.\n\nAn excellent trade.",
+      "facebook": "Being practical doesn’t have to mean becoming completely predictable.\n\nDon’t Lose Your Magic is a small nudge toward keeping the part of you that makes things interesting. The sensible errands can still get done.",
+      "hashtags": [
+        "#DontLoseYourMagic",
+        "#StayYou"
+      ],
+      "cta": "Keep a little magic close"
+    },
+    "dont-lose-your-magic-cat": {
+      "instagram": "The cat believes in magic. Mostly its ability to make you open doors.\n\nA perfectly reasonable starting point.",
+      "facebook": "Cats make a convincing case for keeping a little mystery about you.\n\nDon’t Lose Your Magic Cat is for the people who like their encouragement with whiskers and a healthy disregard for everyone else’s instructions.",
+      "hashtags": [
+        "#MagicCat",
+        "#CatPeople"
+      ],
+      "cta": "Let the cat remind you"
+    },
+    "dont-worry-it-gets-worse": {
+      "instagram": "The motivational poster took a left turn.\n\nHonestly, the group chat is going to love it.",
+      "facebook": "Some days call for uplifting words. Other days call for a friend who can make you laugh at the ridiculousness of it all.\n\nDon’t worry, It gets worse! belongs firmly to that second school of encouragement.",
+      "hashtags": [
+        "#UnhelpfulAdvice",
+        "#DarkHumor"
+      ],
+      "cta": "Add the least helpful encouragement"
+    },
+    "f-bomb": {
+      "instagram": "A little emphasis has entered the room.\n\nThe F Bomb prefers not to whisper.",
+      "facebook": "When “oh dear” just doesn’t cover the situation.\n\nF Bomb is for the person with expressive vocabulary and a strong appreciation for getting directly to the point. Probably not the subtle option.",
+      "hashtags": [
+        "#FBomb",
+        "#ExpressYourself"
+      ],
+      "cta": "Make your point"
+    },
+    "f-bomb-cup": {
+      "instagram": "Hydration has acquired a vocabulary.\n\nIt is not using its indoor voice.",
+      "facebook": "Big drink, strongly worded feelings.\n\nF-Bomb Cup is for the person whose beverage comes along for the day and whose opinions were never going to stay home. A very expressive pairing.",
+      "hashtags": [
+        "#FBombCup",
+        "#CupAttitude"
+      ],
+      "cta": "Take the attitude along"
+    },
+    "fuck-in-words": {
+      "instagram": "One word. An astonishing number of applications.\n\nA vocabulary study with absolutely no classroom voice.",
+      "facebook": "Surprise, frustration, emphasis, admiration. Some words really do have range.\n\nFuck In Words is for people who appreciate both language and the occasional well-placed expletive. You probably already know who this reminds you of.",
+      "hashtags": [
+        "#WordPeople",
+        "#WellSaid"
+      ],
+      "cta": "Explore the expressive vocabulary"
+    },
+    "great-wave": {
+      "instagram": "The wave has no interest in being a small detail.\n\nA little dramatic movement for an otherwise stationary day.",
+      "facebook": "Your everyday routine could use an occasional swell of drama that doesn’t involve your inbox.\n\nGreat Wave brings the wave mood without requiring you to rearrange your day around a trip to the water.",
+      "hashtags": [
+        "#GreatWave",
+        "#WavePeople"
+      ],
+      "cta": "Catch the wave mood"
+    },
+    "great-wave-california": {
+      "instagram": "California. A great wave. Your very convincing ocean daydream.\n\nThe inbox is losing this round.",
+      "facebook": "For the person who hears “California” and immediately starts thinking about the water.\n\nGreat Wave California gives that coastal daydream something to land on. No need to explain why you keep looking at it.",
+      "hashtags": [
+        "#CaliforniaWaves",
+        "#CoastalDaydreams"
+      ],
+      "cta": "Follow the California wave"
+    },
+    "hang-on-let-me-overthink-this": {
+      "instagram": "I have considered every possibility.\n\nUnfortunately, I have now discovered more possibilities.",
+      "facebook": "A simple decision walked into the room. You gave it a full committee hearing.\n\nHang On. Let me overthink this. is for anyone whose “quick thought” arrives with three alternatives and a follow-up question.",
+      "hashtags": [
+        "#OverthinkingClub",
+        "#JustOneMoreThought"
+      ],
+      "cta": "Consider this option"
+    },
+    "ho-ho-howdy-texas-santa": {
+      "instagram": "Santa picked up a Texas greeting.\n\nHo ho howdy is now part of the holiday vocabulary.",
+      "facebook": "The holiday introduction got a little more Texan.\n\nHo Ho Howdy Texas Santa is for people who think the festive season should sound like someone they’d actually invite over.",
+      "hashtags": [
+        "#TexasSanta",
+        "#HoHoHowdy"
+      ],
+      "cta": "Give Santa a Texas hello"
+    },
+    "houston-icons": {
+      "instagram": "Houston people will recognize the attachment.\n\nEveryone else may receive a short presentation.",
+      "facebook": "There’s remembering a city, and there’s knowing which details make it feel like yours.\n\nHouston Icons is for the person whose hometown enthusiasm arrives with examples. Go ahead. We know you have favorites.",
+      "hashtags": [
+        "#HoustonIcons",
+        "#HoustonPeople"
+      ],
+      "cta": "Find your Houston connection"
+    },
+    "houston-vivid-skyline": {
+      "instagram": "Houston, with all the skyline enthusiasm turned up.\n\nA city crush is allowed to be obvious.",
+      "facebook": "Your feelings about Houston don’t have to be understated.\n\nHouston Vivid Skyline gives the city a little extra presence in your day. For locals, visitors, and people whose “just one weekend” turned into a lasting attachment.",
+      "hashtags": [
+        "#HoustonSkyline",
+        "#VividCity"
+      ],
+      "cta": "Give Houston some space"
+    },
+    "howdy-from-texas": {
+      "instagram": "A Texas hello with a very long reach.\n\nHowdy travels well.",
+      "facebook": "One word, and the whole greeting gets friendlier.\n\nHowdy From Texas is for anyone who likes their state pride with an open-door sort of attitude. Send the feeling along, or keep the hello for yourself.",
+      "hashtags": [
+        "#HowdyFromTexas",
+        "#TexasHello"
+      ],
+      "cta": "Bring home the howdy"
+    },
+    "howdy-from-texas-the-lone-star-state": {
+      "instagram": "Texas has introduced itself.\n\nIt also included the full title, just in case.",
+      "facebook": "A casual hello, followed by a very confident hometown introduction.\n\nHowdy From Texas The Lone Star State is for people who don’t need an excuse to mention Texas—but appreciate having such a good one.",
+      "hashtags": [
+        "#LoneStarState",
+        "#HowdyTexas"
+      ],
+      "cta": "Make the Texas introduction"
+    },
+    "howdy-from-wimberley-roadrunner": {
+      "instagram": "Wimberley sent a greeting. The roadrunner handled delivery.\n\nApparently we’re doing express howdys now.",
+      "facebook": "A Wimberley hello with a roadrunner in the conversation. That feels like a greeting worth keeping.\n\nFor anyone whose favorite town deserves something a little livelier than a standard postcard mood.",
+      "hashtags": [
+        "#Wimberley",
+        "#Roadrunner"
+      ],
+      "cta": "Say howdy to the roadrunner"
+    },
+    "howdy-from-wimberley-rr12": {
+      "instagram": "RR12 has entered the travel conversation.\n\nYou were going to suggest Wimberley anyway.",
+      "facebook": "Some routes become part of the reason you love a place.\n\nHowdy From Wimberley RR12 is for the person who can turn “let’s go for a drive” into an extremely specific suggestion. We have a feeling we know the destination.",
+      "hashtags": [
+        "#WimberleyRR12",
+        "#TexasRoadTrips"
+      ],
+      "cta": "Take the Wimberley turn"
+    },
+    "howdy-i-guess-longhorn": {
+      "instagram": "Technically a greeting. Emotionally a compromise.\n\nHowdy. I guess.",
+      "facebook": "Not every hello needs a parade.\n\nHowdy I Guess Longhorn is for the person who showed up, acknowledged everyone, and would now like credit for making the effort. A wonderfully low-key kind of Texas welcome.",
+      "hashtags": [
+        "#HowdyIGuess",
+        "#LonghornMood"
+      ],
+      "cta": "Meet the reluctant welcoming committee"
+    },
+    "howdy-pawtner": {
+      "instagram": "The greeting has paws now.\n\nHowdy, pawtner. We’re already attached.",
+      "facebook": "A friendly howdy is good. A pawtner pun is apparently impossible for us to resist.\n\nFor the animal people who believe a proper welcome should come with a little wordplay and a lot of affection.",
+      "hashtags": [
+        "#HowdyPawtner",
+        "#AnimalPeople"
+      ],
+      "cta": "Say howdy to your pawtner"
+    },
+    "i-knead-them-biscuits": {
+      "instagram": "The biscuit business is booming.\n\nManagement is very small and very committed.",
+      "facebook": "Some people find their calling. Others simply start kneading the nearest available surface.\n\nI Knead Them Biscuits celebrates that level of dedication. For anyone who knows a tiny, very enthusiastic biscuit maker.",
+      "hashtags": [
+        "#BiscuitBusiness",
+        "#CatPeople"
+      ],
+      "cta": "Support the biscuit operation"
+    },
+    "i-knead-them-biscuits-cat": {
+      "instagram": "Head baker. No recipe. Absolutely certain of the technique.\n\nThe cat is taking this very seriously.",
+      "facebook": "There is a cat somewhere right now putting in a full shift at the imaginary bakery.\n\nI Knead Them Biscuits Cat is for the people who appreciate the effort, even when they are personally serving as the work surface.",
+      "hashtags": [
+        "#BiscuitMaker",
+        "#KneadingCat"
+      ],
+      "cta": "Meet the dedicated little baker"
+    },
+    "i-need-them-biscuits-cat": {
+      "instagram": "Not a suggestion. A biscuit requirement.\n\nThe cat would like the matter handled immediately.",
+      "facebook": "Some requests arrive politely. This one has a cat attached.\n\nI Need Them Biscuits Cat is for anyone who recognizes the difference between a casual preference and a very strongly held feline position.",
+      "hashtags": [
+        "#BiscuitCat",
+        "#FelinePriorities"
+      ],
+      "cta": "Hear the cat’s request"
+    },
+    "im-not-anti-social-im-anti-stupid": {
+      "instagram": "Available for good company.\n\nCurrently declining the rest of the calendar.",
+      "facebook": "Your social battery isn’t the only factor. Sometimes the conversation just needs better material.\n\nI’m Not Anti Social. I’m Anti Stupid. is for the friend whose invitations come with exceptionally selective enthusiasm.",
+      "hashtags": [
+        "#SelectiveSocializing",
+        "#StrongOpinions"
+      ],
+      "cta": "Meet the unofficial RSVP"
+    },
+    "in-this-house-we-narrate-the-dogs-thoughts": {
+      "instagram": "The dog has a voice.\n\nWe supplied the accent, the backstory, and most of the opinions.",
+      "facebook": "You know your household does it. Someone gives the dog a voice, and suddenly there’s a full character with recurring opinions about dinner.\n\nFor the families who consider narrating the dog a completely normal shared activity.",
+      "hashtags": [
+        "#DogNarrator",
+        "#DogPeople"
+      ],
+      "cta": "Make the household policy official"
+    },
+    "its-complicated": {
+      "instagram": "The short version? There isn’t one.\n\nPlease allow several follow-up questions.",
+      "facebook": "Some situations deserve a neat explanation. Yours apparently came with subplots.\n\nIt’s Complicated is for anyone whose “long story short” has never actually made the story shorter.",
+      "hashtags": [
+        "#ItsComplicated",
+        "#ThereIsABackstory"
+      ],
+      "cta": "Skip to the complicated part"
+    },
+    "jaws-shark": {
+      "instagram": "A shark has joined the outfit conversation.\n\nSubtle entrance no longer available. 🦈",
+      "facebook": "For the shark fan who thinks a perfectly ordinary day could use a little more cinematic tension.\n\nJaws Shark brings the subject into the everyday. Your coworkers may simply have to accept this about you.",
+      "hashtags": [
+        "#SharkPeople",
+        "#MovieMood"
+      ],
+      "cta": "Let the shark make an appearance"
+    },
+    "joshua-tree-california-wildflowers": {
+      "instagram": "Joshua Tree daydream. Wildflower subplot.\n\nSuddenly the calendar has a little competition.",
+      "facebook": "There’s the big desert daydream, and then there are all the small flowers you want to stop and look at.\n\nJoshua Tree California Wildflowers is for the people who make room for both kinds of scenery.",
+      "hashtags": [
+        "#JoshuaTree",
+        "#DesertFlowers"
+      ],
+      "cta": "Keep the wildflower subplot"
+    },
+    "life-s-a-peach": {
+      "instagram": "Life’s a peach.\n\nWe’re choosing to take that deliciously literally today.",
+      "facebook": "An optimistic outlook is nice. One with a peach involved is a little easier to get behind.\n\nLife’s A Peach is for anyone who likes a sunny saying with a side of fruit-based enthusiasm.",
+      "hashtags": [
+        "#LifesAPeach",
+        "#PeachMood"
+      ],
+      "cta": "Pick a peach of a mood"
+    },
+    "lifes-a-peach": {
+      "instagram": "Peachy, with no further explanation required.\n\nA little fruit-forward optimism.",
+      "facebook": "Some days you have to choose your own cheerful outlook. A peach seems like a reasonable place to start.\n\nLife’s A Peach brings a playful little reminder for people who prefer their positivity with some character.",
+      "hashtags": [
+        "#PeachyDays",
+        "#LifesAPeach"
+      ],
+      "cta": "Give peachy a place"
+    },
+    "live-laugh-loaf": {
+      "instagram": "Live. Laugh. Cancel one thing and loaf.\n\nA lifestyle philosophy we can actually maintain.",
+      "facebook": "The motivational slogan has been updated to reflect our actual priorities.\n\nLive Laugh Loaf is for the person who can appreciate a productive day but would also like everyone to consider a very good sit-down.",
+      "hashtags": [
+        "#LiveLaughLoaf",
+        "#LoafLife"
+      ],
+      "cta": "Make room for loafing"
+    },
+    "live-laugh-loaf-cat": {
+      "instagram": "The cat has achieved loaf.\n\nWe’re still working on the work-life balance.",
+      "facebook": "Cats don’t need a seminar on slowing down. They fold up their feet and demonstrate.\n\nLive Laugh Loaf Cat is for people who recognize a very small expert in doing absolutely enough.",
+      "hashtags": [
+        "#CatLoaf",
+        "#LoafGoals"
+      ],
+      "cta": "Learn from the little loaf"
+    },
+    "llama-bubble-gum": {
+      "instagram": "A llama. Bubble gum.\n\nHonestly, the meeting could have been this.",
+      "facebook": "Sometimes you need a deep explanation. Sometimes a llama with bubble gum is already a complete creative direction.\n\nFor the friend whose sense of humor takes a delightful little detour.",
+      "hashtags": [
+        "#LlamaMood",
+        "#BubbleGum"
+      ],
+      "cta": "Take the llama detour"
+    },
+    "local-menace-grackle": {
+      "instagram": "No job. No rent. Your taco.\n\nParking-lot royalty has entered the gallery. 🌮",
+      "facebook": "Every parking lot has a main character. This one stole your lunch.\n\nLocal Menace Grackle gives everyone’s favorite feathered troublemaker the recognition he absolutely did not earn. Know someone with this exact energy?",
+      "hashtags": [
+        "#GrackleEnergy",
+        "#LocalMenace"
+      ],
+      "cta": "Meet the local menace"
+    },
+    "longhorn-texas-flag": {
+      "instagram": "Longhorn energy. Texas-flag commitment.\n\nA hometown hint this is not.",
+      "facebook": "When someone asks if you’re attached to Texas, you could give a measured answer. Or you could let a longhorn and the flag do the talking.\n\nFor the person whose state pride has never had a quiet setting.",
+      "hashtags": [
+        "#TexasLonghorn",
+        "#TexasFlag"
+      ],
+      "cta": "Let Texas speak up"
+    },
+    "love-in-words": {
+      "instagram": "Love, but make it a word person’s problem.\n\nWe have plenty to say on the subject.",
+      "facebook": "Not every love note needs a grand occasion. Sometimes you just want to put the word somewhere it can interrupt an ordinary day.\n\nLove In Words is for the affectionate people who enjoy a little typography with their feelings.",
+      "hashtags": [
+        "#LoveInWords",
+        "#WordPeople"
+      ],
+      "cta": "Put a little love into words"
+    },
+    "made-from-scratch-cat": {
+      "instagram": "Made from scratch.\n\nThe cat would like credit for the scratching.",
+      "facebook": "A cooking phrase and a cat in the same sentence? The pun was practically inevitable.\n\nMade From Scratch Cat is for anyone who likes their kitchen humor with claws and a very pleased-with-itself expression.",
+      "hashtags": [
+        "#MadeFromScratch",
+        "#CatHumor"
+      ],
+      "cta": "Give the cat some credit"
+    },
+    "meowdy-cat": {
+      "instagram": "Howdy, translated by the cat.\n\nMeowdy. That’s the whole introduction.",
+      "facebook": "A cat with a friendly greeting still gets to decide whether you may pet it.\n\nMeowdy Cat is for people who love a Texas hello and understand that feline terms and conditions always apply.",
+      "hashtags": [
+        "#Meowdy",
+        "#CatPeople"
+      ],
+      "cta": "Return the meowdy"
+    },
+    "meowdy-cowboy-cat": {
+      "instagram": "Cowboy manners. Cat priorities.\n\nMeowdy, and please move out of the favorite spot.",
+      "facebook": "The cowboy cat has arrived with a greeting and several unspoken expectations.\n\nFor the people who appreciate a little Western wordplay, a lot of feline confidence, and the undeniable charm of “meowdy.”",
+      "hashtags": [
+        "#CowboyCat",
+        "#MeowdyMood"
+      ],
+      "cta": "Meet the feline pawtner"
+    },
+    "merry": {
+      "instagram": "Merry is a mood.\n\nThe holiday to-do list may submit its concerns in writing.",
+      "facebook": "Between the planning, the shopping, and figuring out who’s bringing what, a little reminder to be merry feels useful.\n\nFor the person who wants the holiday feeling without making it another complicated assignment.",
+      "hashtags": [
+        "#MerryMood",
+        "#HolidayPeople"
+      ],
+      "cta": "Keep a little merry nearby"
+    },
+    "merry-bright-y-all-christmas-armadillo": {
+      "instagram": "The armadillo has joined the festivities.\n\nMerry, bright, and very much y’all.",
+      "facebook": "Holiday cheer has a Texas accent and an armadillo in the guest list.\n\nMerry & Bright Y’all Christmas Armadillo is for the people who like a little local personality in their seasonal enthusiasm.",
+      "hashtags": [
+        "#ChristmasArmadillo",
+        "#MerryAndBright"
+      ],
+      "cta": "Welcome the festive little Texan"
+    },
+    "merry-bright-yall-christmas-armadillo": {
+      "instagram": "Texas holiday committee: one very festive armadillo.\n\nWe approve of the representation.",
+      "facebook": "Some holiday visitors bring cookies. This one brings armadillo energy and a very clear sense of place.\n\nFor anyone who thinks “Merry & Bright” sounds even better when you finish it with “y’all.”",
+      "hashtags": [
+        "#TexasChristmas",
+        "#ArmadilloLove"
+      ],
+      "cta": "Add an armadillo to the celebration"
+    },
+    "mew-mew": {
+      "instagram": "We asked for a statement.\n\nThe response was “mew mew.” Extremely on brand.",
+      "facebook": "Not every conversation needs more words. Sometimes a little “mew mew” is doing all the necessary work.\n\nFor the cat people who already understand the entire tone without requiring a translation.",
+      "hashtags": [
+        "#MewMew",
+        "#CatConversation"
+      ],
+      "cta": "Hear the feline statement"
+    },
+    "mississippi-blue-wave": {
+      "instagram": "Mississippi, with a blue-wave state of mind.\n\nA little movement for your everyday view.",
+      "facebook": "If Mississippi has a place in your heart, it can have a wave in the conversation too.\n\nMississippi Blue Wave pairs that state connection with a wave-themed mood. For the person who likes their hometown nod with a little motion.",
+      "hashtags": [
+        "#Mississippi",
+        "#BlueWave"
+      ],
+      "cta": "Follow the Mississippi wave"
+    },
+    "mix-tape-sticker-austin-city-limits": {
+      "instagram": "The playlist had a physical form.\n\nAustin City Limits, meet the mix-tape people.",
+      "facebook": "Remember when making someone a mix took actual sequencing decisions and a very strong opinion about the opening track?\n\nMix Tape Sticker – Austin City Limits is for music people who still think that part mattered.",
+      "hashtags": [
+        "#MixTapePeople",
+        "#AustinMusic"
+      ],
+      "cta": "Pick the opening track"
+    },
+    "no-no-no-holiday-cat": {
+      "instagram": "Season’s greetings. The cat has objections.\n\nThree of them, apparently.",
+      "facebook": "Not every member of the household signed off on all this festive enthusiasm.\n\nNo No No Holiday Cat is for people who love the season and also respect a small, extremely committed holiday skeptic.",
+      "hashtags": [
+        "#HolidayCat",
+        "#FestiveObjections"
+      ],
+      "cta": "Hear the cat’s holiday feedback"
+    },
+    "nope-cat": {
+      "instagram": "My cat has already answered your question.\n\nThe answer was not especially encouraging. 🐈‍⬛",
+      "facebook": "A cat with a firm position and absolutely no interest in a follow-up meeting.\n\nNope Cat is for the people who appreciate a clear answer, particularly when it comes with wonderfully unimpressed little eyes.",
+      "hashtags": [
+        "#CatPeople",
+        "#NopeEnergy"
+      ],
+      "cta": "Meet the official spokesperson"
+    },
+    "not-my-pasture-not-my-patty-cow": {
+      "instagram": "The cow has reviewed the situation.\n\nApparently it belongs to another pasture.",
+      "facebook": "An unfamiliar problem arrived, and the cow has an impressively clear understanding of its responsibilities.\n\nNot My Pasture Not My Patty Cow is for the friend who has finally stopped volunteering to manage every passing mess.",
+      "hashtags": [
+        "#NotMyPasture",
+        "#CowHumor"
+      ],
+      "cta": "Consult the pasture policy"
+    },
+    "not-today-human-cat": {
+      "instagram": "Human request received.\n\nFeline response: not today.",
+      "facebook": "You had plans. The cat had a different plan, mostly involving your plans not happening.\n\nNot Today, Human – Cat is for anyone who knows exactly how little committee input a cat requires.",
+      "hashtags": [
+        "#NotTodayHuman",
+        "#CatManagement"
+      ],
+      "cta": "Read the feline response"
+    },
+    "not-today-human-dog": {
+      "instagram": "Good dog. Limited availability.\n\nPlease schedule your expectations for another day.",
+      "facebook": "Even the most enthusiastic dog is allowed to have a “not today, human” mood.\n\nFor dog people who recognize a familiar expression—and maybe identify with it a little more than they’d like to admit.",
+      "hashtags": [
+        "#NotTodayHuman",
+        "#DogMood"
+      ],
+      "cta": "Respect the dog’s schedule"
+    },
+    "our-lady-of-bad-decicions-racoon-prayer-candle": {
+      "instagram": "A raccoon has joined the decision-making committee.\n\nWe anticipate an interesting evening.",
+      "facebook": "Some choices benefit from careful consideration. This raccoon seems to have taken a different approach.\n\nOur Lady of Bad Decisions brings a mischievous little patron to the conversation. For the friend whose stories usually begin with “so, we had an idea.”",
+      "hashtags": [
+        "#RaccoonEnergy",
+        "#QuestionablePlans"
+      ],
+      "cta": "Meet the patron of questionable plans"
+    },
+    "our-lady-of-not-today-cat-prayer-candle": {
+      "instagram": "The request has reached Our Lady of Not Today.\n\nHer office is, unsurprisingly, closed.",
+      "facebook": "A cat is an excellent representative for the words “not today.” It has years of relevant experience.\n\nFor anyone who could use a little ceremonial recognition for declining one more thing.",
+      "hashtags": [
+        "#OurLadyOfNotToday",
+        "#CatEnergy"
+      ],
+      "cta": "Submit your request tomorrow"
+    },
+    "our-lady-of-perpetual-distraction-cat-prayer-candle": {
+      "instagram": "One task. Twelve side quests.\n\nOur Lady of Perpetual Distraction sends a very delayed greeting.",
+      "facebook": "You were doing one thing. Then something moved, another idea appeared, and somehow you were in a different room.\n\nThis cat seems like an appropriate representative for that particular chain of events.",
+      "hashtags": [
+        "#PerpetualDistraction",
+        "#CatSideQuests"
+      ],
+      "cta": "Take one delightful detour"
+    },
+    "pacific-northwest-mushrooms": {
+      "instagram": "Pacific Northwest mood: look down, find a mushroom, tell everyone.\n\nA highly specific kind of enthusiasm.",
+      "facebook": "For the friend who can make a walk last twice as long by getting excited about fungi.\n\nPacific Northwest Mushrooms brings that woodland-minded enthusiasm into an ordinary day. We know the pointing will continue.",
+      "hashtags": [
+        "#PacificNorthwest",
+        "#MushroomPeople"
+      ],
+      "cta": "Follow the fungi fascination"
+    },
+    "petals-and-wings": {
+      "instagram": "Petals and wings.\n\nThe garden apparently has a social life.",
+      "facebook": "Flowers are interesting enough on their own. Add wings to the conversation and suddenly you have a reason to linger.\n\nPetals And Wings is for people who never quite manage to walk past a garden without looking.",
+      "hashtags": [
+        "#PetalsAndWings",
+        "#GardenPeople"
+      ],
+      "cta": "Stay for a closer look"
+    },
+    "petals-and-wings-ver2": {
+      "instagram": "Another little garden daydream.\n\nThe petals invited the wings back.",
+      "facebook": "Your garden fascination does not have to settle on just one interpretation.\n\nThis Petals And Wings version offers another way to keep that flowers-and-flight mood close. Choosing favorites is entirely optional.",
+      "hashtags": [
+        "#GardenDaydream",
+        "#PetalsAndWings"
+      ],
+      "cta": "Explore this garden variation"
+    },
+    "petals-and-wings-ver4": {
+      "instagram": "A small pause for petals.\n\nAnd whatever has wings and excellent taste in company.",
+      "facebook": "There’s a reason the combination of petals and wings keeps pulling your attention back.\n\nFor anyone who likes a little garden-minded detail in a day that otherwise involves far too many practical things.",
+      "hashtags": [
+        "#LittleGardenMoment",
+        "#PetalsAndWings"
+      ],
+      "cta": "Keep a garden moment nearby"
+    },
+    "roll-with-it-texas-armadillo": {
+      "instagram": "Today’s strategy: consult the armadillo.\n\nApparently we’re rolling with it.",
+      "facebook": "The plan changed. Again. A Texas armadillo has a suggestion.\n\nRoll With It is for the people who can appreciate a good backup plan, especially when the backup plan is a small joke and a change of attitude.",
+      "hashtags": [
+        "#RollWithIt",
+        "#TexasArmadillo"
+      ],
+      "cta": "Take the armadillo’s suggestion"
+    },
+    "saint-anthony-of-lost-things-racoon-prayer-candle": {
+      "instagram": "The lost-things department has a raccoon now.\n\nWe have several questions about inventory control.",
+      "facebook": "Keys, remote, that thing you just had in your hand. The lost-things list is getting ambitious.\n\nSaint Anthony of Lost Things Raccoon is for the person whose daily routine includes a brief household search party.",
+      "hashtags": [
+        "#LostThings",
+        "#RaccoonHumor"
+      ],
+      "cta": "Meet the lost-and-found representative"
+    },
+    "saint-taco-cat-prayer-candle": {
+      "instagram": "We have gathered here to discuss tacos.\n\nThe cat considers this an excellent use of everyone’s time.",
+      "facebook": "A cat and tacos in the same conversation? That is a very convincing set of priorities.\n\nSaint Taco Cat is for people who can appreciate a little ceremonial enthusiasm for their favorite dinner subject.",
+      "hashtags": [
+        "#SaintTacoCat",
+        "#TacoPeople"
+      ],
+      "cta": "Honor the taco priorities"
+    },
+    "santa-claws-cat": {
+      "instagram": "Santa Claws is making a list.\n\nMostly of things to knock over.",
+      "facebook": "The holiday season has a feline representative, and the name was apparently inevitable.\n\nSanta Claws Cat is for the households where the festive decorating committee includes someone with paws and independent opinions.",
+      "hashtags": [
+        "#SantaClaws",
+        "#ChristmasCats"
+      ],
+      "cta": "Welcome Santa Claws"
+    },
+    "stay-wild-texas-armadillo-flowers": {
+      "instagram": "Wildflower interests. Armadillo attitude.\n\nTexas, you’ve assembled a very good little team.",
+      "facebook": "A Texas armadillo and flowers make a convincing argument for keeping a little wild in your day.\n\nFor the person who likes their encouragement less formal and considerably more full of local character.",
+      "hashtags": [
+        "#StayWildTexas",
+        "#ArmadilloAndFlowers"
+      ],
+      "cta": "Keep the wild company"
+    },
+    "stay-wild-texas-armadillo-sunset": {
+      "instagram": "Stay wild. Admire the sunset.\n\nThe armadillo has organized a sensible evening.",
+      "facebook": "A sunset, an armadillo, and a reminder not to become entirely predictable.\n\nStay Wild Texas Armadillo Sunset is for people whose favorite end-of-day plan involves a little sky watching and a little Texas affection.",
+      "hashtags": [
+        "#TexasArmadillo",
+        "#StayWild"
+      ],
+      "cta": "Join the armadillo’s evening plan"
+    },
+    "tacos": {
+      "instagram": "We had other plans.\n\nThen someone said tacos. 🌮",
+      "facebook": "The easiest way to change the subject, improve the dinner plan, or get the group chat to answer.\n\nTacos is for anyone whose enthusiasm for this particular meal does not need a special occasion.",
+      "hashtags": [
+        "#TacoPeople",
+        "#DinnerPriorities"
+      ],
+      "cta": "Follow the taco suggestion"
+    },
+    "tacos-in-words": {
+      "instagram": "Tacos: a topic we are prepared to discuss at length.\n\nPreferably over tacos.",
+      "facebook": "Some people have a way with words. Some people hear “tacos” and immediately become much better listeners.\n\nTacos In Words brings those two interests together. We’re fairly certain the conversation will end with dinner plans.",
+      "hashtags": [
+        "#TacosInWords",
+        "#TacoConversation"
+      ],
+      "cta": "Get the taco conversation started"
+    },
+    "texas-blue-wave": {
+      "instagram": "Texas, with a little blue-wave momentum.\n\nThe everyday view could use some movement.",
+      "facebook": "A Texas connection doesn’t always have to make the same entrance.\n\nTexas Blue Wave gives that state affection a wave-themed turn. For people who like a little motion in their familiar favorites.",
+      "hashtags": [
+        "#TexasBlueWave",
+        "#WaveMood"
+      ],
+      "cta": "Find your Texas wave"
+    },
+    "texas-bluebonnets": {
+      "instagram": "Bluebonnets: extremely good at interrupting a Texas drive.\n\nWe have no complaints.",
+      "facebook": "You may have a destination in mind, but the bluebonnets occasionally have other plans for your attention.\n\nFor the Texas flower people who know the scenery sometimes deserves its own part of the conversation.",
+      "hashtags": [
+        "#TexasBluebonnets",
+        "#FlowerPeople"
+      ],
+      "cta": "Keep the bluebonnet moment"
+    },
+    "texas-flowers": {
+      "instagram": "Texas has flowers.\n\nWe have an unreasonable number of feelings about them.",
+      "facebook": "Big state. Plenty of room in your day for a little flower appreciation.\n\nTexas Flowers is for the people who can turn a casual glance at the roadside into a full botanical enthusiasm event.",
+      "hashtags": [
+        "#TexasFlowers",
+        "#RoadsideCrush"
+      ],
+      "cta": "Bring the flower enthusiasm home"
+    },
+    "texas-hill-country-wildflowers": {
+      "instagram": "Hill Country itinerary: stop admiring flowers eventually.\n\nWe’re still negotiating “eventually.”",
+      "facebook": "A Hill Country drive has a way of becoming a wildflower conversation.\n\nTexas Hill Country Wildflowers is for anyone who understands that getting there and looking at everything along the way are two equally important activities.",
+      "hashtags": [
+        "#HillCountryWildflowers",
+        "#TexasDaydreams"
+      ],
+      "cta": "Take the flower-filled route"
+    },
+    "texas-howdy-yall": {
+      "instagram": "Two words. The whole room is included.\n\nHowdy, y’all.",
+      "facebook": "There are efficient greetings, and then there are greetings that make everyone feel like they’ve been invited in.\n\nTexas Howdy Y’all is for people who appreciate that a little warmth doesn’t need a long introduction.",
+      "hashtags": [
+        "#HowdyYall",
+        "#TexasGreeting"
+      ],
+      "cta": "Send a proper Texas hello"
+    },
+    "texas-longhorn": {
+      "instagram": "A Texas introduction with very clear horns.\n\nNo need to be coy about the hometown attachment.",
+      "facebook": "Some Texas symbols do not require much explaining. A longhorn makes its point rather efficiently.\n\nFor anyone who likes a familiar Texas nod with a confident entrance.",
+      "hashtags": [
+        "#TexasLonghorn",
+        "#TexasPride"
+      ],
+      "cta": "Meet the longhorn"
+    },
+    "texas-longhorn-burnt-orange": {
+      "instagram": "Longhorn. Burnt orange.\n\nA very specific color preference has entered the conversation.",
+      "facebook": "You know your favorite color when you see it. Apparently the longhorn does too.\n\nTexas Longhorn Burnt Orange is for people who can recognize their kind of Texas mood from across the room.",
+      "hashtags": [
+        "#BurntOrange",
+        "#TexasLonghorn"
+      ],
+      "cta": "Pick the burnt-orange mood"
+    },
+    "texas-longhorn-with-flag": {
+      "instagram": "A longhorn and a Texas flag have formed a very obvious alliance.\n\nHometown enthusiasm wins again.",
+      "facebook": "When your Texas affection has two perfectly good ways to introduce itself, there’s no rule that says you have to choose.\n\nTexas Longhorn with Flag is for the people who prefer their state pride fully represented.",
+      "hashtags": [
+        "#LonghornAndFlag",
+        "#TexasLove"
+      ],
+      "cta": "Double down on the Texas"
+    },
+    "texas-sayings": {
+      "instagram": "Texas has a saying for that.\n\nIt also has a story. You may want to sit down.",
+      "facebook": "You can hear certain sayings in someone’s voice before you even finish reading them.\n\nTexas Sayings is for people who appreciate the expressions, the delivery, and the occasional very long explanation that follows.",
+      "hashtags": [
+        "#TexasSayings",
+        "#SoundsLikeHome"
+      ],
+      "cta": "Find a familiar turn of phrase"
+    },
+    "texas-sayings2": {
+      "instagram": "Some phrases arrive with their own Texas accent.\n\nReading them silently does not help.",
+      "facebook": "A good Texas saying usually brings more personality than a perfectly straightforward sentence.\n\nFor the word people, the storytellers, and everyone who knows exactly which relative a familiar expression sounds like.",
+      "hashtags": [
+        "#TexasWords",
+        "#TexasSayings"
+      ],
+      "cta": "Let the sayings do the talking"
+    },
+    "texas-wild": {
+      "instagram": "Texas, with the sensible part of the itinerary politely removed.\n\nKeep a little wild in the plan.",
+      "facebook": "There’s room for the practical schedule and the part of you that would rather wander a little.\n\nTexas Wild is a nod to the second part. It deserves a place in the day too.",
+      "hashtags": [
+        "#TexasWild",
+        "#WanderingMood"
+      ],
+      "cta": "Leave room for the wild"
+    },
+    "texas-wildflowers": {
+      "instagram": "A roadside crush. A very understandable flower fixation. 🌼\n\nBluebonnets, Indian blanket, and the rest of the colorful crowd—without pulling over for “just one more photo.”",
+      "facebook": "For everyone who has interrupted a perfectly good conversation to yell, “LOOK AT THOSE FLOWERS!”\n\nTexas Wildflowers brings that roadside excitement into the everyday. Find your favorite bloom and give your flower enthusiasm a new place to land.",
+      "hashtags": [
+        "#TexasWildflowers",
+        "#FlowerPeople"
+      ],
+      "cta": "Bring home the wildflowers"
+    },
+    "undiagnosed-but-we-know": {
+      "instagram": "Subtle as a group chat with screenshots.\n\nSome jokes arrive with a whole shared backstory.",
+      "facebook": "The raised eyebrows. The knowing look. The joke that apparently requires everyone to have been there.\n\nUndiagnosed – But We Know is for the friend group with a very specific sense of humor and a truly impressive archive of shared references.",
+      "hashtags": [
+        "#GroupChatEnergy",
+        "#InsideJokes"
+      ],
+      "cta": "See the group-chat joke"
+    },
+    "we-love-houston": {
+      "instagram": "We love Houston.\n\nWe are available to elaborate, probably at length.",
+      "facebook": "You don’t always need a complicated explanation for your favorite city. Sometimes “we love Houston” has already covered it.\n\nFor the people whose Houston affection is a group project, a family thing, or simply a very settled opinion.",
+      "hashtags": [
+        "#WeLoveHouston",
+        "#HoustonPeople"
+      ],
+      "cta": "Add your Houston love"
+    },
+    "weed-in-words": {
+      "instagram": "The word people have a leafy topic today.\n\nTypography has entered its very specific conversation era.",
+      "facebook": "Some interests are easier to recognize than to explain. This one has already put its subject into words.\n\nWeed In Words is a playful design for people who enjoy a very particular bit of word-focused humor.",
+      "hashtags": [
+        "#WeedInWords",
+        "#WordArt"
+      ],
+      "cta": "Take a look at the wordplay"
+    },
+    "weird-af": {
+      "instagram": "Weird AF.\n\nThe self-description has been finalized.",
+      "facebook": "You could spend a lot of time explaining your personality. Or you could save everyone a few minutes.\n\nWeird AF is for the people who heard “you’re a little unusual” and decided to keep doing exactly what they were doing.",
+      "hashtags": [
+        "#WeirdAF",
+        "#StayYourself"
+      ],
+      "cta": "Keep being the interesting one"
+    },
+    "weird-af-austin-texas": {
+      "instagram": "Austin, Texas. Weird AF.\n\nA location and a personality assessment, efficiently combined.",
+      "facebook": "Your Austin connection and your refusal to be entirely conventional have finally agreed on a shared introduction.\n\nFor the person who doesn’t see “a little weird” as something that needs fixing.",
+      "hashtags": [
+        "#AustinWeird",
+        "#WeirdAF"
+      ],
+      "cta": "Bring the Austin attitude"
+    },
+    "what-me-worry": {
+      "instagram": "Concern has requested a meeting.\n\nWe have not accepted the invitation.",
+      "facebook": "There’s a lot going on. You have elected to meet it with a wonderfully unbothered question.\n\nWhat Me Worry is for the person who would rather add a little humor than another item to the worry list.",
+      "hashtags": [
+        "#WhatMeWorry",
+        "#Unbothered"
+      ],
+      "cta": "Take the lighter approach"
+    },
+    "wild-california": {
+      "instagram": "California, on the less scheduled part of the itinerary.\n\nA little wild looks good on a daydream.",
+      "facebook": "The practical trip has reservations and a very sensible route. The California daydream has room to wander.\n\nWild California is for the part of you that would happily leave a little of the plan open.",
+      "hashtags": [
+        "#WildCalifornia",
+        "#WanderingDaydreams"
+      ],
+      "cta": "Let California wander into your day"
+    },
+    "wild-colorado": {
+      "instagram": "Colorado plans: a little more wild, a little less calendar.\n\nWe’re making a persuasive case.",
+      "facebook": "Some people hear “Colorado” and start making ambitious plans. Others just start daydreaming.\n\nWild Colorado makes room for both. For anyone who keeps a little Colorado affection tucked into an otherwise ordinary week.",
+      "hashtags": [
+        "#WildColorado",
+        "#ColoradoDaydreams"
+      ],
+      "cta": "Keep Colorado in the picture"
+    },
+    "wildflowers-of-mt-rainier": {
+      "instagram": "Mt. Rainier has a wildflower fan club.\n\nWe seem to have joined without filling out any forms.",
+      "facebook": "Sometimes a place stays with you in the big views. Sometimes it’s the flowers you keep remembering.\n\nWildflowers of Mt. Rainier is for people whose scenery appreciation includes the little details too.",
+      "hashtags": [
+        "#MountRainier",
+        "#WildflowerPeople"
+      ],
+      "cta": "Remember the little blooms"
+    },
+    "wildflowers-of-yosemite": {
+      "instagram": "Yosemite daydream, flower edition.\n\nThe smaller details would also like your attention.",
+      "facebook": "A big landscape can have some very memorable small subjects.\n\nWildflowers of Yosemite is for anyone who thinks flower spotting belongs on the itinerary, even when everyone else has already started walking again.",
+      "hashtags": [
+        "#YosemiteWildflowers",
+        "#LookCloser"
+      ],
+      "cta": "Stay with the flower details"
+    },
+    "wimberley-a-little-bit-of-heaven": {
+      "instagram": "Wimberley, making a very appealing argument for staying longer.\n\nWe’re open to persuasion.",
+      "facebook": "You went for a visit. Now you’re explaining why everyone should make time for Wimberley.\n\nA Little Bit Of Heaven is a familiar sort of enthusiasm for people who left with more affection than they expected.",
+      "hashtags": [
+        "#WimberleyLove",
+        "#LittleBitOfHeaven"
+      ],
+      "cta": "Keep a little Wimberley close"
+    },
+    "wimberley-texas-a-little-bit-of-heaven": {
+      "instagram": "A little bit of heaven. A very specific Texas address.\n\nWimberley people already understand.",
+      "facebook": "Some towns become a recurring suggestion whenever someone asks where to go for a little escape.\n\nWimberley Texas A Little Bit Of Heaven is for the people who already have their answer ready.",
+      "hashtags": [
+        "#WimberleyTexas",
+        "#TexasGetaway"
+      ],
+      "cta": "Give Wimberley its place"
+    },
+    "yee-claw": {
+      "instagram": "The rodeo has a feline situation.\n\nYee claw. That’s the announcement.",
+      "facebook": "A little cowboy wordplay and a cat with absolutely no reservations about joining in.\n\nYee Claw is for people who appreciate a good pun and know that the cat was going to make itself part of the occasion anyway.",
+      "hashtags": [
+        "#YeeClaw",
+        "#CowboyCat"
+      ],
+      "cta": "Join the feline rodeo"
+    },
+    "yee-claw-cat": {
+      "instagram": "Western enthusiasm, now with extra claws.\n\nThe cat has accepted the role.",
+      "facebook": "Nobody asked the cat to provide a Western-themed pun. It showed up with one anyway.\n\nYee Claw Cat is for the people who think a little feline attitude makes a familiar greeting much more interesting.",
+      "hashtags": [
+        "#YeeClawCat",
+        "#CatPuns"
+      ],
+      "cta": "Meet the enthusiastic little pawtner"
+    },
+    "yee-claw-cowboy-cat": {
+      "instagram": "Cowboy cat. Very confident greeting.\n\nThe yee has officially acquired claws.",
+      "facebook": "The cowboy cat has arrived, and subtle wordplay was not part of the brief.\n\nFor anyone who likes a Western wink, an unapologetic pun, and a cat who looks perfectly capable of running the whole show.",
+      "hashtags": [
+        "#CowboyCat",
+        "#YeeClawMood"
+      ],
+      "cta": "Let the cowboy cat say hello"
+    },
+    "yee-paw-dog": {
+      "instagram": "The dog heard a Western greeting and wanted in.\n\nYee paw. Everybody’s included now.",
+      "facebook": "The cats cannot have every animal pun. The dog would like to contribute a cheerful “yee paw.”\n\nFor dog people who appreciate a friendly greeting with a little Western flavor and a lot of affection.",
+      "hashtags": [
+        "#YeePaw",
+        "#DogPeople"
+      ],
+      "cta": "Say yee paw to the dog crowd"
+    },
+    "yellowstone-wildflowers": {
+      "instagram": "Yellowstone on the mind. Wildflowers in the spotlight.\n\nA very good reason to slow the imaginary itinerary down.",
+      "facebook": "Some travel memories are the big moments. Some are the flowers you stopped to look at when everyone else was ready to keep going.\n\nYellowstone Wildflowers is for people who make room for that second kind of memory.",
+      "hashtags": [
+        "#YellowstoneWildflowers",
+        "#FlowerDetours"
+      ],
+      "cta": "Keep the quieter travel memory"
+    },
+    "youre-doing-it-wrong": {
+      "instagram": "Unsolicited feedback has arrived.\n\nIt is remarkably confident for someone who wasn’t asked.",
+      "facebook": "Every group has a person with an opinion about the correct way to do absolutely everything.\n\nYou’re Doing It Wrong is for the friend who can laugh at that person—especially when that person is occasionally themselves.",
+      "hashtags": [
+        "#UnsolicitedFeedback",
+        "#StrongOpinions"
+      ],
+      "cta": "Meet the unofficial supervisor"
+    }
+  },
+  "product_versions": {
+    "gid://shopify/Product/9229782548643": {
+      "design_key": "local-menace-grackle",
+      "title": "Local Menace Grackle Wall Print",
+      "instagram": "No job. No rent. Your taco.\n\nParking-lot royalty has entered the gallery. 🌮\n\nLocal Menace Grackle Wall Print at modpanic.com.\n\n#ModPanic #GrackleEnergy #LocalMenace",
+      "facebook": "Every parking lot has a main character. This one stole your lunch.\n\nOur Local Menace Grackle Wall Print gives everyone’s favorite feathered troublemaker the recognition he absolutely did not earn.\n\nKnow someone with this exact energy?\n\nGive the menace some wall space\n{url}"
+    },
+    "gid://shopify/Product/15504868901027": {
+      "design_key": "nope-cat",
+      "title": "Nope Cat Mug",
+      "instagram": "My mug has already answered your question. 🐈‍⬛☕\n\nNope Cat Mug. For mornings when eye contact feels like a commitment.\n\nFind your new spokesperson at modpanic.com.\n\n#ModPanic #CatPeople #NopeEnergy",
+      "facebook": "Before coffee: nope.\nAfter coffee: let’s not get ahead of ourselves.\n\nThe Nope Cat Mug puts a wonderfully unimpressed cat in charge of your morning communications. Set it on your desk and let those little judgmental eyes handle the small talk.\n\nMeet your new office representative\n{url}"
+    },
+    "gid://shopify/Product/9227236802723": {
+      "design_key": "texas-wildflowers",
+      "title": "Texas Wildflowers Wall Print",
+      "instagram": "A roadside crush. A wall-space commitment. 🌼\n\nBluebonnets, Indian blanket, and the rest of the colorful crowd—without pulling over for “just one more photo.”\n\nTexas Wildflowers Wall Print at modpanic.com.\n\n#ModPanic #TexasWildflowers #BringTheOutsideIn",
+      "facebook": "For everyone who has interrupted a perfectly good conversation to yell, “LOOK AT THOSE FLOWERS!”\n\nOur Texas Wildflowers Wall Print brings that roadside excitement indoors, with colorful blooms and their names woven into the artwork.\n\nFind your favorite, give it a spot on the wall, and enjoy a garden with absolutely no watering schedule.\n\nBring home the wildflowers\n{url}"
+    }
+  }
+}
